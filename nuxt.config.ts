@@ -3,7 +3,8 @@ export default defineNuxtConfig({
   modules: [
     '@nuxt/eslint',
     '@nuxt/ui',
-    '@vueuse/nuxt'
+    '@vueuse/nuxt',
+    'nitro-cloudflare-dev'
   ],
 
   devtools: {
@@ -18,7 +19,7 @@ export default defineNuxtConfig({
     }
   },
 
-  compatibilityDate: '2024-07-11',
+  compatibilityDate: '2026-03-10',
 
   eslint: {
     config: {
@@ -26,6 +27,15 @@ export default defineNuxtConfig({
         commaDangle: 'never',
         braceStyle: '1tbs'
       }
+    }
+  },
+
+  nitro: {
+    preset: 'cloudflare_module',
+
+    cloudflare: {
+      deployConfig: true,
+      nodeCompat: true
     }
   }
 })

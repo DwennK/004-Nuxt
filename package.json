@@ -5,10 +5,12 @@
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
-    "preview": "nuxt preview",
+    "preview": "npm run build && wrangler --cwd .output dev",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "deploy": "npm run build && wrangler --cwd .output deploy",
+    "cf-typegen": "npm run build && wrangler --cwd .output types"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.96",
@@ -30,8 +32,10 @@
   "devDependencies": {
     "@nuxt/eslint": "^1.15.2",
     "eslint": "^10.0.3",
+    "nitro-cloudflare-dev": "^0.2.2",
     "typescript": "^5.9.3",
-    "vue-tsc": "^3.2.5"
+    "vue-tsc": "^3.2.5",
+    "wrangler": "^4.72.0"
   },
-  "packageManager": "pnpm@10.30.3"
+  "packageManager": "npm@10.9.0"
 }
