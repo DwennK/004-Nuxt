@@ -7,6 +7,13 @@ const toast = useToast()
 const open = ref(false)
 
 const links = [[{
+  label: 'Stocks Smartphone',
+  icon: 'i-lucide-smartphone',
+  to: '/stocks-smartphone',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
   label: 'Home',
   icon: 'i-lucide-house',
   to: '/',

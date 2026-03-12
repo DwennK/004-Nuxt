@@ -11,13 +11,13 @@ const open = ref(false)
 const toast = useToast()
 
 async function onSubmit() {
-  if (!props.ids?.length) {
+  if (!props.ids.length) {
     open.value = false
     return
   }
 
   try {
-    await $fetch('/api/customers', {
+    await $fetch('/api/smartphone-stocks', {
       method: 'DELETE',
       body: {
         ids: props.ids
@@ -25,15 +25,19 @@ async function onSubmit() {
     })
 
     toast.add({
-      title: 'Customers deleted',
-      description: `${props.ids.length} customer${props.ids.length > 1 ? 's' : ''} deleted.`,
+      title: 'Smartphones supprimes',
+      description: `${props.ids.length} smartphone${props.ids.length > 1 ? 's' : ''} retire${props.ids.length > 1 ? 's' : ''} du stock.`,
       color: 'success'
     })
     open.value = false
-    await refreshNuxtData()
+    await refreshNuxtData('smartphone-stocks')
   } catch (error) {
-    const description = error instanceof Error ? error.message : 'Unable to delete customers'
-    toast.add({ title: 'Error', description, color: 'error' })
+    const description = error instanceof Error ? error.message : 'Suppression impossible'
+    toast.add({
+      title: 'Erreur',
+      description,
+      color: 'error'
+    })
   }
 }
 </script>
@@ -41,21 +45,21 @@ async function onSubmit() {
 <template>
   <UModal
     v-model:open="open"
-    :title="`Delete ${props.count} customer${props.count > 1 ? 's' : ''}`"
-    :description="`Are you sure, this action cannot be undone.`"
+    :title="`Supprimer ${props.count} smartphone${props.count > 1 ? 's' : ''}`"
+    description="Cette action est definitive."
   >
     <slot />
 
     <template #body>
       <div class="flex justify-end gap-2">
         <UButton
-          label="Cancel"
+          label="Annuler"
           color="neutral"
           variant="subtle"
           @click="open = false"
         />
         <UButton
-          label="Delete"
+          label="Supprimer"
           color="error"
           variant="solid"
           loading-auto

@@ -12,6 +12,16 @@ export interface User {
   location: string
 }
 
+export interface SmartphoneStock {
+  id: number
+  model: string
+  imei: string
+  sku: string
+  capacity: string
+  stockedAt: string
+  sold: boolean
+}
+
 export interface Mail {
   id: number
   unread?: boolean

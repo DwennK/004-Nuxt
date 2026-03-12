@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import { upperFirst } from 'scule'
-import { getPaginationRowModel } from '@tanstack/table-core'
 import type { Row } from '@tanstack/table-core'
-import type { User } from '~/types'
+import { getPaginationRowModel } from '@tanstack/table-core'
+import { format, isValid, parseISO } from 'date-fns'
+import { upperFirst } from 'scule'
+import type { SmartphoneStock } from '~/types'
 
-type CustomerTableInstance = {
+type SmartphoneTableInstance = {
   tableApi?: {
-    getFilteredSelectedRowModel: () => { rows: Row<User>[] }
+    getFilteredSelectedRowModel: () => { rows: Row<SmartphoneStock>[] }
     getColumn: (id: string) => {
       getFilterValue: () => unknown
-      setFilterValue: (value: string | undefined) => void
+      setFilterValue: (value: string | boolean | undefined) => void
       toggleVisibility: (value: boolean) => void
     } | undefined
     getAllColumns: () => Array<{
@@ -18,7 +19,7 @@ type CustomerTableInstance = {
       getCanHide: () => boolean
       getIsVisible: () => boolean
     }>
-    getFilteredRowModel: () => { rows: Row<User>[] }
+    getFilteredRowModel: () => { rows: Row<SmartphoneStock>[] }
     getState: () => {
       pagination: {
         pageIndex: number
@@ -29,40 +30,115 @@ type CustomerTableInstance = {
   }
 }
 
-const UAvatar = resolveComponent('UAvatar')
 const UButton = resolveComponent('UButton')
 const UBadge = resolveComponent('UBadge')
-const UDropdownMenu = resolveComponent('UDropdownMenu')
 const UCheckbox = resolveComponent('UCheckbox')
+const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
-const table = useTemplateRef<CustomerTableInstance>('table')
+const table = useTemplateRef<SmartphoneTableInstance>('table')
+const editModalOpen = ref(false)
+const editingItem = ref<SmartphoneStock | null>(null)
 
 const columnFilters = ref([{
-  id: 'email',
+  id: 'model',
   value: ''
 }])
 const columnVisibility = ref()
-const rowSelection = ref({ 1: true })
+const rowSelection = ref({})
 
-const { data, status } = await useFetch<User[]>('/api/customers', {
+const { data, status } = await useFetch<SmartphoneStock[]>('/api/smartphone-stocks', {
+  key: 'smartphone-stocks',
   lazy: true
 })
 
-function getRowItems(row: Row<User>) {
+function formatSwissDate(value: string) {
+  if (!value) {
+    return ''
+  }
+
+  const date = parseISO(value)
+  return isValid(date) ? format(date, 'dd.MM.yyyy') : value
+}
+
+function formatImei(value: string) {
+  const digits = value.replace(/\s+/g, '')
+
+  if (!digits) {
+    return '-'
+  }
+
+  return digits.match(/.{1,3}/g)?.join(' ') || value
+}
+
+async function updateSoldState(row: SmartphoneStock, sold: boolean) {
+  try {
+    await $fetch('/api/smartphone-stocks', {
+      method: 'PATCH',
+      body: {
+        id: row.id,
+        model: row.model,
+        imei: row.imei,
+        sku: row.sku,
+        capacity: row.capacity,
+        stockedAt: row.stockedAt,
+        sold
+      }
+    })
+
+    toast.add({
+      title: 'Stock mis a jour',
+      description: `${row.model} est maintenant ${sold ? 'vendu' : 'disponible'}.`,
+      color: 'success'
+    })
+    await refreshNuxtData('smartphone-stocks')
+  } catch (error) {
+    toast.add({
+      title: 'Erreur',
+      description: error instanceof Error ? error.message : 'Mise a jour impossible',
+      color: 'error'
+    })
+  }
+}
+
+async function deleteSingleStock(id: number) {
+  try {
+    await $fetch('/api/smartphone-stocks', {
+      method: 'DELETE',
+      body: {
+        ids: [id]
+      }
+    })
+
+    toast.add({
+      title: 'Smartphone supprime',
+      description: 'La ligne a ete retiree du stock.',
+      color: 'success'
+    })
+    await refreshNuxtData('smartphone-stocks')
+  } catch (error) {
+    toast.add({
+      title: 'Erreur',
+      description: error instanceof Error ? error.message : 'Suppression impossible',
+      color: 'error'
+    })
+  }
+}
+
+function getRowItems(row: Row<SmartphoneStock>) {
   return [
     {
       type: 'label',
       label: 'Actions'
     },
     {
-      label: 'Copy customer ID',
+      label: 'Copier l ID',
       icon: 'i-lucide-copy',
       onSelect() {
         navigator.clipboard.writeText(row.original.id.toString())
         toast.add({
-          title: 'Copied to clipboard',
-          description: 'Customer ID copied to clipboard'
+          title: 'Copie',
+          description: 'ID du smartphone copie dans le presse-papiers.'
         })
       }
     },
@@ -70,49 +146,32 @@ function getRowItems(row: Row<User>) {
       type: 'separator'
     },
     {
-      label: 'View customer details',
-      icon: 'i-lucide-list'
-    },
-    {
-      label: 'View customer payments',
-      icon: 'i-lucide-wallet'
+      label: 'Modifier',
+      icon: 'i-lucide-pencil',
+      onSelect() {
+        editingItem.value = row.original
+        editModalOpen.value = true
+      }
     },
     {
       type: 'separator'
     },
     {
-      label: 'Delete customer',
+      label: 'Supprimer',
       icon: 'i-lucide-trash',
       color: 'error',
       onSelect() {
-        $fetch('/api/customers', {
-          method: 'DELETE',
-          body: {
-            ids: [row.original.id]
-          }
-        }).then(async () => {
-          toast.add({
-            title: 'Customer deleted',
-            description: 'The customer has been deleted.'
-          })
-          await refreshNuxtData()
-        }).catch((error) => {
-          toast.add({
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'Unable to delete customer',
-            color: 'error'
-          })
-        })
+        deleteSingleStock(row.original.id)
       }
     }
   ]
 }
 
-const selectedCustomerIds = computed<number[]>(() => {
+const selectedSmartphoneIds = computed<number[]>(() => {
   return table.value?.tableApi?.getFilteredSelectedRowModel().rows.map(row => row.original.id) || []
 })
 
-const columns: TableColumn<User>[] = [
+const columns: TableColumn<SmartphoneStock>[] = [
   {
     id: 'select',
     header: ({ table }) =>
@@ -136,30 +195,14 @@ const columns: TableColumn<User>[] = [
     header: 'ID'
   },
   {
-    accessorKey: 'name',
-    header: 'Name',
-    cell: ({ row }) => {
-      return h('div', { class: 'flex items-center gap-3' }, [
-        h(UAvatar, {
-          ...row.original.avatar,
-          size: 'lg'
-        }),
-        h('div', undefined, [
-          h('p', { class: 'font-medium text-highlighted' }, row.original.name),
-          h('p', { class: '' }, `@${row.original.name}`)
-        ])
-      ])
-    }
-  },
-  {
-    accessorKey: 'email',
+    accessorKey: 'model',
     header: ({ column }) => {
       const isSorted = column.getIsSorted()
 
       return h(UButton, {
         color: 'neutral',
         variant: 'ghost',
-        label: 'Email',
+        label: 'Modele',
         icon: isSorted
           ? isSorted === 'asc'
             ? 'i-lucide-arrow-up-narrow-wide'
@@ -171,24 +214,39 @@ const columns: TableColumn<User>[] = [
     }
   },
   {
-    accessorKey: 'location',
-    header: 'Location',
-    cell: ({ row }) => row.original.location
+    accessorKey: 'imei',
+    header: 'IMEI',
+    cell: ({ row }) => formatImei(row.original.imei)
   },
   {
-    accessorKey: 'status',
-    header: 'Status',
+    accessorKey: 'sku',
+    header: 'SKU'
+  },
+  {
+    accessorKey: 'capacity',
+    header: 'Capacite'
+  },
+  {
+    accessorKey: 'stockedAt',
+    header: 'Entree stock',
+    cell: ({ row }) => formatSwissDate(row.original.stockedAt)
+  },
+  {
+    accessorKey: 'sold',
+    header: 'Vendu',
     filterFn: 'equals',
     cell: ({ row }) => {
-      const color = {
-        subscribed: 'success' as const,
-        unsubscribed: 'error' as const,
-        bounced: 'warning' as const
-      }[row.original.status]
-
-      return h(UBadge, { class: 'capitalize', variant: 'subtle', color }, () =>
-        row.original.status
-      )
+      return h('div', { class: 'flex items-center gap-3' }, [
+        h(UCheckbox, {
+          'modelValue': row.original.sold,
+          'onUpdate:modelValue': (value: boolean | 'indeterminate') => updateSoldState(row.original, !!value),
+          'ariaLabel': `Toggle sold for ${row.original.model}`
+        }),
+        h(UBadge, {
+          color: row.original.sold ? 'success' : 'neutral',
+          variant: 'subtle'
+        }, () => row.original.sold ? 'Vendu' : 'Disponible')
+      ])
     }
   },
   {
@@ -218,27 +276,27 @@ const columns: TableColumn<User>[] = [
   }
 ]
 
-const statusFilter = ref('all')
+const soldFilter = ref('all')
 
-watch(() => statusFilter.value, (newVal) => {
-  if (!table?.value?.tableApi) return
+watch(() => soldFilter.value, (newVal) => {
+  if (!table.value?.tableApi) return
 
-  const statusColumn = table.value.tableApi.getColumn('status')
-  if (!statusColumn) return
+  const soldColumn = table.value.tableApi.getColumn('sold')
+  if (!soldColumn) return
 
   if (newVal === 'all') {
-    statusColumn.setFilterValue(undefined)
+    soldColumn.setFilterValue(undefined)
   } else {
-    statusColumn.setFilterValue(newVal)
+    soldColumn.setFilterValue(newVal === 'sold')
   }
 })
 
-const email = computed({
+const model = computed({
   get: (): string => {
-    return (table.value?.tableApi?.getColumn('email')?.getFilterValue() as string) || ''
+    return (table.value?.tableApi?.getColumn('model')?.getFilterValue() as string) || ''
   },
   set: (value: string) => {
-    table.value?.tableApi?.getColumn('email')?.setFilterValue(value || undefined)
+    table.value?.tableApi?.getColumn('model')?.setFilterValue(value || undefined)
   }
 })
 
@@ -249,15 +307,21 @@ const pagination = ref({
 </script>
 
 <template>
-  <UDashboardPanel id="customers">
+  <UDashboardPanel id="smartphone-stocks">
     <template #header>
-      <UDashboardNavbar title="Customers">
+      <UDashboardNavbar title="Stocks Smartphone">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
 
         <template #right>
-          <CustomersAddModal />
+          <SmartphonesFormModal />
+          <SmartphonesFormModal
+            v-model:open="editModalOpen"
+            mode="edit"
+            :item="editingItem"
+            :show-trigger="false"
+          />
         </template>
       </UDashboardNavbar>
     </template>
@@ -265,20 +329,20 @@ const pagination = ref({
     <template #body>
       <div class="flex flex-wrap items-center justify-between gap-1.5">
         <UInput
-          v-model="email"
+          v-model="model"
           class="max-w-sm"
           icon="i-lucide-search"
-          placeholder="Filter emails..."
+          placeholder="Filtrer les modeles..."
         />
 
         <div class="flex flex-wrap items-center gap-1.5">
-          <CustomersDeleteModal
+          <SmartphonesDeleteModal
             :count="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
-            :ids="selectedCustomerIds"
+            :ids="selectedSmartphoneIds"
           >
             <UButton
               v-if="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
-              label="Delete"
+              label="Supprimer"
               color="error"
               variant="subtle"
               icon="i-lucide-trash"
@@ -289,20 +353,20 @@ const pagination = ref({
                 </UKbd>
               </template>
             </UButton>
-          </CustomersDeleteModal>
+          </SmartphonesDeleteModal>
 
           <USelect
-            v-model="statusFilter"
+            v-model="soldFilter"
             :items="[
-              { label: 'All', value: 'all' },
-              { label: 'Subscribed', value: 'subscribed' },
-              { label: 'Unsubscribed', value: 'unsubscribed' },
-              { label: 'Bounced', value: 'bounced' }
+              { label: 'Tous', value: 'all' },
+              { label: 'Disponibles', value: 'available' },
+              { label: 'Vendus', value: 'sold' }
             ]"
             :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
-            placeholder="Filter status"
-            class="min-w-28"
+            placeholder="Filtrer le statut"
+            class="min-w-32"
           />
+
           <UDropdownMenu
             :items="
               table?.tableApi
