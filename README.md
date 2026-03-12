@@ -1,64 +1,94 @@
-# Nuxt Dashboard Template
+# 004-Nuxt
 
-[![Nuxt UI](https://img.shields.io/badge/Made%20with-Nuxt%20UI-00DC82?logo=nuxt&labelColor=020420)](https://ui.nuxt.com)
+Nuxt 4 dashboard app based on Nuxt UI, configured for deployment on Cloudflare Workers.
 
-Get started with the Nuxt dashboard template with multiple pages, collapsible sidebar, keyboard shortcuts, light & dark mode, command palette and more, powered by [Nuxt UI](https://ui.nuxt.com).
+## Stack
 
-- [Live demo](https://dashboard-template.nuxt.dev/)
-- [Documentation](https://ui.nuxt.com/docs/getting-started/installation/nuxt)
-
-<a href="https://dashboard-template.nuxt.dev/" target="_blank">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://ui.nuxt.com/assets/templates/nuxt/dashboard-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="https://ui.nuxt.com/assets/templates/nuxt/dashboard-light.png">
-    <img alt="Nuxt Dashboard Template" src="https://ui.nuxt.com/assets/templates/nuxt/dashboard-light.png">
-  </picture>
-</a>
-
-> The dashboard template for Vue is on https://github.com/nuxt-ui-templates/dashboard-vue.
-
-## Quick Start
-
-```bash [Terminal]
-npm create nuxt@latest -- -t ui/dashboard
-```
-
-## Deploy your own
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-name=dashboard&repository-url=https%3A%2F%2Fgithub.com%2Fnuxt-ui-templates%2Fdashboard&demo-image=https%3A%2F%2Fui.nuxt.com%2Fassets%2Ftemplates%2Fnuxt%2Fdashboard-dark.png&demo-url=https%3A%2F%2Fdashboard-template.nuxt.dev%2F&demo-title=Nuxt%20Dashboard%20Template&demo-description=A%20dashboard%20template%20with%20multi-column%20layout%20for%20building%20sophisticated%20admin%20interfaces.)
+- Nuxt 4
+- Nuxt UI
+- npm
+- Cloudflare Workers via Nitro
+- Turso-ready environment variables
 
 ## Setup
 
-Make sure to install the dependencies:
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-## Development Server
+Create your local environment file:
 
-Start the development server on `http://localhost:3000`:
+```bash
+cp .env.example .env
+```
+
+## Environment Variables
+
+Defined in [.env.example](./.env.example):
+
+```bash
+NUXT_PUBLIC_SITE_URL=
+TURSO_URL=
+TURSO_TOKEN=
+```
+
+- `NUXT_PUBLIC_SITE_URL`: public site URL
+- `TURSO_URL`: Turso database URL
+- `TURSO_TOKEN`: Turso auth token
+
+## Development
+
+Start the Nuxt dev server:
 
 ```bash
 npm run dev
 ```
 
-## Production
+Use `npm run dev` for day-to-day development:
 
-Build the application for production:
+- fast feedback loop
+- hot reload
+- best choice while building features
+
+## Cloudflare Workers
+
+This project uses the Nitro `cloudflare_module` preset configured in [nuxt.config.ts](./nuxt.config.ts).
+
+Build for production:
 
 ```bash
 npm run build
 ```
 
-Locally preview production build:
+Preview the Worker locally with Wrangler:
 
 ```bash
 npm run preview
 ```
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+Use `npm run preview` when you want to validate the Cloudflare runtime locally:
 
-## Renovate integration
+- runs a production build first
+- starts the app with Wrangler
+- closer to real Cloudflare Workers behavior than `npm run dev`
+- slower than the regular dev server, so it is not the default coding workflow
 
-Install [Renovate GitHub app](https://github.com/apps/renovate/installations/select_target) on your repository and you are good to go.
+Deploy to Cloudflare Workers:
+
+```bash
+npm run deploy
+```
+
+Generate Cloudflare runtime types:
+
+```bash
+npm run cf-typegen
+```
+
+## Deployment Notes
+
+- Deploy using the generated Nitro output, not `wrangler deploy` at the repo root.
+- The deploy script already uses the correct command: `wrangler --cwd .output deploy`.
+- For GitHub-based deployments, make sure Cloudflare uses the Workers/Nitro workflow rather than a static Pages setup.
