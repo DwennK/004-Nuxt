@@ -1,0 +1,932 @@
+import { and, desc, eq, isNotNull, like, sql, sum } from 'drizzle-orm'
+import {
+  catalogItems,
+  customers,
+  documentLines,
+  documents,
+  payments,
+  tickets
+} from '~~/server/db/schema'
+import { documentTypePrefixes } from '~~/shared/constants/pos'
+import type {
+  CustomerRecord,
+  DocumentStatus,
+  DocumentType,
+  PaymentStatus,
+  TicketStatus
+} from '~~/shared/types/pos'
+import { buildZonedDayRange, formatCustomerName, sumMoney, toIsoDateTime } from '~~/shared/utils/pos'
+import { useDb, useTursoClient } from '../turso'
+
+let posSchemaPromise: Promise<void> | null = null
+
+export function normalizeOptionalText(value: string | null | undefined) {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const normalized = value.trim()
+  return normalized ? normalized : null
+}
+
+export function normalizeRequiredText(value: string) {
+  return value.trim()
+}
+
+export function splitLegacyName(name: string | null | undefined) {
+  const normalized = normalizeOptionalText(name) || 'Customer'
+  const parts = normalized.split(/\s+/)
+
+  if (parts.length === 1) {
+    return {
+      firstName: parts[0] || 'Customer',
+      lastName: 'Customer'
+    }
+  }
+
+  return {
+    firstName: parts.slice(0, -1).join(' ') || parts[0] || 'Customer',
+    lastName: parts[parts.length - 1] || 'Customer'
+  }
+}
+
+export function mapCustomer(row: typeof customers.$inferSelect): CustomerRecord {
+  return {
+    id: row.id,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    companyName: row.companyName,
+    phone: row.phone,
+    email: row.email,
+    addressLine1: row.addressLine1,
+    addressLine2: row.addressLine2,
+    postalCode: row.postalCode,
+    city: row.city,
+    notes: row.notes,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    displayName: formatCustomerName(row)
+  }
+}
+
+export function calculateDocumentTotals(lines: Array<{
+  quantity: number
+  unitPrice: number
+  vatRate: number
+  lineTotal?: number | null
+}>) {
+  const normalizedLines = lines.map((line) => {
+    const computedTotal = line.lineTotal ?? Math.round(line.quantity * line.unitPrice)
+    const taxableBase = line.vatRate > 0
+      ? Math.round(computedTotal / (1 + (line.vatRate / 100)))
+      : computedTotal
+
+    return {
+      ...line,
+      lineTotal: computedTotal,
+      subtotal: taxableBase,
+      taxAmount: Math.max(computedTotal - taxableBase, 0)
+    }
+  })
+
+  return {
+    lines: normalizedLines,
+    subtotal: sumMoney(normalizedLines.map(line => line.subtotal)),
+    taxAmount: sumMoney(normalizedLines.map(line => line.taxAmount)),
+    total: sumMoney(normalizedLines.map(line => line.lineTotal))
+  }
+}
+
+async function refreshStoredDocumentTotals() {
+  const db = useDb()
+  const storedDocuments = await db.select({ id: documents.id }).from(documents)
+
+  for (const document of storedDocuments) {
+    const lines = await db.select({
+      quantity: documentLines.quantity,
+      unitPrice: documentLines.unitPrice,
+      vatRate: documentLines.vatRate,
+      lineTotal: documentLines.lineTotal
+    }).from(documentLines).where(eq(documentLines.documentId, document.id))
+
+    if (!lines.length) {
+      continue
+    }
+
+    const totals = calculateDocumentTotals(lines)
+
+    await db.update(documents)
+      .set({
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        total: totals.total
+      })
+      .where(eq(documents.id, document.id))
+  }
+}
+
+async function createPosTables() {
+  const client = useTursoClient()
+
+  await client.batch([
+    `
+      CREATE TABLE IF NOT EXISTS customers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        company_name TEXT,
+        phone TEXT NOT NULL,
+        email TEXT NOT NULL,
+        address_line_1 TEXT,
+        address_line_2 TEXT,
+        postal_code TEXT,
+        city TEXT,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `,
+    `
+      CREATE TABLE IF NOT EXISTS catalog_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        sku TEXT,
+        type TEXT NOT NULL,
+        default_price INTEGER NOT NULL,
+        vat_rate REAL NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `,
+    `
+      CREATE TABLE IF NOT EXISTS tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_number TEXT NOT NULL,
+        customer_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'new',
+        brand TEXT,
+        model TEXT,
+        serial_number TEXT,
+        imei TEXT,
+        issue_description TEXT NOT NULL,
+        internal_notes TEXT,
+        opened_at TEXT NOT NULL,
+        closed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT
+      )
+    `,
+    `
+      CREATE TABLE IF NOT EXISTS documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_number TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        customer_id INTEGER NOT NULL,
+        ticket_id INTEGER,
+        issued_at TEXT NOT NULL,
+        subtotal INTEGER NOT NULL,
+        tax_amount INTEGER NOT NULL,
+        total INTEGER NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+        FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE SET NULL
+      )
+    `,
+    `
+      CREATE TABLE IF NOT EXISTS document_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        catalog_item_id INTEGER,
+        label TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        unit_price INTEGER NOT NULL,
+        vat_rate REAL NOT NULL,
+        line_total INTEGER NOT NULL,
+        category_hint TEXT,
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+        FOREIGN KEY (catalog_item_id) REFERENCES catalog_items(id) ON DELETE SET NULL
+      )
+    `,
+    `
+      CREATE TABLE IF NOT EXISTS payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER,
+        document_id INTEGER NOT NULL,
+        method TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        amount INTEGER NOT NULL,
+        paid_at TEXT NOT NULL,
+        reference TEXT,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+      )
+    `,
+    'CREATE INDEX IF NOT EXISTS customers_last_name_idx ON customers(last_name)',
+    'CREATE INDEX IF NOT EXISTS customers_phone_idx ON customers(phone)',
+    'CREATE INDEX IF NOT EXISTS customers_email_idx ON customers(email)',
+    'CREATE INDEX IF NOT EXISTS catalog_items_name_idx ON catalog_items(name)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS catalog_items_sku_idx ON catalog_items(sku)',
+    'CREATE INDEX IF NOT EXISTS catalog_items_type_idx ON catalog_items(type)',
+    'CREATE INDEX IF NOT EXISTS tickets_ticket_number_idx ON tickets(ticket_number)',
+    'CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets(customer_id)',
+    'CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets(status)',
+    'CREATE INDEX IF NOT EXISTS tickets_opened_at_idx ON tickets(opened_at)',
+    'CREATE INDEX IF NOT EXISTS documents_document_number_idx ON documents(document_number)',
+    'CREATE INDEX IF NOT EXISTS documents_customer_id_idx ON documents(customer_id)',
+    'CREATE INDEX IF NOT EXISTS documents_ticket_id_idx ON documents(ticket_id)',
+    'CREATE INDEX IF NOT EXISTS documents_type_idx ON documents(type)',
+    'CREATE INDEX IF NOT EXISTS documents_status_idx ON documents(status)',
+    'CREATE INDEX IF NOT EXISTS documents_issued_at_idx ON documents(issued_at)',
+    'CREATE INDEX IF NOT EXISTS payments_document_id_idx ON payments(document_id)',
+    'CREATE INDEX IF NOT EXISTS payments_paid_at_idx ON payments(paid_at)',
+    'CREATE INDEX IF NOT EXISTS payments_method_idx ON payments(method)',
+    'CREATE INDEX IF NOT EXISTS payments_status_idx ON payments(status)',
+    'CREATE INDEX IF NOT EXISTS document_lines_document_id_idx ON document_lines(document_id)',
+    'CREATE INDEX IF NOT EXISTS document_lines_category_hint_idx ON document_lines(category_hint)'
+  ], 'write')
+}
+
+async function migrateDocumentLinesQuantityToInteger() {
+  const client = useTursoClient()
+  const tableInfo = await client.execute('PRAGMA table_info(document_lines)')
+
+  if (!tableInfo.rows.length) {
+    return
+  }
+
+  const quantityColumn = tableInfo.rows.find(row => String(row.name) === 'quantity')
+  const quantityType = String(quantityColumn?.type || '').toUpperCase()
+
+  if (quantityType.includes('INT')) {
+    return
+  }
+
+  await client.batch([
+    'ALTER TABLE document_lines RENAME TO document_lines_legacy_quantity',
+    `
+      CREATE TABLE document_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        catalog_item_id INTEGER,
+        label TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        unit_price INTEGER NOT NULL,
+        vat_rate REAL NOT NULL,
+        line_total INTEGER NOT NULL,
+        category_hint TEXT,
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+        FOREIGN KEY (catalog_item_id) REFERENCES catalog_items(id) ON DELETE SET NULL
+      )
+    `,
+    `
+      INSERT INTO document_lines (
+        id,
+        document_id,
+        catalog_item_id,
+        label,
+        quantity,
+        unit_price,
+        vat_rate,
+        line_total,
+        category_hint
+      )
+      SELECT
+        id,
+        document_id,
+        catalog_item_id,
+        label,
+        CAST(ROUND(quantity, 0) AS INTEGER),
+        unit_price,
+        vat_rate,
+        line_total,
+        category_hint
+      FROM document_lines_legacy_quantity
+    `,
+    'DROP TABLE document_lines_legacy_quantity',
+    'CREATE INDEX IF NOT EXISTS document_lines_document_id_idx ON document_lines(document_id)',
+    'CREATE INDEX IF NOT EXISTS document_lines_catalog_item_id_idx ON document_lines(catalog_item_id)',
+    'CREATE INDEX IF NOT EXISTS document_lines_category_hint_idx ON document_lines(category_hint)'
+  ], 'write')
+}
+
+async function migrateLegacyCustomersTable() {
+  const client = useTursoClient()
+  const tableInfo = await client.execute('PRAGMA table_info(customers)')
+  const columns = new Set(tableInfo.rows.map(row => String(row.name)))
+
+  if (!columns.size || columns.has('first_name')) {
+    return
+  }
+
+  if (!columns.has('name')) {
+    return
+  }
+
+  const legacyRows = await client.execute('SELECT * FROM customers')
+
+  await client.execute(`
+    CREATE TABLE customers_v2 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      company_name TEXT,
+      phone TEXT NOT NULL,
+      email TEXT NOT NULL,
+      address_line_1 TEXT,
+      address_line_2 TEXT,
+      postal_code TEXT,
+      city TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
+  for (const row of legacyRows.rows) {
+    const { firstName, lastName } = splitLegacyName(String(row.name || 'Customer'))
+    await client.execute(
+      `
+        INSERT INTO customers_v2 (
+          id,
+          first_name,
+          last_name,
+          company_name,
+          phone,
+          email,
+          address_line_1,
+          address_line_2,
+          postal_code,
+          city,
+          notes,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        Number(row.id),
+        firstName,
+        lastName,
+        null,
+        String(row.phone || ''),
+        String(row.email || ''),
+        row.address ? String(row.address) : null,
+        null,
+        row.postal_code ? String(row.postal_code) : null,
+        row.city ? String(row.city) : null,
+        row.comment ? String(row.comment) : null,
+        toIsoDateTime(),
+        toIsoDateTime()
+      ]
+    )
+  }
+
+  await client.batch([
+    'DROP TABLE customers',
+    'ALTER TABLE customers_v2 RENAME TO customers'
+  ], 'write')
+}
+
+async function seedCustomers() {
+  const db = useDb()
+  const count = await db.select({ count: sql<number>`count(*)` }).from(customers)
+
+  if (Number(count[0]?.count || 0) > 0) {
+    return
+  }
+
+  await db.insert(customers).values([
+    {
+      firstName: 'Alex',
+      lastName: 'Martin',
+      companyName: null,
+      phone: '+41 79 555 10 01',
+      email: 'alex.martin@example.com',
+      addressLine1: 'Rue du Lac 10',
+      addressLine2: null,
+      postalCode: '1003',
+      city: 'Lausanne',
+      notes: 'Usually accepts quote approvals by phone.',
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      firstName: 'Sofia',
+      lastName: 'Rossi',
+      companyName: null,
+      phone: '+41 78 555 10 02',
+      email: 'sofia.rossi@example.com',
+      addressLine1: 'Avenue Centrale 12',
+      addressLine2: null,
+      postalCode: '1201',
+      city: 'Geneve',
+      notes: null,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      firstName: 'Nora',
+      lastName: 'Bianchi',
+      companyName: 'Atelier Pixel',
+      phone: '+41 76 555 10 03',
+      email: 'contact@atelierpixel.example.com',
+      addressLine1: 'Rue des Alpes 7',
+      addressLine2: '2nd floor',
+      postalCode: '1950',
+      city: 'Sion',
+      notes: 'Business customer for small-office support.',
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    }
+  ])
+}
+
+async function seedCatalogItems() {
+  const db = useDb()
+  const count = await db.select({ count: sql<number>`count(*)` }).from(catalogItems)
+
+  if (Number(count[0]?.count || 0) > 0) {
+    return
+  }
+
+  await db.insert(catalogItems).values([
+    {
+      name: 'iPhone 15 Case',
+      sku: 'CASE-IP15-BLK',
+      type: 'product',
+      defaultPrice: 2990,
+      vatRate: 8.1,
+      isActive: true,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      name: 'Tempered Glass Samsung A54',
+      sku: 'GLASS-A54',
+      type: 'product',
+      defaultPrice: 1990,
+      vatRate: 8.1,
+      isActive: true,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      name: 'Screen Replacement iPhone 13',
+      sku: 'REPAIR-IP13-SCR',
+      type: 'repair_part',
+      defaultPrice: 16900,
+      vatRate: 8.1,
+      isActive: true,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      name: 'Battery Replacement',
+      sku: 'LAB-BATT',
+      type: 'labor',
+      defaultPrice: 4900,
+      vatRate: 8.1,
+      isActive: true,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      name: 'Diagnostic',
+      sku: 'SERV-DIAG',
+      type: 'service',
+      defaultPrice: 3900,
+      vatRate: 8.1,
+      isActive: true,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      name: 'WhatsApp Support 20 min',
+      sku: 'SERV-WA-20',
+      type: 'service',
+      defaultPrice: 2500,
+      vatRate: 8.1,
+      isActive: true,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      name: 'Data Transfer',
+      sku: 'SERV-DATA',
+      type: 'service',
+      defaultPrice: 4500,
+      vatRate: 8.1,
+      isActive: true,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    }
+  ])
+}
+
+async function seedOperations() {
+  const db = useDb()
+  const ticketCount = await db.select({ count: sql<number>`count(*)` }).from(tickets)
+
+  if (Number(ticketCount[0]?.count || 0) > 0) {
+    return
+  }
+
+  const seededCustomers = await db.select().from(customers).orderBy(customers.id)
+  const seededItems = await db.select().from(catalogItems).orderBy(catalogItems.id)
+
+  const repairCustomer = seededCustomers[0]
+  const accessoryCustomer = seededCustomers[1]
+  const supportCustomer = seededCustomers[2]
+
+  if (!repairCustomer || !accessoryCustomer || !supportCustomer) {
+    return
+  }
+
+  const repairTicket = await db.insert(tickets).values({
+    ticketNumber: 'TIC-2026-0001',
+    customerId: repairCustomer.id,
+    type: 'repair',
+    status: 'in_progress',
+    brand: 'Apple',
+    model: 'iPhone 13',
+    serialNumber: 'SN-IP13-001',
+    imei: '356789123456789',
+    issueDescription: 'Display is cracked and touch is inconsistent after a fall.',
+    internalNotes: 'Customer approved screen replacement. Awaiting replacement module delivery.',
+    openedAt: toIsoDateTime(new Date('2026-03-24T09:15:00.000Z')),
+    closedAt: null,
+    createdAt: toIsoDateTime(),
+    updatedAt: toIsoDateTime()
+  }).returning()
+
+  const ticket = repairTicket[0]
+
+  const repairPart = seededItems.find(item => item.name === 'Screen Replacement iPhone 13')
+  const diagnostic = seededItems.find(item => item.name === 'Diagnostic')
+  const caseItem = seededItems.find(item => item.name === 'iPhone 15 Case')
+  const glassItem = seededItems.find(item => item.name === 'Tempered Glass Samsung A54')
+  const whatsappSupport = seededItems.find(item => item.name === 'WhatsApp Support 20 min')
+
+  if (!ticket || !repairPart || !diagnostic || !caseItem || !glassItem || !whatsappSupport) {
+    return
+  }
+
+  const quoteTotals = calculateDocumentTotals([
+    {
+      quantity: 1,
+      unitPrice: repairPart.defaultPrice,
+      vatRate: repairPart.vatRate
+    },
+    {
+      quantity: 1,
+      unitPrice: diagnostic.defaultPrice,
+      vatRate: diagnostic.vatRate
+    }
+  ])
+
+  const accessoryTotals = calculateDocumentTotals([
+    {
+      quantity: 1,
+      unitPrice: caseItem.defaultPrice,
+      vatRate: caseItem.vatRate
+    },
+    {
+      quantity: 1,
+      unitPrice: glassItem.defaultPrice,
+      vatRate: glassItem.vatRate
+    }
+  ])
+
+  const supportTotals = calculateDocumentTotals([{
+    quantity: 1,
+    unitPrice: whatsappSupport.defaultPrice,
+    vatRate: whatsappSupport.vatRate
+  }])
+
+  const quote = await db.insert(documents).values({
+    documentNumber: 'QUO-2026-0001',
+    type: 'quote',
+    status: 'issued',
+    customerId: repairCustomer.id,
+    ticketId: ticket.id,
+    issuedAt: toIsoDateTime(new Date('2026-03-24T10:00:00.000Z')),
+    subtotal: quoteTotals.subtotal,
+    taxAmount: quoteTotals.taxAmount,
+    total: quoteTotals.total,
+    notes: 'Quote created from tracked repair ticket.',
+    createdAt: toIsoDateTime(),
+    updatedAt: toIsoDateTime()
+  }).returning()
+
+  const receipt = await db.insert(documents).values({
+    documentNumber: 'REC-2026-0001',
+    type: 'receipt',
+    status: 'paid',
+    customerId: accessoryCustomer.id,
+    ticketId: null,
+    issuedAt: toIsoDateTime(new Date('2026-03-25T08:40:00.000Z')),
+    subtotal: accessoryTotals.subtotal,
+    taxAmount: accessoryTotals.taxAmount,
+    total: accessoryTotals.total,
+    notes: 'Direct accessory sale at the counter.',
+    createdAt: toIsoDateTime(),
+    updatedAt: toIsoDateTime()
+  }).returning()
+
+  const supportInvoice = await db.insert(documents).values({
+    documentNumber: 'INV-2026-0001',
+    type: 'invoice',
+    status: 'paid',
+    customerId: supportCustomer.id,
+    ticketId: null,
+    issuedAt: toIsoDateTime(new Date('2026-03-25T11:15:00.000Z')),
+    subtotal: supportTotals.subtotal,
+    taxAmount: supportTotals.taxAmount,
+    total: supportTotals.total,
+    notes: 'Quick support service completed immediately.',
+    createdAt: toIsoDateTime(),
+    updatedAt: toIsoDateTime()
+  }).returning()
+
+  const quoteDocument = quote[0]
+  const receiptDocument = receipt[0]
+  const supportDocument = supportInvoice[0]
+
+  if (!quoteDocument || !receiptDocument || !supportDocument) {
+    return
+  }
+
+  await db.insert(documentLines).values([
+    {
+      documentId: quoteDocument.id,
+      catalogItemId: repairPart.id,
+      label: repairPart.name,
+      quantity: 1,
+      unitPrice: repairPart.defaultPrice,
+      vatRate: repairPart.vatRate,
+      lineTotal: quoteTotals.lines[0]!.lineTotal,
+      categoryHint: 'repair'
+    },
+    {
+      documentId: quoteDocument.id,
+      catalogItemId: diagnostic.id,
+      label: diagnostic.name,
+      quantity: 1,
+      unitPrice: diagnostic.defaultPrice,
+      vatRate: diagnostic.vatRate,
+      lineTotal: quoteTotals.lines[1]!.lineTotal,
+      categoryHint: 'service'
+    },
+    {
+      documentId: receiptDocument.id,
+      catalogItemId: caseItem.id,
+      label: caseItem.name,
+      quantity: 1,
+      unitPrice: caseItem.defaultPrice,
+      vatRate: caseItem.vatRate,
+      lineTotal: accessoryTotals.lines[0]!.lineTotal,
+      categoryHint: 'accessory'
+    },
+    {
+      documentId: receiptDocument.id,
+      catalogItemId: glassItem.id,
+      label: glassItem.name,
+      quantity: 1,
+      unitPrice: glassItem.defaultPrice,
+      vatRate: glassItem.vatRate,
+      lineTotal: accessoryTotals.lines[1]!.lineTotal,
+      categoryHint: 'accessory'
+    },
+    {
+      documentId: supportDocument.id,
+      catalogItemId: whatsappSupport.id,
+      label: whatsappSupport.name,
+      quantity: 1,
+      unitPrice: whatsappSupport.defaultPrice,
+      vatRate: whatsappSupport.vatRate,
+      lineTotal: supportTotals.lines[0]!.lineTotal,
+      categoryHint: 'service'
+    }
+  ])
+
+  await db.insert(payments).values([
+    {
+      customerId: accessoryCustomer.id,
+      documentId: receiptDocument.id,
+      method: 'card',
+      status: 'paid',
+      amount: receiptDocument.total,
+      paidAt: toIsoDateTime(new Date('2026-03-25T08:42:00.000Z')),
+      reference: 'POS-8001',
+      notes: null,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      customerId: supportCustomer.id,
+      documentId: supportDocument.id,
+      method: 'cash',
+      status: 'paid',
+      amount: supportDocument.total,
+      paidAt: toIsoDateTime(new Date('2026-03-25T11:17:00.000Z')),
+      reference: null,
+      notes: 'Paid at the counter.',
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    }
+  ])
+}
+
+async function seedPosData() {
+  await seedCustomers()
+  await seedCatalogItems()
+  await seedOperations()
+}
+
+export async function ensurePosSchema() {
+  if (!posSchemaPromise) {
+    posSchemaPromise = (async () => {
+      await migrateLegacyCustomersTable()
+      await createPosTables()
+      await migrateDocumentLinesQuantityToInteger()
+      await refreshStoredDocumentTotals()
+      await seedPosData()
+    })().catch((error) => {
+      posSchemaPromise = null
+      throw error
+    })
+  }
+
+  return posSchemaPromise
+}
+
+export async function generateTicketNumber() {
+  await ensurePosSchema()
+
+  const year = new Date().getFullYear()
+  const prefix = `TIC-${year}-`
+  const db = useDb()
+  const latest = await db.select({ ticketNumber: tickets.ticketNumber })
+    .from(tickets)
+    .where(like(tickets.ticketNumber, `${prefix}%`))
+    .orderBy(desc(tickets.ticketNumber))
+    .limit(1)
+
+  const lastNumber = latest[0]?.ticketNumber?.split('-').pop()
+  const sequence = (lastNumber ? Number(lastNumber) : 0) + 1
+
+  return `${prefix}${String(sequence).padStart(4, '0')}`
+}
+
+export async function generateDocumentNumber(type: DocumentType) {
+  await ensurePosSchema()
+
+  const year = new Date().getFullYear()
+  const prefix = `${documentTypePrefixes[type]}-${year}-`
+  const db = useDb()
+  const latest = await db.select({ documentNumber: documents.documentNumber })
+    .from(documents)
+    .where(and(eq(documents.type, type), like(documents.documentNumber, `${prefix}%`)))
+    .orderBy(desc(documents.documentNumber))
+    .limit(1)
+
+  const lastNumber = latest[0]?.documentNumber?.split('-').pop()
+  const sequence = (lastNumber ? Number(lastNumber) : 0) + 1
+
+  return `${prefix}${String(sequence).padStart(4, '0')}`
+}
+
+export async function syncDocumentStatus(documentId: number) {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const paymentSummary = await db.select({
+    paidTotal: sum(payments.amount)
+  })
+    .from(payments)
+    .where(and(eq(payments.documentId, documentId), eq(payments.status, 'paid')))
+
+  const documentRow = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1)
+  const currentDocument = documentRow[0]
+
+  if (!currentDocument) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Document not found'
+    })
+  }
+
+  const paidTotal = Number(paymentSummary[0]?.paidTotal || 0)
+  const nextStatus: DocumentStatus = paidTotal >= currentDocument.total ? 'paid' : currentDocument.status === 'cancelled' ? 'cancelled' : 'issued'
+
+  if (nextStatus !== currentDocument.status) {
+    await db.update(documents)
+      .set({
+        status: nextStatus,
+        updatedAt: toIsoDateTime()
+      })
+      .where(eq(documents.id, documentId))
+  }
+
+  return nextStatus
+}
+
+export async function closeTicketRecord(ticketId: number, internalNotes?: string | null) {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const result = await db.update(tickets)
+    .set({
+      status: 'closed',
+      closedAt: toIsoDateTime(),
+      internalNotes: normalizeOptionalText(internalNotes) ?? undefined,
+      updatedAt: toIsoDateTime()
+    })
+    .where(eq(tickets.id, ticketId))
+    .returning()
+
+  const row = result[0]
+
+  if (!row) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Ticket not found'
+    })
+  }
+
+  return row
+}
+
+export async function updateTicketStatusRecord(ticketId: number, status: TicketStatus, internalNotes?: string | null) {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const result = await db.update(tickets)
+    .set({
+      status,
+      closedAt: status === 'closed' ? toIsoDateTime() : null,
+      internalNotes: normalizeOptionalText(internalNotes) ?? undefined,
+      updatedAt: toIsoDateTime()
+    })
+    .where(eq(tickets.id, ticketId))
+    .returning()
+
+  const row = result[0]
+
+  if (!row) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Ticket not found'
+    })
+  }
+
+  return row
+}
+
+export async function getTicketPayments(ticketId: number) {
+  await ensurePosSchema()
+
+  const db = useDb()
+  return db.select({
+    id: payments.id,
+    customerId: payments.customerId,
+    documentId: payments.documentId,
+    method: payments.method,
+    status: payments.status,
+    amount: payments.amount,
+    paidAt: payments.paidAt,
+    reference: payments.reference,
+    notes: payments.notes,
+    createdAt: payments.createdAt,
+    updatedAt: payments.updatedAt
+  })
+    .from(payments)
+    .innerJoin(documents, eq(payments.documentId, documents.id))
+    .where(and(eq(documents.ticketId, ticketId), isNotNull(documents.ticketId)))
+    .orderBy(desc(payments.paidAt), desc(payments.id))
+}
+
+export async function getDocumentPaymentTotals(documentId: number, status: PaymentStatus = 'paid') {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const totals = await db.select({
+    total: sum(payments.amount)
+  })
+    .from(payments)
+    .where(and(eq(payments.documentId, documentId), eq(payments.status, status)))
+
+  return Number(totals[0]?.total || 0)
+}
+
+export function buildDayRange(date: string) {
+  return buildZonedDayRange(date)
+}

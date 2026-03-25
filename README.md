@@ -6,68 +6,243 @@
 [![Turso](https://img.shields.io/badge/Turso-libSQL-4FF8D2?logo=turso&logoColor=111111)](https://turso.tech/)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
 
-Dashboard Nuxt 4 orienté gestion smartphone, avec interface admin construite sur Nuxt UI, base de données Turso/libSQL, accès données via Drizzle ORM, et déploiement Cloudflare Workers via Nitro.
+Nuxt 4 shop management / POS app for a physical tech store. The current implementation is built around a simple, production-friendly architecture for:
 
-## Aperçu
+- smartphone repair
+- smartphone sales
+- computer / tech support services
+- accessories sales
 
-Le projet couvre actuellement plusieurs briques métier :
+The app uses Nuxt server routes, Drizzle ORM, and Turso/libSQL with a clear separation between workflow, commercial documents, and cashflow.
 
-- gestion des clients
-- gestion du stock smartphone
-- gestion des demandes de réservation smartphone
-- import / export CSV des demandes de réservation
-- dashboard Nuxt UI avec table, filtres, modales et actions CRUD
+## Current Scope
+
+Primary POS domain implemented:
+
+- `customers`
+- `catalog_items`
+- `tickets`
+- `documents`
+- `document_lines`
+- `payments`
+- end-of-day reporting
+
+Still present in the repo as older/secondary modules:
+
+- smartphone stock management
+- smartphone reservation requests
+- inbox / notifications / settings demo pages
+
+## Core Business Model
+
+The project follows these rules:
+
+- a `ticket` is only for tracked work cases: repairs, diagnostics, follow-up support, or any case where the device is kept by the store
+- a `document` is the commercial object: quote, invoice, receipt, credit note
+- a `payment` is the cashflow object and is tracked separately
+- direct accessory sales do not require a ticket
+- quick support services do not require a ticket if there is no follow-up
+
+Typical flows:
+
+- tracked repair: `Ticket -> Quote -> Invoice -> Payment -> Ticket closed`
+- direct sale: `Receipt/Invoice -> Payment`
+- quick support: `Invoice/Receipt -> Payment`
 
 ## Stack
 
 - `Nuxt 4`
 - `Vue 3`
+- `TypeScript`
 - `@nuxt/ui`
-- `Turso` avec `@libsql/client`
-- `Drizzle ORM` + `drizzle-kit`
+- `Drizzle ORM`
+- `drizzle-kit`
+- `@libsql/client`
+- `Turso` / `libSQL`
 - `Tailwind CSS`
 - `Zod`
-- `Cloudflare Workers` via `Nitro`
+- `Cloudflare Workers` via Nitro
 
-## Base de données
+## Database
 
-Le projet utilise maintenant `Drizzle ORM` comme couche d'accès aux données.
+Key files:
 
-Fichiers clés :
+- schema: [`server/db/schema.ts`](./server/db/schema.ts)
+- drizzle config: [`drizzle.config.ts`](./drizzle.config.ts)
+- Turso/Drizzle connection: [`server/utils/turso.ts`](./server/utils/turso.ts)
+- POS bootstrap, migration, numbering, seed data: [`server/utils/pos/core.ts`](./server/utils/pos/core.ts)
 
-- schéma Drizzle : [`server/db/schema.ts`](./server/db/schema.ts)
-- config Drizzle Kit : [`drizzle.config.ts`](./drizzle.config.ts)
-- connexion Turso / Drizzle : [`server/utils/turso.ts`](./server/utils/turso.ts)
-
-Tables principales :
+Main tables:
 
 - `customers`
-- `smartphone_stocks`
-- `smartphone_reservation_requests`
+- `catalog_items`
+- `tickets`
+- `documents`
+- `document_lines`
+- `payments`
 
-Note importante :
+Notable implementation details:
 
-- les modules métiers utilisent Drizzle pour les requêtes CRUD
-- les fonctions `ensure*Table()` existantes gardent encore une logique de bootstrap / compatibilité pour les bases déjà présentes
-- `db:push` est disponible pour synchroniser le schéma défini par Drizzle
+- money is stored as integer cents
+- catalog and document prices are handled as TTC / VAT-inclusive amounts
+- VAT is stored separately per line and per document for reporting and print output
+- document line quantity is validated and stored as a whole number integer
+- ticket numbers and document numbers are generated server-side
+- the POS bootstrap includes compatibility logic for the older customer table shape
+- seed data creates sample customers, catalog items, one repair ticket, one accessory sale, and one quick support sale
+
+## Indexing
+
+The schema includes indexes for the operational lookups that matter most in-store:
+
+- customer search: last name, phone, email
+- ticket lookup: ticket number, customer, status, opened date
+- document lookup: document number, customer, ticket, type, status, issued date
+- payment reporting: document, paid date, method, status
+- category reporting support: document lines by document and category hint
+
+## Shared POS Layer
+
+Shared constants, types, helpers, and validation are centralized here:
+
+- constants: [`shared/constants/pos.ts`](./shared/constants/pos.ts)
+- types: [`shared/types/pos.ts`](./shared/types/pos.ts)
+- utilities: [`shared/utils/pos.ts`](./shared/utils/pos.ts)
+- validation schemas: [`shared/validation/pos.ts`](./shared/validation/pos.ts)
+
+This keeps enums and business vocabulary aligned across pages, server routes, and database code.
+
+## Server Structure
+
+POS services:
+
+- [`server/utils/pos/customers.ts`](./server/utils/pos/customers.ts)
+- [`server/utils/pos/catalog.ts`](./server/utils/pos/catalog.ts)
+- [`server/utils/pos/tickets.ts`](./server/utils/pos/tickets.ts)
+- [`server/utils/pos/documents.ts`](./server/utils/pos/documents.ts)
+- [`server/utils/pos/payments.ts`](./server/utils/pos/payments.ts)
+- [`server/utils/pos/reports.ts`](./server/utils/pos/reports.ts)
+
+POS API routes:
+
+```text
+server/api/
+  customers/
+    index.get.ts
+    index.post.ts
+    [id].get.ts
+    [id].patch.ts
+    [id].delete.ts
+  catalog-items/
+    index.get.ts
+    index.post.ts
+    [id].get.ts
+    [id].patch.ts
+    [id].delete.ts
+  tickets/
+    index.get.ts
+    index.post.ts
+    [id].get.ts
+    [id].patch.ts
+    [id].delete.ts
+    [id]/quote.post.ts
+    [id]/invoice.post.ts
+    [id]/status.post.ts
+    [id]/close.post.ts
+  documents/
+    index.get.ts
+    index.post.ts
+    [id].get.ts
+    [id].patch.ts
+    [id].delete.ts
+    [id]/mark-paid.post.ts
+  payments/
+    index.get.ts
+    index.post.ts
+    [id].get.ts
+    [id].patch.ts
+    [id].delete.ts
+  reports/
+    end-of-day.get.ts
+```
+
+## Frontend Structure
+
+Main POS pages:
+
+```text
+app/pages/
+  index.vue
+  customers/
+    index.vue
+    new.vue
+    [id].vue
+  catalog/
+    index.vue
+    new.vue
+    [id].vue
+  tickets/
+    index.vue
+    new.vue
+    [id].vue
+  documents/
+    index.vue
+    new.vue
+    [id].vue
+    [id]/print.vue
+  payments/
+    index.vue
+  reports/
+    daily.vue
+```
+
+Reusable POS UI components:
+
+- [`app/components/pos/CustomerForm.vue`](./app/components/pos/CustomerForm.vue)
+- [`app/components/pos/CatalogItemForm.vue`](./app/components/pos/CatalogItemForm.vue)
+- [`app/components/pos/TicketForm.vue`](./app/components/pos/TicketForm.vue)
+- [`app/components/pos/DocumentEditor.vue`](./app/components/pos/DocumentEditor.vue)
+- [`app/components/pos/SummaryCard.vue`](./app/components/pos/SummaryCard.vue)
+
+The default dashboard navigation has been updated in [`app/layouts/default.vue`](./app/layouts/default.vue) to make the POS flows the primary app navigation.
+
+## End-Of-Day Reporting
+
+The daily report endpoint and page are designed for quick store closing checks.
+
+Current output includes:
+
+- total paid today
+- list of paid invoices and receipts today
+- totals by payment method
+- number of open tickets
+- number of tickets opened today
+- number of tickets closed today
+- turnover split by document line category when available
+
+Relevant files:
+
+- API: [`server/api/reports/end-of-day.get.ts`](./server/api/reports/end-of-day.get.ts)
+- service: [`server/utils/pos/reports.ts`](./server/utils/pos/reports.ts)
+- page: [`app/pages/reports/daily.vue`](./app/pages/reports/daily.vue)
 
 ## Installation
 
-Installer les dépendances :
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-Créer le fichier d'environnement local :
+Create a local environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-## Variables d’environnement
+## Environment Variables
 
-Définies dans [`/.env.example`](./.env.example) :
+Defined in [`.env.example`](./.env.example):
 
 ```bash
 NUXT_PUBLIC_SITE_URL=
@@ -75,19 +250,19 @@ TURSO_URL=
 TURSO_TOKEN=
 ```
 
-- `NUXT_PUBLIC_SITE_URL` : URL publique du site
-- `TURSO_URL` : URL de la base Turso
-- `TURSO_TOKEN` : token d'authentification Turso
+- `NUXT_PUBLIC_SITE_URL`: public site URL
+- `TURSO_URL`: Turso database URL
+- `TURSO_TOKEN`: Turso auth token
 
-## Développement
+## Development
 
-Lancer le serveur de dev Nuxt :
+Run the Nuxt dev server:
 
 ```bash
 npm run dev
 ```
 
-Contrôles qualité :
+Quality checks:
 
 ```bash
 npm run lint
@@ -96,63 +271,49 @@ npm run typecheck
 
 ## Drizzle
 
-Pousser le schéma Drizzle vers Turso :
+Push the schema to Turso:
 
 ```bash
 npm run db:push
 ```
 
-Lancer Drizzle Studio :
+Open Drizzle Studio:
 
 ```bash
 npm run db:studio
 ```
 
-## Cloudflare Workers
+## Cloudflare / Nitro
 
-Le projet utilise le preset Nitro `cloudflare_module` configuré dans [`nuxt.config.ts`](./nuxt.config.ts).
+The app uses the `cloudflare_module` Nitro preset configured in [`nuxt.config.ts`](./nuxt.config.ts).
 
-Build production :
+Build:
 
 ```bash
 npm run build
 ```
 
-Prévisualisation locale du worker :
+Preview locally:
 
 ```bash
 npm run preview
 ```
 
-Déploiement :
+Deploy:
 
 ```bash
 npm run deploy
 ```
 
-Génération des types Cloudflare :
+Generate Cloudflare types:
 
 ```bash
 npm run cf-typegen
 ```
 
-## Structure utile
-
-```text
-app/
-  components/
-  layouts/
-  pages/
-server/
-  api/
-  db/
-  utils/
-drizzle.config.ts
-nuxt.config.ts
-```
-
 ## Notes
 
-- ne pas déployer avec `wrangler deploy` à la racine du repo
-- le script de déploiement passe bien par `.output`
-- si tu fais évoluer le modèle de données, mets à jour le schéma Drizzle avant de pousser les changements
+- do not run `wrangler deploy` from the repo root directly; use the provided npm scripts
+- deployment goes through `.output`
+- if you change the data model, update [`server/db/schema.ts`](./server/db/schema.ts) first, then run `npm run db:push`
+- the app currently bootstraps some data automatically on first POS access via the POS core bootstrap

@@ -1,17 +1,136 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
+import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 export const customers = sqliteTable('customers', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  name: text('name').notNull(),
-  phone: text('phone'),
+  firstName: text('first_name').notNull(),
+  lastName: text('last_name').notNull(),
+  companyName: text('company_name'),
+  phone: text('phone').notNull(),
   email: text('email').notNull(),
-  address: text('address'),
+  addressLine1: text('address_line_1'),
+  addressLine2: text('address_line_2'),
   postalCode: text('postal_code'),
   city: text('city'),
-  comment: text('comment')
+  notes: text('notes'),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, table => ({
-  emailIdx: uniqueIndex('customers_email_idx').on(table.email),
-  nameIdx: index('customers_name_idx').on(table.name)
+  emailIdx: index('customers_email_idx').on(table.email),
+  lastNameIdx: index('customers_last_name_idx').on(table.lastName),
+  phoneIdx: index('customers_phone_idx').on(table.phone)
+}))
+
+export const catalogItems = sqliteTable('catalog_items', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  sku: text('sku'),
+  type: text('type', { enum: ['product', 'service', 'repair_part', 'labor'] }).notNull(),
+  defaultPrice: integer('default_price').notNull(),
+  vatRate: real('vat_rate').notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, table => ({
+  nameIdx: index('catalog_items_name_idx').on(table.name),
+  skuIdx: uniqueIndex('catalog_items_sku_idx').on(table.sku),
+  typeIdx: index('catalog_items_type_idx').on(table.type),
+  activeIdx: index('catalog_items_is_active_idx').on(table.isActive)
+}))
+
+export const tickets = sqliteTable('tickets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ticketNumber: text('ticket_number').notNull(),
+  customerId: integer('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' }),
+  type: text('type', { enum: ['repair', 'support'] }).notNull(),
+  status: text('status', {
+    enum: [
+      'new',
+      'diagnosis',
+      'awaiting_customer_approval',
+      'approved',
+      'in_progress',
+      'waiting_parts',
+      'ready_for_pickup',
+      'delivered',
+      'closed',
+      'cancelled'
+    ]
+  }).notNull().default('new'),
+  brand: text('brand'),
+  model: text('model'),
+  serialNumber: text('serial_number'),
+  imei: text('imei'),
+  issueDescription: text('issue_description').notNull(),
+  internalNotes: text('internal_notes'),
+  openedAt: text('opened_at').notNull(),
+  closedAt: text('closed_at'),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, table => ({
+  numberIdx: uniqueIndex('tickets_ticket_number_idx').on(table.ticketNumber),
+  customerIdx: index('tickets_customer_id_idx').on(table.customerId),
+  statusIdx: index('tickets_status_idx').on(table.status),
+  openedAtIdx: index('tickets_opened_at_idx').on(table.openedAt)
+}))
+
+export const documents = sqliteTable('documents', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  documentNumber: text('document_number').notNull(),
+  type: text('type', { enum: ['quote', 'invoice', 'receipt', 'credit_note'] }).notNull(),
+  status: text('status', { enum: ['draft', 'issued', 'paid', 'cancelled'] }).notNull().default('draft'),
+  customerId: integer('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' }),
+  ticketId: integer('ticket_id').references(() => tickets.id, { onDelete: 'set null' }),
+  issuedAt: text('issued_at').notNull(),
+  subtotal: integer('subtotal').notNull(),
+  taxAmount: integer('tax_amount').notNull(),
+  total: integer('total').notNull(),
+  notes: text('notes'),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, table => ({
+  numberIdx: uniqueIndex('documents_document_number_idx').on(table.documentNumber),
+  customerIdx: index('documents_customer_id_idx').on(table.customerId),
+  ticketIdx: index('documents_ticket_id_idx').on(table.ticketId),
+  typeIdx: index('documents_type_idx').on(table.type),
+  statusIdx: index('documents_status_idx').on(table.status),
+  issuedAtIdx: index('documents_issued_at_idx').on(table.issuedAt)
+}))
+
+export const documentLines = sqliteTable('document_lines', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  documentId: integer('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  catalogItemId: integer('catalog_item_id').references(() => catalogItems.id, { onDelete: 'set null' }),
+  label: text('label').notNull(),
+  quantity: integer('quantity').notNull(),
+  unitPrice: integer('unit_price').notNull(),
+  vatRate: real('vat_rate').notNull(),
+  lineTotal: integer('line_total').notNull(),
+  categoryHint: text('category_hint', { enum: ['accessory', 'repair', 'service'] })
+}, table => ({
+  documentIdx: index('document_lines_document_id_idx').on(table.documentId),
+  catalogItemIdx: index('document_lines_catalog_item_id_idx').on(table.catalogItemId),
+  categoryIdx: index('document_lines_category_hint_idx').on(table.categoryHint)
+}))
+
+export const payments = sqliteTable('payments', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
+  documentId: integer('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  method: text('method', { enum: ['cash', 'card', 'twint', 'bank_transfer'] }).notNull(),
+  status: text('status', { enum: ['pending', 'paid', 'refunded', 'cancelled'] }).notNull().default('pending'),
+  amount: integer('amount').notNull(),
+  paidAt: text('paid_at').notNull(),
+  reference: text('reference'),
+  notes: text('notes'),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, table => ({
+  documentIdx: index('payments_document_id_idx').on(table.documentId),
+  paidAtIdx: index('payments_paid_at_idx').on(table.paidAt),
+  methodIdx: index('payments_method_idx').on(table.method),
+  statusIdx: index('payments_status_idx').on(table.status),
+  customerIdx: index('payments_customer_id_idx').on(table.customerId)
 }))
 
 export const smartphoneStocks = sqliteTable('smartphone_stocks', {

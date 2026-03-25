@@ -15,11 +15,11 @@
     "cf-typegen": "npm run build && wrangler --cwd .output types"
   },
   "dependencies": {
-    "@iconify-json/lucide": "^1.2.96",
-    "@iconify-json/simple-icons": "^1.2.72",
+    "@iconify-json/lucide": "^1.2.98",
+    "@iconify-json/simple-icons": "^1.2.75",
     "@internationalized/date": "^3.12.0",
-    "@libsql/client": "^0.17.0",
-    "@nuxt/ui": "^4.5.1",
+    "@libsql/client": "^0.17.2",
+    "@nuxt/ui": "^4.6.0",
     "@tanstack/table-core": "^8.21.3",
     "@unovis/ts": "^1.6.4",
     "@unovis/vue": "^1.6.4",
@@ -27,9 +27,9 @@
     "@vueuse/nuxt": "^14.2.1",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.1",
-    "nuxt": "^4.3.1",
+    "nuxt": "^4.4.2",
     "scule": "^1.3.0",
-    "tailwindcss": "^4.2.1",
+    "tailwindcss": "^4.2.2",
     "vue": "^3.5.29",
     "zod": "^4.3.6"
   },
@@ -37,11 +37,11 @@
     "@nuxt/eslint": "^1.15.2",
     "dotenv": "^17.3.1",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.0.3",
+    "eslint": "^9.39.4",
     "nitro-cloudflare-dev": "^0.2.2",
     "typescript": "^5.9.3",
-    "vue-tsc": "^3.2.5",
-    "wrangler": "^4.72.0"
+    "vue-tsc": "^3.2.6",
+    "wrangler": "^4.77.0"
   },
   "packageManager": "npm@10.9.0"
 }

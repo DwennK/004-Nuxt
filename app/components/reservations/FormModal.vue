@@ -124,10 +124,12 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
 </script>
 
 <template>
-  <UModal
+  <USlideover
     v-model:open="open"
     :title="isEditing ? 'Modifier la demande' : 'Nouvelle demande'"
     :description="isEditing ? 'Mettre a jour une demande de reservation smartphone.' : 'Ajouter une nouvelle demande de reservation smartphone.'"
+    side="right"
+    :ui="{ content: 'max-w-xl' }"
   >
     <slot>
       <UButton
@@ -165,9 +167,10 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         </UFormField>
 
         <UFormField label="Etat" name="status">
-          <USelect
+          <USelectMenu
             v-model="state.status"
             :items="statusItems"
+            value-key="value"
             class="w-full"
           />
         </UFormField>
@@ -197,5 +200,5 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         </div>
       </UForm>
     </template>
-  </UModal>
+  </USlideover>
 </template>

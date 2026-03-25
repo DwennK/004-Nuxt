@@ -109,10 +109,12 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
 </script>
 
 <template>
-  <UModal
+  <USlideover
     v-model:open="open"
     :title="isEditing ? 'Modifier le smartphone' : 'Nouveau smartphone'"
     :description="isEditing ? 'Mettre a jour une ligne du stock Microwest.' : 'Ajouter un smartphone reconditionne au stock Microwest.'"
+    side="right"
+    :ui="{ content: 'max-w-xl' }"
   >
     <slot>
       <UButton
@@ -150,10 +152,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         </UFormField>
 
         <UFormField label="Vendu" name="sold">
-          <UCheckbox
-            v-model="state.sold"
-            label="Ce smartphone est deja vendu"
-          />
+          <USwitch v-model="state.sold" label="Ce smartphone est deja vendu" />
         </UFormField>
 
         <div class="flex justify-end gap-2">
@@ -172,5 +171,5 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         </div>
       </UForm>
     </template>
-  </UModal>
+  </USlideover>
 </template>

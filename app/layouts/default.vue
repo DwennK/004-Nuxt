@@ -1,37 +1,13 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
-
-const route = useRoute()
-const toast = useToast()
+import type { CustomerRecord, DocumentListItem, TicketListItem } from '~~/shared/types/pos'
 
 const open = ref(false)
 
 const links = [[{
-  label: 'Stocks Smartphone',
-  icon: 'i-lucide-smartphone',
-  to: '/stocks-smartphone',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
-  label: 'Reservations Smartphone',
-  icon: 'i-lucide-clipboard-list',
-  to: '/reservations-smartphone',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
-  label: 'Home',
+  label: 'Overview',
   icon: 'i-lucide-house',
   to: '/',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
-  label: 'Inbox',
-  icon: 'i-lucide-inbox',
-  to: '/inbox',
-  badge: '4',
   onSelect: () => {
     open.value = false
   }
@@ -43,88 +19,139 @@ const links = [[{
     open.value = false
   }
 }, {
-  label: 'Settings',
-  to: '/settings',
-  icon: 'i-lucide-settings',
-  defaultOpen: true,
-  type: 'trigger',
-  children: [{
-    label: 'General',
-    to: '/settings',
-    exact: true,
-    onSelect: () => {
-      open.value = false
-    }
-  }, {
-    label: 'Members',
-    to: '/settings/members',
-    onSelect: () => {
-      open.value = false
-    }
-  }, {
-    label: 'Notifications',
-    to: '/settings/notifications',
-    onSelect: () => {
-      open.value = false
-    }
-  }, {
-    label: 'Security',
-    to: '/settings/security',
-    onSelect: () => {
-      open.value = false
-    }
-  }]
-}], [{
-  label: 'Feedback',
-  icon: 'i-lucide-message-circle',
-  to: 'https://github.com/nuxt-ui-templates/dashboard',
-  target: '_blank'
+  label: 'Catalog',
+  icon: 'i-lucide-package-search',
+  to: '/catalog',
+  onSelect: () => {
+    open.value = false
+  }
 }, {
-  label: 'Help & Support',
-  icon: 'i-lucide-info',
-  to: 'https://github.com/nuxt-ui-templates/dashboard',
-  target: '_blank'
+  label: 'Tickets',
+  icon: 'i-lucide-wrench',
+  to: '/tickets',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
+  label: 'Documents',
+  icon: 'i-lucide-files',
+  to: '/documents',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
+  label: 'Payments',
+  icon: 'i-lucide-wallet',
+  to: '/payments',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
+  label: 'End of day',
+  icon: 'i-lucide-chart-column',
+  to: '/reports/daily',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
+  label: 'Phone stock',
+  icon: 'i-lucide-smartphone',
+  to: '/stocks-smartphone',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
+  label: 'Reservations',
+  icon: 'i-lucide-book-user',
+  to: '/reservations-smartphone',
+  onSelect: () => {
+    open.value = false
+  }
+}], [{
+  label: 'Settings',
+  icon: 'i-lucide-settings',
+  to: '/settings',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
+  label: 'Inbox',
+  icon: 'i-lucide-inbox',
+  to: '/inbox',
+  onSelect: () => {
+    open.value = false
+  }
 }]] satisfies NavigationMenuItem[][]
 
-const groups = computed(() => [{
-  id: 'links',
-  label: 'Go to',
-  items: links.flat()
+const [{ data: customers }, { data: tickets }, { data: documents }] = await Promise.all([
+  useFetch<CustomerRecord[]>('/api/customers'),
+  useFetch<TicketListItem[]>('/api/tickets'),
+  useFetch<DocumentListItem[]>('/api/documents')
+])
+
+const quickActions = [{
+  id: 'new-customer',
+  label: 'New customer',
+  icon: 'i-lucide-user-plus',
+  to: '/customers/new'
 }, {
-  id: 'code',
-  label: 'Code',
-  items: [{
-    id: 'source',
-    label: 'View page source',
-    icon: 'i-simple-icons-github',
-    to: `https://github.com/nuxt-ui-templates/dashboard/blob/main/app/pages${route.path === '/' ? '/index' : route.path}.vue`,
-    target: '_blank'
-  }]
-}])
+  id: 'new-ticket',
+  label: 'New ticket',
+  icon: 'i-lucide-wrench',
+  to: '/tickets/new'
+}, {
+  id: 'new-document',
+  label: 'New document',
+  icon: 'i-lucide-file-plus-2',
+  to: '/documents/new'
+}]
 
-onMounted(async () => {
-  const cookie = useCookie('cookie-consent')
-  if (cookie.value === 'accepted') {
-    return
-  }
+const groups = computed(() => {
+  const customerItems = (customers.value || []).slice(0, 5).map(customer => ({
+    id: `customer-${customer.id}`,
+    label: customer.displayName,
+    icon: 'i-lucide-users',
+    to: `/customers/${customer.id}`,
+    suffix: customer.phone
+  }))
 
-  toast.add({
-    title: 'We use first-party cookies to enhance your experience on our website.',
-    duration: 0,
-    close: false,
-    actions: [{
-      label: 'Accept',
-      color: 'neutral',
-      variant: 'outline',
-      onClick: () => {
-        cookie.value = 'accepted'
-      }
-    }, {
-      label: 'Opt out',
-      color: 'neutral',
-      variant: 'ghost'
-    }]
-  })
+  const ticketItems = (tickets.value || []).slice(0, 5).map(ticket => ({
+    id: `ticket-${ticket.id}`,
+    label: ticket.ticketNumber,
+    icon: 'i-lucide-wrench',
+    to: `/tickets/${ticket.id}`,
+    suffix: ticket.customerName
+  }))
+
+  const documentItems = (documents.value || []).slice(0, 5).map(document => ({
+    id: `document-${document.id}`,
+    label: document.documentNumber,
+    icon: 'i-lucide-files',
+    to: `/documents/${document.id}`,
+    suffix: document.customerName
+  }))
+
+  return [{
+    id: 'navigate',
+    label: 'Navigate',
+    items: links.flat()
+  }, {
+    id: 'create',
+    label: 'Quick actions',
+    items: quickActions
+  }, {
+    id: 'customers',
+    label: 'Recent customers',
+    items: customerItems
+  }, {
+    id: 'tickets',
+    label: 'Recent tickets',
+    items: ticketItems
+  }, {
+    id: 'documents',
+    label: 'Recent documents',
+    items: documentItems
+  }].filter(group => group.items.length)
 })
 </script>
 
