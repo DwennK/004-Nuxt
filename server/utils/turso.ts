@@ -1,6 +1,9 @@
 import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+import * as schema from '../db/schema'
 
 let client: ReturnType<typeof createClient> | null = null
+let db: ReturnType<typeof drizzle<typeof schema>> | null = null
 
 export function useTursoClient() {
   if (client) {
@@ -24,4 +27,14 @@ export function useTursoClient() {
   })
 
   return client
+}
+
+export function useDb() {
+  if (db) {
+    return db
+  }
+
+  db = drizzle(useTursoClient(), { schema })
+
+  return db
 }

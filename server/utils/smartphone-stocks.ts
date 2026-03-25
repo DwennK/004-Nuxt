@@ -1,20 +1,9 @@
+import { asc, eq, inArray, sql } from 'drizzle-orm'
 import type { SmartphoneStock } from '~/types'
-import { useTursoClient } from './turso'
+import { smartphoneStocks } from '../db/schema'
+import { useDb, useTursoClient } from './turso'
 
-type SmartphoneStockRow = {
-  id: number | string
-  model: string
-  imei: string | null
-  sku: string | null
-  capacity: string
-  stocked_at: string | null
-  sold: number | boolean
-}
-
-function normalizeOptionalText(value: string) {
-  const normalized = value.trim()
-  return normalized ? normalized : null
-}
+type SmartphoneStockRow = typeof smartphoneStocks.$inferSelect
 
 const seedSmartphoneStocks: SmartphoneStock[] = [{
   id: 1,
@@ -82,22 +71,27 @@ const seedSmartphoneStocks: SmartphoneStock[] = [{
   sold: true
 }]
 
+function normalizeOptionalText(value: string) {
+  const normalized = value.trim()
+  return normalized ? normalized : null
+}
+
 function mapSmartphoneStock(row: SmartphoneStockRow): SmartphoneStock {
   return {
-    id: Number(row.id),
+    id: row.id,
     model: row.model,
     imei: row.imei || '',
     sku: row.sku || '',
     capacity: row.capacity,
-    stockedAt: row.stocked_at || '',
-    sold: Boolean(row.sold)
+    stockedAt: row.stockedAt,
+    sold: row.sold
   }
 }
 
 export async function ensureSmartphoneStocksTable() {
-  const db = useTursoClient()
+  const client = useTursoClient()
 
-  await db.execute(`
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS smartphone_stocks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       model TEXT NOT NULL,
@@ -109,35 +103,35 @@ export async function ensureSmartphoneStocksTable() {
     )
   `)
 
-  const columns = await db.execute('PRAGMA table_info(smartphone_stocks)')
+  const columns = await client.execute('PRAGMA table_info(smartphone_stocks)')
   const columnMap = new Map(columns.rows.map(row => [String(row.name), row]))
   const columnNames = new Set(columnMap.keys())
 
   if (!columnNames.has('imei')) {
-    await db.execute('ALTER TABLE smartphone_stocks ADD COLUMN imei TEXT')
+    await client.execute('ALTER TABLE smartphone_stocks ADD COLUMN imei TEXT')
   }
 
   if (!columnNames.has('sku')) {
-    await db.execute('ALTER TABLE smartphone_stocks ADD COLUMN sku TEXT')
+    await client.execute('ALTER TABLE smartphone_stocks ADD COLUMN sku TEXT')
   }
 
   if (!columnNames.has('stocked_at')) {
-    await db.execute('ALTER TABLE smartphone_stocks ADD COLUMN stocked_at TEXT')
+    await client.execute('ALTER TABLE smartphone_stocks ADD COLUMN stocked_at TEXT')
   }
 
-  await db.execute(`
+  await client.execute(`
     UPDATE smartphone_stocks
     SET stocked_at = DATE('now')
     WHERE stocked_at IS NULL OR TRIM(stocked_at) = ''
   `)
 
-  await db.execute(`
+  await client.execute(`
     UPDATE smartphone_stocks
     SET imei = NULL
     WHERE imei LIKE 'AUTOIMEI%'
   `)
 
-  await db.execute(`
+  await client.execute(`
     UPDATE smartphone_stocks
     SET sku = NULL
     WHERE sku LIKE 'MW-AUTO-%'
@@ -148,7 +142,7 @@ export async function ensureSmartphoneStocksTable() {
   const needsSchemaMigration = Number(imeiColumn?.notnull || 0) === 1 || Number(skuColumn?.notnull || 0) === 1
 
   if (needsSchemaMigration) {
-    await db.batch([
+    await client.batch([
       `
         CREATE TABLE smartphone_stocks_migrated (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -185,7 +179,7 @@ export async function ensureSmartphoneStocksTable() {
     ], 'write')
   }
 
-  await db.batch([
+  await client.batch([
     `
       CREATE INDEX IF NOT EXISTS smartphone_stocks_model_idx
       ON smartphone_stocks(model)
@@ -200,96 +194,84 @@ export async function ensureSmartphoneStocksTable() {
     `
   ], 'write')
 
-  const result = await db.execute('SELECT COUNT(*) AS count FROM smartphone_stocks')
-  const count = Number(result.rows[0]?.count || 0)
+  const db = useDb()
+  const result = await db.select({ count: sql<number>`count(*)` }).from(smartphoneStocks)
+  const count = Number(result[0]?.count || 0)
 
   if (count > 0) {
     return
   }
 
-  await db.batch(seedSmartphoneStocks.map(stock => ({
-    sql: `
-      INSERT INTO smartphone_stocks (id, model, imei, sku, capacity, stocked_at, sold)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `,
-    args: [
-      stock.id,
-      stock.model,
-      stock.imei,
-      stock.sku,
-      stock.capacity,
-      stock.stockedAt,
-      stock.sold ? 1 : 0
-    ]
-  })), 'write')
+  await db.insert(smartphoneStocks).values(seedSmartphoneStocks)
 }
 
 export async function listSmartphoneStocks() {
   await ensureSmartphoneStocksTable()
 
-  const db = useTursoClient()
-  const result = await db.execute(`
-    SELECT id, model, imei, sku, capacity, stocked_at, sold
-    FROM smartphone_stocks
-    ORDER BY id ASC
-  `)
+  const db = useDb()
+  const result = await db.select().from(smartphoneStocks).orderBy(asc(smartphoneStocks.id))
 
-  return result.rows.map(row => mapSmartphoneStock(row as unknown as SmartphoneStockRow))
+  return result.map(mapSmartphoneStock)
 }
 
 export async function createSmartphoneStock(input: Omit<SmartphoneStock, 'id'>) {
   await ensureSmartphoneStocksTable()
 
-  const db = useTursoClient()
-  const result = await db.execute({
-    sql: `
-      INSERT INTO smartphone_stocks (model, imei, sku, capacity, stocked_at, sold)
-      VALUES (?, ?, ?, ?, ?, ?)
-      RETURNING id, model, imei, sku, capacity, stocked_at, sold
-    `,
-    args: [
-      input.model,
-      normalizeOptionalText(input.imei),
-      normalizeOptionalText(input.sku),
-      input.capacity,
-      input.stockedAt,
-      input.sold ? 1 : 0
-    ]
-  })
+  const db = useDb()
+  const result = await db.insert(smartphoneStocks).values({
+    model: input.model,
+    imei: normalizeOptionalText(input.imei),
+    sku: normalizeOptionalText(input.sku),
+    capacity: input.capacity,
+    stockedAt: input.stockedAt,
+    sold: input.sold
+  }).returning()
 
-  return mapSmartphoneStock(result.rows[0] as unknown as SmartphoneStockRow)
+  const row = result[0]
+
+  if (!row) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Creation smartphone impossible'
+    })
+  }
+
+  return mapSmartphoneStock(row)
 }
 
 export async function updateSmartphoneStock(input: SmartphoneStock) {
   await ensureSmartphoneStocksTable()
 
-  const db = useTursoClient()
-  const result = await db.execute({
-    sql: `
-      UPDATE smartphone_stocks
-      SET model = ?, imei = ?, sku = ?, capacity = ?, stocked_at = ?, sold = ?
-      WHERE id = ?
-      RETURNING id, model, imei, sku, capacity, stocked_at, sold
-    `,
-    args: [
-      input.model,
-      normalizeOptionalText(input.imei),
-      normalizeOptionalText(input.sku),
-      input.capacity,
-      input.stockedAt,
-      input.sold ? 1 : 0,
-      input.id
-    ]
-  })
+  const db = useDb()
+  const result = await db.update(smartphoneStocks)
+    .set({
+      model: input.model,
+      imei: normalizeOptionalText(input.imei),
+      sku: normalizeOptionalText(input.sku),
+      capacity: input.capacity,
+      stockedAt: input.stockedAt,
+      sold: input.sold
+    })
+    .where(eq(smartphoneStocks.id, input.id))
+    .returning()
 
-  if (!result.rows.length) {
+  if (!result.length) {
     throw createError({
       statusCode: 404,
       statusMessage: 'Smartphone not found'
     })
   }
 
-  return mapSmartphoneStock(result.rows[0] as unknown as SmartphoneStockRow)
+  const row = result[0]
+
+  if (!row) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Smartphone not found'
+    })
+  }
+
+  return mapSmartphoneStock(row)
 }
 
 export async function deleteSmartphoneStocks(ids: number[]) {
@@ -299,12 +281,8 @@ export async function deleteSmartphoneStocks(ids: number[]) {
 
   await ensureSmartphoneStocksTable()
 
-  const db = useTursoClient()
-  const placeholders = ids.map(() => '?').join(', ')
-  const result = await db.execute({
-    sql: `DELETE FROM smartphone_stocks WHERE id IN (${placeholders})`,
-    args: ids
-  })
+  const db = useDb()
+  const result = await db.delete(smartphoneStocks).where(inArray(smartphoneStocks.id, ids))
 
   return result.rowsAffected
 }

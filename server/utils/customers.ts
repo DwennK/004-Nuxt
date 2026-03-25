@@ -1,287 +1,219 @@
-import type { User, UserStatus } from '~/types'
-import { useTursoClient } from './turso'
+import { asc, eq, inArray, sql } from 'drizzle-orm'
+import type { Customer } from '~/types'
+import { customers } from '../db/schema'
+import { useDb, useTursoClient } from './turso'
 
-type CustomerRow = {
-  id: number | string
-  name: string
-  email: string
-  status: UserStatus
-  location: string | null
-  avatar_src: string | null
-}
+type CustomerRow = typeof customers.$inferSelect
 
-const seedCustomers: User[] = [{
+const seedCustomers: Customer[] = [{
   id: 1,
   name: 'Alex Smith',
+  phone: '+41 79 555 10 01',
   email: 'alex.smith@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=1'
-  },
-  status: 'subscribed',
-  location: 'New York, USA'
+  address: 'Rue du Lac 10',
+  postalCode: '1003',
+  city: 'Lausanne',
+  comment: 'Client interesse par les iPhone recents.'
 }, {
   id: 2,
   name: 'Jordan Brown',
+  phone: '+41 78 555 10 02',
   email: 'jordan.brown@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=2'
-  },
-  status: 'unsubscribed',
-  location: 'London, UK'
+  address: 'Avenue Centrale 12',
+  postalCode: '1201',
+  city: 'Geneve',
+  comment: ''
 }, {
   id: 3,
   name: 'Taylor Green',
+  phone: '+41 76 555 10 03',
   email: 'taylor.green@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=3'
-  },
-  status: 'bounced',
-  location: 'Paris, France'
-}, {
-  id: 4,
-  name: 'Morgan White',
-  email: 'morgan.white@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=4'
-  },
-  status: 'subscribed',
-  location: 'Berlin, Germany'
-}, {
-  id: 5,
-  name: 'Casey Gray',
-  email: 'casey.gray@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=5'
-  },
-  status: 'subscribed',
-  location: 'Tokyo, Japan'
-}, {
-  id: 6,
-  name: 'Jamie Johnson',
-  email: 'jamie.johnson@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=6'
-  },
-  status: 'subscribed',
-  location: 'Sydney, Australia'
-}, {
-  id: 7,
-  name: 'Riley Davis',
-  email: 'riley.davis@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=7'
-  },
-  status: 'subscribed',
-  location: 'New York, USA'
-}, {
-  id: 8,
-  name: 'Kelly Wilson',
-  email: 'kelly.wilson@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=8'
-  },
-  status: 'subscribed',
-  location: 'London, UK'
-}, {
-  id: 9,
-  name: 'Drew Moore',
-  email: 'drew.moore@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=9'
-  },
-  status: 'bounced',
-  location: 'Paris, France'
-}, {
-  id: 10,
-  name: 'Jordan Taylor',
-  email: 'jordan.taylor@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=10'
-  },
-  status: 'subscribed',
-  location: 'Berlin, Germany'
-}, {
-  id: 11,
-  name: 'Morgan Anderson',
-  email: 'morgan.anderson@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=11'
-  },
-  status: 'subscribed',
-  location: 'Tokyo, Japan'
-}, {
-  id: 12,
-  name: 'Casey Thomas',
-  email: 'casey.thomas@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=12'
-  },
-  status: 'unsubscribed',
-  location: 'Sydney, Australia'
-}, {
-  id: 13,
-  name: 'Jamie Jackson',
-  email: 'jamie.jackson@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=13'
-  },
-  status: 'unsubscribed',
-  location: 'New York, USA'
-}, {
-  id: 14,
-  name: 'Riley White',
-  email: 'riley.white@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=14'
-  },
-  status: 'unsubscribed',
-  location: 'London, UK'
-}, {
-  id: 15,
-  name: 'Kelly Harris',
-  email: 'kelly.harris@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=15'
-  },
-  status: 'subscribed',
-  location: 'Paris, France'
-}, {
-  id: 16,
-  name: 'Drew Martin',
-  email: 'drew.martin@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=16'
-  },
-  status: 'subscribed',
-  location: 'Berlin, Germany'
-}, {
-  id: 17,
-  name: 'Alex Thompson',
-  email: 'alex.thompson@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=17'
-  },
-  status: 'unsubscribed',
-  location: 'Tokyo, Japan'
-}, {
-  id: 18,
-  name: 'Jordan Garcia',
-  email: 'jordan.garcia@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=18'
-  },
-  status: 'subscribed',
-  location: 'Sydney, Australia'
-}, {
-  id: 19,
-  name: 'Taylor Rodriguez',
-  email: 'taylor.rodriguez@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=19'
-  },
-  status: 'bounced',
-  location: 'New York, USA'
-}, {
-  id: 20,
-  name: 'Morgan Lopez',
-  email: 'morgan.lopez@example.com',
-  avatar: {
-    src: 'https://i.pravatar.cc/128?u=20'
-  },
-  status: 'subscribed',
-  location: 'London, UK'
+  address: 'Chemin des Alpes 7',
+  postalCode: '1950',
+  city: 'Sion',
+  comment: 'Prefere etre contacte par email.'
 }]
 
-function mapCustomer(row: CustomerRow): User {
+function mapCustomer(row: CustomerRow): Customer {
   return {
-    id: Number(row.id),
+    id: row.id,
     name: row.name,
+    phone: row.phone || '',
     email: row.email,
-    status: row.status,
-    location: row.location || 'Unknown',
-    avatar: row.avatar_src
-      ? {
-          src: row.avatar_src
-        }
-      : undefined
+    address: row.address || '',
+    postalCode: row.postalCode || '',
+    city: row.city || '',
+    comment: row.comment || ''
   }
 }
 
-export async function ensureCustomersTable() {
-  const db = useTursoClient()
+function normalizeOptionalText(value: string) {
+  const normalized = value.trim()
+  return normalized ? normalized : null
+}
 
-  await db.batch([
+export async function ensureCustomersTable() {
+  const client = useTursoClient()
+
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS customers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      phone TEXT,
+      address TEXT,
+      postal_code TEXT,
+      city TEXT,
+      comment TEXT
+    )
+  `)
+
+  const columns = await client.execute('PRAGMA table_info(customers)')
+  const columnNames = new Set(columns.rows.map(row => String(row.name)))
+
+  if (!columnNames.has('phone')) {
+    await client.execute('ALTER TABLE customers ADD COLUMN phone TEXT')
+  }
+
+  if (!columnNames.has('address')) {
+    await client.execute('ALTER TABLE customers ADD COLUMN address TEXT')
+  }
+
+  if (!columnNames.has('postal_code')) {
+    await client.execute('ALTER TABLE customers ADD COLUMN postal_code TEXT')
+  }
+
+  if (!columnNames.has('city')) {
+    await client.execute('ALTER TABLE customers ADD COLUMN city TEXT')
+  }
+
+  if (!columnNames.has('comment')) {
+    await client.execute('ALTER TABLE customers ADD COLUMN comment TEXT')
+  }
+
+  if (columnNames.has('status') || columnNames.has('location') || columnNames.has('avatar_src')) {
+    await client.batch([
+      `
+        CREATE TABLE customers_migrated (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          phone TEXT,
+          address TEXT,
+          postal_code TEXT,
+          city TEXT,
+          comment TEXT
+        )
+      `,
+      `
+        INSERT INTO customers_migrated (id, name, email, phone, address, postal_code, city, comment)
+        SELECT
+          id,
+          name,
+          email,
+          phone,
+          address,
+          postal_code,
+          city,
+          comment
+        FROM customers
+      `,
+      'DROP TABLE customers',
+      'ALTER TABLE customers_migrated RENAME TO customers'
+    ], 'write')
+  }
+
+  await client.batch([
     `
-      CREATE TABLE IF NOT EXISTS customers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        status TEXT NOT NULL DEFAULT 'subscribed',
-        location TEXT,
-        avatar_src TEXT
-      )
+      CREATE UNIQUE INDEX IF NOT EXISTS customers_email_idx
+      ON customers(email)
     `,
     `
-      CREATE INDEX IF NOT EXISTS customers_email_idx
-      ON customers(email)
+      CREATE INDEX IF NOT EXISTS customers_name_idx
+      ON customers(name)
     `
   ], 'write')
 
-  const result = await db.execute('SELECT COUNT(*) AS count FROM customers')
-  const count = Number(result.rows[0]?.count || 0)
+  const db = useDb()
+  const result = await db.select({ count: sql<number>`count(*)` }).from(customers)
+  const count = Number(result[0]?.count || 0)
 
   if (count > 0) {
     return
   }
 
-  await db.batch(seedCustomers.map(customer => ({
-    sql: `
-      INSERT INTO customers (id, name, email, status, location, avatar_src)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `,
-    args: [
-      customer.id,
-      customer.name,
-      customer.email,
-      customer.status,
-      customer.location,
-      customer.avatar?.src || null
-    ]
-  })), 'write')
+  await db.insert(customers).values(seedCustomers)
 }
 
 export async function listCustomers() {
   await ensureCustomersTable()
 
-  const db = useTursoClient()
-  const result = await db.execute(`
-    SELECT id, name, email, status, location, avatar_src
-    FROM customers
-    ORDER BY id ASC
-  `)
+  const db = useDb()
+  const result = await db.select().from(customers).orderBy(asc(customers.id))
 
-  return result.rows.map(row => mapCustomer(row as unknown as CustomerRow))
+  return result.map(mapCustomer)
 }
 
-export async function createCustomer(input: Pick<User, 'name' | 'email'> & Partial<Pick<User, 'status' | 'location'>>) {
+export async function createCustomer(input: Omit<Customer, 'id'>) {
   await ensureCustomersTable()
 
-  const db = useTursoClient()
-  const result = await db.execute({
-    sql: `
-      INSERT INTO customers (name, email, status, location)
-      VALUES (?, ?, ?, ?)
-      RETURNING id, name, email, status, location, avatar_src
-    `,
-    args: [
-      input.name,
-      input.email,
-      input.status || 'subscribed',
-      input.location || 'Unknown'
-    ]
-  })
+  const db = useDb()
+  const result = await db.insert(customers).values({
+    name: input.name,
+    phone: normalizeOptionalText(input.phone),
+    email: input.email,
+    address: normalizeOptionalText(input.address),
+    postalCode: normalizeOptionalText(input.postalCode),
+    city: normalizeOptionalText(input.city),
+    comment: normalizeOptionalText(input.comment)
+  }).returning()
 
-  return mapCustomer(result.rows[0] as unknown as CustomerRow)
+  const row = result[0]
+
+  if (!row) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Creation client impossible'
+    })
+  }
+
+  return mapCustomer(row)
+}
+
+export async function updateCustomer(input: Customer) {
+  await ensureCustomersTable()
+
+  const db = useDb()
+  const result = await db.update(customers)
+    .set({
+      name: input.name,
+      phone: normalizeOptionalText(input.phone),
+      email: input.email,
+      address: normalizeOptionalText(input.address),
+      postalCode: normalizeOptionalText(input.postalCode),
+      city: normalizeOptionalText(input.city),
+      comment: normalizeOptionalText(input.comment)
+    })
+    .where(eq(customers.id, input.id))
+    .returning()
+
+  if (!result.length) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Client introuvable'
+    })
+  }
+
+  const row = result[0]
+
+  if (!row) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Client introuvable'
+    })
+  }
+
+  return mapCustomer(row)
 }
 
 export async function deleteCustomers(ids: number[]) {
@@ -291,12 +223,8 @@ export async function deleteCustomers(ids: number[]) {
 
   await ensureCustomersTable()
 
-  const db = useTursoClient()
-  const placeholders = ids.map(() => '?').join(', ')
-  const result = await db.execute({
-    sql: `DELETE FROM customers WHERE id IN (${placeholders})`,
-    args: ids
-  })
+  const db = useDb()
+  const result = await db.delete(customers).where(inArray(customers.id, ids))
 
   return result.rowsAffected
 }

@@ -1,11 +1,18 @@
 import * as z from 'zod'
-import { createCustomer, deleteCustomers, listCustomers } from '../utils/customers'
+import { createCustomer, deleteCustomers, listCustomers, updateCustomer } from '../utils/customers'
 
-const createCustomerSchema = z.object({
+const customerSchema = z.object({
   name: z.string().min(2),
+  phone: z.string().min(6),
   email: z.email(),
-  status: z.enum(['subscribed', 'unsubscribed', 'bounced']).optional(),
-  location: z.string().min(2).optional()
+  address: z.string().min(2),
+  postalCode: z.string().min(2),
+  city: z.string().min(2),
+  comment: z.string().optional().default('')
+})
+
+const updateCustomerSchema = customerSchema.extend({
+  id: z.coerce.number().int().positive()
 })
 
 const deleteCustomersSchema = z.object({
@@ -18,10 +25,27 @@ export default eventHandler(async (event) => {
   }
 
   if (event.method === 'POST') {
-    const body = await readValidatedBody(event, createCustomerSchema.parse)
+    const body = await readValidatedBody(event, customerSchema.parse)
 
     try {
       return await createCustomer(body)
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+        throw createError({
+          statusCode: 409,
+          statusMessage: 'A customer with this email already exists'
+        })
+      }
+
+      throw error
+    }
+  }
+
+  if (event.method === 'PATCH') {
+    const body = await readValidatedBody(event, updateCustomerSchema.parse)
+
+    try {
+      return await updateCustomer(body)
     } catch (error) {
       if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
         throw createError({

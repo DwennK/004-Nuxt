@@ -1,32 +1,73 @@
 # 004-Nuxt
 
-Nuxt 4 dashboard app based on Nuxt UI, configured for deployment on Cloudflare Workers.
+[![Nuxt 4](https://img.shields.io/badge/Nuxt-4-00DC82?logo=nuxt&logoColor=white)](https://nuxt.com/)
+[![Nuxt UI](https://img.shields.io/badge/Nuxt_UI-v4-00DC82?logo=nuxt&logoColor=white)](https://ui.nuxt.com/)
+[![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-typed_SQL-C5F74F?logo=drizzle&logoColor=111111)](https://orm.drizzle.team/)
+[![Turso](https://img.shields.io/badge/Turso-libSQL-4FF8D2?logo=turso&logoColor=111111)](https://turso.tech/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
+
+Dashboard Nuxt 4 orienté gestion smartphone, avec interface admin construite sur Nuxt UI, base de données Turso/libSQL, accès données via Drizzle ORM, et déploiement Cloudflare Workers via Nitro.
+
+## Aperçu
+
+Le projet couvre actuellement plusieurs briques métier :
+
+- gestion des clients
+- gestion du stock smartphone
+- gestion des demandes de réservation smartphone
+- import / export CSV des demandes de réservation
+- dashboard Nuxt UI avec table, filtres, modales et actions CRUD
 
 ## Stack
 
-- Nuxt 4
-- Nuxt UI
-- npm
-- Cloudflare Workers via Nitro
-- Turso-ready environment variables
+- `Nuxt 4`
+- `Vue 3`
+- `@nuxt/ui`
+- `Turso` avec `@libsql/client`
+- `Drizzle ORM` + `drizzle-kit`
+- `Tailwind CSS`
+- `Zod`
+- `Cloudflare Workers` via `Nitro`
 
-## Setup
+## Base de données
 
-Install dependencies:
+Le projet utilise maintenant `Drizzle ORM` comme couche d'accès aux données.
+
+Fichiers clés :
+
+- schéma Drizzle : [`server/db/schema.ts`](./server/db/schema.ts)
+- config Drizzle Kit : [`drizzle.config.ts`](./drizzle.config.ts)
+- connexion Turso / Drizzle : [`server/utils/turso.ts`](./server/utils/turso.ts)
+
+Tables principales :
+
+- `customers`
+- `smartphone_stocks`
+- `smartphone_reservation_requests`
+
+Note importante :
+
+- les modules métiers utilisent Drizzle pour les requêtes CRUD
+- les fonctions `ensure*Table()` existantes gardent encore une logique de bootstrap / compatibilité pour les bases déjà présentes
+- `db:push` est disponible pour synchroniser le schéma défini par Drizzle
+
+## Installation
+
+Installer les dépendances :
 
 ```bash
 npm install
 ```
 
-Create your local environment file:
+Créer le fichier d'environnement local :
 
 ```bash
 cp .env.example .env
 ```
 
-## Environment Variables
+## Variables d’environnement
 
-Defined in [.env.example](./.env.example):
+Définies dans [`/.env.example`](./.env.example) :
 
 ```bash
 NUXT_PUBLIC_SITE_URL=
@@ -34,61 +75,84 @@ TURSO_URL=
 TURSO_TOKEN=
 ```
 
-- `NUXT_PUBLIC_SITE_URL`: public site URL
-- `TURSO_URL`: Turso database URL
-- `TURSO_TOKEN`: Turso auth token
+- `NUXT_PUBLIC_SITE_URL` : URL publique du site
+- `TURSO_URL` : URL de la base Turso
+- `TURSO_TOKEN` : token d'authentification Turso
 
-## Development
+## Développement
 
-Start the Nuxt dev server:
+Lancer le serveur de dev Nuxt :
 
 ```bash
 npm run dev
 ```
 
-Use `npm run dev` for day-to-day development:
+Contrôles qualité :
 
-- fast feedback loop
-- hot reload
-- best choice while building features
+```bash
+npm run lint
+npm run typecheck
+```
+
+## Drizzle
+
+Pousser le schéma Drizzle vers Turso :
+
+```bash
+npm run db:push
+```
+
+Lancer Drizzle Studio :
+
+```bash
+npm run db:studio
+```
 
 ## Cloudflare Workers
 
-This project uses the Nitro `cloudflare_module` preset configured in [nuxt.config.ts](./nuxt.config.ts).
+Le projet utilise le preset Nitro `cloudflare_module` configuré dans [`nuxt.config.ts`](./nuxt.config.ts).
 
-Build for production:
+Build production :
 
 ```bash
 npm run build
 ```
 
-Preview the Worker locally with Wrangler:
+Prévisualisation locale du worker :
 
 ```bash
 npm run preview
 ```
 
-Use `npm run preview` when you want to validate the Cloudflare runtime locally:
-
-- runs a production build first
-- starts the app with Wrangler
-- closer to real Cloudflare Workers behavior than `npm run dev`
-- slower than the regular dev server, so it is not the default coding workflow
-
-Deploy to Cloudflare Workers:
+Déploiement :
 
 ```bash
 npm run deploy
 ```
 
-Generate Cloudflare runtime types:
+Génération des types Cloudflare :
 
 ```bash
 npm run cf-typegen
 ```
 
-## Deployment Notes
+## Structure utile
 
-- Deploy using the generated Nitro output, not `wrangler deploy` at the repo root.
-- The deploy script already uses the correct command: `wrangler --cwd .output deploy`.
-- For GitHub-based deployments, make sure Cloudflare uses the Workers/Nitro workflow rather than a static Pages setup.
+```text
+app/
+  components/
+  layouts/
+  pages/
+server/
+  api/
+  db/
+  utils/
+drizzle.config.ts
+nuxt.config.ts
+```
+
+## Notes
+
+- ne pas déployer avec `wrangler deploy` à la racine du repo
+- le script de déploiement passe bien par `.output`
+- si tu fais évoluer le modèle de données, mets à jour le schéma Drizzle avant de pousser les changements

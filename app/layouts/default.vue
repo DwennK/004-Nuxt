@@ -14,6 +14,13 @@ const links = [[{
     open.value = false
   }
 }, {
+  label: 'Reservations Smartphone',
+  icon: 'i-lucide-clipboard-list',
+  to: '/reservations-smartphone',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
   label: 'Home',
   icon: 'i-lucide-house',
   to: '/',

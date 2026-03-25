@@ -12,6 +12,17 @@ export interface User {
   location: string
 }
 
+export interface Customer {
+  id: number
+  name: string
+  phone: string
+  email: string
+  address: string
+  postalCode: string
+  city: string
+  comment: string
+}
+
 export interface SmartphoneStock {
   id: number
   model: string
@@ -20,6 +31,19 @@ export interface SmartphoneStock {
   capacity: string
   stockedAt: string
   sold: boolean
+}
+
+export type SmartphoneReservationStatus = 'pending' | 'contacted' | 'sold'
+
+export interface SmartphoneReservationRequest {
+  id: number
+  name: string
+  phone: string
+  model: string
+  storage: string
+  requestedAt: string
+  status: SmartphoneReservationStatus
+  notes: string
 }
 
 export interface Mail {

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import { upperFirst } from 'scule'
-import { getPaginationRowModel } from '@tanstack/table-core'
 import type { Row } from '@tanstack/table-core'
-import type { Customer } from '~/types'
+import { getPaginationRowModel } from '@tanstack/table-core'
+import { format, isValid, parseISO } from 'date-fns'
+import { upperFirst } from 'scule'
+import type { SmartphoneReservationRequest, SmartphoneReservationStatus } from '~/types'
 
-type CustomerTableInstance = {
+type ReservationTableInstance = {
   tableApi?: {
-    getFilteredSelectedRowModel: () => { rows: Row<Customer>[] }
+    getFilteredSelectedRowModel: () => { rows: Row<SmartphoneReservationRequest>[] }
     getColumn: (id: string) => {
       getFilterValue: () => unknown
       setFilterValue: (value: string | undefined) => void
@@ -18,7 +19,7 @@ type CustomerTableInstance = {
       getCanHide: () => boolean
       getIsVisible: () => boolean
     }>
-    getFilteredRowModel: () => { rows: Row<Customer>[] }
+    getFilteredRowModel: () => { rows: Row<SmartphoneReservationRequest>[] }
     getState: () => {
       pagination: {
         pageIndex: number
@@ -29,14 +30,15 @@ type CustomerTableInstance = {
   }
 }
 
+const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
-const UDropdownMenu = resolveComponent('UDropdownMenu')
 const UCheckbox = resolveComponent('UCheckbox')
+const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
-const table = useTemplateRef<CustomerTableInstance>('table')
+const table = useTemplateRef<ReservationTableInstance>('table')
 const editModalOpen = ref(false)
-const editingItem = ref<Customer | null>(null)
+const editingItem = ref<SmartphoneReservationRequest | null>(null)
 
 const columnFilters = ref([{
   id: 'name',
@@ -45,24 +47,105 @@ const columnFilters = ref([{
 const columnVisibility = ref()
 const rowSelection = ref({})
 
-const { data, status } = await useFetch<Customer[]>('/api/customers', {
+const { data, status } = await useFetch<SmartphoneReservationRequest[]>('/api/smartphone-reservations', {
+  key: 'smartphone-reservation-requests',
   lazy: true
 })
 
-function getRowItems(row: Row<Customer>) {
+const statusLabels: Record<SmartphoneReservationStatus, string> = {
+  pending: 'En attente',
+  contacted: 'Contacte',
+  sold: 'Vendu'
+}
+
+const statusColors: Record<SmartphoneReservationStatus, 'warning' | 'info' | 'success'> = {
+  pending: 'warning',
+  contacted: 'info',
+  sold: 'success'
+}
+
+async function exportCsv() {
+  try {
+    const response = await fetch('/api/smartphone-reservations/export')
+
+    if (!response.ok) {
+      throw new Error('Export impossible')
+    }
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    const contentDisposition = response.headers.get('content-disposition') || ''
+    const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/)
+
+    anchor.href = url
+    anchor.download = fileNameMatch?.[1] || 'demandes-reservation-smartphones.csv'
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+
+    toast.add({
+      title: 'Export termine',
+      description: 'Le fichier CSV a ete telecharge.',
+      color: 'success'
+    })
+  } catch (error) {
+    toast.add({
+      title: 'Erreur',
+      description: error instanceof Error ? error.message : 'Export impossible',
+      color: 'error'
+    })
+  }
+}
+
+function formatSwissDate(value: string) {
+  if (!value) {
+    return ''
+  }
+
+  const date = parseISO(value)
+  return isValid(date) ? format(date, 'dd.MM.yyyy') : value
+}
+
+async function deleteSingleReservation(id: number) {
+  try {
+    await $fetch('/api/smartphone-reservations', {
+      method: 'DELETE',
+      body: {
+        ids: [id]
+      }
+    })
+
+    toast.add({
+      title: 'Demande supprimee',
+      description: 'La demande a ete retiree de la liste.',
+      color: 'success'
+    })
+    await refreshNuxtData('smartphone-reservation-requests')
+  } catch (error) {
+    toast.add({
+      title: 'Erreur',
+      description: error instanceof Error ? error.message : 'Suppression impossible',
+      color: 'error'
+    })
+  }
+}
+
+function getRowItems(row: Row<SmartphoneReservationRequest>) {
   return [
     {
       type: 'label',
       label: 'Actions'
     },
     {
-      label: 'Copy customer ID',
+      label: 'Copier l ID',
       icon: 'i-lucide-copy',
       onSelect() {
         navigator.clipboard.writeText(row.original.id.toString())
         toast.add({
-          title: 'Copied to clipboard',
-          description: 'Customer ID copied to clipboard'
+          title: 'Copie',
+          description: 'ID de la demande copie dans le presse-papiers.'
         })
       }
     },
@@ -81,38 +164,21 @@ function getRowItems(row: Row<Customer>) {
       type: 'separator'
     },
     {
-      label: 'Delete customer',
+      label: 'Supprimer',
       icon: 'i-lucide-trash',
       color: 'error',
       onSelect() {
-        $fetch('/api/customers', {
-          method: 'DELETE',
-          body: {
-            ids: [row.original.id]
-          }
-        }).then(async () => {
-          toast.add({
-            title: 'Customer deleted',
-            description: 'The customer has been deleted.'
-          })
-          await refreshNuxtData()
-        }).catch((error) => {
-          toast.add({
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'Unable to delete customer',
-            color: 'error'
-          })
-        })
+        deleteSingleReservation(row.original.id)
       }
     }
   ]
 }
 
-const selectedCustomerIds = computed<number[]>(() => {
+const selectedReservationIds = computed<number[]>(() => {
   return table.value?.tableApi?.getFilteredSelectedRowModel().rows.map(row => row.original.id) || []
 })
 
-const columns: TableColumn<Customer>[] = [
+const columns: TableColumn<SmartphoneReservationRequest>[] = [
   {
     id: 'select',
     header: ({ table }) =>
@@ -137,22 +203,13 @@ const columns: TableColumn<Customer>[] = [
   },
   {
     accessorKey: 'name',
-    header: 'Name',
-    cell: ({ row }) => h('p', { class: 'font-medium text-highlighted' }, row.original.name)
-  },
-  {
-    accessorKey: 'phone',
-    header: 'Telephone'
-  },
-  {
-    accessorKey: 'email',
     header: ({ column }) => {
       const isSorted = column.getIsSorted()
 
       return h(UButton, {
         color: 'neutral',
         variant: 'ghost',
-        label: 'Email',
+        label: 'Nom',
         icon: isSorted
           ? isSorted === 'asc'
             ? 'i-lucide-arrow-up-narrow-wide'
@@ -164,48 +221,78 @@ const columns: TableColumn<Customer>[] = [
     }
   },
   {
-    accessorKey: 'address',
-    header: 'Adresse'
+    accessorKey: 'phone',
+    header: 'Telephone',
+    cell: ({ row }) => h('span', { class: 'font-mono text-xs sm:text-sm' }, row.original.phone)
   },
   {
-    accessorKey: 'postalCode',
-    header: 'Code Postal'
+    accessorKey: 'model',
+    header: 'Modele'
   },
   {
-    accessorKey: 'city',
-    header: 'Ville'
+    accessorKey: 'storage',
+    header: 'Stockage'
   },
   {
-    accessorKey: 'comment',
-    header: 'Commentaire',
-    cell: ({ row }) => h('p', { class: 'max-w-xs truncate text-muted' }, row.original.comment || '-')
+    accessorKey: 'requestedAt',
+    header: 'Date demande',
+    cell: ({ row }) => formatSwissDate(row.original.requestedAt)
+  },
+  {
+    accessorKey: 'status',
+    header: 'Etat',
+    filterFn: 'equals',
+    cell: ({ row }) => h(UBadge, {
+      class: 'capitalize',
+      variant: 'subtle',
+      color: statusColors[row.original.status]
+    }, () => statusLabels[row.original.status])
+  },
+  {
+    accessorKey: 'notes',
+    header: 'Remarques',
+    cell: ({ row }) => h('p', {
+      class: 'max-w-xs truncate text-muted'
+    }, row.original.notes || '-')
   },
   {
     id: 'actions',
-    cell: ({ row }) => {
-      return h(
-        'div',
-        { class: 'text-right' },
-        h(
-          UDropdownMenu,
-          {
-            content: {
-              align: 'end'
-            },
-            items: getRowItems(row)
+    cell: ({ row }) => h(
+      'div',
+      { class: 'text-right' },
+      h(
+        UDropdownMenu,
+        {
+          content: {
+            align: 'end'
           },
-          () =>
-            h(UButton, {
-              icon: 'i-lucide-ellipsis-vertical',
-              color: 'neutral',
-              variant: 'ghost',
-              class: 'ml-auto'
-            })
-        )
+          items: getRowItems(row)
+        },
+        () => h(UButton, {
+          icon: 'i-lucide-ellipsis-vertical',
+          color: 'neutral',
+          variant: 'ghost',
+          class: 'ml-auto'
+        })
       )
-    }
+    )
   }
 ]
+
+const requestStatusFilter = ref('all')
+
+watch(() => requestStatusFilter.value, (newVal) => {
+  if (!table.value?.tableApi) return
+
+  const statusColumn = table.value.tableApi.getColumn('status')
+  if (!statusColumn) return
+
+  if (newVal === 'all') {
+    statusColumn.setFilterValue(undefined)
+  } else {
+    statusColumn.setFilterValue(newVal)
+  }
+})
 
 const name = computed({
   get: (): string => {
@@ -223,16 +310,24 @@ const pagination = ref({
 </script>
 
 <template>
-  <UDashboardPanel id="customers">
+  <UDashboardPanel id="smartphone-reservations">
     <template #header>
-      <UDashboardNavbar title="Customers">
+      <UDashboardNavbar title="Demandes reservation">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
 
         <template #right>
-          <CustomersAddModal />
-          <CustomersAddModal
+          <ReservationsFormModal />
+          <ReservationsImportModal />
+          <UButton
+            label="Exporter CSV"
+            icon="i-lucide-file-down"
+            color="neutral"
+            variant="outline"
+            @click="exportCsv"
+          />
+          <ReservationsFormModal
             v-model:open="editModalOpen"
             mode="edit"
             :item="editingItem"
@@ -248,17 +343,17 @@ const pagination = ref({
           v-model="name"
           class="max-w-sm"
           icon="i-lucide-search"
-          placeholder="Filter names..."
+          placeholder="Filtrer par nom..."
         />
 
         <div class="flex flex-wrap items-center gap-1.5">
-          <CustomersDeleteModal
+          <ReservationsDeleteModal
             :count="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
-            :ids="selectedCustomerIds"
+            :ids="selectedReservationIds"
           >
             <UButton
               v-if="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
-              label="Delete"
+              label="Supprimer"
               color="error"
               variant="subtle"
               icon="i-lucide-trash"
@@ -269,7 +364,20 @@ const pagination = ref({
                 </UKbd>
               </template>
             </UButton>
-          </CustomersDeleteModal>
+          </ReservationsDeleteModal>
+
+          <USelect
+            v-model="requestStatusFilter"
+            :items="[
+              { label: 'Tous', value: 'all' },
+              { label: 'En attente', value: 'pending' },
+              { label: 'Contacte', value: 'contacted' },
+              { label: 'Vendu', value: 'sold' }
+            ]"
+            :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
+            placeholder="Filtrer l etat"
+            class="min-w-36"
+          />
 
           <UDropdownMenu
             :items="
@@ -318,7 +426,7 @@ const pagination = ref({
           thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
           tbody: '[&>tr]:last:[&>td]:border-b-0',
           th: 'py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-          td: 'border-b border-default',
+          td: 'border-b border-default align-top',
           separator: 'h-0'
         }"
       />

@@ -1,0 +1,62 @@
+import * as z from 'zod'
+import {
+  createSmartphoneReservation,
+  deleteSmartphoneReservations,
+  listSmartphoneReservations,
+  updateSmartphoneReservation
+} from '../utils/smartphone-reservations'
+
+const optionalText = (minLength: number) => z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value
+  }
+
+  const normalized = value.trim()
+  return normalized === '' ? undefined : normalized
+}, z.string().min(minLength).optional().default(''))
+
+const smartphoneReservationSchema = z.object({
+  name: z.string().min(2),
+  phone: z.string().min(6),
+  model: z.string().min(2),
+  storage: z.string().min(2),
+  requestedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  status: z.enum(['pending', 'contacted', 'sold']).default('pending'),
+  notes: optionalText(2)
+})
+
+const updateSmartphoneReservationSchema = smartphoneReservationSchema.extend({
+  id: z.coerce.number().int().positive()
+})
+
+const deleteSmartphoneReservationsSchema = z.object({
+  ids: z.array(z.coerce.number().int().positive()).min(1)
+})
+
+export default eventHandler(async (event) => {
+  if (event.method === 'GET') {
+    return listSmartphoneReservations()
+  }
+
+  if (event.method === 'POST') {
+    const body = await readValidatedBody(event, smartphoneReservationSchema.parse)
+    return createSmartphoneReservation(body)
+  }
+
+  if (event.method === 'PATCH') {
+    const body = await readValidatedBody(event, updateSmartphoneReservationSchema.parse)
+    return updateSmartphoneReservation(body)
+  }
+
+  if (event.method === 'DELETE') {
+    const body = await readValidatedBody(event, deleteSmartphoneReservationsSchema.parse)
+    const deleted = await deleteSmartphoneReservations(body.ids)
+
+    return { deleted }
+  }
+
+  throw createError({
+    statusCode: 405,
+    statusMessage: 'Method not allowed'
+  })
+})
