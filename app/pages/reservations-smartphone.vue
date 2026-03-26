@@ -108,6 +108,11 @@ function formatSwissDate(value: string) {
   return isValid(date) ? format(date, 'dd.MM.yyyy') : value
 }
 
+function openReservationEditor(item: SmartphoneReservationRequest) {
+  editingItem.value = item
+  editModalOpen.value = true
+}
+
 async function deleteSingleReservation(id: number) {
   try {
     await $fetch('/api/smartphone-reservations', {
@@ -156,8 +161,7 @@ function getRowItems(row: Row<SmartphoneReservationRequest>) {
       label: 'Modifier',
       icon: 'i-lucide-pencil',
       onSelect() {
-        editingItem.value = row.original
-        editModalOpen.value = true
+        openReservationEditor(row.original)
       }
     },
     {
@@ -223,7 +227,11 @@ const columns: TableColumn<SmartphoneReservationRequest>[] = [
   {
     accessorKey: 'phone',
     header: 'Téléphone',
-    cell: ({ row }) => h('span', { class: 'font-mono text-xs sm:text-sm' }, row.original.phone)
+    cell: ({ row }) => h('a', {
+      href: `tel:${row.original.phone.replace(/\s+/g, '')}`,
+      class: 'font-mono text-xs text-primary underline-offset-4 hover:underline sm:text-sm',
+      onClick: (event: MouseEvent) => event.stopPropagation()
+    }, row.original.phone)
   },
   {
     accessorKey: 'model',
@@ -434,11 +442,12 @@ const pagination = ref({
         :ui="{
           base: 'table-fixed border-separate border-spacing-0',
           thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-          tbody: '[&>tr]:last:[&>td]:border-b-0',
+          tbody: '[&>tr]:last:[&>td]:border-b-0 [&>tr]:cursor-pointer [&>tr]:hover:bg-elevated/30',
           th: 'py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
           td: 'border-b border-default align-top',
           separator: 'h-0'
         }"
+        @select="(_, row) => openReservationEditor(row.original)"
       />
 
       <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">

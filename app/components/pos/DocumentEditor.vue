@@ -280,6 +280,18 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
     }))
   })
 }
+
+function selectAllOnFocus(event: FocusEvent) {
+  const target = event.target
+
+  if (!(target instanceof HTMLInputElement)) {
+    return
+  }
+
+  requestAnimationFrame(() => {
+    target.select()
+  })
+}
 </script>
 
 <template>
@@ -459,12 +471,13 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
                 v-model="row.original.unitPrice"
                 :min="0"
                 :step="0.05"
+                :increment="false"
+                :decrement="false"
                 size="sm"
                 variant="subtle"
-                :increment="{ variant: 'ghost' }"
-                :decrement="{ variant: 'ghost' }"
-                :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
+                :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
                 class="w-full"
+                @focus="selectAllOnFocus"
               />
             </UFormField>
           </template>
