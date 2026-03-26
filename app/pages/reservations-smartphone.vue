@@ -54,7 +54,7 @@ const { data, status } = await useFetch<SmartphoneReservationRequest[]>('/api/sm
 
 const statusLabels: Record<SmartphoneReservationStatus, string> = {
   pending: 'En attente',
-  contacted: 'Contacte',
+  contacted: 'Contacté',
   sold: 'Vendu'
 }
 
@@ -86,8 +86,8 @@ async function exportCsv() {
     URL.revokeObjectURL(url)
 
     toast.add({
-      title: 'Export termine',
-      description: 'Le fichier CSV a ete telecharge.',
+      title: 'Export terminé',
+      description: 'Le fichier CSV a été téléchargé.',
       color: 'success'
     })
   } catch (error) {
@@ -118,8 +118,8 @@ async function deleteSingleReservation(id: number) {
     })
 
     toast.add({
-      title: 'Demande supprimee',
-      description: 'La demande a ete retiree de la liste.',
+      title: 'Demande supprimée',
+      description: 'La demande a été retirée de la liste.',
       color: 'success'
     })
     await refreshNuxtData('smartphone-reservation-requests')
@@ -139,13 +139,13 @@ function getRowItems(row: Row<SmartphoneReservationRequest>) {
       label: 'Actions'
     },
     {
-      label: 'Copier l ID',
+      label: 'Copier l’ID',
       icon: 'i-lucide-copy',
       onSelect() {
         navigator.clipboard.writeText(row.original.id.toString())
         toast.add({
-          title: 'Copie',
-          description: 'ID de la demande copie dans le presse-papiers.'
+          title: 'Copié',
+          description: 'ID de la demande copié dans le presse-papiers.'
         })
       }
     },
@@ -188,13 +188,13 @@ const columns: TableColumn<SmartphoneReservationRequest>[] = [
           : table.getIsAllPageRowsSelected(),
         'onUpdate:modelValue': (value: boolean | 'indeterminate') =>
           table.toggleAllPageRowsSelected(!!value),
-        'ariaLabel': 'Select all'
+        'ariaLabel': 'Tout sélectionner'
       }),
     cell: ({ row }) =>
       h(UCheckbox, {
         'modelValue': row.getIsSelected(),
         'onUpdate:modelValue': (value: boolean | 'indeterminate') => row.toggleSelected(!!value),
-        'ariaLabel': 'Select row'
+        'ariaLabel': 'Sélectionner la ligne'
       })
   },
   {
@@ -222,25 +222,26 @@ const columns: TableColumn<SmartphoneReservationRequest>[] = [
   },
   {
     accessorKey: 'phone',
-    header: 'Telephone',
+    header: 'Téléphone',
     cell: ({ row }) => h('span', { class: 'font-mono text-xs sm:text-sm' }, row.original.phone)
   },
   {
     accessorKey: 'model',
-    header: 'Modele'
+    header: 'Modèle'
   },
   {
     accessorKey: 'storage',
-    header: 'Stockage'
+    header: 'Stockage',
+    cell: ({ row }) => row.original.storage || '-'
   },
   {
     accessorKey: 'requestedAt',
-    header: 'Date demande',
+    header: 'Date de demande',
     cell: ({ row }) => formatSwissDate(row.original.requestedAt)
   },
   {
     accessorKey: 'status',
-    header: 'Etat',
+    header: 'État',
     filterFn: 'equals',
     cell: ({ row }) => h(UBadge, {
       class: 'capitalize',
@@ -312,7 +313,7 @@ const pagination = ref({
 <template>
   <UDashboardPanel id="smartphone-reservations">
     <template #header>
-      <UDashboardNavbar title="Demandes reservation">
+      <UDashboardNavbar title="Demandes de réservation">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -371,11 +372,11 @@ const pagination = ref({
             :items="[
               { label: 'Tous', value: 'all' },
               { label: 'En attente', value: 'pending' },
-              { label: 'Contacte', value: 'contacted' },
+              { label: 'Contacté', value: 'contacted' },
               { label: 'Vendu', value: 'sold' }
             ]"
             :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
-            placeholder="Filtrer l etat"
+            placeholder="Filtrer l’état"
             class="min-w-36"
           />
 
@@ -385,7 +386,16 @@ const pagination = ref({
                 ?.getAllColumns()
                 .filter((column: any) => column.getCanHide())
                 .map((column: any) => ({
-                  label: upperFirst(column.id),
+                  label: ({
+                    id: 'ID',
+                    name: 'Nom',
+                    phone: 'Téléphone',
+                    model: 'Modèle',
+                    storage: 'Stockage',
+                    requestedAt: 'Date de demande',
+                    status: 'État',
+                    notes: 'Remarques'
+                  } as Record<string, string>)[column.id] || upperFirst(column.id),
                   type: 'checkbox' as const,
                   checked: column.getIsVisible(),
                   onUpdateChecked(checked: boolean) {
@@ -399,7 +409,7 @@ const pagination = ref({
             :content="{ align: 'end' }"
           >
             <UButton
-              label="Display"
+              label="Colonnes"
               color="neutral"
               variant="outline"
               trailing-icon="i-lucide-settings-2"
@@ -433,8 +443,8 @@ const pagination = ref({
 
       <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
         <div class="text-sm text-muted">
-          {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length || 0 }} of
-          {{ table?.tableApi?.getFilteredRowModel().rows.length || 0 }} row(s) selected.
+          {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length || 0 }} sur
+          {{ table?.tableApi?.getFilteredRowModel().rows.length || 0 }} ligne(s) sélectionnée(s).
         </div>
 
         <div class="flex items-center gap-1.5">

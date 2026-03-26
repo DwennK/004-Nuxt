@@ -31,12 +31,12 @@ const sorting = ref([{ id: 'paidAt', desc: true }])
 const columnVisibility = ref()
 
 const methodItems = [
-  { label: 'All methods', value: 'all' },
+  { label: 'Tous les modes', value: 'all' },
   ...Object.entries(paymentMethodLabels).map(([value, label]) => ({ label, value }))
 ]
 
 const statusItems = [
-  { label: 'All statuses', value: 'all' },
+  { label: 'Tous les statuts', value: 'all' },
   ...Object.entries(paymentStatusLabels).map(([value, label]) => ({ label, value }))
 ]
 
@@ -66,19 +66,19 @@ watch([search, methodFilter, statusFilter, dateFilter], () => {
 
 async function removePayment(id: number) {
   await $fetch(`/api/payments/${id}`, { method: 'DELETE' })
-  toast.add({ title: 'Payment removed', color: 'success' })
+  toast.add({ title: 'Paiement supprimé', color: 'success' })
   await refresh()
 }
 
 function getRowItems(payment: PaymentListItem) {
   return [[{
-    label: 'Open document',
+    label: 'Ouvrir le document',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
       navigateTo(`/documents/${payment.documentId}`)
     }
   }], [{
-    label: 'Delete',
+    label: 'Supprimer',
     icon: 'i-lucide-trash',
     color: 'error',
     onSelect() {
@@ -93,7 +93,7 @@ const columns: TableColumn<PaymentListItem>[] = [
     header: ({ column }) => h(UButton, {
       color: 'neutral',
       variant: 'ghost',
-      label: 'Amount',
+      label: 'Montant',
       icon: column.getIsSorted() === 'asc'
         ? 'i-lucide-arrow-up-wide-narrow'
         : column.getIsSorted() === 'desc'
@@ -112,9 +112,9 @@ const columns: TableColumn<PaymentListItem>[] = [
   },
   {
     accessorKey: 'customerName',
-    header: 'Customer',
+    header: 'Client',
     cell: ({ row }) => h('div', { class: 'min-w-0' }, [
-      h('p', { class: 'font-medium truncate' }, row.original.customerName || 'Walk-in / not set'),
+      h('p', { class: 'font-medium truncate' }, row.original.customerName || 'Passage comptoir / non défini'),
       h('p', { class: 'text-sm text-toned truncate' }, row.original.documentNumber)
     ])
   },
@@ -125,12 +125,12 @@ const columns: TableColumn<PaymentListItem>[] = [
   },
   {
     accessorKey: 'reference',
-    header: 'Reference',
-    cell: ({ row }) => row.original.reference || 'No reference'
+    header: 'Référence',
+    cell: ({ row }) => row.original.reference || 'Aucune référence'
   },
   {
     accessorKey: 'paidAt',
-    header: 'Encaisse a',
+    header: 'Encaissé à',
     cell: ({ row }) => formatDateTime(row.original.paidAt)
   },
   {
@@ -154,7 +154,7 @@ const columns: TableColumn<PaymentListItem>[] = [
 <template>
   <UDashboardPanel id="payments-list">
     <template #header>
-      <UDashboardNavbar title="Payments">
+      <UDashboardNavbar title="Paiements">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -165,7 +165,7 @@ const columns: TableColumn<PaymentListItem>[] = [
           <UInput
             v-model="search"
             icon="i-lucide-search"
-            placeholder="Search by customer, document or reference"
+            placeholder="Rechercher par client, document ou référence"
             class="max-w-md"
           />
           <USelectMenu
@@ -189,7 +189,14 @@ const columns: TableColumn<PaymentListItem>[] = [
               ?.getAllColumns()
               .filter((column: DashboardTableColumn) => column.getCanHide())
               .map((column: DashboardTableColumn) => ({
-                label: upperFirst(column.id),
+                label: ({
+                  amount: 'Montant',
+                  customerName: 'Client',
+                  documentType: 'Document',
+                  reference: 'Référence',
+                  paidAt: 'Encaissé à',
+                  actions: 'Actions'
+                } as Record<string, string>)[column.id] || upperFirst(column.id),
                 type: 'checkbox' as const,
                 checked: column.getIsVisible(),
                 onUpdateChecked(checked: boolean) {
@@ -203,7 +210,7 @@ const columns: TableColumn<PaymentListItem>[] = [
           :content="{ align: 'end' }"
         >
           <UButton
-            label="Columns"
+            label="Colonnes"
             color="neutral"
             variant="outline"
             trailing-icon="i-lucide-settings-2"
@@ -215,10 +222,10 @@ const columns: TableColumn<PaymentListItem>[] = [
     <template #body>
       <div class="space-y-4">
         <div class="grid gap-4 md:grid-cols-4">
-          <PosSummaryCard title="Payments" :value="String(payments?.length || 0)" icon="i-lucide-wallet" />
-          <PosSummaryCard title="Paid total" :value="formatCurrency((filteredPayments || []).reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-wallet-cards" />
-          <PosSummaryCard title="Cash" :value="formatCurrency((filteredPayments || []).filter(payment => payment.method === 'cash').reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-banknote" />
-          <PosSummaryCard title="Visible" :value="String(filteredPayments.length)" icon="i-lucide-filter" />
+          <PosSummaryCard title="Paiements" :value="String(payments?.length || 0)" icon="i-lucide-wallet" />
+          <PosSummaryCard title="Total encaissé" :value="formatCurrency((filteredPayments || []).reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-wallet-cards" />
+          <PosSummaryCard title="Espèces" :value="formatCurrency((filteredPayments || []).filter(payment => payment.method === 'cash').reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-banknote" />
+          <PosSummaryCard title="Visibles" :value="String(filteredPayments.length)" icon="i-lucide-filter" />
         </div>
 
         <UTable
@@ -245,15 +252,15 @@ const columns: TableColumn<PaymentListItem>[] = [
           <template #empty>
             <UEmpty
               icon="i-lucide-wallet"
-              title="No payments found"
-              description="Adjust the date or method filters to see results."
+              title="Aucun paiement trouvé"
+              description="Ajustez la date ou les filtres pour voir des résultats."
             />
           </template>
         </UTable>
 
         <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
           <p class="text-sm text-toned">
-            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredPayments.length }} payment(s)
+            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredPayments.length }} paiement(s)
           </p>
 
           <UPagination

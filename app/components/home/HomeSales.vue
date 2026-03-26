@@ -62,7 +62,7 @@ const columns: TableColumn<Sale>[] = [
   },
   {
     accessorKey: 'status',
-    header: 'Status',
+    header: 'Statut',
     cell: ({ row }) => {
       const color = {
         paid: 'success' as const,
@@ -70,24 +70,26 @@ const columns: TableColumn<Sale>[] = [
         refunded: 'neutral' as const
       }[row.getValue('status') as string]
 
-      return h(UBadge, { class: 'capitalize', variant: 'subtle', color }, () =>
-        row.getValue('status')
-      )
+      return h(UBadge, { class: 'capitalize', variant: 'subtle', color }, () => ({
+        paid: 'payé',
+        failed: 'échoué',
+        refunded: 'remboursé'
+      }[row.getValue('status') as string] || row.getValue('status')))
     }
   },
   {
     accessorKey: 'email',
-    header: 'Email'
+    header: 'E-mail'
   },
   {
     accessorKey: 'amount',
-    header: () => h('div', { class: 'text-right' }, 'Amount'),
+    header: () => h('div', { class: 'text-right' }, 'Montant'),
     cell: ({ row }) => {
       const amount = Number.parseFloat(row.getValue('amount'))
 
-      const formatted = new Intl.NumberFormat('en-US', {
+      const formatted = new Intl.NumberFormat('fr-CH', {
         style: 'currency',
-        currency: 'EUR'
+        currency: 'CHF'
       }).format(amount)
 
       return h('div', { class: 'text-right font-medium' }, formatted)

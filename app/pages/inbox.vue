@@ -4,10 +4,10 @@ import { breakpointsTailwind } from '@vueuse/core'
 import type { Mail } from '~/types'
 
 const tabItems = [{
-  label: 'All',
+  label: 'Tous',
   value: 'all'
 }, {
-  label: 'Unread',
+  label: 'Non lus',
   value: 'unread'
 }]
 const selectedTab = ref('all')
@@ -55,7 +55,7 @@ const isMobile = breakpoints.smaller('lg')
     :max-size="30"
     resizable
   >
-    <UDashboardNavbar title="Inbox">
+    <UDashboardNavbar title="Boîte de réception">
       <template #leading>
         <UDashboardSidebarCollapse />
       </template>

@@ -8,32 +8,32 @@ const state = reactive<{ [key: string]: boolean }>({
 })
 
 const sections = [{
-  title: 'Notification channels',
-  description: 'Where can we notify you?',
+  title: 'Canaux de notification',
+  description: 'Où souhaitez-vous recevoir les notifications ?',
   fields: [{
     name: 'email',
-    label: 'Email',
-    description: 'Receive a daily email digest.'
+    label: 'E-mail',
+    description: 'Recevoir un récapitulatif quotidien par e-mail.'
   }, {
     name: 'desktop',
-    label: 'Desktop',
-    description: 'Receive desktop notifications.'
+    label: 'Bureau',
+    description: 'Recevoir des notifications sur l’ordinateur.'
   }]
 }, {
-  title: 'Account updates',
-  description: 'Receive updates about Nuxt UI.',
+  title: 'Mises à jour du compte',
+  description: 'Recevoir les nouvelles liées à l’espace de travail.',
   fields: [{
     name: 'weekly_digest',
-    label: 'Weekly digest',
-    description: 'Receive a weekly digest of news.'
+    label: 'Récapitulatif hebdomadaire',
+    description: 'Recevoir un résumé hebdomadaire des nouveautés.'
   }, {
     name: 'product_updates',
-    label: 'Product updates',
-    description: 'Receive a monthly email with all new features and updates.'
+    label: 'Mises à jour produit',
+    description: 'Recevoir un e-mail mensuel avec les nouveautés et améliorations.'
   }, {
     name: 'important_updates',
-    label: 'Important updates',
-    description: 'Receive emails about important updates like security fixes, maintenance, etc.'
+    label: 'Mises à jour importantes',
+    description: 'Recevoir les informations importantes comme la sécurité, la maintenance, etc.'
   }]
 }]
 

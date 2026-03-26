@@ -29,7 +29,7 @@ const schema = z.object({
   model: z.string().min(2, 'Trop court'),
   imei: optionalText(8, 'IMEI invalide'),
   sku: optionalText(3, 'SKU invalide'),
-  capacity: z.string().min(2, 'Capacite invalide'),
+  capacity: z.string().min(2, 'Capacité invalide'),
   stockedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide'),
   sold: z.boolean().default(false)
 })
@@ -72,8 +72,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       })
 
       toast.add({
-        title: 'Smartphone mis a jour',
-        description: `${event.data.model} a ete modifie.`,
+        title: 'Smartphone mis à jour',
+        description: `${event.data.model} a été modifié.`,
         color: 'success'
       })
     } else {
@@ -83,8 +83,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       })
 
       toast.add({
-        title: 'Smartphone ajoute',
-        description: `${event.data.model} a ete ajoute au stock.`,
+        title: 'Smartphone ajouté',
+        description: `${event.data.model} a été ajouté au stock.`,
         color: 'success'
       })
     }
@@ -98,7 +98,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     state.sold = false
     await refreshNuxtData('smartphone-stocks')
   } catch (error) {
-    const description = error instanceof Error ? error.message : 'Operation impossible'
+    const description = error instanceof Error ? error.message : 'Opération impossible'
     toast.add({
       title: 'Erreur',
       description,
@@ -112,7 +112,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   <USlideover
     v-model:open="open"
     :title="isEditing ? 'Modifier le smartphone' : 'Nouveau smartphone'"
-    :description="isEditing ? 'Mettre a jour une ligne du stock Microwest.' : 'Ajouter un smartphone reconditionne au stock Microwest.'"
+    :description="isEditing ? 'Mettre à jour une ligne du stock Microwest.' : 'Ajouter un smartphone reconditionné au stock Microwest.'"
     side="right"
     :ui="{ content: 'max-w-xl' }"
   >
@@ -131,7 +131,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         class="space-y-4"
         @submit="onSubmit"
       >
-        <UFormField label="Modele" name="model">
+        <UFormField label="Modèle" name="model">
           <UInput v-model="state.model" class="w-full" placeholder="iPhone 13 Pro" />
         </UFormField>
 
@@ -143,16 +143,16 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           <UInput v-model="state.sku" class="w-full" placeholder="Optionnel" />
         </UFormField>
 
-        <UFormField label="Capacite" name="capacity">
+        <UFormField label="Capacité" name="capacity">
           <UInput v-model="state.capacity" class="w-full" placeholder="128 Go" />
         </UFormField>
 
-        <UFormField label="Entree en stock" name="stockedAt">
+        <UFormField label="Entrée en stock" name="stockedAt">
           <UInput v-model="state.stockedAt" type="date" class="w-full" />
         </UFormField>
 
         <UFormField label="Vendu" name="sold">
-          <USwitch v-model="state.sold" label="Ce smartphone est deja vendu" />
+          <USwitch v-model="state.sold" label="Ce smartphone est déjà vendu" />
         </UFormField>
 
         <div class="flex justify-end gap-2">
@@ -163,7 +163,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
             @click="open = false"
           />
           <UButton
-            :label="isEditing ? 'Enregistrer' : 'Creer'"
+            :label="isEditing ? 'Enregistrer' : 'Créer'"
             color="primary"
             variant="solid"
             type="submit"

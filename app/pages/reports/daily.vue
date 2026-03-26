@@ -33,11 +33,11 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
   },
   {
     accessorKey: 'customerName',
-    header: 'Customer'
+    header: 'Client'
   },
   {
     accessorKey: 'paidAmountToday',
-    header: 'Encaisse aujourd hui',
+    header: 'Encaissé aujourd’hui',
     cell: ({ row }) => formatCurrency(row.original.paidAmountToday)
   },
   {
@@ -47,7 +47,7 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
   },
   {
     accessorKey: 'paidAt',
-    header: 'Encaisse a',
+    header: 'Encaissé à',
     cell: ({ row }) => formatDateTime(row.original.paidAt)
   }
 ]
@@ -55,12 +55,12 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
 const paymentMethodColumns: TableColumn<DailySummary['totalsByMethod'][number]>[] = [
   {
     accessorKey: 'method',
-    header: 'Method',
+    header: 'Mode de paiement',
     cell: ({ row }) => paymentMethodLabels[row.original.method]
   },
   {
     accessorKey: 'total',
-    header: 'Encaisse',
+    header: 'Encaissé',
     cell: ({ row }) => formatCurrency(row.original.total)
   }
 ]
@@ -68,12 +68,12 @@ const paymentMethodColumns: TableColumn<DailySummary['totalsByMethod'][number]>[
 const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[] = [
   {
     accessorKey: 'category',
-    header: 'Category',
+    header: 'Catégorie',
     cell: ({ row }) => lineCategoryLabels[row.original.category]
   },
   {
     accessorKey: 'total',
-    header: 'Turnover',
+    header: 'Chiffre d’affaires',
     cell: ({ row }) => formatCurrency(row.original.total)
   }
 ]
@@ -82,7 +82,7 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
 <template>
   <UDashboardPanel id="report-daily">
     <template #header>
-      <UDashboardNavbar title="End of day">
+      <UDashboardNavbar title="Fin de journée">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -96,10 +96,10 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
     <template #body>
       <div v-if="summary" class="space-y-6">
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <PosSummaryCard title="Total paid today" :value="formatCurrency(summary.totalPaid)" icon="i-lucide-wallet-cards" />
-          <PosSummaryCard title="Open tickets" :value="String(summary.ticketStats.openCount)" icon="i-lucide-wrench" />
-          <PosSummaryCard title="Opened today" :value="String(summary.ticketStats.openedToday)" icon="i-lucide-folder-plus" />
-          <PosSummaryCard title="Closed today" :value="String(summary.ticketStats.closedToday)" icon="i-lucide-folder-check" />
+          <PosSummaryCard title="Total encaissé aujourd’hui" :value="formatCurrency(summary.totalPaid)" icon="i-lucide-wallet-cards" />
+          <PosSummaryCard title="Tickets ouverts" :value="String(summary.ticketStats.openCount)" icon="i-lucide-wrench" />
+          <PosSummaryCard title="Ouverts aujourd’hui" :value="String(summary.ticketStats.openedToday)" icon="i-lucide-folder-plus" />
+          <PosSummaryCard title="Clôturés aujourd’hui" :value="String(summary.ticketStats.closedToday)" icon="i-lucide-folder-check" />
         </div>
 
         <div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -107,10 +107,10 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Paid invoices and receipts
+                  Factures et reçus encaissés
                 </h2>
                 <p class="text-sm text-toned">
-                  Documents with paid cashflow attributed to the selected day.
+                  Documents dont les encaissements sont attribués au jour sélectionné.
                 </p>
               </div>
             </template>
@@ -131,8 +131,8 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
               <template #empty>
                 <UEmpty
                   icon="i-lucide-receipt"
-                  title="No paid documents"
-                  description="No payments were booked for the selected date."
+                  title="Aucun document encaissé"
+                  description="Aucun paiement n’a été comptabilisé à la date sélectionnée."
                 />
               </template>
             </UTable>
@@ -143,7 +143,7 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
               <template #header>
                 <div>
                   <h2 class="text-lg font-semibold text-highlighted">
-                    By payment method
+                    Par mode de paiement
                   </h2>
                 </div>
               </template>
@@ -156,8 +156,8 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
                 <template #empty>
                   <UEmpty
                     icon="i-lucide-wallet"
-                    title="No payment methods to show"
-                    description="Booked payments will appear here."
+                    title="Aucun mode de paiement à afficher"
+                    description="Les paiements comptabilisés apparaîtront ici."
                     size="sm"
                     variant="naked"
                   />
@@ -169,10 +169,10 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
               <template #header>
                 <div>
                   <h2 class="text-lg font-semibold text-highlighted">
-                    Turnover split
+                    Répartition du chiffre d’affaires
                   </h2>
                   <p class="text-sm text-toned">
-                    Based on paid document lines for the selected day.
+                    Basée sur les lignes de documents encaissés pour le jour sélectionné.
                   </p>
                 </div>
               </template>
@@ -185,8 +185,8 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
                 <template #empty>
                   <UEmpty
                     icon="i-lucide-pie-chart"
-                    title="No turnover split"
-                    description="No categorized document lines were paid on this date."
+                    title="Aucune répartition disponible"
+                    description="Aucune ligne catégorisée n’a été encaissée à cette date."
                     size="sm"
                     variant="naked"
                   />

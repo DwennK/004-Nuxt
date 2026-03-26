@@ -31,16 +31,16 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
   },
   {
     accessorKey: 'customerName',
-    header: 'Customer'
+    header: 'Client'
   },
   {
     accessorKey: 'paidAmountToday',
-    header: 'Encaisse aujourd hui',
+    header: 'Encaissé aujourd’hui',
     cell: ({ row }) => formatCurrency(row.original.paidAmountToday)
   },
   {
     accessorKey: 'paidAt',
-    header: 'Encaisse a',
+    header: 'Encaissé à',
     cell: ({ row }) => formatDateTime(row.original.paidAt)
   }
 ]
@@ -49,7 +49,7 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
 <template>
   <UDashboardPanel id="home">
     <template #header>
-      <UDashboardNavbar title="Store overview">
+      <UDashboardNavbar title="Vue d’ensemble du magasin">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -59,8 +59,8 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
     <template #body>
       <div class="space-y-6">
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <PosSummaryCard title="Encaisse aujourd hui" :value="formatCurrency(summary?.totalPaid || 0)" icon="i-lucide-wallet-cards" />
-          <PosSummaryCard title="Open tickets" :value="String(summary?.ticketStats.openCount || 0)" icon="i-lucide-wrench" />
+          <PosSummaryCard title="Encaissé aujourd’hui" :value="formatCurrency(summary?.totalPaid || 0)" icon="i-lucide-wallet-cards" />
+          <PosSummaryCard title="Tickets ouverts" :value="String(summary?.ticketStats.openCount || 0)" icon="i-lucide-wrench" />
           <PosSummaryCard title="Documents" :value="String(documents?.length || 0)" icon="i-lucide-file-text" />
           <PosSummaryCard title="Tickets" :value="String(tickets?.length || 0)" icon="i-lucide-clipboard-list" />
         </div>
@@ -70,10 +70,10 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Quick actions
+                  Actions rapides
                 </h2>
                 <p class="text-sm text-toned">
-                  Keep the main store flows one click away.
+                  Gardez les flux principaux du magasin à un clic.
                 </p>
               </div>
             </template>
@@ -81,28 +81,28 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
             <div class="grid gap-3">
               <UButton
                 to="/customers/new"
-                label="New customer"
+                label="Nouveau client"
                 icon="i-lucide-user-plus"
                 variant="subtle"
                 class="justify-start"
               />
               <UButton
                 to="/tickets/new"
-                label="New tracked ticket"
+                label="Nouveau ticket suivi"
                 icon="i-lucide-wrench"
                 variant="subtle"
                 class="justify-start"
               />
               <UButton
                 to="/documents/new"
-                label="Direct invoice or receipt"
+                label="Facture ou reçu direct"
                 icon="i-lucide-receipt"
                 variant="subtle"
                 class="justify-start"
               />
               <UButton
                 to="/reports/daily"
-                label="End-of-day report"
+                label="Rapport de fin de journée"
                 icon="i-lucide-chart-column"
                 variant="subtle"
                 class="justify-start"
@@ -114,10 +114,10 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Paid documents today
+                  Documents encaissés aujourd’hui
                 </h2>
                 <p class="text-sm text-toned">
-                  Operator view of what has actually been collected today.
+                  Vue opérateur de ce qui a réellement été encaissé aujourd’hui.
                 </p>
               </div>
             </template>
@@ -138,8 +138,8 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
               <template #empty>
                 <UEmpty
                   icon="i-lucide-receipt"
-                  title="No paid documents yet"
-                  description="Today’s paid invoices and receipts will appear here."
+                  title="Aucun document encaissé"
+                  description="Les factures et reçus encaissés aujourd’hui apparaîtront ici."
                 />
               </template>
             </UTable>

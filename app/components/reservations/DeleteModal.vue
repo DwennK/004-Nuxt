@@ -25,8 +25,8 @@ async function onSubmit() {
     })
 
     toast.add({
-      title: 'Demandes supprimees',
-      description: `${props.ids.length} demande${props.ids.length > 1 ? 's' : ''} retiree${props.ids.length > 1 ? 's' : ''}.`,
+      title: 'Demandes supprimées',
+      description: `${props.ids.length} demande${props.ids.length > 1 ? 's' : ''} retirée${props.ids.length > 1 ? 's' : ''}.`,
       color: 'success'
     })
     open.value = false
@@ -46,7 +46,7 @@ async function onSubmit() {
   <UModal
     v-model:open="open"
     :title="`Supprimer ${props.count} demande${props.count > 1 ? 's' : ''}`"
-    description="Cette action est definitive."
+    description="Cette action est définitive."
   >
     <slot />
 

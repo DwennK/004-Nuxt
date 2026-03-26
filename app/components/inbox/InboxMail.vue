@@ -9,16 +9,16 @@ defineProps<{
 const emits = defineEmits(['close'])
 
 const dropdownItems = [[{
-  label: 'Mark as unread',
+  label: 'Marquer comme non lu',
   icon: 'i-lucide-check-circle'
 }, {
-  label: 'Mark as important',
+  label: 'Marquer comme important',
   icon: 'i-lucide-triangle-alert'
 }], [{
-  label: 'Star thread',
+  label: 'Mettre en favori',
   icon: 'i-lucide-star'
 }, {
-  label: 'Mute thread',
+  label: 'Couper les notifications',
   icon: 'i-lucide-circle-pause'
 }]]
 
@@ -34,8 +34,8 @@ function onSubmit() {
     reply.value = ''
 
     toast.add({
-      title: 'Email sent',
-      description: 'Your email has been sent successfully',
+      title: 'E-mail envoyé',
+      description: 'Votre e-mail a bien été envoyé.',
       icon: 'i-lucide-check-circle',
       color: 'success'
     })
@@ -59,7 +59,7 @@ function onSubmit() {
       </template>
 
       <template #right>
-        <UTooltip text="Archive">
+        <UTooltip text="Archiver">
           <UButton
             icon="i-lucide-inbox"
             color="neutral"
@@ -67,7 +67,7 @@ function onSubmit() {
           />
         </UTooltip>
 
-        <UTooltip text="Reply">
+        <UTooltip text="Répondre">
           <UButton icon="i-lucide-reply" color="neutral" variant="ghost" />
         </UTooltip>
 
@@ -116,7 +116,7 @@ function onSubmit() {
           <UIcon name="i-lucide-reply" class="size-5" />
 
           <span class="text-sm truncate">
-            Reply to {{ mail.from.name }} ({{ mail.from.email }})
+            Répondre à {{ mail.from.name }} ({{ mail.from.email }})
           </span>
         </template>
 
@@ -127,7 +127,7 @@ function onSubmit() {
             variant="none"
             required
             autoresize
-            placeholder="Write your reply..."
+            placeholder="Écrire une réponse..."
             :rows="4"
             :disabled="loading"
             class="w-full"
@@ -135,7 +135,7 @@ function onSubmit() {
           />
 
           <div class="flex items-center justify-between">
-            <UTooltip text="Attach file">
+            <UTooltip text="Joindre un fichier">
               <UButton
                 color="neutral"
                 variant="ghost"
@@ -147,13 +147,13 @@ function onSubmit() {
               <UButton
                 color="neutral"
                 variant="ghost"
-                label="Save draft"
+                label="Enregistrer le brouillon"
               />
               <UButton
                 type="submit"
                 color="neutral"
                 :loading="loading"
-                label="Send"
+                label="Envoyer"
                 icon="i-lucide-send"
               />
             </div>

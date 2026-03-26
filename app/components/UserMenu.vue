@@ -24,20 +24,20 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
   label: user.value.name,
   avatar: user.value.avatar
 }], [{
-  label: 'Profile',
+  label: 'Profil',
   icon: 'i-lucide-user'
 }, {
-  label: 'Billing',
+  label: 'Facturation',
   icon: 'i-lucide-credit-card'
 }, {
-  label: 'Settings',
+  label: 'Paramètres',
   icon: 'i-lucide-settings',
   to: '/settings'
 }], [{
-  label: 'Theme',
+  label: 'Thème',
   icon: 'i-lucide-palette',
   children: [{
-    label: 'Primary',
+    label: 'Couleur principale',
     slot: 'chip',
     chip: appConfig.ui.colors.primary,
     content: {
@@ -57,7 +57,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
       }
     }))
   }, {
-    label: 'Neutral',
+    label: 'Couleur neutre',
     slot: 'chip',
     chip: appConfig.ui.colors.neutral === 'neutral' ? 'old-neutral' : appConfig.ui.colors.neutral,
     content: {
@@ -78,10 +78,10 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
     }))
   }]
 }, {
-  label: 'Appearance',
+  label: 'Apparence',
   icon: 'i-lucide-sun-moon',
   children: [{
-    label: 'Light',
+    label: 'Clair',
     icon: 'i-lucide-sun',
     type: 'checkbox',
     checked: colorMode.value === 'light',
@@ -91,7 +91,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
       colorMode.preference = 'light'
     }
   }, {
-    label: 'Dark',
+    label: 'Sombre',
     icon: 'i-lucide-moon',
     type: 'checkbox',
     checked: colorMode.value === 'dark',
@@ -105,22 +105,22 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
     }
   }]
 }], [{
-  label: 'Templates',
+  label: 'Modèles',
   icon: 'i-lucide-layout-template',
   children: [{
-    label: 'Starter',
+    label: 'Démarrage',
     to: 'https://starter-template.nuxt.dev/'
   }, {
     label: 'Landing',
     to: 'https://landing-template.nuxt.dev/'
   }, {
-    label: 'Docs',
+    label: 'Documentation',
     to: 'https://docs-template.nuxt.dev/'
   }, {
     label: 'SaaS',
     to: 'https://saas-template.nuxt.dev/'
   }, {
-    label: 'Dashboard',
+    label: 'Tableau de bord',
     to: 'https://dashboard-template.nuxt.dev/',
     color: 'primary',
     checked: true,
@@ -132,7 +132,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
     label: 'Portfolio',
     to: 'https://portfolio-template.nuxt.dev/'
   }, {
-    label: 'Changelog',
+    label: 'Journal des changements',
     to: 'https://changelog-template.nuxt.dev/'
   }]
 }], [{
@@ -141,12 +141,12 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
   to: 'https://ui.nuxt.com/docs/getting-started/installation/nuxt',
   target: '_blank'
 }, {
-  label: 'GitHub repository',
+  label: 'Dépôt GitHub',
   icon: 'i-simple-icons-github',
   to: 'https://github.com/nuxt-ui-templates/dashboard',
   target: '_blank'
 }, {
-  label: 'Log out',
+  label: 'Déconnexion',
   icon: 'i-lucide-log-out'
 }]]))
 </script>

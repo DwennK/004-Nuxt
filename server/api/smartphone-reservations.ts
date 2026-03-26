@@ -19,7 +19,7 @@ const smartphoneReservationSchema = z.object({
   name: z.string().min(2),
   phone: z.string().min(6),
   model: z.string().min(2),
-  storage: z.string().min(2),
+  storage: optionalText(2),
   requestedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   status: z.enum(['pending', 'contacted', 'sold']).default('pending'),
   notes: optionalText(2)

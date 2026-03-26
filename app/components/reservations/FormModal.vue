@@ -29,7 +29,7 @@ const statusItems = [{
   label: 'En attente',
   value: 'pending'
 }, {
-  label: 'Contacte',
+  label: 'Contacté',
   value: 'contacted'
 }, {
   label: 'Vendu',
@@ -38,9 +38,9 @@ const statusItems = [{
 
 const schema = z.object({
   name: z.string().min(2, 'Nom trop court'),
-  phone: z.string().min(6, 'Telephone invalide'),
-  model: z.string().min(2, 'Modele invalide'),
-  storage: z.string().min(2, 'Stockage invalide'),
+  phone: z.string().min(6, 'Téléphone invalide'),
+  model: z.string().min(2, 'Modèle invalide'),
+  storage: optionalText(2, 'Stockage invalide'),
   requestedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide'),
   status: z.enum(['pending', 'contacted', 'sold']).default('pending'),
   notes: optionalText(2, 'Remarque trop courte')
@@ -86,8 +86,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       })
 
       toast.add({
-        title: 'Demande mise a jour',
-        description: `${event.data.name} a ete modifie.`,
+        title: 'Demande mise à jour',
+        description: `${event.data.name} a été modifié.`,
         color: 'success'
       })
     } else {
@@ -97,8 +97,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       })
 
       toast.add({
-        title: 'Demande ajoutee',
-        description: `${event.data.name} a ete ajoute.`,
+        title: 'Demande ajoutée',
+        description: `${event.data.name} a été ajoutée.`,
         color: 'success'
       })
     }
@@ -113,7 +113,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     state.notes = ''
     await refreshNuxtData('smartphone-reservation-requests')
   } catch (error) {
-    const description = error instanceof Error ? error.message : 'Operation impossible'
+    const description = error instanceof Error ? error.message : 'Opération impossible'
     toast.add({
       title: 'Erreur',
       description,
@@ -127,7 +127,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   <USlideover
     v-model:open="open"
     :title="isEditing ? 'Modifier la demande' : 'Nouvelle demande'"
-    :description="isEditing ? 'Mettre a jour une demande de reservation smartphone.' : 'Ajouter une nouvelle demande de reservation smartphone.'"
+    :description="isEditing ? 'Mettre à jour une demande de réservation smartphone.' : 'Ajouter une nouvelle demande de réservation smartphone.'"
     side="right"
     :ui="{ content: 'max-w-xl' }"
   >
@@ -150,15 +150,15 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           <UInput v-model="state.name" class="w-full" placeholder="Jean Dupont" />
         </UFormField>
 
-        <UFormField label="Telephone" name="phone">
+        <UFormField label="Téléphone" name="phone">
           <UInput v-model="state.phone" class="w-full" placeholder="+41 79 123 45 67" />
         </UFormField>
 
-        <UFormField label="Modele" name="model">
+        <UFormField label="Modèle" name="model">
           <UInput v-model="state.model" class="w-full" placeholder="iPhone 15 Pro" />
         </UFormField>
 
-        <UFormField label="Stockage" name="storage">
+        <UFormField label="Stockage" name="storage" hint="Optionnel">
           <UInput v-model="state.storage" class="w-full" placeholder="256 Go" />
         </UFormField>
 
@@ -166,7 +166,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           <UInput v-model="state.requestedAt" type="date" class="w-full" />
         </UFormField>
 
-        <UFormField label="Etat" name="status">
+        <UFormField label="État" name="status">
           <USelectMenu
             v-model="state.status"
             :items="statusItems"
@@ -180,7 +180,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
             v-model="state.notes"
             class="w-full"
             :rows="4"
-            placeholder="Informations utiles sur la reservation"
+            placeholder="Informations utiles sur la réservation"
           />
         </UFormField>
 
@@ -192,7 +192,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
             @click="open = false"
           />
           <UButton
-            :label="isEditing ? 'Enregistrer' : 'Creer'"
+            :label="isEditing ? 'Enregistrer' : 'Créer'"
             color="primary"
             variant="solid"
             type="submit"

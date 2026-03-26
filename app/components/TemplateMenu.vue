@@ -3,16 +3,16 @@
     v-slot="{ open }"
     :modal="false"
     :items="[{
-      label: 'Starter',
+      label: 'Base',
       to: 'https://starter-template.nuxt.dev/',
       color: 'primary',
       checked: true,
       type: 'checkbox'
     }, {
-      label: 'Landing',
+      label: 'Vitrine',
       to: 'https://landing-template.nuxt.dev/'
     }, {
-      label: 'Docs',
+      label: 'Documentation',
       to: 'https://docs-template.nuxt.dev/'
     }, {
       label: 'SaaS',
@@ -27,7 +27,7 @@
       label: 'Portfolio',
       to: 'https://portfolio-template.nuxt.dev/'
     }, {
-      label: 'Changelog',
+      label: 'Journal des changements',
       to: 'https://changelog-template.nuxt.dev/'
     }]"
     :content="{ align: 'start' }"
@@ -35,7 +35,7 @@
     size="xs"
   >
     <UButton
-      label="Starter"
+      label="Base"
       variant="subtle"
       trailing-icon="i-lucide-chevron-down"
       size="xs"

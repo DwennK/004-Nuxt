@@ -26,7 +26,7 @@ async function onImport() {
   if (!selectedFile.value) {
     toast.add({
       title: 'Erreur',
-      description: 'Selectionne un fichier CSV avant de lancer l import.',
+      description: 'Sélectionnez un fichier CSV avant de lancer l’import.',
       color: 'error'
     })
     return
@@ -42,8 +42,8 @@ async function onImport() {
     })
 
     toast.add({
-      title: 'Import termine',
-      description: `${response.imported} demande${response.imported > 1 ? 's' : ''} importee${response.imported > 1 ? 's' : ''}.`,
+      title: 'Import terminé',
+      description: `${response.imported} demande${response.imported > 1 ? 's' : ''} importée${response.imported > 1 ? 's' : ''}.`,
       color: 'success'
     })
     open.value = false
@@ -65,7 +65,7 @@ async function onImport() {
   <UModal
     v-model:open="open"
     title="Importer un CSV"
-    description="Import de demandes de reservation smartphone depuis un fichier CSV."
+    description="Import de demandes de réservation smartphone depuis un fichier CSV."
   >
     <UButton
       label="Importer CSV"
@@ -77,12 +77,12 @@ async function onImport() {
     <template #body>
       <div class="space-y-4">
         <div class="rounded-lg border border-default bg-elevated/50 p-4 text-sm text-toned">
-          Colonnes attendues:
+          Colonnes attendues :
           <div class="mt-2 font-mono text-xs text-muted">
-            Nom;Telephone;Modele;Stockage;DateDemande;Etat;Remarques
+            Nom;Téléphone;Modèle;Stockage;DateDemande;État;Remarques
           </div>
           <div class="mt-2 text-xs text-muted">
-            Formats acceptes: `,` ou `;` comme separateur, date en `YYYY-MM-DD`, etat `En attente`, `Contacte` ou `Vendu`.
+            Formats acceptés : `,` ou `;` comme séparateur, date en `YYYY-MM-DD`, état `En attente`, `Contacté` ou `Vendu`.
           </div>
         </div>
 
@@ -104,7 +104,7 @@ async function onImport() {
           />
 
           <span class="text-sm text-muted">
-            {{ selectedFile?.name || 'Aucun fichier selectionne' }}
+            {{ selectedFile?.name || 'Aucun fichier sélectionné' }}
           </span>
         </div>
 

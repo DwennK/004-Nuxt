@@ -13,12 +13,12 @@ useHead({
     { rel: 'icon', href: '/favicon.ico' }
   ],
   htmlAttrs: {
-    lang: 'en'
+    lang: 'fr'
   }
 })
 
 const title = 'Microwest POS'
-const description = 'Shop management and point-of-sale workspace for repairs, direct sales, support services, documents, payments, and end-of-day reporting.'
+const description = 'Espace de gestion magasin et point de vente pour les réparations, ventes directes, services, documents, paiements et rapports de fin de journée.'
 
 useSeoMeta({
   title,

@@ -87,7 +87,7 @@ async function updateSoldState(row: SmartphoneStock, sold: boolean) {
     })
 
     toast.add({
-      title: 'Stock mis a jour',
+      title: 'Stock mis à jour',
       description: `${row.model} est maintenant ${sold ? 'vendu' : 'disponible'}.`,
       color: 'success'
     })
@@ -95,7 +95,7 @@ async function updateSoldState(row: SmartphoneStock, sold: boolean) {
   } catch (error) {
     toast.add({
       title: 'Erreur',
-      description: error instanceof Error ? error.message : 'Mise a jour impossible',
+      description: error instanceof Error ? error.message : 'Mise à jour impossible',
       color: 'error'
     })
   }
@@ -111,8 +111,8 @@ async function deleteSingleStock(id: number) {
     })
 
     toast.add({
-      title: 'Smartphone supprime',
-      description: 'La ligne a ete retiree du stock.',
+      title: 'Smartphone supprimé',
+      description: 'La ligne a été retirée du stock.',
       color: 'success'
     })
     await refreshNuxtData('smartphone-stocks')
@@ -132,13 +132,13 @@ function getRowItems(row: Row<SmartphoneStock>) {
       label: 'Actions'
     },
     {
-      label: 'Copier l ID',
+      label: 'Copier l’ID',
       icon: 'i-lucide-copy',
       onSelect() {
         navigator.clipboard.writeText(row.original.id.toString())
         toast.add({
-          title: 'Copie',
-          description: 'ID du smartphone copie dans le presse-papiers.'
+          title: 'Copié',
+          description: 'ID du smartphone copié dans le presse-papiers.'
         })
       }
     },
@@ -181,13 +181,13 @@ const columns: TableColumn<SmartphoneStock>[] = [
           : table.getIsAllPageRowsSelected(),
         'onUpdate:modelValue': (value: boolean | 'indeterminate') =>
           table.toggleAllPageRowsSelected(!!value),
-        'ariaLabel': 'Select all'
+        'ariaLabel': 'Tout sélectionner'
       }),
     cell: ({ row }) =>
       h(UCheckbox, {
         'modelValue': row.getIsSelected(),
         'onUpdate:modelValue': (value: boolean | 'indeterminate') => row.toggleSelected(!!value),
-        'ariaLabel': 'Select row'
+        'ariaLabel': 'Sélectionner la ligne'
       })
   },
   {
@@ -202,7 +202,7 @@ const columns: TableColumn<SmartphoneStock>[] = [
       return h(UButton, {
         color: 'neutral',
         variant: 'ghost',
-        label: 'Modele',
+        label: 'Modèle',
         icon: isSorted
           ? isSorted === 'asc'
             ? 'i-lucide-arrow-up-narrow-wide'
@@ -224,11 +224,11 @@ const columns: TableColumn<SmartphoneStock>[] = [
   },
   {
     accessorKey: 'capacity',
-    header: 'Capacite'
+    header: 'Capacité'
   },
   {
     accessorKey: 'stockedAt',
-    header: 'Entree stock',
+    header: 'Entrée en stock',
     cell: ({ row }) => formatSwissDate(row.original.stockedAt)
   },
   {
@@ -309,7 +309,7 @@ const pagination = ref({
 <template>
   <UDashboardPanel id="smartphone-stocks">
     <template #header>
-      <UDashboardNavbar title="Stocks Smartphone">
+      <UDashboardNavbar title="Stock téléphones">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -332,7 +332,7 @@ const pagination = ref({
           v-model="model"
           class="max-w-sm"
           icon="i-lucide-search"
-          placeholder="Filtrer les modeles..."
+          placeholder="Filtrer les modèles..."
         />
 
         <div class="flex flex-wrap items-center gap-1.5">
@@ -373,7 +373,15 @@ const pagination = ref({
                 ?.getAllColumns()
                 .filter((column: any) => column.getCanHide())
                 .map((column: any) => ({
-                  label: upperFirst(column.id),
+                  label: ({
+                    id: 'ID',
+                    model: 'Modèle',
+                    imei: 'IMEI',
+                    sku: 'SKU',
+                    capacity: 'Capacité',
+                    stockedAt: 'Entrée en stock',
+                    sold: 'Vendu'
+                  } as Record<string, string>)[column.id] || upperFirst(column.id),
                   type: 'checkbox' as const,
                   checked: column.getIsVisible(),
                   onUpdateChecked(checked: boolean) {
@@ -387,7 +395,7 @@ const pagination = ref({
             :content="{ align: 'end' }"
           >
             <UButton
-              label="Display"
+              label="Colonnes"
               color="neutral"
               variant="outline"
               trailing-icon="i-lucide-settings-2"
@@ -421,8 +429,8 @@ const pagination = ref({
 
       <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
         <div class="text-sm text-muted">
-          {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length || 0 }} of
-          {{ table?.tableApi?.getFilteredRowModel().rows.length || 0 }} row(s) selected.
+          {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length || 0 }} sur
+          {{ table?.tableApi?.getFilteredRowModel().rows.length || 0 }} ligne(s) sélectionnée(s).
         </div>
 
         <div class="flex items-center gap-1.5">

@@ -5,21 +5,21 @@ import type { CustomerRecord, DocumentListItem, TicketListItem } from '~~/shared
 const open = ref(false)
 
 const links = [[{
-  label: 'Overview',
+  label: 'Vue d’ensemble',
   icon: 'i-lucide-house',
   to: '/',
   onSelect: () => {
     open.value = false
   }
 }, {
-  label: 'Customers',
+  label: 'Clients',
   icon: 'i-lucide-users',
   to: '/customers',
   onSelect: () => {
     open.value = false
   }
 }, {
-  label: 'Catalog',
+  label: 'Catalogue',
   icon: 'i-lucide-package-search',
   to: '/catalog',
   onSelect: () => {
@@ -40,42 +40,42 @@ const links = [[{
     open.value = false
   }
 }, {
-  label: 'Payments',
+  label: 'Paiements',
   icon: 'i-lucide-wallet',
   to: '/payments',
   onSelect: () => {
     open.value = false
   }
 }, {
-  label: 'End of day',
+  label: 'Fin de journée',
   icon: 'i-lucide-chart-column',
   to: '/reports/daily',
   onSelect: () => {
     open.value = false
   }
 }, {
-  label: 'Phone stock',
+  label: 'Stock téléphones',
   icon: 'i-lucide-smartphone',
   to: '/stocks-smartphone',
   onSelect: () => {
     open.value = false
   }
 }, {
-  label: 'Reservations',
+  label: 'Réservations',
   icon: 'i-lucide-book-user',
   to: '/reservations-smartphone',
   onSelect: () => {
     open.value = false
   }
 }], [{
-  label: 'Settings',
+  label: 'Paramètres',
   icon: 'i-lucide-settings',
   to: '/settings',
   onSelect: () => {
     open.value = false
   }
 }, {
-  label: 'Inbox',
+  label: 'Boîte de réception',
   icon: 'i-lucide-inbox',
   to: '/inbox',
   onSelect: () => {
@@ -91,17 +91,17 @@ const [{ data: customers }, { data: tickets }, { data: documents }] = await Prom
 
 const quickActions = [{
   id: 'new-customer',
-  label: 'New customer',
+  label: 'Nouveau client',
   icon: 'i-lucide-user-plus',
   to: '/customers/new'
 }, {
   id: 'new-ticket',
-  label: 'New ticket',
+  label: 'Nouveau ticket',
   icon: 'i-lucide-wrench',
   to: '/tickets/new'
 }, {
   id: 'new-document',
-  label: 'New document',
+  label: 'Nouveau document',
   icon: 'i-lucide-file-plus-2',
   to: '/documents/new'
 }]
@@ -133,23 +133,23 @@ const groups = computed(() => {
 
   return [{
     id: 'navigate',
-    label: 'Navigate',
+    label: 'Navigation',
     items: links.flat()
   }, {
     id: 'create',
-    label: 'Quick actions',
+    label: 'Actions rapides',
     items: quickActions
   }, {
     id: 'customers',
-    label: 'Recent customers',
+    label: 'Clients récents',
     items: customerItems
   }, {
     id: 'tickets',
-    label: 'Recent tickets',
+    label: 'Tickets récents',
     items: ticketItems
   }, {
     id: 'documents',
-    label: 'Recent documents',
+    label: 'Documents récents',
     items: documentItems
   }].filter(group => group.items.length)
 })
