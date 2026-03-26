@@ -213,24 +213,6 @@ function formatQrLocation(address: SwissQrAddress) {
           </div>
 
           <div class="invoice-party-row">
-            <section class="invoice-party">
-              <p class="invoice-label">
-                Client
-              </p>
-              <p class="invoice-strong">
-                {{ document.customer.displayName }}
-              </p>
-              <p v-for="line in customerAddress" :key="`customer-${line}`">
-                {{ line }}
-              </p>
-              <p v-if="document.customer.phone">
-                {{ document.customer.phone }}
-              </p>
-              <p v-if="document.customer.email">
-                {{ document.customer.email }}
-              </p>
-            </section>
-
             <section class="invoice-party invoice-party--compact">
               <p class="invoice-label">
                 Références
@@ -250,6 +232,28 @@ function formatQrLocation(address: SwissQrAddress) {
               <p v-if="paymentSummary">
                 {{ paymentSummary.paidAt }}
               </p>
+            </section>
+
+            <section class="invoice-window-wrap">
+              <p class="invoice-label invoice-window-label">
+                Adresse destinataire
+              </p>
+              <div class="invoice-window">
+                <p class="invoice-strong">
+                  {{ document.customer.displayName }}
+                </p>
+                <p v-for="line in customerAddress" :key="`customer-${line}`">
+                  {{ line }}
+                </p>
+                <template v-if="!customerAddress.length">
+                  <p v-if="document.customer.phone">
+                    {{ document.customer.phone }}
+                  </p>
+                  <p v-if="document.customer.email">
+                    {{ document.customer.email }}
+                  </p>
+                </template>
+              </div>
             </section>
           </div>
         </header>
@@ -407,7 +411,7 @@ function formatQrLocation(address: SwissQrAddress) {
                   <p class="qr-bill-label">
                     Référence
                   </p>
-                  <p>Sans référence</p>
+                  <p>{{ qrBill.displayReference }}</p>
                 </div>
 
                 <div class="qr-bill-block">
@@ -582,13 +586,33 @@ body {
 
 .invoice-party-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
-  gap: 4mm;
-  margin-top: 3mm;
+  grid-template-columns: minmax(0, 1fr) 100mm;
+  gap: 6mm;
+  margin-top: 15.8mm;
+  align-items: start;
 }
 
 .invoice-party {
   min-height: 0;
+}
+
+.invoice-window-wrap {
+  min-height: 0;
+  justify-self: end;
+  margin-right: 14.2mm;
+}
+
+.invoice-window-label {
+  margin-bottom: 1.2mm;
+  text-align: left;
+}
+
+.invoice-window {
+  width: 100mm;
+  min-height: 50mm;
+  padding: 9mm 6mm 0 8mm;
+  color: #334155;
+  overflow: hidden;
 }
 
 .invoice-strong {
@@ -836,6 +860,10 @@ body {
     min-height: auto;
     margin: 0;
     max-width: none;
+  }
+
+  .invoice-window-label {
+    visibility: hidden;
   }
 
   .invoice-header,

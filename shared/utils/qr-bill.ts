@@ -17,6 +17,7 @@ export interface SwissQrBillData {
   currency: 'CHF'
   creditor: SwissQrAddress
   debtor: SwissQrAddress | null
+  displayReference: string
   message: string
   payload: string
 }
@@ -99,19 +100,6 @@ function formatQrAmount(cents: number) {
   return cents > 0 ? (cents / 100).toFixed(2) : ''
 }
 
-function documentTypeLabel(type: DocumentDetail['type']) {
-  switch (type) {
-    case 'invoice':
-      return 'Facture'
-    case 'quote':
-      return 'Devis'
-    case 'receipt':
-      return 'Reçu'
-    case 'credit_note':
-      return 'Avoir'
-  }
-}
-
 function buildDebtorAddress(customer: CustomerRecord) {
   return buildStructuredAddress({
     name: customer.displayName,
@@ -146,7 +134,8 @@ export function buildSwissQrBill(document: DocumentDetail, company: CompanySetti
   }
 
   const debtor = buildDebtorAddress(document.customer)
-  const message = normalizeQrText(`${documentTypeLabel(document.type)} ${document.documentNumber}`)
+  const displayReference = normalizeQrText(document.documentNumber)
+  const message = displayReference
 
   const payload = [
     'SPC',
@@ -173,6 +162,7 @@ export function buildSwissQrBill(document: DocumentDetail, company: CompanySetti
     currency: 'CHF',
     creditor,
     debtor,
+    displayReference,
     message,
     payload
   } satisfies SwissQrBillData
