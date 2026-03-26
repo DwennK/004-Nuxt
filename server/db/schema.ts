@@ -49,13 +49,15 @@ export const catalogItems = sqliteTable('catalog_items', {
   defaultPrice: integer('default_price').notNull(),
   vatRate: real('vat_rate').notNull(),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  isQuickPick: integer('is_quick_pick', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, table => ({
   nameIdx: index('catalog_items_name_idx').on(table.name),
   skuIdx: uniqueIndex('catalog_items_sku_idx').on(table.sku),
   typeIdx: index('catalog_items_type_idx').on(table.type),
-  activeIdx: index('catalog_items_is_active_idx').on(table.isActive)
+  activeIdx: index('catalog_items_is_active_idx').on(table.isActive),
+  quickPickIdx: index('catalog_items_is_quick_pick_idx').on(table.isQuickPick)
 }))
 
 export const tickets = sqliteTable('tickets', {

@@ -8,6 +8,7 @@ type CatalogItemPayload = {
   defaultPrice: number
   vatRate: number
   isActive: boolean
+  isQuickPick: boolean
 }
 
 defineProps<{

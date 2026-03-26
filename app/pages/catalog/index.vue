@@ -55,7 +55,8 @@ const editingItemForm = computed(() => {
     type: editingItem.value.type,
     defaultPrice: editingItem.value.defaultPrice,
     vatRate: editingItem.value.vatRate,
-    isActive: editingItem.value.isActive
+    isActive: editingItem.value.isActive,
+    isQuickPick: editingItem.value.isQuickPick
   }
 })
 
@@ -70,6 +71,7 @@ async function saveItem(payload: {
   defaultPrice: number
   vatRate: number
   isActive: boolean
+  isQuickPick: boolean
 }) {
   if (editingItem.value) {
     await $fetch(`/api/catalog-items/${editingItem.value.id}`, {
@@ -140,7 +142,12 @@ const columns: TableColumn<CatalogItemRecord>[] = [
     }),
     cell: ({ row }) => h('div', { class: 'min-w-0' }, [
       h('p', { class: 'font-medium text-highlighted truncate' }, row.original.name),
-      h('p', { class: 'text-sm text-toned truncate' }, row.original.sku || 'Aucun SKU')
+      h('div', { class: 'mt-1 flex flex-wrap items-center gap-2 text-sm text-toned' }, [
+        h('span', { class: 'truncate' }, row.original.sku || 'Aucun SKU'),
+        row.original.isQuickPick
+          ? h(UBadge, { color: 'primary', variant: 'soft', size: 'sm' }, () => 'Raccourci')
+          : null
+      ])
     ])
   },
   {

@@ -42,7 +42,7 @@ async function saveTicket(payload: {
 <template>
   <UDashboardPanel id="ticket-create">
     <template #header>
-      <UDashboardNavbar title="Nouveau ticket">
+      <UDashboardNavbar title="Nouvelle réparation">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -55,14 +55,14 @@ async function saveTicket(payload: {
           <div class="space-y-1">
             <div class="flex flex-wrap items-center gap-2">
               <h1 class="text-xl font-semibold text-highlighted">
-                Nouveau ticket atelier
+                Réparation rapide
               </h1>
               <UBadge color="warning" variant="subtle" size="sm">
-                Smartphone repair
+                Comptoir atelier
               </UBadge>
             </div>
             <p class="text-sm text-toned">
-              Écran de saisie rapide pour l’accueil, le diagnostic initial et la préparation de la facturation.
+              Dites le modèle et la panne comme au comptoir, annoncez le prix, prenez les coordonnées, créez le ticket.
             </p>
           </div>
         </div>

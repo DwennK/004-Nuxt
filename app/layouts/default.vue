@@ -90,18 +90,23 @@ const [{ data: customers }, { data: tickets }, { data: documents }] = await Prom
 ])
 
 const quickActions = [{
+  id: 'new-ticket',
+  label: 'Nouvelle réparation',
+  icon: 'i-lucide-wrench',
+  to: '/tickets/new'
+}, {
+  id: 'new-sale',
+  label: 'Vente rapide',
+  icon: 'i-lucide-receipt',
+  to: '/sales/new'
+}, {
   id: 'new-customer',
   label: 'Nouveau client',
   icon: 'i-lucide-user-plus',
   to: '/customers/new'
 }, {
-  id: 'new-ticket',
-  label: 'Nouveau ticket',
-  icon: 'i-lucide-wrench',
-  to: '/tickets/new'
-}, {
   id: 'new-document',
-  label: 'Nouveau document',
+  label: 'Document avancé',
   icon: 'i-lucide-file-plus-2',
   to: '/documents/new'
 }]

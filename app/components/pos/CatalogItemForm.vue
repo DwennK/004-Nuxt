@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
     defaultPrice: number | null
     vatRate: number | null
     isActive: boolean | null
+    isQuickPick: boolean | null
   }>
   formId?: string
   layout?: 'compact' | 'page'
@@ -33,6 +34,7 @@ const emit = defineEmits<{
     defaultPrice: number
     vatRate: number
     isActive: boolean
+    isQuickPick: boolean
   }]
 }>()
 
@@ -42,7 +44,8 @@ const schema = z.object({
   type: z.enum(catalogItemTypes),
   defaultPrice: z.coerce.number().min(0),
   vatRate: z.coerce.number().min(0).max(100),
-  isActive: z.boolean().default(true)
+  isActive: z.boolean().default(true),
+  isQuickPick: z.boolean().default(false)
 })
 
 type Schema = z.output<typeof schema>
@@ -58,7 +61,8 @@ const state = reactive<Schema>({
   type: 'product',
   defaultPrice: 0,
   vatRate: 8.1,
-  isActive: true
+  isActive: true,
+  isQuickPick: false
 })
 
 watchEffect(() => {
@@ -68,6 +72,7 @@ watchEffect(() => {
   state.defaultPrice = (props.initialValue.defaultPrice ?? 0) / 100
   state.vatRate = props.initialValue.vatRate ?? 8.1
   state.isActive = props.initialValue.isActive ?? true
+  state.isQuickPick = props.initialValue.isQuickPick ?? false
 })
 
 const preview = computed(() => formatCurrency(Math.round((state.defaultPrice || 0) * 100)))
@@ -172,7 +177,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
       <UPageCard
         title="Disponibilité"
-        description="Contrôlez si l’article reste visible et vendable dans l’interface opérateur."
+        description="Contrôlez si l’article reste visible et s’il doit remonter dans les raccourcis comptoir."
         variant="subtle"
       >
         <UFormField
@@ -183,6 +188,16 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
           <USwitch v-model="state.isActive" label="Actif et vendable" />
+        </UFormField>
+        <USeparator />
+        <UFormField
+          label="Raccourci comptoir"
+          name="isQuickPick"
+          description="Affiche l’article dans la vente rapide pour les ventes récurrentes."
+          orientation="horizontal"
+          class="flex max-sm:flex-col justify-between items-start gap-4"
+        >
+          <USwitch v-model="state.isQuickPick" label="Montrer en vente rapide" />
         </UFormField>
       </UPageCard>
     </template>
@@ -235,6 +250,10 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
       <UFormField label="Statut" name="isActive">
         <USwitch v-model="state.isActive" label="Actif et vendable" />
+      </UFormField>
+
+      <UFormField label="Raccourci comptoir" name="isQuickPick">
+        <USwitch v-model="state.isQuickPick" label="Montrer en vente rapide" />
       </UFormField>
     </template>
 

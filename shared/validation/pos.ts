@@ -66,7 +66,8 @@ export const catalogItemInputSchema = z.object({
   type: z.enum(catalogItemTypes),
   defaultPrice: z.coerce.number().int().min(0),
   vatRate: z.coerce.number().min(0).max(100),
-  isActive: z.coerce.boolean().default(true)
+  isActive: z.coerce.boolean().default(true),
+  isQuickPick: z.coerce.boolean().default(false)
 })
 
 export const ticketInputSchema = z.object({

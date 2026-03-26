@@ -2,7 +2,10 @@
 import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import { ticketStatusColors, ticketStatusLabels, ticketStatuses, ticketTypeColors, ticketTypeLabels, ticketTypes } from '~~/shared/constants/pos'
-import type { CustomerRecord } from '~~/shared/types/pos'
+import { defaultRepairSearches } from '~~/shared/constants/repair-suggestions'
+import type { CustomerRecord, RepairSuggestion } from '~~/shared/types/pos'
+import { formatCurrency } from '~~/shared/utils/pos'
+import { getRepairSuggestionResult } from '~~/shared/utils/repair-suggestions'
 
 const props = withDefaults(defineProps<{
   customers: CustomerRecord[]
@@ -88,6 +91,8 @@ const statusItems = ticketStatuses.map(status => ({
 }))
 
 const patternOpen = ref(false)
+const advancedOpen = ref(false)
+const intakeQuery = ref('')
 const createdCustomer = ref<CustomerRecord | null>(null)
 
 const state = reactive<Schema>({
@@ -125,6 +130,28 @@ watchEffect(() => {
 const currentCustomer = computed(() => {
   return props.customers.find(customer => customer.id === state.customerId)
     || (createdCustomer.value?.id === state.customerId ? createdCustomer.value : null)
+})
+
+const repairSuggestionResult = computed(() => getRepairSuggestionResult(intakeQuery.value))
+const bestRepairSuggestion = computed(() => repairSuggestionResult.value.bestMatch)
+const suggestedRepairMatches = computed(() => repairSuggestionResult.value.suggestedMatches)
+const quotedPrice = computed(() => bestRepairSuggestion.value ? formatCurrency(bestRepairSuggestion.value.priceCents) : 'À confirmer')
+const repairSearchButtons = computed(() => {
+  if (suggestedRepairMatches.value.length) {
+    return suggestedRepairMatches.value.map(suggestion => ({
+      key: `${suggestion.model}-${suggestion.issueKey}`,
+      label: `${suggestion.model} · ${suggestion.issueLabel}`,
+      action: () => applyRepairSuggestion(suggestion)
+    }))
+  }
+
+  return defaultRepairSearches.map(search => ({
+    key: search,
+    label: search,
+    action: () => {
+      intakeQuery.value = search
+    }
+  }))
 })
 
 const deviceSummary = computed(() => {
@@ -167,12 +194,28 @@ const completionItems = computed(() => {
       value: state.issueDescription.trim() || 'Description à saisir'
     },
     {
+      label: 'Prix annoncé',
+      done: Boolean(bestRepairSuggestion.value),
+      value: bestRepairSuggestion.value ? quotedPrice.value : 'Aucune suggestion'
+    },
+    {
       label: 'Accès',
       done: Boolean(state.accessCode.trim() || state.simCode.trim()),
       value: state.accessCode.trim() || state.simCode.trim() || 'Aucun code renseigné'
     }
   ]
 })
+
+watch(bestRepairSuggestion, (suggestion) => {
+  if (!suggestion || props.layout !== 'intake') {
+    return
+  }
+
+  state.brand = suggestion.brand
+  state.model = suggestion.model
+  state.type = 'repair'
+  state.issueDescription = suggestion.issueLabel
+}, { immediate: true })
 
 function onSubmit(event: FormSubmitEvent<Schema>) {
   emit('save', {
@@ -192,6 +235,14 @@ function setCustomer(value: number | null) {
 
 function handleCustomerCreated(customer: CustomerRecord) {
   createdCustomer.value = customer
+}
+
+function applyRepairSuggestion(suggestion: RepairSuggestion) {
+  intakeQuery.value = `${suggestion.model} ${suggestion.issueLabel}`
+  state.brand = suggestion.brand
+  state.model = suggestion.model
+  state.type = 'repair'
+  state.issueDescription = suggestion.issueLabel
 }
 </script>
 
@@ -218,15 +269,106 @@ function handleCustomerCreated(customer: CustomerRecord) {
               <div class="space-y-1">
                 <div class="flex flex-wrap items-center gap-2">
                   <h2 class="text-base font-semibold text-highlighted">
-                    Client et suivi
+                    Appareil / panne
                   </h2>
-                  <UBadge color="neutral" variant="subtle" size="sm">
-                    Ticket atelier
+                  <UBadge color="warning" variant="subtle" size="sm">
+                    Réparation rapide
                   </UBadge>
                 </div>
                 <p class="text-sm text-toned">
-                  Associez le bon client et posez le cadre de traitement dès l’arrivée.
+                  Tapez comme au comptoir: modèle + panne. Le ticket se préremplit dès qu’un tarif connu est reconnu.
                 </p>
+              </div>
+            </template>
+
+            <UFormField
+              label="Saisie rapide"
+              name="intakeQuery"
+              description="Ex. iphone 14 ecran, s23 ultra batterie, iphone 15 port charge"
+            >
+              <UInput
+                v-model="intakeQuery"
+                icon="i-lucide-scan-search"
+                class="w-full"
+                placeholder="iphone 14 ecran"
+                autofocus
+              />
+            </UFormField>
+
+            <div class="flex flex-wrap gap-2">
+              <UButton
+                v-for="hint in repairSearchButtons"
+                :key="hint.key"
+                type="button"
+                color="neutral"
+                variant="soft"
+                size="sm"
+                :label="hint.label"
+                @click="hint.action()"
+              />
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]">
+              <div class="space-y-4">
+                <div class="grid gap-4 md:grid-cols-2">
+                  <UFormField label="Marque" name="brand" hint="Auto ou manuel">
+                    <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
+                  </UFormField>
+
+                  <UFormField label="Modèle" name="model" hint="Auto ou manuel">
+                    <UInput v-model="state.model" class="w-full" placeholder="iPhone 14, Galaxy S23..." />
+                  </UFormField>
+                </div>
+
+                <UFormField
+                  label="Problème constaté"
+                  name="issueDescription"
+                  required
+                >
+                  <UTextarea
+                    v-model="state.issueDescription"
+                    class="w-full"
+                    :rows="3"
+                    placeholder="Ex. écran fissuré, batterie faible, port de charge endommagé..."
+                  />
+                </UFormField>
+              </div>
+
+              <div class="rounded-3xl border border-primary/20 bg-primary/5 p-4">
+                <p class="text-xs uppercase tracking-[0.14em] text-primary/80">
+                  Prix suggéré
+                </p>
+                <p class="mt-2 text-2xl font-semibold text-highlighted">
+                  {{ quotedPrice }}
+                </p>
+                <p class="mt-1 text-sm text-toned">
+                  {{ bestRepairSuggestion?.issueLabel || 'Aucune suggestion fiable pour cette saisie.' }}
+                </p>
+                <p v-if="bestRepairSuggestion" class="mt-2 text-xs text-toned">
+                  {{ bestRepairSuggestion.model }} · {{ bestRepairSuggestion.brand }}
+                </p>
+              </div>
+            </div>
+          </UCard>
+
+          <UCard
+            variant="subtle"
+            :ui="{
+              root: 'rounded-3xl',
+              body: 'space-y-4 p-4 sm:p-5',
+              header: 'p-4 pb-0 sm:p-5 sm:pb-0'
+            }"
+          >
+            <template #header>
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="space-y-1">
+                  <h2 class="text-base font-semibold text-highlighted">
+                    Client
+                  </h2>
+                  <p class="text-sm text-toned">
+                    Prenez le strict nécessaire puis créez le ticket. La fiche client peut être enrichie ensuite.
+                  </p>
+                </div>
               </div>
             </template>
 
@@ -244,16 +386,7 @@ function handleCustomerCreated(customer: CustomerRecord) {
               />
             </UFormField>
 
-            <div class="grid gap-4 md:grid-cols-3">
-              <UFormField label="Type" name="type" required>
-                <USelect
-                  v-model="state.type"
-                  :items="ticketTypeItems"
-                  value-key="value"
-                  class="w-full"
-                />
-              </UFormField>
-
+            <div class="grid gap-4 md:grid-cols-2">
               <UFormField label="Statut" name="status" required>
                 <USelect
                   v-model="state.status"
@@ -278,125 +411,86 @@ function handleCustomerCreated(customer: CustomerRecord) {
             }"
           >
             <template #header>
-              <div class="space-y-1">
-                <h2 class="text-base font-semibold text-highlighted">
-                  Appareil
-                </h2>
-                <p class="text-sm text-toned">
-                  Identifiez le téléphone avant le diagnostic ou la commande de pièces.
-                </p>
-              </div>
-            </template>
-
-            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <UFormField label="Marque" name="brand" hint="Optionnel">
-                <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
-              </UFormField>
-
-              <UFormField label="Modèle" name="model" hint="Optionnel">
-                <UInput v-model="state.model" class="w-full" placeholder="iPhone 14, Galaxy S23..." />
-              </UFormField>
-
-              <UFormField label="IMEI" name="imei" hint="Optionnel">
-                <UInput v-model="state.imei" class="w-full" placeholder="356..." />
-              </UFormField>
-
-              <UFormField label="N° de série" name="serialNumber" hint="Optionnel">
-                <UInput v-model="state.serialNumber" class="w-full" placeholder="Numéro de série" />
-              </UFormField>
-            </div>
-          </UCard>
-
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-3xl',
-              body: 'space-y-4 p-4 sm:p-5',
-              header: 'p-4 pb-0 sm:p-5 sm:pb-0'
-            }"
-          >
-            <template #header>
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="space-y-1">
                   <h2 class="text-base font-semibold text-highlighted">
-                    Accès
+                    Champs avancés
                   </h2>
                   <p class="text-sm text-toned">
-                    Notez le code d’ouverture si le client l’accepte, ou dessinez le pattern Android.
+                    Ouvrez seulement si vous avez besoin d’IMEI, de codes ou de notes atelier détaillées.
                   </p>
                 </div>
 
                 <UButton
                   type="button"
-                  label="Pattern Android"
-                  icon="i-lucide-grid-3x3"
+                  :label="advancedOpen ? 'Réduire' : 'Afficher'"
+                  :icon="advancedOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
                   color="neutral"
                   variant="soft"
                   size="sm"
-                  @click="patternOpen = true"
+                  @click="advancedOpen = !advancedOpen"
                 />
               </div>
             </template>
 
-            <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]">
-              <UFormField label="Code / accès appareil" name="accessCode" hint="Optionnel">
-                <UInput
-                  v-model="state.accessCode"
-                  class="w-full"
-                  placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
-                />
-              </UFormField>
+            <div v-if="advancedOpen" class="space-y-4">
+              <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <UFormField label="Type" name="type" required>
+                  <USelect
+                    v-model="state.type"
+                    :items="ticketTypeItems"
+                    value-key="value"
+                    class="w-full"
+                  />
+                </UFormField>
 
-              <UFormField label="Code SIM" name="simCode" hint="Optionnel">
-                <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
+                <UFormField label="IMEI" name="imei" hint="Optionnel">
+                  <UInput v-model="state.imei" class="w-full" placeholder="356..." />
+                </UFormField>
+
+                <UFormField label="N° de série" name="serialNumber" hint="Optionnel">
+                  <UInput v-model="state.serialNumber" class="w-full" placeholder="Numéro de série" />
+                </UFormField>
+              </div>
+
+              <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]">
+                <UFormField label="Code / accès appareil" name="accessCode" hint="Optionnel">
+                  <div class="space-y-2">
+                    <UInput
+                      v-model="state.accessCode"
+                      class="w-full"
+                      placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
+                    />
+                    <UButton
+                      type="button"
+                      label="Dessiner un pattern Android"
+                      icon="i-lucide-grid-3x3"
+                      color="neutral"
+                      variant="soft"
+                      size="sm"
+                      @click="patternOpen = true"
+                    />
+                  </div>
+                </UFormField>
+
+                <UFormField label="Code SIM" name="simCode" hint="Optionnel">
+                  <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
+                </UFormField>
+              </div>
+
+              <UFormField
+                label="Notes internes"
+                name="internalNotes"
+                hint="Optionnel"
+              >
+                <UTextarea
+                  v-model="state.internalNotes"
+                  class="w-full"
+                  :rows="4"
+                  placeholder="Diagnostic initial, accessoires laissés, pièces à commander..."
+                />
               </UFormField>
             </div>
-          </UCard>
-
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-3xl',
-              body: 'space-y-4 p-4 sm:p-5',
-              header: 'p-4 pb-0 sm:p-5 sm:pb-0'
-            }"
-          >
-            <template #header>
-              <div class="space-y-1">
-                <h2 class="text-base font-semibold text-highlighted">
-                  Intervention
-                </h2>
-                <p class="text-sm text-toned">
-                  Décrivez le symptôme client puis gardez les remarques atelier en dessous.
-                </p>
-              </div>
-            </template>
-
-            <UFormField
-              label="Problème constaté"
-              name="issueDescription"
-              required
-            >
-              <UTextarea
-                v-model="state.issueDescription"
-                class="w-full"
-                :rows="5"
-                placeholder="Ex. écran fissuré, Face ID inactif, batterie qui chauffe..."
-              />
-            </UFormField>
-
-            <UFormField
-              label="Notes internes"
-              name="internalNotes"
-              hint="Optionnel"
-            >
-              <UTextarea
-                v-model="state.internalNotes"
-                class="w-full"
-                :rows="4"
-                placeholder="Diagnostic initial, accessoires laissés, pièces à commander..."
-              />
-            </UFormField>
           </UCard>
         </div>
 
@@ -447,13 +541,13 @@ function handleCustomerCreated(customer: CustomerRecord) {
 
               <div class="rounded-2xl border border-default bg-default/70 p-4">
                 <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                  Appareil
+                  Offre annoncée
                 </p>
                 <p class="mt-1 text-sm font-medium text-highlighted">
-                  {{ deviceSummary }}
+                  {{ bestRepairSuggestion?.issueLabel || 'Tarif à confirmer' }}
                 </p>
                 <p class="mt-1 text-xs text-toned">
-                  {{ state.imei.trim() || state.serialNumber.trim() || 'Sans IMEI ni numéro de série pour l’instant' }}
+                  {{ bestRepairSuggestion ? `${bestRepairSuggestion.model} · ${quotedPrice}` : deviceSummary }}
                 </p>
               </div>
 
@@ -509,6 +603,16 @@ function handleCustomerCreated(customer: CustomerRecord) {
                   variant="soft"
                   class="w-full justify-center"
                   @click="patternOpen = true"
+                />
+
+                <UButton
+                  type="button"
+                  :label="advancedOpen ? 'Masquer les champs avancés' : 'Afficher les champs avancés'"
+                  :icon="advancedOpen ? 'i-lucide-panel-top-close' : 'i-lucide-panel-top-open'"
+                  color="neutral"
+                  variant="ghost"
+                  class="w-full justify-center"
+                  @click="advancedOpen = !advancedOpen"
                 />
               </div>
             </template>

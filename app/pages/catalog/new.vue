@@ -9,6 +9,7 @@ async function saveItem(payload: {
   defaultPrice: number
   vatRate: number
   isActive: boolean
+  isQuickPick: boolean
 }) {
   const item = await $fetch('/api/catalog-items', {
     method: 'POST',

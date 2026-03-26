@@ -16,6 +16,7 @@ async function saveItem(payload: {
   defaultPrice: number
   vatRate: number
   isActive: boolean
+  isQuickPick: boolean
 }) {
   await $fetch(`/api/catalog-items/${id.value}`, {
     method: 'PATCH',
@@ -93,6 +94,12 @@ async function saveItem(payload: {
                 <span class="text-sm text-toned">Statut</span>
                 <UBadge :color="item?.isActive ? 'success' : 'neutral'" variant="subtle">
                   {{ item?.isActive ? 'Actif' : 'Inactif' }}
+                </UBadge>
+              </div>
+              <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">
+                <span class="text-sm text-toned">Vente rapide</span>
+                <UBadge :color="item?.isQuickPick ? 'primary' : 'neutral'" variant="subtle">
+                  {{ item?.isQuickPick ? 'Raccourci comptoir' : 'Standard' }}
                 </UBadge>
               </div>
               <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">

@@ -13,6 +13,7 @@ function mapCatalogItem(row: typeof catalogItems.$inferSelect): CatalogItemRecor
     defaultPrice: row.defaultPrice,
     vatRate: row.vatRate,
     isActive: row.isActive,
+    isQuickPick: row.isQuickPick,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   }
@@ -70,6 +71,7 @@ export async function createCatalogItem(input: Omit<CatalogItemRecord, 'id' | 'c
     defaultPrice: input.defaultPrice,
     vatRate: input.vatRate,
     isActive: input.isActive,
+    isQuickPick: input.isQuickPick,
     createdAt: now,
     updatedAt: now
   }).returning()
@@ -89,6 +91,7 @@ export async function updateCatalogItem(id: number, input: Omit<CatalogItemRecor
       defaultPrice: input.defaultPrice,
       vatRate: input.vatRate,
       isActive: input.isActive,
+      isQuickPick: input.isQuickPick,
       updatedAt: new Date().toISOString()
     })
     .where(eq(catalogItems.id, id))

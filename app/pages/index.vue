@@ -80,6 +80,20 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
 
             <div class="grid gap-3">
               <UButton
+                to="/tickets/new"
+                label="Nouvelle réparation"
+                icon="i-lucide-wrench"
+                size="xl"
+                class="justify-start"
+              />
+              <UButton
+                to="/sales/new"
+                label="Vente rapide"
+                icon="i-lucide-receipt"
+                size="xl"
+                class="justify-start"
+              />
+              <UButton
                 to="/customers/new"
                 label="Nouveau client"
                 icon="i-lucide-user-plus"
@@ -87,16 +101,9 @@ const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] 
                 class="justify-start"
               />
               <UButton
-                to="/tickets/new"
-                label="Nouveau ticket suivi"
-                icon="i-lucide-wrench"
-                variant="subtle"
-                class="justify-start"
-              />
-              <UButton
                 to="/documents/new"
-                label="Facture ou reçu direct"
-                icon="i-lucide-receipt"
+                label="Document avancé"
+                icon="i-lucide-file-plus-2"
                 variant="subtle"
                 class="justify-start"
               />

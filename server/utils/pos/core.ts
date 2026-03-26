@@ -190,6 +190,7 @@ async function createPosTables() {
         default_price INTEGER NOT NULL,
         vat_rate REAL NOT NULL,
         is_active INTEGER NOT NULL DEFAULT 1,
+        is_quick_pick INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
@@ -294,6 +295,7 @@ async function createPosTables() {
     'CREATE INDEX IF NOT EXISTS catalog_items_name_idx ON catalog_items(name)',
     'CREATE UNIQUE INDEX IF NOT EXISTS catalog_items_sku_idx ON catalog_items(sku)',
     'CREATE INDEX IF NOT EXISTS catalog_items_type_idx ON catalog_items(type)',
+    'CREATE INDEX IF NOT EXISTS catalog_items_is_active_idx ON catalog_items(is_active)',
     'CREATE INDEX IF NOT EXISTS tickets_ticket_number_idx ON tickets(ticket_number)',
     'CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets(customer_id)',
     'CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets(status)',
@@ -398,6 +400,27 @@ async function migrateTicketAccessColumns() {
   if (!statements.length) {
     return
   }
+
+  await client.batch(statements, 'write')
+}
+
+async function migrateCatalogQuickPickColumn() {
+  const client = useTursoClient()
+  const tableInfo = await client.execute('PRAGMA table_info(catalog_items)')
+  const columns = new Set(tableInfo.rows.map(row => String(row.name)))
+
+  if (!columns.size) {
+    return
+  }
+
+  const statements: string[] = []
+
+  if (!columns.has('is_quick_pick')) {
+    statements.push('ALTER TABLE catalog_items ADD COLUMN is_quick_pick INTEGER NOT NULL DEFAULT 0')
+  }
+
+  statements.push('CREATE INDEX IF NOT EXISTS catalog_items_is_active_idx ON catalog_items(is_active)')
+  statements.push('CREATE INDEX IF NOT EXISTS catalog_items_is_quick_pick_idx ON catalog_items(is_quick_pick)')
 
   await client.batch(statements, 'write')
 }
@@ -591,6 +614,7 @@ async function seedCatalogItems() {
       defaultPrice: 2990,
       vatRate: 8.1,
       isActive: true,
+      isQuickPick: true,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -601,6 +625,29 @@ async function seedCatalogItems() {
       defaultPrice: 1990,
       vatRate: 8.1,
       isActive: true,
+      isQuickPick: true,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      name: 'Chargeur rapide USB-C 20W',
+      sku: 'CHG-USBC-20W',
+      type: 'product',
+      defaultPrice: 2490,
+      vatRate: 8.1,
+      isActive: true,
+      isQuickPick: true,
+      createdAt: toIsoDateTime(),
+      updatedAt: toIsoDateTime()
+    },
+    {
+      name: 'Cable USB-C vers USB-C',
+      sku: 'CBL-USBC-USBC',
+      type: 'product',
+      defaultPrice: 1490,
+      vatRate: 8.1,
+      isActive: true,
+      isQuickPick: true,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -611,6 +658,7 @@ async function seedCatalogItems() {
       defaultPrice: 16900,
       vatRate: 8.1,
       isActive: true,
+      isQuickPick: false,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -621,6 +669,7 @@ async function seedCatalogItems() {
       defaultPrice: 4900,
       vatRate: 8.1,
       isActive: true,
+      isQuickPick: false,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -631,6 +680,7 @@ async function seedCatalogItems() {
       defaultPrice: 3900,
       vatRate: 8.1,
       isActive: true,
+      isQuickPick: false,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -641,6 +691,7 @@ async function seedCatalogItems() {
       defaultPrice: 2500,
       vatRate: 8.1,
       isActive: true,
+      isQuickPick: false,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -651,6 +702,7 @@ async function seedCatalogItems() {
       defaultPrice: 4500,
       vatRate: 8.1,
       isActive: true,
+      isQuickPick: false,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     }
@@ -882,6 +934,7 @@ export async function ensurePosSchema() {
     posSchemaPromise = (async () => {
       await migrateLegacyCustomersTable()
       await createPosTables()
+      await migrateCatalogQuickPickColumn()
       await migrateTicketAccessColumns()
       await migrateCompanySettingsColumns()
       await migrateDocumentLinesQuantityToInteger()

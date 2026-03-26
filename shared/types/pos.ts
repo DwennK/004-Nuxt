@@ -17,6 +17,16 @@ export type DocumentStatus = (typeof documentStatuses)[number]
 export type PaymentMethod = (typeof paymentMethods)[number]
 export type PaymentStatus = (typeof paymentStatuses)[number]
 export type LineCategoryHint = (typeof lineCategoryHints)[number]
+export type RepairSuggestionIssueKey
+  = | 'screen'
+    | 'battery'
+    | 'chassis'
+    | 'back_glass'
+    | 'rear_camera'
+    | 'front_camera'
+    | 'camera_lens'
+    | 'charge_port'
+    | 'earpiece'
 
 export interface CustomerUpsertInput {
   displayName?: string | null
@@ -71,8 +81,19 @@ export interface CatalogItemRecord {
   defaultPrice: number
   vatRate: number
   isActive: boolean
+  isQuickPick: boolean
   createdAt: string
   updatedAt: string
+}
+
+export interface RepairSuggestion {
+  brand: string
+  family: string
+  model: string
+  issueKey: RepairSuggestionIssueKey
+  issueLabel: string
+  priceCents: number
+  keywords: string[]
 }
 
 export interface TicketRecord {

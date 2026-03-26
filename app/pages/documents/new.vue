@@ -60,10 +60,10 @@ async function saveDocument(payload: {
         <template #header>
           <div>
             <h2 class="text-lg font-semibold text-highlighted">
-              Vente directe ou document autonome
+              Document avancé
             </h2>
             <p class="text-sm text-toned">
-              À utiliser pour les ventes d’accessoires directes, les services rapides, les devis autonomes, ou la facturation liée à un ticket.
+              À utiliser pour les devis, factures, reçus ou avoirs hors flux rapide, avec contrôle complet des lignes et du client.
             </p>
           </div>
         </template>
