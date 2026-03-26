@@ -6,14 +6,16 @@ import {
   documentLines,
   documents,
   payments,
+  ticketEvents,
   tickets
 } from '~~/server/db/schema'
-import { documentTypePrefixes } from '~~/shared/constants/pos'
+import { documentTypePrefixes, ticketStatusLabels } from '~~/shared/constants/pos'
 import type {
   CustomerRecord,
   DocumentStatus,
   DocumentType,
   PaymentStatus,
+  TicketEventKind,
   TicketStatus
 } from '~~/shared/types/pos'
 import { buildZonedDayRange, formatCustomerName, sumMoney, toIsoDateTime } from '~~/shared/utils/pos'
@@ -32,6 +34,18 @@ export function normalizeOptionalText(value: string | null | undefined) {
 
 export function normalizeRequiredText(value: string) {
   return value.trim()
+}
+
+function serializeEventMetadata(metadata?: Record<string, unknown> | null) {
+  if (!metadata) {
+    return null
+  }
+
+  try {
+    return JSON.stringify(metadata)
+  } catch {
+    return null
+  }
 }
 
 export function splitLegacyName(name: string | null | undefined) {
@@ -258,6 +272,19 @@ async function createPosTables() {
       )
     `,
     `
+      CREATE TABLE IF NOT EXISTS ticket_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        label TEXT NOT NULL,
+        note TEXT,
+        metadata_json TEXT,
+        occurred_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
+      )
+    `,
+    `
       CREATE TABLE IF NOT EXISTS document_lines (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         document_id INTEGER NOT NULL,
@@ -300,6 +327,9 @@ async function createPosTables() {
     'CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets(customer_id)',
     'CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets(status)',
     'CREATE INDEX IF NOT EXISTS tickets_opened_at_idx ON tickets(opened_at)',
+    'CREATE INDEX IF NOT EXISTS ticket_events_ticket_id_idx ON ticket_events(ticket_id)',
+    'CREATE INDEX IF NOT EXISTS ticket_events_occurred_at_idx ON ticket_events(occurred_at)',
+    'CREATE INDEX IF NOT EXISTS ticket_events_kind_idx ON ticket_events(kind)',
     'CREATE INDEX IF NOT EXISTS documents_document_number_idx ON documents(document_number)',
     'CREATE INDEX IF NOT EXISTS documents_customer_id_idx ON documents(customer_id)',
     'CREATE INDEX IF NOT EXISTS documents_ticket_id_idx ON documents(ticket_id)',
@@ -986,6 +1016,30 @@ export async function generateDocumentNumber(type: DocumentType) {
   return `${prefix}${String(sequence).padStart(4, '0')}`
 }
 
+export async function createTicketEvent(input: {
+  ticketId: number
+  kind: TicketEventKind
+  label: string
+  note?: string | null
+  metadata?: Record<string, unknown> | null
+  occurredAt?: string | null
+}) {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const now = toIsoDateTime()
+
+  await db.insert(ticketEvents).values({
+    ticketId: input.ticketId,
+    kind: input.kind,
+    label: input.label.trim(),
+    note: normalizeOptionalText(input.note),
+    metadataJson: serializeEventMetadata(input.metadata),
+    occurredAt: input.occurredAt || now,
+    createdAt: now
+  })
+}
+
 export async function syncDocumentStatus(documentId: number) {
   await ensurePosSchema()
 
@@ -1025,6 +1079,16 @@ export async function closeTicketRecord(ticketId: number, internalNotes?: string
   await ensurePosSchema()
 
   const db = useDb()
+  const existingRows = await db.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1)
+  const existing = existingRows[0]
+
+  if (!existing) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Ticket not found'
+    })
+  }
+
   const result = await db.update(tickets)
     .set({
       status: 'closed',
@@ -1044,6 +1108,20 @@ export async function closeTicketRecord(ticketId: number, internalNotes?: string
     })
   }
 
+  if (existing.status !== 'closed') {
+    await createTicketEvent({
+      ticketId,
+      kind: 'ticket_closed',
+      label: 'Ticket clôturé',
+      note: internalNotes,
+      metadata: {
+        previousStatus: existing.status,
+        nextStatus: 'closed'
+      },
+      occurredAt: row.closedAt
+    })
+  }
+
   return row
 }
 
@@ -1051,6 +1129,16 @@ export async function updateTicketStatusRecord(ticketId: number, status: TicketS
   await ensurePosSchema()
 
   const db = useDb()
+  const existingRows = await db.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1)
+  const existing = existingRows[0]
+
+  if (!existing) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Ticket not found'
+    })
+  }
+
   const result = await db.update(tickets)
     .set({
       status,
@@ -1067,6 +1155,20 @@ export async function updateTicketStatusRecord(ticketId: number, status: TicketS
     throw createError({
       statusCode: 404,
       statusMessage: 'Ticket not found'
+    })
+  }
+
+  if (existing.status !== status) {
+    await createTicketEvent({
+      ticketId,
+      kind: status === 'closed' ? 'ticket_closed' : 'ticket_status_changed',
+      label: status === 'closed' ? 'Ticket clôturé' : `Statut mis à jour · ${ticketStatusLabels[status]}`,
+      note: internalNotes,
+      metadata: {
+        previousStatus: existing.status,
+        nextStatus: status
+      },
+      occurredAt: status === 'closed' ? row.closedAt : row.updatedAt
     })
   }
 

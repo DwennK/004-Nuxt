@@ -1,8 +1,9 @@
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
+import { paymentMethodLabels } from '~~/shared/constants/pos'
 import { customers, documents, payments } from '~~/server/db/schema'
 import type { PaymentListItem, PaymentRecord } from '~~/shared/types/pos'
 import { useDb } from '../turso'
-import { ensurePosSchema, normalizeOptionalText, syncDocumentStatus } from './core'
+import { createTicketEvent, ensurePosSchema, normalizeOptionalText, syncDocumentStatus } from './core'
 import { mapPayment } from './documents'
 
 export async function listPayments(filters?: {
@@ -79,6 +80,35 @@ export async function createPaymentRecord(input: Omit<PaymentRecord, 'id' | 'cre
   }).returning()
 
   await syncDocumentStatus(input.documentId)
+
+  const documentRows = await db.select({
+    id: documents.id,
+    ticketId: documents.ticketId,
+    documentNumber: documents.documentNumber,
+    type: documents.type
+  }).from(documents).where(eq(documents.id, input.documentId)).limit(1)
+  const document = documentRows[0]
+  const payment = rows[0]
+
+  if (document?.ticketId && payment && input.status === 'paid') {
+    await createTicketEvent({
+      ticketId: document.ticketId,
+      kind: 'payment_recorded',
+      label: 'Paiement enregistré',
+      note: input.notes,
+      metadata: {
+        paymentId: payment.id,
+        documentId: document.id,
+        documentNumber: document.documentNumber,
+        documentType: document.type,
+        amount: input.amount,
+        method: input.method,
+        methodLabel: paymentMethodLabels[input.method],
+        reference: input.reference || null
+      },
+      occurredAt: input.paidAt
+    })
+  }
 
   return mapPayment(rows[0]!)
 }

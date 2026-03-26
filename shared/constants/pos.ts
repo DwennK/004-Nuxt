@@ -12,6 +12,7 @@ export const ticketStatuses = [
   'closed',
   'cancelled'
 ] as const
+export const ticketWorkflowSteps = ['reception', 'diagnostic', 'workshop', 'pickup', 'closure'] as const
 export const documentTypes = ['quote', 'invoice', 'receipt', 'credit_note'] as const
 export const documentStatuses = ['draft', 'issued', 'paid', 'cancelled'] as const
 export const paymentMethods = ['cash', 'card', 'twint', 'bank_transfer'] as const
@@ -66,6 +67,14 @@ export const ticketStatusColors: Record<(typeof ticketStatuses)[number], 'info' 
   delivered: 'success',
   closed: 'neutral',
   cancelled: 'error'
+}
+
+export const ticketWorkflowStepLabels: Record<(typeof ticketWorkflowSteps)[number], string> = {
+  reception: 'Réception',
+  diagnostic: 'Diagnostic',
+  workshop: 'Atelier',
+  pickup: 'Retrait',
+  closure: 'Clôture'
 }
 
 export const documentTypeLabels: Record<(typeof documentTypes)[number], string> = {

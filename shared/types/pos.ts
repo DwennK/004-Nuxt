@@ -6,12 +6,14 @@ import type {
   paymentMethods,
   paymentStatuses,
   ticketStatuses,
-  ticketTypes
+  ticketTypes,
+  ticketWorkflowSteps
 } from '../constants/pos'
 
 export type CatalogItemType = (typeof catalogItemTypes)[number]
 export type TicketType = (typeof ticketTypes)[number]
 export type TicketStatus = (typeof ticketStatuses)[number]
+export type TicketWorkflowStep = (typeof ticketWorkflowSteps)[number]
 export type DocumentType = (typeof documentTypes)[number]
 export type DocumentStatus = (typeof documentStatuses)[number]
 export type PaymentMethod = (typeof paymentMethods)[number]
@@ -116,6 +118,54 @@ export interface TicketRecord {
   updatedAt: string
 }
 
+export type TicketEventKind
+  = | 'ticket_created'
+    | 'ticket_status_changed'
+    | 'ticket_closed'
+    | 'document_created'
+    | 'payment_recorded'
+
+export interface TicketEvent {
+  id: number | string
+  ticketId: number
+  kind: TicketEventKind
+  label: string
+  note: string | null
+  metadata: Record<string, unknown> | null
+  occurredAt: string
+  createdAt: string
+  isSynthetic?: boolean
+}
+
+export interface TicketWorkflowAction {
+  id: string
+  kind: 'status' | 'close'
+  label: string
+  description: string
+  icon: string
+  color: 'neutral' | 'warning' | 'success' | 'info' | 'error'
+  targetStatus: TicketStatus | null
+}
+
+export interface TicketWorkflowSummary {
+  step: TicketWorkflowStep
+  stepLabel: string
+  currentStatusLabel: string
+  nextActionLabel: string
+  blockerLabel: string | null
+  actions: TicketWorkflowAction[]
+}
+
+export interface TicketCommercialSummary {
+  quote: DocumentRecord | null
+  invoice: DocumentRecord | null
+  latestDocument: DocumentRecord | null
+  payableDocument: DocumentRecord | null
+  totalPaid: number
+  balanceDue: number
+  paymentStateLabel: string
+}
+
 export interface DocumentLineRecord {
   id: number
   documentId: number
@@ -169,6 +219,9 @@ export interface TicketDetail extends TicketRecord {
   customer: CustomerRecord
   documents: DocumentRecord[]
   payments: PaymentRecord[]
+  events: TicketEvent[]
+  workflow: TicketWorkflowSummary
+  commercialSummary: TicketCommercialSummary
 }
 
 export interface TicketListItem extends TicketRecord {

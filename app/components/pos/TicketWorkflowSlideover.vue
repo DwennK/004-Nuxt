@@ -1,53 +1,50 @@
 <script setup lang="ts">
 import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
-import { ticketStatusLabels, ticketStatuses } from '~~/shared/constants/pos'
-import type { TicketStatus } from '~~/shared/types/pos'
+import type { TicketWorkflowAction } from '~~/shared/types/pos'
 
 const props = defineProps<{
-  initialStatus: TicketStatus
+  action: TicketWorkflowAction | null
   initialNotes?: string | null
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
 
 const emit = defineEmits<{
-  updateStatus: [payload: { status: TicketStatus, internalNotes: string }]
-  closeTicket: [payload: { internalNotes: string }]
+  submit: [payload: { action: TicketWorkflowAction, internalNotes: string }]
 }>()
 
 const schema = z.object({
-  status: z.enum(ticketStatuses),
   internalNotes: z.string().optional().default('')
 })
 
 type Schema = z.output<typeof schema>
 
-const statusItems = ticketStatuses.map(status => ({
-  label: ticketStatusLabels[status],
-  value: status
-}))
-
 const state = reactive<Schema>({
-  status: props.initialStatus,
   internalNotes: props.initialNotes || ''
 })
 
 watchEffect(() => {
-  state.status = props.initialStatus
   state.internalNotes = props.initialNotes || ''
 })
 
-function submitStatus(event: FormSubmitEvent<Schema>) {
-  emit('updateStatus', event.data)
+function onSubmit(event: FormSubmitEvent<Schema>) {
+  if (!props.action) {
+    return
+  }
+
+  emit('submit', {
+    action: props.action,
+    internalNotes: event.data.internalNotes
+  })
 }
 </script>
 
 <template>
   <USlideover
     v-model:open="open"
-    title="Actions de suivi"
-    description="Mettez à jour le suivi du ticket séparément des devis, factures et paiements."
+    :title="action?.label || 'Action de suivi'"
+    :description="action?.description || 'Confirmez l’action de suivi et ajoutez une note si besoin.'"
     side="right"
     :ui="{ content: 'max-w-xl' }"
   >
@@ -55,33 +52,45 @@ function submitStatus(event: FormSubmitEvent<Schema>) {
       <UForm
         :schema="schema"
         :state="state"
-        class="space-y-4"
-        @submit="submitStatus"
+        class="space-y-5"
+        @submit="onSubmit"
       >
-        <UFormField label="Statut" name="status">
-          <USelectMenu
-            v-model="state.status"
-            :items="statusItems"
-            value-key="value"
-            class="w-full"
-          />
-        </UFormField>
+        <div v-if="action" class="rounded-2xl border border-default bg-muted/20 p-4">
+          <div class="flex items-start gap-3">
+            <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <UIcon :name="action.icon" class="size-5" />
+            </div>
+            <div class="space-y-1">
+              <p class="font-medium text-highlighted">
+                {{ action.label }}
+              </p>
+              <p class="text-sm text-toned">
+                {{ action.description }}
+              </p>
+            </div>
+          </div>
+        </div>
 
-        <UFormField label="Notes internes" name="internalNotes">
+        <UFormField
+          label="Note de suivi"
+          name="internalNotes"
+          hint="Optionnel"
+        >
           <UTextarea
             v-model="state.internalNotes"
             class="w-full"
             :rows="6"
-            placeholder="Diagnostic, accord client, état des pièces, détails du retrait"
+            placeholder="Diagnostic, accord client, blocage, détail de remise ou commentaire atelier..."
           />
         </UFormField>
 
-        <div class="flex flex-wrap justify-end gap-2">
-          <UButton label="Appliquer le statut" type="submit" variant="subtle" />
+        <div class="flex justify-end">
           <UButton
-            label="Clôturer le ticket"
-            color="warning"
-            @click="emit('closeTicket', { internalNotes: state.internalNotes })"
+            type="submit"
+            :label="action ? `Confirmer · ${action.label}` : 'Confirmer l’action'"
+            :icon="action?.icon || 'i-lucide-check'"
+            :color="action?.color || 'primary'"
+            :disabled="!action"
           />
         </div>
       </UForm>

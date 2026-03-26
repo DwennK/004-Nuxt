@@ -6,6 +6,7 @@ import {
   payments,
   tickets
 } from '~~/server/db/schema'
+import { paymentMethodLabels } from '~~/shared/constants/pos'
 import type {
   DocumentDetail,
   DocumentLineRecord,
@@ -16,6 +17,7 @@ import type {
 import { useDb } from '../turso'
 import {
   calculateDocumentTotals,
+  createTicketEvent,
   ensurePosSchema,
   generateDocumentNumber,
   getDocumentPaymentTotals,
@@ -69,6 +71,19 @@ export function mapPayment(row: typeof payments.$inferSelect): PaymentRecord {
     notes: row.notes,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
+  }
+}
+
+function getDocumentCreatedLabel(type: DocumentRecord['type']) {
+  switch (type) {
+    case 'quote':
+      return 'Devis créé'
+    case 'invoice':
+      return 'Facture créée'
+    case 'receipt':
+      return 'Reçu créé'
+    case 'credit_note':
+      return 'Avoir créé'
   }
 }
 
@@ -255,7 +270,24 @@ export async function createDocumentRecord(input: {
     categoryHint: input.lines[index]!.categoryHint ?? null
   })))
 
-  return getDocumentById(document.id)
+  const detail = await getDocumentById(document.id)
+
+  if (detail.ticketId && (detail.type === 'quote' || detail.type === 'invoice')) {
+    await createTicketEvent({
+      ticketId: detail.ticketId,
+      kind: 'document_created',
+      label: getDocumentCreatedLabel(detail.type),
+      metadata: {
+        documentId: detail.id,
+        documentNumber: detail.documentNumber,
+        documentType: detail.type,
+        documentStatus: detail.status
+      },
+      occurredAt: detail.issuedAt
+    })
+  }
+
+  return detail
 }
 
 export async function updateDocumentRecord(id: number, input: {
@@ -354,7 +386,7 @@ export async function markDocumentAsPaid(id: number, input: {
   const amount = input.amount && input.amount > 0 ? input.amount : balance || document.total
   const now = new Date().toISOString()
 
-  await db.insert(payments).values({
+  const rows = await db.insert(payments).values({
     customerId: document.customerId,
     documentId: document.id,
     method: input.method,
@@ -365,11 +397,34 @@ export async function markDocumentAsPaid(id: number, input: {
     notes: normalizeOptionalText(input.notes),
     createdAt: now,
     updatedAt: now
-  })
+  }).returning()
 
   await syncDocumentStatus(id)
 
-  return getDocumentById(id)
+  const detail = await getDocumentById(id)
+  const payment = rows[0]
+
+  if (detail.ticketId && payment) {
+    await createTicketEvent({
+      ticketId: detail.ticketId,
+      kind: 'payment_recorded',
+      label: 'Paiement enregistré',
+      note: input.notes,
+      metadata: {
+        paymentId: payment.id,
+        documentId: detail.id,
+        documentNumber: detail.documentNumber,
+        documentType: detail.type,
+        amount,
+        method: input.method,
+        methodLabel: paymentMethodLabels[input.method],
+        reference: input.reference || null
+      },
+      occurredAt: payment.paidAt
+    })
+  }
+
+  return detail
 }
 
 export async function cloneDocumentLinesFromLatest(ticketId: number, preferredType?: typeof documents.$inferSelect.type) {

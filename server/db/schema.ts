@@ -98,6 +98,23 @@ export const tickets = sqliteTable('tickets', {
   openedAtIdx: index('tickets_opened_at_idx').on(table.openedAt)
 }))
 
+export const ticketEvents = sqliteTable('ticket_events', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ticketId: integer('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
+  kind: text('kind', {
+    enum: ['ticket_created', 'ticket_status_changed', 'ticket_closed', 'document_created', 'payment_recorded']
+  }).notNull(),
+  label: text('label').notNull(),
+  note: text('note'),
+  metadataJson: text('metadata_json'),
+  occurredAt: text('occurred_at').notNull(),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, table => ({
+  ticketIdx: index('ticket_events_ticket_id_idx').on(table.ticketId),
+  occurredAtIdx: index('ticket_events_occurred_at_idx').on(table.occurredAt),
+  kindIdx: index('ticket_events_kind_idx').on(table.kind)
+}))
+
 export const documents = sqliteTable('documents', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   documentNumber: text('document_number').notNull(),
