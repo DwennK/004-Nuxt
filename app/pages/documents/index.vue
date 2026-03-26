@@ -10,7 +10,7 @@ import {
   documentTypeLabels
 } from '~~/shared/constants/pos'
 import type { DocumentListItem } from '~~/shared/types/pos'
-import { formatCurrency, formatDateTime, toDateInputValue } from '~~/shared/utils/pos'
+import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
@@ -22,7 +22,7 @@ const table = useTemplateRef<DashboardTableInstance>('table')
 const search = ref('')
 const typeFilter = ref<'all' | DocumentListItem['type']>('all')
 const statusFilter = ref<'all' | DocumentListItem['status']>('all')
-const dateFilter = ref(toDateInputValue())
+const dateFilter = ref('')
 const pagination = ref({
   pageIndex: 0,
   pageSize: 10
@@ -31,12 +31,12 @@ const sorting = ref([{ id: 'issuedAt', desc: true }])
 const columnVisibility = ref()
 
 const typeItems = [
-  { label: 'All types', value: 'all' },
+  { label: 'Tous les types', value: 'all' },
   ...Object.entries(documentTypeLabels).map(([value, label]) => ({ label, value }))
 ]
 
 const statusItems = [
-  { label: 'All statuses', value: 'all' },
+  { label: 'Tous les statuts', value: 'all' },
   ...Object.entries(documentStatusLabels).map(([value, label]) => ({ label, value }))
 ]
 
@@ -64,27 +64,41 @@ watch([search, typeFilter, statusFilter, dateFilter], () => {
   pagination.value.pageIndex = 0
 })
 
+const hasActiveFilters = computed(() =>
+  !!search.value.trim()
+  || typeFilter.value !== 'all'
+  || statusFilter.value !== 'all'
+  || !!dateFilter.value
+)
+
+function resetFilters() {
+  search.value = ''
+  typeFilter.value = 'all'
+  statusFilter.value = 'all'
+  dateFilter.value = ''
+}
+
 async function removeDocument(id: number) {
   await $fetch(`/api/documents/${id}`, { method: 'DELETE' })
-  toast.add({ title: 'Document removed', color: 'success' })
+  toast.add({ title: 'Document supprimé', color: 'success' })
   await refresh()
 }
 
 function getRowItems(document: DocumentListItem) {
   return [[{
-    label: 'Open document',
+    label: 'Ouvrir le document',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
       navigateTo(`/documents/${document.id}`)
     }
   }, {
-    label: 'Printable view',
+    label: 'Aperçu imprimable',
     icon: 'i-lucide-printer',
     onSelect() {
       navigateTo(`/documents/${document.id}/print`)
     }
   }], [{
-    label: 'Delete',
+    label: 'Supprimer',
     icon: 'i-lucide-trash',
     color: 'error',
     onSelect() {
@@ -118,10 +132,10 @@ const columns: TableColumn<DocumentListItem>[] = [
   },
   {
     accessorKey: 'customerName',
-    header: 'Customer',
+    header: 'Client',
     cell: ({ row }) => h('div', { class: 'min-w-0' }, [
       h('p', { class: 'font-medium truncate' }, row.original.customerName),
-      h('p', { class: 'text-sm text-toned truncate' }, row.original.ticketNumber || 'Direct sale / standalone')
+      h('p', { class: 'text-sm text-toned truncate' }, row.original.ticketNumber || 'Vente directe / autonome')
     ])
   },
   {
@@ -129,17 +143,17 @@ const columns: TableColumn<DocumentListItem>[] = [
     header: 'Total TTC',
     cell: ({ row }) => h('div', { class: 'space-y-1 text-right' }, [
       h('p', { class: 'font-medium text-highlighted' }, formatCurrency(row.original.total)),
-      h('p', { class: 'text-sm text-toned' }, `Encaisse ${formatCurrency(row.original.paidAmount)}`)
+      h('p', { class: 'text-sm text-toned' }, `Encaissé ${formatCurrency(row.original.paidAmount)}`)
     ])
   },
   {
     accessorKey: 'balanceDue',
-    header: 'Reste a payer',
+    header: 'Reste à payer',
     cell: ({ row }) => formatCurrency(row.original.balanceDue)
   },
   {
     accessorKey: 'issuedAt',
-    header: 'Issued',
+    header: 'Émis le',
     cell: ({ row }) => formatDateTime(row.original.issuedAt)
   },
   {
@@ -169,7 +183,7 @@ const columns: TableColumn<DocumentListItem>[] = [
         </template>
 
         <template #right>
-          <UButton to="/documents/new" icon="i-lucide-file-plus-2" label="Direct invoice / receipt" />
+          <UButton to="/documents/new" icon="i-lucide-file-plus-2" label="Facture / reçu direct" />
         </template>
       </UDashboardNavbar>
 
@@ -178,7 +192,7 @@ const columns: TableColumn<DocumentListItem>[] = [
           <UInput
             v-model="search"
             icon="i-lucide-search"
-            placeholder="Search by document, customer or ticket"
+            placeholder="Rechercher par document, client ou ticket"
             class="max-w-md"
           />
           <USelectMenu
@@ -194,6 +208,14 @@ const columns: TableColumn<DocumentListItem>[] = [
             class="w-48"
           />
           <UInput v-model="dateFilter" type="date" class="w-44" />
+          <UButton
+            v-if="hasActiveFilters"
+            color="neutral"
+            variant="outline"
+            icon="i-lucide-x"
+            label="Réinitialiser"
+            @click="resetFilters"
+          />
         </div>
 
         <UDropdownMenu
@@ -202,7 +224,14 @@ const columns: TableColumn<DocumentListItem>[] = [
               ?.getAllColumns()
               .filter((column: DashboardTableColumn) => column.getCanHide())
               .map((column: DashboardTableColumn) => ({
-                label: upperFirst(column.id),
+                label: ({
+                  documentNumber: 'Document',
+                  customerName: 'Client',
+                  total: 'Total TTC',
+                  balanceDue: 'Reste à payer',
+                  issuedAt: 'Émis le',
+                  actions: 'Actions'
+                } as Record<string, string>)[column.id] || upperFirst(column.id),
                 type: 'checkbox' as const,
                 checked: column.getIsVisible(),
                 onUpdateChecked(checked: boolean) {
@@ -216,7 +245,7 @@ const columns: TableColumn<DocumentListItem>[] = [
           :content="{ align: 'end' }"
         >
           <UButton
-            label="Columns"
+            label="Colonnes"
             color="neutral"
             variant="outline"
             trailing-icon="i-lucide-settings-2"
@@ -229,9 +258,9 @@ const columns: TableColumn<DocumentListItem>[] = [
       <div class="space-y-4">
         <div class="grid gap-4 md:grid-cols-4">
           <PosSummaryCard title="Documents" :value="String(documents?.length || 0)" icon="i-lucide-files" />
-          <PosSummaryCard title="Paid" :value="String((documents || []).filter(document => document.status === 'paid').length)" icon="i-lucide-wallet" />
-          <PosSummaryCard title="Outstanding" :value="formatCurrency((documents || []).reduce((sum, document) => sum + document.balanceDue, 0))" icon="i-lucide-scale" />
-          <PosSummaryCard title="Visible" :value="String(filteredDocuments.length)" icon="i-lucide-filter" />
+          <PosSummaryCard title="Payés" :value="String((documents || []).filter(document => document.status === 'paid').length)" icon="i-lucide-wallet" />
+          <PosSummaryCard title="Restant à encaisser" :value="formatCurrency((documents || []).reduce((sum, document) => sum + document.balanceDue, 0))" icon="i-lucide-scale" />
+          <PosSummaryCard title="Visibles" :value="String(filteredDocuments.length)" icon="i-lucide-filter" />
         </div>
 
         <UTable
@@ -258,8 +287,8 @@ const columns: TableColumn<DocumentListItem>[] = [
           <template #empty>
             <UEmpty
               icon="i-lucide-files"
-              title="No documents found"
-              description="Adjust the filters or create a new document."
+              title="Aucun document trouvé"
+              description="Ajustez les filtres ou créez un nouveau document."
             />
           </template>
         </UTable>

@@ -21,6 +21,26 @@ export const customers = sqliteTable('customers', {
   phoneIdx: index('customers_phone_idx').on(table.phone)
 }))
 
+export const companySettings = sqliteTable('company_settings', {
+  id: integer('id').primaryKey(),
+  name: text('name').notNull(),
+  address: text('address'),
+  postalCode: text('postal_code'),
+  city: text('city'),
+  countryCode: text('country_code'),
+  phone: text('phone'),
+  email: text('email'),
+  website: text('website'),
+  vatNumber: text('vat_number'),
+  bankName: text('bank_name'),
+  iban: text('iban'),
+  paymentTerms: text('payment_terms'),
+  footerNotes: text('footer_notes'),
+  logoDataUrl: text('logo_data_url'),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+})
+
 export const catalogItems = sqliteTable('catalog_items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
@@ -61,6 +81,8 @@ export const tickets = sqliteTable('tickets', {
   model: text('model'),
   serialNumber: text('serial_number'),
   imei: text('imei'),
+  accessCode: text('access_code'),
+  simCode: text('sim_code'),
   issueDescription: text('issue_description').notNull(),
   internalNotes: text('internal_notes'),
   openedAt: text('opened_at').notNull(),

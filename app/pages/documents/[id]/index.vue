@@ -23,10 +23,10 @@ const activeTab = ref('overview')
 const paymentOpen = ref(false)
 
 const tabItems = [
-  { label: 'Overview', value: 'overview', icon: 'i-lucide-file-text' },
-  { label: 'Lines', value: 'lines', icon: 'i-lucide-list' },
-  { label: 'Payments', value: 'payments', icon: 'i-lucide-wallet' },
-  { label: 'Print', value: 'print', icon: 'i-lucide-printer' }
+  { label: 'Vue d’ensemble', value: 'overview', icon: 'i-lucide-file-text' },
+  { label: 'Lignes', value: 'lines', icon: 'i-lucide-list' },
+  { label: 'Paiements', value: 'payments', icon: 'i-lucide-wallet' },
+  { label: 'Aperçu imprimable', value: 'print', icon: 'i-lucide-printer' }
 ]
 
 const [{ data: document, refresh }, { data: customers }, { data: catalogItems }] = await Promise.all([
@@ -63,7 +63,7 @@ async function saveDocument(payload: {
   })
 
   toast.add({
-    title: 'Document updated',
+    title: 'Document mis à jour',
     color: 'success'
   })
 
@@ -83,7 +83,7 @@ async function markPaid(payload: {
 
   paymentOpen.value = false
   toast.add({
-    title: 'Payment recorded',
+    title: 'Paiement enregistré',
     color: 'success'
   })
   await refresh()
@@ -92,7 +92,7 @@ async function markPaid(payload: {
 const lineColumns: TableColumn<DocumentDetail['lines'][number]>[] = [
   {
     accessorKey: 'label',
-    header: 'Line',
+    header: 'Ligne',
     cell: ({ row }) => h('div', { class: 'space-y-1' }, [
       h('p', { class: 'font-medium text-highlighted' }, row.original.label),
       row.original.categoryHint
@@ -105,7 +105,7 @@ const lineColumns: TableColumn<DocumentDetail['lines'][number]>[] = [
   },
   {
     accessorKey: 'quantity',
-    header: 'Qty'
+    header: 'Qté'
   },
   {
     accessorKey: 'unitPrice',
@@ -127,7 +127,7 @@ const lineColumns: TableColumn<DocumentDetail['lines'][number]>[] = [
 const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
   {
     accessorKey: 'method',
-    header: 'Method',
+    header: 'Mode de paiement',
     cell: ({ row }) => h(UBadge, {
       color: paymentMethodColors[row.original.method],
       variant: 'subtle'
@@ -140,13 +140,13 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
   },
   {
     accessorKey: 'paidAt',
-    header: 'Encaisse a',
+    header: 'Encaissé à',
     cell: ({ row }) => formatDateTime(row.original.paidAt)
   },
   {
     accessorKey: 'reference',
-    header: 'Reference',
-    cell: ({ row }) => row.original.reference || 'No reference'
+    header: 'Référence',
+    cell: ({ row }) => row.original.reference || 'Aucune référence'
   }
 ]
 </script>
@@ -154,7 +154,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
 <template>
   <UDashboardPanel id="document-detail">
     <template #header>
-      <UDashboardNavbar :title="document?.documentNumber || 'Document detail'">
+      <UDashboardNavbar :title="document?.documentNumber || 'Détail du document'">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -163,11 +163,11 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
           <UButton
             v-if="document?.status !== 'paid' && balanceDue > 0"
             icon="i-lucide-wallet"
-            label="Record payment"
+            label="Enregistrer un paiement"
             variant="subtle"
             @click="paymentOpen = true"
           />
-          <UButton :to="`/documents/${id}/print`" icon="i-lucide-printer" label="Printable view" />
+          <UButton :to="`/documents/${id}/print`" icon="i-lucide-printer" label="Aperçu imprimable" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -176,8 +176,8 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
       <div v-if="document && customers && catalogItems" class="space-y-6">
         <div class="grid gap-4 md:grid-cols-4">
           <PosSummaryCard title="Total TTC" :value="formatCurrency(document.total)" icon="i-lucide-receipt" />
-          <PosSummaryCard title="Encaisse" :value="formatCurrency(paidAmount)" icon="i-lucide-wallet" />
-          <PosSummaryCard title="Reste a payer" :value="formatCurrency(balanceDue)" icon="i-lucide-badge-euro" />
+          <PosSummaryCard title="Encaissé" :value="formatCurrency(paidAmount)" icon="i-lucide-wallet" />
+          <PosSummaryCard title="Reste à payer" :value="formatCurrency(balanceDue)" icon="i-lucide-badge-euro" />
           <PosSummaryCard title="Lignes" :value="String(document.lines.length)" icon="i-lucide-list" />
         </div>
 
@@ -194,7 +194,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
               <template #header>
                 <div>
                   <h2 class="text-lg font-semibold text-highlighted">
-                    Commercial state
+                    État commercial
                   </h2>
                 </div>
               </template>
@@ -207,13 +207,13 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
                   </UBadge>
                 </div>
                 <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">
-                  <span class="text-sm text-toned">Status</span>
+                  <span class="text-sm text-toned">Statut</span>
                   <UBadge :color="documentStatusColors[document.status]" variant="subtle">
                     {{ documentStatusLabels[document.status] }}
                   </UBadge>
                 </div>
                 <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">
-                  <span class="text-sm text-toned">Issued at</span>
+                  <span class="text-sm text-toned">Émis le</span>
                   <span class="text-sm font-medium text-highlighted">{{ formatDateTime(document.issuedAt) }}</span>
                 </div>
               </div>
@@ -223,7 +223,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
               <template #header>
                 <div>
                   <h2 class="text-lg font-semibold text-highlighted">
-                    Linked objects
+                    Objets liés
                   </h2>
                 </div>
               </template>
@@ -246,7 +246,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
                     </NuxtLink>
                   </p>
                   <p v-else>
-                    Direct sale / standalone document
+                    Vente directe / document autonome
                   </p>
                 </div>
               </div>
@@ -257,7 +257,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Notes and totals
+                  Notes et totaux
                 </h2>
               </div>
             </template>
@@ -268,7 +268,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
                   Notes
                 </p>
                 <p class="mt-2 text-sm text-highlighted">
-                  {{ document.notes || 'No notes on this document.' }}
+                  {{ document.notes || 'Aucune note sur ce document.' }}
                 </p>
               </div>
               <div class="grid gap-3 md:grid-cols-3">
@@ -290,7 +290,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
                 </div>
                 <div class="rounded-2xl border border-default px-4 py-3">
                   <p class="text-xs uppercase tracking-wide text-toned">
-                    Balance
+                    Reste à payer
                   </p>
                   <p class="mt-2 font-semibold text-highlighted">
                     {{ formatCurrency(balanceDue) }}
@@ -305,10 +305,10 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
           <template #header>
             <div>
               <h2 class="text-lg font-semibold text-highlighted">
-                Document editor
+                Éditeur de document
               </h2>
               <p class="text-sm text-toned">
-                Direct sales and ticket-linked billing share the same document editor.
+                Les ventes directes et la facturation liée à un ticket partagent le même éditeur.
               </p>
             </div>
           </template>
@@ -318,7 +318,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
             :catalog-items="catalogItems"
             :initial-value="document"
             :fixed-ticket-id="document.ticketId"
-            submit-label="Save document"
+            submit-label="Enregistrer le document"
             @save="saveDocument"
           />
         </UCard>
@@ -328,7 +328,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Payment history
+                  Historique des paiements
                 </h2>
               </div>
             </template>
@@ -337,8 +337,8 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
               <template #empty>
                 <UEmpty
                   icon="i-lucide-wallet"
-                  title="No payments recorded"
-                  description="Record a payment from the header action."
+                  title="Aucun paiement enregistré"
+                  description="Enregistrez un paiement depuis l’action d’en-tête."
                 />
               </template>
             </UTable>
@@ -349,7 +349,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
               <template #header>
                 <div>
                   <h2 class="text-lg font-semibold text-highlighted">
-                    Outstanding balance
+                    Solde restant
                   </h2>
                 </div>
               </template>
@@ -357,7 +357,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
               <div class="space-y-4">
                 <div class="rounded-2xl border border-default bg-muted/20 px-4 py-3">
                   <p class="text-xs uppercase tracking-wide text-toned">
-                    Remaining
+                    Restant
                   </p>
                   <p class="mt-2 text-lg font-semibold text-highlighted">
                     {{ formatCurrency(balanceDue) }}
@@ -366,7 +366,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
 
                 <UButton
                   v-if="document.status !== 'paid' && balanceDue > 0"
-                  label="Record payment"
+                  label="Enregistrer un paiement"
                   icon="i-lucide-wallet"
                   block
                   @click="paymentOpen = true"
@@ -378,7 +378,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
               <template #header>
                 <div>
                   <h2 class="text-lg font-semibold text-highlighted">
-                    Current lines
+                    Lignes actuelles
                   </h2>
                 </div>
               </template>
@@ -387,8 +387,8 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
                 <template #empty>
                   <UEmpty
                     icon="i-lucide-list"
-                    title="No lines"
-                    description="Add lines in the document editor tab."
+                    title="Aucune ligne"
+                    description="Ajoutez des lignes dans l’onglet éditeur."
                     size="sm"
                     variant="naked"
                   />
@@ -403,18 +403,18 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Printable workflow
+                  Aperçu imprimable
                 </h2>
                 <p class="text-sm text-toned">
-                  Use the printable route for invoices, receipts, quotes, and credit notes.
+                  Ouvrez une vraie mise en page documentaire avant de lancer l’impression.
                 </p>
               </div>
             </template>
 
             <div class="space-y-4">
-              <UButton :to="`/documents/${id}/print`" label="Open printable layout" icon="i-lucide-printer" />
+              <UButton :to="`/documents/${id}/print`" label="Ouvrir l’aperçu imprimable" icon="i-lucide-printer" />
               <div class="rounded-2xl border border-default p-4 text-sm text-toned">
-                Print mode keeps the commercial layout separate from the operator editing surface.
+                L’aperçu imprimable sépare le document commercial de l’interface opérateur et ajoute un vrai bouton d’impression.
               </div>
             </div>
           </UCard>
@@ -423,7 +423,7 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Current document lines
+                  Lignes actuelles du document
                 </h2>
               </div>
             </template>
@@ -432,21 +432,21 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
               <template #empty>
                 <UEmpty
                   icon="i-lucide-list"
-                  title="No lines"
-                  description="Add lines in the editor tab."
+                  title="Aucune ligne"
+                  description="Ajoutez des lignes dans l’onglet éditeur."
                 />
               </template>
             </UTable>
           </UCard>
         </div>
       </div>
-
-      <PosDocumentPaymentSlideover
-        v-if="document"
-        v-model:open="paymentOpen"
-        :balance-due="balanceDue"
-        @save="markPaid"
-      />
     </template>
   </UDashboardPanel>
+
+  <PosDocumentPaymentSlideover
+    v-if="document"
+    v-model:open="paymentOpen"
+    :balance-due="balanceDue"
+    @save="markPaid"
+  />
 </template>

@@ -1,6 +1,7 @@
 import { and, desc, eq, isNotNull, like, sql, sum } from 'drizzle-orm'
 import {
   catalogItems,
+  companySettings,
   customers,
   documentLines,
   documents,
@@ -39,8 +40,8 @@ export function splitLegacyName(name: string | null | undefined) {
 
   if (parts.length === 1) {
     return {
-      firstName: parts[0] || 'Customer',
-      lastName: 'Customer'
+      firstName: '',
+      lastName: parts[0] || 'Customer'
     }
   }
 
@@ -67,6 +68,40 @@ export function mapCustomer(row: typeof customers.$inferSelect): CustomerRecord 
     updatedAt: row.updatedAt,
     displayName: formatCustomerName(row)
   }
+}
+
+async function ensureCompanySettingsRow() {
+  const db = useDb()
+  const rows = await db.select({ id: companySettings.id })
+    .from(companySettings)
+    .where(eq(companySettings.id, 1))
+    .limit(1)
+
+  if (rows[0]) {
+    return
+  }
+
+  const now = toIsoDateTime()
+
+  await db.insert(companySettings).values({
+    id: 1,
+    name: 'Microwest',
+    address: null,
+    postalCode: null,
+    city: null,
+    countryCode: 'CH',
+    phone: null,
+    email: null,
+    website: null,
+    vatNumber: null,
+    bankName: null,
+    iban: null,
+    paymentTerms: null,
+    footerNotes: null,
+    logoDataUrl: null,
+    createdAt: now,
+    updatedAt: now
+  })
 }
 
 export function calculateDocumentTotals(lines: Array<{
@@ -160,6 +195,27 @@ async function createPosTables() {
       )
     `,
     `
+      CREATE TABLE IF NOT EXISTS company_settings (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        address TEXT,
+        postal_code TEXT,
+        city TEXT,
+        country_code TEXT,
+        phone TEXT,
+        email TEXT,
+        website TEXT,
+        vat_number TEXT,
+        bank_name TEXT,
+        iban TEXT,
+        payment_terms TEXT,
+        footer_notes TEXT,
+        logo_data_url TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `,
+    `
       CREATE TABLE IF NOT EXISTS tickets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ticket_number TEXT NOT NULL,
@@ -170,6 +226,8 @@ async function createPosTables() {
         model TEXT,
         serial_number TEXT,
         imei TEXT,
+        access_code TEXT,
+        sim_code TEXT,
         issue_description TEXT NOT NULL,
         internal_notes TEXT,
         opened_at TEXT NOT NULL,
@@ -316,6 +374,74 @@ async function migrateDocumentLinesQuantityToInteger() {
     'CREATE INDEX IF NOT EXISTS document_lines_catalog_item_id_idx ON document_lines(catalog_item_id)',
     'CREATE INDEX IF NOT EXISTS document_lines_category_hint_idx ON document_lines(category_hint)'
   ], 'write')
+}
+
+async function migrateTicketAccessColumns() {
+  const client = useTursoClient()
+  const tableInfo = await client.execute('PRAGMA table_info(tickets)')
+  const columns = new Set(tableInfo.rows.map(row => String(row.name)))
+
+  if (!columns.size) {
+    return
+  }
+
+  const statements: string[] = []
+
+  if (!columns.has('access_code')) {
+    statements.push('ALTER TABLE tickets ADD COLUMN access_code TEXT')
+  }
+
+  if (!columns.has('sim_code')) {
+    statements.push('ALTER TABLE tickets ADD COLUMN sim_code TEXT')
+  }
+
+  if (!statements.length) {
+    return
+  }
+
+  await client.batch(statements, 'write')
+}
+
+async function migrateCompanySettingsColumns() {
+  const client = useTursoClient()
+  const tableInfo = await client.execute('PRAGMA table_info(company_settings)')
+  const columns = new Set(tableInfo.rows.map(row => String(row.name)))
+
+  if (!columns.size) {
+    return
+  }
+
+  const statements: string[] = []
+
+  if (!columns.has('website')) {
+    statements.push('ALTER TABLE company_settings ADD COLUMN website TEXT')
+  }
+
+  if (!columns.has('country_code')) {
+    statements.push('ALTER TABLE company_settings ADD COLUMN country_code TEXT')
+  }
+
+  if (!columns.has('bank_name')) {
+    statements.push('ALTER TABLE company_settings ADD COLUMN bank_name TEXT')
+  }
+
+  if (!columns.has('iban')) {
+    statements.push('ALTER TABLE company_settings ADD COLUMN iban TEXT')
+  }
+
+  if (!columns.has('payment_terms')) {
+    statements.push('ALTER TABLE company_settings ADD COLUMN payment_terms TEXT')
+  }
+
+  if (!columns.has('footer_notes')) {
+    statements.push('ALTER TABLE company_settings ADD COLUMN footer_notes TEXT')
+  }
+
+  if (!statements.length) {
+    return
+  }
+
+  await client.batch(statements, 'write')
 }
 
 async function migrateLegacyCustomersTable() {
@@ -756,7 +882,10 @@ export async function ensurePosSchema() {
     posSchemaPromise = (async () => {
       await migrateLegacyCustomersTable()
       await createPosTables()
+      await migrateTicketAccessColumns()
+      await migrateCompanySettingsColumns()
       await migrateDocumentLinesQuantityToInteger()
+      await ensureCompanySettingsRow()
       await refreshStoredDocumentTotals()
       await seedPosData()
     })().catch((error) => {
