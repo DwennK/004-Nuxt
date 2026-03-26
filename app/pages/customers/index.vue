@@ -3,7 +3,7 @@ import type { TableColumn } from '@nuxt/ui'
 import { getPaginationRowModel } from '@tanstack/table-core'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
-import type { CustomerRecord } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerRecord } from '~~/shared/types/pos'
 import { formatDateTime } from '~~/shared/utils/pos'
 
 const UButton = resolveComponent('UButton')
@@ -49,6 +49,7 @@ const editingCustomerForm = computed(() => {
   }
 
   return {
+    displayName: editingCustomer.value.displayName,
     firstName: editingCustomer.value.firstName,
     lastName: editingCustomer.value.lastName,
     companyName: editingCustomer.value.companyName || '',
@@ -66,25 +67,14 @@ watch(search, () => {
   pagination.value.pageIndex = 0
 })
 
-async function saveCustomer(payload: {
-  firstName: string
-  lastName: string
-  companyName: string
-  phone: string
-  email: string
-  addressLine1: string
-  addressLine2: string
-  postalCode: string
-  city: string
-  notes: string
-}) {
+async function saveCustomer(payload: CustomerFormValue) {
   if (editingCustomer.value) {
     await $fetch(`/api/customers/${editingCustomer.value.id}`, {
       method: 'PATCH',
       body: payload
     })
 
-    toast.add({ title: 'Customer updated', color: 'success' })
+    toast.add({ title: 'Client mis à jour', color: 'success' })
     editOpen.value = false
     editingCustomer.value = null
   } else {
@@ -93,7 +83,7 @@ async function saveCustomer(payload: {
       body: payload
     })
 
-    toast.add({ title: 'Customer created', color: 'success' })
+    toast.add({ title: 'Client créé', color: 'success' })
     createOpen.value = false
   }
 
@@ -102,7 +92,7 @@ async function saveCustomer(payload: {
 
 async function removeCustomer(id: number) {
   await $fetch(`/api/customers/${id}`, { method: 'DELETE' })
-  toast.add({ title: 'Customer removed', color: 'success' })
+  toast.add({ title: 'Client supprimé', color: 'success' })
   await refresh()
 }
 
@@ -113,31 +103,31 @@ function openEditor(customer: CustomerRecord) {
 
 function getRowItems(customer: CustomerRecord) {
   return [[{
-    label: 'Open customer',
+    label: 'Ouvrir le client',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
       navigateTo(`/customers/${customer.id}`)
     }
   }, {
-    label: 'New ticket',
+    label: 'Nouveau ticket',
     icon: 'i-lucide-wrench',
     onSelect() {
       navigateTo(`/tickets/new?customerId=${customer.id}`)
     }
   }, {
-    label: 'New document',
+    label: 'Nouveau document',
     icon: 'i-lucide-file-plus-2',
     onSelect() {
       navigateTo(`/documents/new?customerId=${customer.id}`)
     }
   }], [{
-    label: 'Quick edit',
+    label: 'Modification rapide',
     icon: 'i-lucide-pencil',
     onSelect() {
       openEditor(customer)
     }
   }, {
-    label: 'Delete',
+    label: 'Supprimer',
     icon: 'i-lucide-trash',
     color: 'error',
     onSelect() {
@@ -152,7 +142,7 @@ const columns: TableColumn<CustomerRecord>[] = [
     header: ({ column }) => h(UButton, {
       color: 'neutral',
       variant: 'ghost',
-      label: 'Customer',
+      label: 'Client',
       icon: column.getIsSorted() === 'asc'
         ? 'i-lucide-arrow-up-az'
         : column.getIsSorted() === 'desc'
@@ -168,22 +158,22 @@ const columns: TableColumn<CustomerRecord>[] = [
   },
   {
     accessorKey: 'phone',
-    header: 'Phone',
+    header: 'Téléphone',
     cell: ({ row }) => h('span', { class: 'font-medium' }, row.original.phone)
   },
   {
     accessorKey: 'email',
-    header: 'Email',
+    header: 'E-mail',
     cell: ({ row }) => h('span', { class: 'text-toned' }, row.original.email)
   },
   {
     accessorKey: 'city',
-    header: 'City',
-    cell: ({ row }) => row.original.city || 'Not set'
+    header: 'Ville',
+    cell: ({ row }) => row.original.city || 'Non renseignée'
   },
   {
     accessorKey: 'updatedAt',
-    header: 'Updated',
+    header: 'Mis à jour',
     cell: ({ row }) => formatDateTime(row.original.updatedAt)
   },
   {
@@ -207,7 +197,7 @@ const columns: TableColumn<CustomerRecord>[] = [
 <template>
   <UDashboardPanel id="customers-list">
     <template #header>
-      <UDashboardNavbar title="Customers">
+      <UDashboardNavbar title="Clients">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -215,11 +205,11 @@ const columns: TableColumn<CustomerRecord>[] = [
         <template #right>
           <UButton
             icon="i-lucide-user-plus"
-            label="Quick customer"
+            label="Client rapide"
             variant="subtle"
             @click="createOpen = true"
           />
-          <UButton to="/customers/new" icon="i-lucide-arrow-up-right" label="Full form" />
+          <UButton to="/customers/new" icon="i-lucide-arrow-up-right" label="Fiche complète" />
         </template>
       </UDashboardNavbar>
 
@@ -227,7 +217,7 @@ const columns: TableColumn<CustomerRecord>[] = [
         <UInput
           v-model="search"
           icon="i-lucide-search"
-          placeholder="Search by name, company, phone or email"
+          placeholder="Rechercher par nom, société, téléphone ou e-mail"
           class="max-w-md"
         />
 
@@ -237,7 +227,14 @@ const columns: TableColumn<CustomerRecord>[] = [
               ?.getAllColumns()
               .filter((column: DashboardTableColumn) => column.getCanHide())
               .map((column: DashboardTableColumn) => ({
-                label: upperFirst(column.id),
+                label: ({
+                  displayName: 'Client',
+                  phone: 'Téléphone',
+                  email: 'E-mail',
+                  city: 'Ville',
+                  updatedAt: 'Mis à jour',
+                  actions: 'Actions'
+                } as Record<string, string>)[column.id] || upperFirst(column.id),
                 type: 'checkbox' as const,
                 checked: column.getIsVisible(),
                 onUpdateChecked(checked: boolean) {
@@ -251,7 +248,7 @@ const columns: TableColumn<CustomerRecord>[] = [
           :content="{ align: 'end' }"
         >
           <UButton
-            label="Columns"
+            label="Colonnes"
             color="neutral"
             variant="outline"
             trailing-icon="i-lucide-settings-2"
@@ -263,9 +260,9 @@ const columns: TableColumn<CustomerRecord>[] = [
     <template #body>
       <div class="space-y-4">
         <div class="grid gap-4 md:grid-cols-3">
-          <PosSummaryCard title="Customers" :value="String(customers?.length || 0)" icon="i-lucide-users" />
-          <PosSummaryCard title="Visible" :value="String(filteredCustomers.length)" icon="i-lucide-filter" />
-          <PosSummaryCard title="Search mode" :value="search ? 'Filtered' : 'All'" icon="i-lucide-search" />
+          <PosSummaryCard title="Clients" :value="String(customers?.length || 0)" icon="i-lucide-users" />
+          <PosSummaryCard title="Visibles" :value="String(filteredCustomers.length)" icon="i-lucide-filter" />
+          <PosSummaryCard title="Mode de recherche" :value="search ? 'Filtré' : 'Tous'" icon="i-lucide-search" />
         </div>
 
         <UTable
@@ -292,15 +289,15 @@ const columns: TableColumn<CustomerRecord>[] = [
           <template #empty>
             <UEmpty
               icon="i-lucide-users"
-              title="No customers found"
-              description="Create a customer or adjust the current search to see results."
+              title="Aucun client trouvé"
+              description="Créez un client ou ajustez la recherche pour voir des résultats."
             />
           </template>
         </UTable>
 
         <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
           <p class="text-sm text-toned">
-            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredCustomers.length }} customer(s)
+            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredCustomers.length }} client(s)
           </p>
 
           <UPagination
@@ -312,22 +309,22 @@ const columns: TableColumn<CustomerRecord>[] = [
         </div>
       </div>
     </template>
-
-    <PosCustomerSlideover
-      v-model:open="createOpen"
-      title="Quick customer"
-      description="Create a reusable customer file without leaving the list."
-      submit-label="Create customer"
-      @save="saveCustomer"
-    />
-
-    <PosCustomerSlideover
-      v-model:open="editOpen"
-      title="Edit customer"
-      description="Update contact details while staying in the operator list."
-      submit-label="Save changes"
-      :initial-value="editingCustomerForm"
-      @save="saveCustomer"
-    />
   </UDashboardPanel>
+
+  <PosCustomerSlideover
+    v-model:open="createOpen"
+    title="Client rapide"
+    description="Créez une fiche client réutilisable sans quitter la liste."
+    submit-label="Créer le client"
+    @save="saveCustomer"
+  />
+
+  <PosCustomerSlideover
+    v-model:open="editOpen"
+    title="Modifier le client"
+    description="Mettez à jour les coordonnées sans quitter la liste opérateur."
+    submit-label="Enregistrer les modifications"
+    :initial-value="editingCustomerForm"
+    @save="saveCustomer"
+  />
 </template>

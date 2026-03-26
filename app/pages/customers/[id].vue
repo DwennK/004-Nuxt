@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import { documentStatusColors, documentStatusLabels, documentTypeColors, documentTypeLabels, paymentMethodColors, paymentMethodLabels, ticketStatusColors, ticketStatusLabels } from '~~/shared/constants/pos'
-import type { CustomerRecord, DocumentListItem, PaymentListItem, TicketListItem } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerRecord, DocumentListItem, PaymentListItem, TicketListItem } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
@@ -15,7 +15,7 @@ const activeTab = ref('tickets')
 const tabItems = [
   { label: 'Tickets', value: 'tickets', icon: 'i-lucide-wrench' },
   { label: 'Documents', value: 'documents', icon: 'i-lucide-files' },
-  { label: 'Payments', value: 'payments', icon: 'i-lucide-wallet' }
+  { label: 'Paiements', value: 'payments', icon: 'i-lucide-wallet' }
 ]
 
 const [{ data: customer, refresh: refreshCustomer }, { data: tickets, refresh: refreshTickets }, { data: documents, refresh: refreshDocuments }, { data: payments, refresh: refreshPayments }] = await Promise.all([
@@ -31,25 +31,14 @@ const [{ data: customer, refresh: refreshCustomer }, { data: tickets, refresh: r
   })
 ])
 
-async function saveCustomer(payload: {
-  firstName: string
-  lastName: string
-  companyName: string
-  phone: string
-  email: string
-  addressLine1: string
-  addressLine2: string
-  postalCode: string
-  city: string
-  notes: string
-}) {
+async function saveCustomer(payload: CustomerFormValue) {
   await $fetch(`/api/customers/${id.value}`, {
     method: 'PATCH',
     body: payload
   })
 
   toast.add({
-    title: 'Customer updated',
+    title: 'Client mis à jour',
     color: 'success'
   })
 
@@ -67,12 +56,12 @@ const ticketColumns: TableColumn<TicketListItem>[] = [
   },
   {
     accessorKey: 'issueDescription',
-    header: 'Issue',
+    header: 'Problème',
     cell: ({ row }) => h('p', { class: 'line-clamp-2 text-toned' }, row.original.issueDescription)
   },
   {
     accessorKey: 'openedAt',
-    header: 'Opened',
+    header: 'Ouvert le',
     cell: ({ row }) => formatDateTime(row.original.openedAt)
   }
 ]
@@ -96,7 +85,7 @@ const documentColumns: TableColumn<DocumentListItem>[] = [
   },
   {
     accessorKey: 'issuedAt',
-    header: 'Issued',
+    header: 'Émis le',
     cell: ({ row }) => formatDateTime(row.original.issuedAt)
   }
 ]
@@ -104,7 +93,7 @@ const documentColumns: TableColumn<DocumentListItem>[] = [
 const paymentColumns: TableColumn<PaymentListItem>[] = [
   {
     accessorKey: 'method',
-    header: 'Method',
+    header: 'Mode de paiement',
     cell: ({ row }) => h(UBadge, {
       color: paymentMethodColors[row.original.method],
       variant: 'subtle'
@@ -121,7 +110,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
   },
   {
     accessorKey: 'paidAt',
-    header: 'Encaisse a',
+    header: 'Encaissé à',
     cell: ({ row }) => formatDateTime(row.original.paidAt)
   }
 ]
@@ -130,7 +119,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
 <template>
   <UDashboardPanel id="customer-detail">
     <template #header>
-      <UDashboardNavbar :title="customer?.displayName || 'Customer detail'">
+      <UDashboardNavbar :title="customer?.displayName || 'Détail client'">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -138,11 +127,11 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
         <template #right>
           <UButton
             :to="`/tickets/new?customerId=${id}`"
-            label="New ticket"
+            label="Nouveau ticket"
             icon="i-lucide-wrench"
             variant="subtle"
           />
-          <UButton :to="`/documents/new?customerId=${id}`" label="New document" icon="i-lucide-file-plus-2" />
+          <UButton :to="`/documents/new?customerId=${id}`" label="Nouveau document" icon="i-lucide-file-plus-2" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -150,10 +139,10 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
     <template #body>
       <div class="space-y-6">
         <div class="grid gap-4 lg:grid-cols-4">
-          <PosSummaryCard title="Open tickets" :value="String((tickets || []).filter(ticket => ticket.status !== 'closed' && ticket.status !== 'cancelled').length)" icon="i-lucide-wrench" />
+          <PosSummaryCard title="Tickets ouverts" :value="String((tickets || []).filter(ticket => ticket.status !== 'closed' && ticket.status !== 'cancelled').length)" icon="i-lucide-wrench" />
           <PosSummaryCard title="Documents" :value="String(documents?.length || 0)" icon="i-lucide-file-text" />
-          <PosSummaryCard title="Payments" :value="String(payments?.length || 0)" icon="i-lucide-wallet" />
-          <PosSummaryCard title="Turnover" :value="formatCurrency((payments || []).reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-wallet-cards" />
+          <PosSummaryCard title="Paiements" :value="String(payments?.length || 0)" icon="i-lucide-wallet" />
+          <PosSummaryCard title="Chiffre d’affaires" :value="formatCurrency((payments || []).reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-wallet-cards" />
         </div>
 
         <div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -161,10 +150,10 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Edit customer
+                  Modifier le client
                 </h2>
                 <p class="text-sm text-toned">
-                  One customer file can be reused across tickets, documents, and payments.
+                  Une fiche client peut être réutilisée sur les tickets, documents et paiements.
                 </p>
               </div>
             </template>
@@ -172,7 +161,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
             <PosCustomerForm
               v-if="customer"
               :initial-value="customer"
-              submit-label="Save changes"
+              submit-label="Enregistrer les modifications"
               @save="saveCustomer"
             />
           </UCard>
@@ -181,7 +170,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Related activity
+                  Activité liée
                 </h2>
               </div>
             </template>
@@ -196,19 +185,19 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
             <div class="mt-4">
               <UTable v-if="activeTab === 'tickets'" :data="tickets || []" :columns="ticketColumns">
                 <template #empty>
-                  <UEmpty icon="i-lucide-wrench" title="No tickets" description="Tracked work tickets for this customer will appear here." />
+                  <UEmpty icon="i-lucide-wrench" title="Aucun ticket" description="Les tickets de travail suivis pour ce client apparaîtront ici." />
                 </template>
               </UTable>
 
               <UTable v-else-if="activeTab === 'documents'" :data="documents || []" :columns="documentColumns">
                 <template #empty>
-                  <UEmpty icon="i-lucide-files" title="No documents" description="Quotes, invoices, and receipts will appear here." />
+                  <UEmpty icon="i-lucide-files" title="Aucun document" description="Les devis, factures et reçus apparaîtront ici." />
                 </template>
               </UTable>
 
               <UTable v-else :data="payments || []" :columns="paymentColumns">
                 <template #empty>
-                  <UEmpty icon="i-lucide-wallet" title="No payments" description="Recorded payments for this customer will appear here." />
+                  <UEmpty icon="i-lucide-wallet" title="Aucun paiement" description="Les paiements enregistrés pour ce client apparaîtront ici." />
                 </template>
               </UTable>
             </div>

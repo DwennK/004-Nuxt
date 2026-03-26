@@ -46,8 +46,8 @@ function submitStatus(event: FormSubmitEvent<Schema>) {
 <template>
   <USlideover
     v-model:open="open"
-    title="Workflow actions"
-    description="Update the ticket workflow separately from quotes, invoices, and payments."
+    title="Actions de suivi"
+    description="Mettez à jour le suivi du ticket séparément des devis, factures et paiements."
     side="right"
     :ui="{ content: 'max-w-xl' }"
   >
@@ -58,7 +58,7 @@ function submitStatus(event: FormSubmitEvent<Schema>) {
         class="space-y-4"
         @submit="submitStatus"
       >
-        <UFormField label="Status" name="status">
+        <UFormField label="Statut" name="status">
           <USelectMenu
             v-model="state.status"
             :items="statusItems"
@@ -67,19 +67,19 @@ function submitStatus(event: FormSubmitEvent<Schema>) {
           />
         </UFormField>
 
-        <UFormField label="Internal notes" name="internalNotes">
+        <UFormField label="Notes internes" name="internalNotes">
           <UTextarea
             v-model="state.internalNotes"
             class="w-full"
             :rows="6"
-            placeholder="Diagnosis, approval notes, parts status, pickup details"
+            placeholder="Diagnostic, accord client, état des pièces, détails du retrait"
           />
         </UFormField>
 
         <div class="flex flex-wrap justify-end gap-2">
-          <UButton label="Apply status" type="submit" variant="subtle" />
+          <UButton label="Appliquer le statut" type="submit" variant="subtle" />
           <UButton
-            label="Close ticket"
+            label="Clôturer le ticket"
             color="warning"
             @click="emit('closeTicket', { internalNotes: state.internalNotes })"
           />

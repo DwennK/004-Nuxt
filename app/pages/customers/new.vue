@@ -1,25 +1,17 @@
 <script setup lang="ts">
-const toast = useToast()
+import type { CustomerFormValue } from '~~/shared/types/pos'
 
-async function saveCustomer(payload: {
-  firstName: string
-  lastName: string
-  companyName: string
-  phone: string
-  email: string
-  addressLine1: string
-  addressLine2: string
-  postalCode: string
-  city: string
-  notes: string
-}) {
+const toast = useToast()
+const formId = 'customer-create-form'
+
+async function saveCustomer(payload: CustomerFormValue) {
   const customer = await $fetch('/api/customers', {
     method: 'POST',
     body: payload
   })
 
   toast.add({
-    title: 'Customer created',
+    title: 'Client créé',
     color: 'success'
   })
 
@@ -30,7 +22,7 @@ async function saveCustomer(payload: {
 <template>
   <UDashboardPanel id="customer-create">
     <template #header>
-      <UDashboardNavbar title="New Customer">
+      <UDashboardNavbar title="Nouveau client">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -38,7 +30,7 @@ async function saveCustomer(payload: {
         <template #right>
           <UButton
             to="/customers"
-            label="Back to customers"
+            label="Retour aux clients"
             variant="ghost"
             color="neutral"
           />
@@ -47,9 +39,32 @@ async function saveCustomer(payload: {
     </template>
 
     <template #body>
-      <UCard class="mx-auto w-full max-w-4xl">
-        <PosCustomerForm submit-label="Create customer" @save="saveCustomer" />
-      </UCard>
+      <div class="mx-auto flex w-full max-w-3xl flex-col gap-4">
+        <UPageCard
+          title="Nouveau client"
+          description="Créez une fiche exploitable immédiatement dans les tickets, documents et encaissements."
+          variant="naked"
+          orientation="horizontal"
+        >
+          <template #footer>
+            <UButton
+              :form="formId"
+              type="submit"
+              label="Créer le client"
+              icon="i-lucide-save"
+              class="w-fit lg:ms-auto"
+            />
+          </template>
+        </UPageCard>
+
+        <PosCustomerForm
+          :form-id="formId"
+          layout="page"
+          :show-submit="false"
+          submit-label="Créer le client"
+          @save="saveCustomer"
+        />
+      </div>
     </template>
   </UDashboardPanel>
 </template>

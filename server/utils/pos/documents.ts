@@ -182,6 +182,8 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
           model: header.ticket.model,
           serialNumber: header.ticket.serialNumber,
           imei: header.ticket.imei,
+          accessCode: header.ticket.accessCode,
+          simCode: header.ticket.simCode,
           issueDescription: header.ticket.issueDescription,
           internalNotes: header.ticket.internalNotes,
           openedAt: header.ticket.openedAt,

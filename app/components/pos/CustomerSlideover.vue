@@ -1,28 +1,17 @@
 <script setup lang="ts">
-type CustomerPayload = {
-  firstName: string
-  lastName: string
-  companyName: string
-  phone: string
-  email: string
-  addressLine1: string
-  addressLine2: string
-  postalCode: string
-  city: string
-  notes: string
-}
+import type { CustomerFormValue } from '~~/shared/types/pos'
 
 defineProps<{
   title: string
   description: string
   submitLabel: string
-  initialValue?: Partial<CustomerPayload>
+  initialValue?: Partial<CustomerFormValue>
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
 
 const emit = defineEmits<{
-  save: [payload: CustomerPayload]
+  save: [payload: CustomerFormValue]
 }>()
 </script>
 
@@ -37,6 +26,7 @@ const emit = defineEmits<{
     <template #body>
       <PosCustomerForm
         :initial-value="initialValue"
+        mode="full"
         :submit-label="submitLabel"
         @save="emit('save', $event)"
       />

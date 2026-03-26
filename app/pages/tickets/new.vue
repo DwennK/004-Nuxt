@@ -15,6 +15,8 @@ async function saveTicket(payload: {
   model: string
   serialNumber: string
   imei: string
+  accessCode: string
+  simCode: string
   issueDescription: string
   internalNotes: string
   openedAt: string
@@ -29,7 +31,7 @@ async function saveTicket(payload: {
   })
 
   toast.add({
-    title: 'Ticket created',
+    title: 'Ticket créé',
     color: 'success'
   })
 
@@ -40,7 +42,7 @@ async function saveTicket(payload: {
 <template>
   <UDashboardPanel id="ticket-create">
     <template #header>
-      <UDashboardNavbar title="New Ticket">
+      <UDashboardNavbar title="Nouveau ticket">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -48,15 +50,32 @@ async function saveTicket(payload: {
     </template>
 
     <template #body>
-      <UCard class="mx-auto w-full max-w-5xl">
+      <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-4">
+        <div class="flex flex-wrap items-start justify-between gap-3 rounded-3xl border border-default bg-default/80 px-4 py-4 shadow-sm sm:px-5">
+          <div class="space-y-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <h1 class="text-xl font-semibold text-highlighted">
+                Nouveau ticket atelier
+              </h1>
+              <UBadge color="warning" variant="subtle" size="sm">
+                Smartphone repair
+              </UBadge>
+            </div>
+            <p class="text-sm text-toned">
+              Écran de saisie rapide pour l’accueil, le diagnostic initial et la préparation de la facturation.
+            </p>
+          </div>
+        </div>
+
         <PosTicketForm
           v-if="customers"
+          layout="intake"
           :customers="customers"
           :initial-value="{ customerId: customerId || undefined }"
-          submit-label="Create ticket"
+          submit-label="Créer le ticket"
           @save="saveTicket"
         />
-      </UCard>
+      </div>
     </template>
   </UDashboardPanel>
 </template>

@@ -18,21 +18,50 @@ const optionalText = z.string().trim().optional().nullable().transform((value) =
   return value.trim() || null
 })
 
+const optionalEmail = z.union([
+  z.string().trim().email('Un e-mail valide est obligatoire'),
+  z.literal(''),
+  z.null(),
+  z.undefined()
+]).transform((value) => {
+  if (!value) {
+    return null
+  }
+
+  return value.trim() || null
+})
+
 export const customerInputSchema = z.object({
-  firstName: z.string().trim().min(1, 'First name is required'),
-  lastName: z.string().trim().min(1, 'Last name is required'),
+  displayName: optionalText,
+  firstName: optionalText,
+  lastName: optionalText,
   companyName: optionalText,
-  phone: z.string().trim().min(3, 'Phone is required'),
-  email: z.email('Valid email is required'),
+  phone: optionalText,
+  email: optionalEmail,
   addressLine1: optionalText,
   addressLine2: optionalText,
   postalCode: optionalText,
   city: optionalText,
   notes: optionalText
+}).superRefine((value, ctx) => {
+  const hasIdentity = Boolean(
+    value.displayName
+    || value.companyName
+    || value.firstName
+    || value.lastName
+  )
+
+  if (!hasIdentity) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['displayName'],
+      message: 'Le nom du client ou de la société est obligatoire'
+    })
+  }
 })
 
 export const catalogItemInputSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required'),
+  name: z.string().trim().min(1, 'Le nom est obligatoire'),
   sku: optionalText,
   type: z.enum(catalogItemTypes),
   defaultPrice: z.coerce.number().int().min(0),
@@ -48,7 +77,9 @@ export const ticketInputSchema = z.object({
   model: optionalText,
   serialNumber: optionalText,
   imei: optionalText,
-  issueDescription: z.string().trim().min(3, 'Issue description is required'),
+  accessCode: optionalText,
+  simCode: optionalText,
+  issueDescription: z.string().trim().min(3, 'La description du problème est obligatoire'),
   internalNotes: optionalText,
   openedAt: z.string().trim().min(1).default(() => new Date().toISOString()),
   closedAt: optionalText
@@ -56,7 +87,7 @@ export const ticketInputSchema = z.object({
 
 export const documentLineInputSchema = z.object({
   catalogItemId: z.coerce.number().int().positive().optional().nullable(),
-  label: z.string().trim().min(1, 'Label is required'),
+  label: z.string().trim().min(1, 'Le libellé est obligatoire'),
   quantity: z.coerce.number().int().positive(),
   unitPrice: z.coerce.number().int().min(0),
   vatRate: z.coerce.number().min(0).max(100),
@@ -71,7 +102,7 @@ export const documentInputSchema = z.object({
   ticketId: z.coerce.number().int().positive().optional().nullable(),
   issuedAt: z.string().trim().min(1).default(() => new Date().toISOString()),
   notes: optionalText,
-  lines: z.array(documentLineInputSchema).min(1, 'At least one line is required')
+  lines: z.array(documentLineInputSchema).min(1, 'Au moins une ligne est obligatoire')
 })
 
 export const paymentInputSchema = z.object({

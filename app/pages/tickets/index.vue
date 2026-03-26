@@ -24,7 +24,7 @@ const sorting = ref([{ id: 'ticketNumber', desc: false }])
 const columnVisibility = ref()
 
 const statusItems = [
-  { label: 'All statuses', value: 'all' },
+  { label: 'Tous les statuts', value: 'all' },
   ...Object.entries(ticketStatusLabels).map(([value, label]) => ({ label, value }))
 ]
 
@@ -54,45 +54,45 @@ watch([search, statusFilter], () => {
 
 async function createQuote(ticketId: number) {
   const document = await $fetch<DocumentDetail>(`/api/tickets/${ticketId}/quote`, { method: 'POST' })
-  toast.add({ title: 'Quote created', color: 'success' })
+  toast.add({ title: 'Devis créé', color: 'success' })
   await refresh()
   await navigateTo(`/documents/${document.id}`)
 }
 
 async function createInvoice(ticketId: number) {
   const document = await $fetch<DocumentDetail>(`/api/tickets/${ticketId}/invoice`, { method: 'POST' })
-  toast.add({ title: 'Invoice created', color: 'success' })
+  toast.add({ title: 'Facture créée', color: 'success' })
   await refresh()
   await navigateTo(`/documents/${document.id}`)
 }
 
 async function removeTicket(id: number) {
   await $fetch(`/api/tickets/${id}`, { method: 'DELETE' })
-  toast.add({ title: 'Ticket removed', color: 'success' })
+  toast.add({ title: 'Ticket supprimé', color: 'success' })
   await refresh()
 }
 
 function getRowItems(ticket: TicketListItem) {
   return [[{
-    label: 'Open ticket',
+    label: 'Ouvrir le ticket',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
       navigateTo(`/tickets/${ticket.id}`)
     }
   }, {
-    label: 'Create quote',
+    label: 'Créer un devis',
     icon: 'i-lucide-scroll-text',
     onSelect() {
       createQuote(ticket.id)
     }
   }, {
-    label: 'Create invoice',
+    label: 'Créer une facture',
     icon: 'i-lucide-receipt',
     onSelect() {
       createInvoice(ticket.id)
     }
   }], [{
-    label: 'Delete',
+    label: 'Supprimer',
     icon: 'i-lucide-trash',
     color: 'error',
     onSelect() {
@@ -126,15 +126,15 @@ const columns: TableColumn<TicketListItem>[] = [
   },
   {
     accessorKey: 'customerName',
-    header: 'Customer',
+    header: 'Client',
     cell: ({ row }) => h('div', { class: 'min-w-0' }, [
       h('p', { class: 'font-medium truncate' }, row.original.customerName),
-      h('p', { class: 'text-sm text-toned truncate' }, [row.original.brand, row.original.model].filter(Boolean).join(' ') || 'Device not set')
+      h('p', { class: 'text-sm text-toned truncate' }, [row.original.brand, row.original.model].filter(Boolean).join(' ') || 'Appareil non défini')
     ])
   },
   {
     accessorKey: 'issueDescription',
-    header: 'Issue',
+    header: 'Problème',
     cell: ({ row }) => h('p', { class: 'line-clamp-2 max-w-md text-toned' }, row.original.issueDescription)
   },
   {
@@ -144,7 +144,7 @@ const columns: TableColumn<TicketListItem>[] = [
   },
   {
     accessorKey: 'openedAt',
-    header: 'Opened',
+    header: 'Ouvert le',
     cell: ({ row }) => formatDateTime(row.original.openedAt)
   },
   {
@@ -174,7 +174,7 @@ const columns: TableColumn<TicketListItem>[] = [
         </template>
 
         <template #right>
-          <UButton to="/tickets/new" icon="i-lucide-plus" label="New ticket" />
+          <UButton to="/tickets/new" icon="i-lucide-plus" label="Nouveau ticket" />
         </template>
       </UDashboardNavbar>
 
@@ -183,7 +183,7 @@ const columns: TableColumn<TicketListItem>[] = [
           <UInput
             v-model="search"
             icon="i-lucide-search"
-            placeholder="Search by ticket, customer, device or issue"
+            placeholder="Rechercher par ticket, client, appareil ou problème"
             class="max-w-md"
           />
 
@@ -215,7 +215,7 @@ const columns: TableColumn<TicketListItem>[] = [
           :content="{ align: 'end' }"
         >
           <UButton
-            label="Columns"
+            label="Colonnes"
             color="neutral"
             variant="outline"
             trailing-icon="i-lucide-settings-2"
@@ -228,9 +228,9 @@ const columns: TableColumn<TicketListItem>[] = [
       <div class="space-y-4">
         <div class="grid gap-4 md:grid-cols-4">
           <PosSummaryCard title="Tickets" :value="String(tickets?.length || 0)" icon="i-lucide-wrench" />
-          <PosSummaryCard title="Open" :value="String((tickets || []).filter(ticket => !['closed', 'cancelled'].includes(ticket.status)).length)" icon="i-lucide-folder-open" />
-          <PosSummaryCard title="Ready" :value="String((tickets || []).filter(ticket => ticket.status === 'ready_for_pickup').length)" icon="i-lucide-package-check" />
-          <PosSummaryCard title="Visible" :value="String(filteredTickets.length)" icon="i-lucide-filter" />
+          <PosSummaryCard title="Ouverts" :value="String((tickets || []).filter(ticket => !['closed', 'cancelled'].includes(ticket.status)).length)" icon="i-lucide-folder-open" />
+          <PosSummaryCard title="Prêts" :value="String((tickets || []).filter(ticket => ticket.status === 'ready_for_pickup').length)" icon="i-lucide-package-check" />
+          <PosSummaryCard title="Visibles" :value="String(filteredTickets.length)" icon="i-lucide-filter" />
         </div>
 
         <UTable
@@ -257,8 +257,8 @@ const columns: TableColumn<TicketListItem>[] = [
           <template #empty>
             <UEmpty
               icon="i-lucide-wrench"
-              title="No tickets found"
-              description="Try a different status/search filter or create a new ticket."
+              title="Aucun ticket trouvé"
+              description="Essayez un autre filtre ou créez un nouveau ticket."
             />
           </template>
         </UTable>

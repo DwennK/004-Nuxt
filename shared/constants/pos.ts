@@ -19,10 +19,10 @@ export const paymentStatuses = ['pending', 'paid', 'refunded', 'cancelled'] as c
 export const lineCategoryHints = ['accessory', 'repair', 'service'] as const
 
 export const catalogItemTypeLabels: Record<(typeof catalogItemTypes)[number], string> = {
-  product: 'Product',
+  product: 'Produit',
   service: 'Service',
-  repair_part: 'Repair part',
-  labor: 'Labor'
+  repair_part: 'Pièce de réparation',
+  labor: 'Main-d’oeuvre'
 }
 
 export const catalogItemTypeColors: Record<(typeof catalogItemTypes)[number], 'info' | 'success' | 'warning' | 'neutral'> = {
@@ -33,7 +33,7 @@ export const catalogItemTypeColors: Record<(typeof catalogItemTypes)[number], 'i
 }
 
 export const ticketTypeLabels: Record<(typeof ticketTypes)[number], string> = {
-  repair: 'Repair',
+  repair: 'Réparation',
   support: 'Support'
 }
 
@@ -43,16 +43,16 @@ export const ticketTypeColors: Record<(typeof ticketTypes)[number], 'warning' | 
 }
 
 export const ticketStatusLabels: Record<(typeof ticketStatuses)[number], string> = {
-  new: 'New',
-  diagnosis: 'Diagnosis',
-  awaiting_customer_approval: 'Awaiting approval',
-  approved: 'Approved',
-  in_progress: 'In progress',
-  waiting_parts: 'Waiting parts',
-  ready_for_pickup: 'Ready for pickup',
-  delivered: 'Delivered',
-  closed: 'Closed',
-  cancelled: 'Cancelled'
+  new: 'Nouveau',
+  diagnosis: 'Diagnostic',
+  awaiting_customer_approval: 'En attente d’accord client',
+  approved: 'Approuvé',
+  in_progress: 'En cours',
+  waiting_parts: 'En attente de pièces',
+  ready_for_pickup: 'Prêt pour retrait',
+  delivered: 'Livré',
+  closed: 'Clôturé',
+  cancelled: 'Annulé'
 }
 
 export const ticketStatusColors: Record<(typeof ticketStatuses)[number], 'info' | 'warning' | 'success' | 'neutral' | 'error'> = {
@@ -69,10 +69,10 @@ export const ticketStatusColors: Record<(typeof ticketStatuses)[number], 'info' 
 }
 
 export const documentTypeLabels: Record<(typeof documentTypes)[number], string> = {
-  quote: 'Quote',
-  invoice: 'Invoice',
-  receipt: 'Receipt',
-  credit_note: 'Credit note'
+  quote: 'Devis',
+  invoice: 'Facture',
+  receipt: 'Reçu',
+  credit_note: 'Avoir'
 }
 
 export const documentTypeColors: Record<(typeof documentTypes)[number], 'neutral' | 'info' | 'success' | 'warning'> = {
@@ -83,10 +83,10 @@ export const documentTypeColors: Record<(typeof documentTypes)[number], 'neutral
 }
 
 export const documentStatusLabels: Record<(typeof documentStatuses)[number], string> = {
-  draft: 'Draft',
-  issued: 'Issued',
-  paid: 'Paid',
-  cancelled: 'Cancelled'
+  draft: 'Brouillon',
+  issued: 'Émis',
+  paid: 'Payé',
+  cancelled: 'Annulé'
 }
 
 export const documentStatusColors: Record<(typeof documentStatuses)[number], 'neutral' | 'warning' | 'success' | 'error'> = {
@@ -97,10 +97,10 @@ export const documentStatusColors: Record<(typeof documentStatuses)[number], 'ne
 }
 
 export const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
-  cash: 'Cash',
-  card: 'Card',
+  cash: 'Espèces',
+  card: 'Carte',
   twint: 'TWINT',
-  bank_transfer: 'Bank transfer'
+  bank_transfer: 'Virement bancaire'
 }
 
 export const paymentMethodColors: Record<(typeof paymentMethods)[number], 'success' | 'info' | 'warning' | 'neutral'> = {
@@ -111,10 +111,10 @@ export const paymentMethodColors: Record<(typeof paymentMethods)[number], 'succe
 }
 
 export const paymentStatusLabels: Record<(typeof paymentStatuses)[number], string> = {
-  pending: 'Pending',
-  paid: 'Paid',
-  refunded: 'Refunded',
-  cancelled: 'Cancelled'
+  pending: 'En attente',
+  paid: 'Payé',
+  refunded: 'Remboursé',
+  cancelled: 'Annulé'
 }
 
 export const paymentStatusColors: Record<(typeof paymentStatuses)[number], 'warning' | 'success' | 'neutral' | 'error'> = {
@@ -125,8 +125,8 @@ export const paymentStatusColors: Record<(typeof paymentStatuses)[number], 'warn
 }
 
 export const lineCategoryLabels: Record<(typeof lineCategoryHints)[number], string> = {
-  accessory: 'Accessory',
-  repair: 'Repair',
+  accessory: 'Accessoire',
+  repair: 'Réparation',
   service: 'Service'
 }
 

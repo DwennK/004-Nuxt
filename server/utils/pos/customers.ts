@@ -1,8 +1,8 @@
 import { asc, eq, or, sql } from 'drizzle-orm'
 import { customers } from '~~/server/db/schema'
-import type { CustomerRecord } from '~~/shared/types/pos'
+import type { CustomerUpsertInput } from '~~/shared/types/pos'
 import { useDb } from '../turso'
-import { ensurePosSchema, mapCustomer, normalizeOptionalText, normalizeRequiredText } from './core'
+import { ensurePosSchema, mapCustomer, normalizeOptionalText, normalizeRequiredText, splitLegacyName } from './core'
 
 export async function listCustomers(search?: string) {
   await ensurePosSchema()
@@ -43,23 +43,38 @@ export async function getCustomerById(id: number) {
   return mapCustomer(row)
 }
 
-export async function createCustomer(input: Omit<CustomerRecord, 'id' | 'createdAt' | 'updatedAt' | 'displayName'>) {
-  await ensurePosSchema()
+function mapCustomerInput(input: CustomerUpsertInput) {
+  const companyName = normalizeOptionalText(input.companyName)
+  const displayName = normalizeOptionalText(input.displayName)
+  const explicitFirstName = normalizeOptionalText(input.firstName)
+  const explicitLastName = normalizeOptionalText(input.lastName)
 
-  const db = useDb()
-  const now = new Date().toISOString()
+  const personName = displayName || [explicitFirstName, explicitLastName].filter(Boolean).join(' ').trim() || null
+  const splitName = personName ? splitLegacyName(personName) : { firstName: '', lastName: '' }
 
-  const rows = await db.insert(customers).values({
-    firstName: normalizeRequiredText(input.firstName),
-    lastName: normalizeRequiredText(input.lastName),
-    companyName: normalizeOptionalText(input.companyName),
-    phone: normalizeRequiredText(input.phone),
-    email: normalizeRequiredText(input.email),
+  return {
+    firstName: normalizeRequiredText(explicitFirstName ?? splitName.firstName),
+    lastName: normalizeRequiredText(explicitLastName ?? splitName.lastName),
+    companyName,
+    phone: normalizeRequiredText(input.phone ?? ''),
+    email: normalizeRequiredText(input.email ?? ''),
     addressLine1: normalizeOptionalText(input.addressLine1),
     addressLine2: normalizeOptionalText(input.addressLine2),
     postalCode: normalizeOptionalText(input.postalCode),
     city: normalizeOptionalText(input.city),
-    notes: normalizeOptionalText(input.notes),
+    notes: normalizeOptionalText(input.notes)
+  }
+}
+
+export async function createCustomer(input: CustomerUpsertInput) {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const now = new Date().toISOString()
+  const values = mapCustomerInput(input)
+
+  const rows = await db.insert(customers).values({
+    ...values,
     createdAt: now,
     updatedAt: now
   }).returning()
@@ -67,22 +82,14 @@ export async function createCustomer(input: Omit<CustomerRecord, 'id' | 'created
   return mapCustomer(rows[0]!)
 }
 
-export async function updateCustomer(id: number, input: Omit<CustomerRecord, 'id' | 'createdAt' | 'updatedAt' | 'displayName'>) {
+export async function updateCustomer(id: number, input: CustomerUpsertInput) {
   await ensurePosSchema()
 
   const db = useDb()
+  const values = mapCustomerInput(input)
   const rows = await db.update(customers)
     .set({
-      firstName: normalizeRequiredText(input.firstName),
-      lastName: normalizeRequiredText(input.lastName),
-      companyName: normalizeOptionalText(input.companyName),
-      phone: normalizeRequiredText(input.phone),
-      email: normalizeRequiredText(input.email),
-      addressLine1: normalizeOptionalText(input.addressLine1),
-      addressLine2: normalizeOptionalText(input.addressLine2),
-      postalCode: normalizeOptionalText(input.postalCode),
-      city: normalizeOptionalText(input.city),
-      notes: normalizeOptionalText(input.notes),
+      ...values,
       updatedAt: new Date().toISOString()
     })
     .where(eq(customers.id, id))

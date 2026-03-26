@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const toast = useToast()
+const formId = 'catalog-create-form'
 
 async function saveItem(payload: {
   name: string
@@ -15,7 +16,7 @@ async function saveItem(payload: {
   })
 
   toast.add({
-    title: 'Catalog item created',
+    title: 'Article créé',
     color: 'success'
   })
 
@@ -26,7 +27,7 @@ async function saveItem(payload: {
 <template>
   <UDashboardPanel id="catalog-create">
     <template #header>
-      <UDashboardNavbar title="New Catalog Item">
+      <UDashboardNavbar title="Nouvel article">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -34,7 +35,7 @@ async function saveItem(payload: {
         <template #right>
           <UButton
             to="/catalog"
-            label="Back to catalog"
+            label="Retour au catalogue"
             variant="ghost"
             color="neutral"
           />
@@ -43,9 +44,32 @@ async function saveItem(payload: {
     </template>
 
     <template #body>
-      <UCard class="mx-auto w-full max-w-4xl">
-        <PosCatalogItemForm submit-label="Create item" @save="saveItem" />
-      </UCard>
+      <div class="mx-auto flex w-full max-w-3xl flex-col gap-4">
+        <UPageCard
+          title="Nouvel article"
+          description="Créez une fiche catalogue propre pour les ventes directes, réparations et documents commerciaux."
+          variant="naked"
+          orientation="horizontal"
+        >
+          <template #footer>
+            <UButton
+              :form="formId"
+              type="submit"
+              label="Créer l’article"
+              icon="i-lucide-save"
+              class="w-fit lg:ms-auto"
+            />
+          </template>
+        </UPageCard>
+
+        <PosCatalogItemForm
+          :form-id="formId"
+          layout="page"
+          :show-submit="false"
+          submit-label="Créer l’article"
+          @save="saveItem"
+        />
+      </div>
     </template>
   </UDashboardPanel>
 </template>

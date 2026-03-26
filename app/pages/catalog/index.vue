@@ -77,7 +77,7 @@ async function saveItem(payload: {
       body: payload
     })
 
-    toast.add({ title: 'Catalog item updated', color: 'success' })
+    toast.add({ title: 'Article mis à jour', color: 'success' })
     editOpen.value = false
     editingItem.value = null
   } else {
@@ -86,7 +86,7 @@ async function saveItem(payload: {
       body: payload
     })
 
-    toast.add({ title: 'Catalog item created', color: 'success' })
+    toast.add({ title: 'Article créé', color: 'success' })
     createOpen.value = false
   }
 
@@ -95,26 +95,26 @@ async function saveItem(payload: {
 
 async function removeItem(id: number) {
   await $fetch(`/api/catalog-items/${id}`, { method: 'DELETE' })
-  toast.add({ title: 'Catalog item removed', color: 'success' })
+  toast.add({ title: 'Article supprimé', color: 'success' })
   await refresh()
 }
 
 function getRowItems(item: CatalogItemRecord) {
   return [[{
-    label: 'Open item',
+    label: 'Ouvrir l’article',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
       navigateTo(`/catalog/${item.id}`)
     }
   }], [{
-    label: 'Quick edit',
+    label: 'Modification rapide',
     icon: 'i-lucide-pencil',
     onSelect() {
       editingItem.value = item
       editOpen.value = true
     }
   }, {
-    label: 'Delete',
+    label: 'Supprimer',
     icon: 'i-lucide-trash',
     color: 'error',
     onSelect() {
@@ -129,7 +129,7 @@ const columns: TableColumn<CatalogItemRecord>[] = [
     header: ({ column }) => h(UButton, {
       color: 'neutral',
       variant: 'ghost',
-      label: 'Item',
+      label: 'Article',
       icon: column.getIsSorted() === 'asc'
         ? 'i-lucide-arrow-up-az'
         : column.getIsSorted() === 'desc'
@@ -140,7 +140,7 @@ const columns: TableColumn<CatalogItemRecord>[] = [
     }),
     cell: ({ row }) => h('div', { class: 'min-w-0' }, [
       h('p', { class: 'font-medium text-highlighted truncate' }, row.original.name),
-      h('p', { class: 'text-sm text-toned truncate' }, row.original.sku || 'No SKU')
+      h('p', { class: 'text-sm text-toned truncate' }, row.original.sku || 'Aucun SKU')
     ])
   },
   {
@@ -163,15 +163,15 @@ const columns: TableColumn<CatalogItemRecord>[] = [
   },
   {
     accessorKey: 'isActive',
-    header: 'Status',
+    header: 'Statut',
     cell: ({ row }) => h(UBadge, {
       color: row.original.isActive ? 'success' : 'neutral',
       variant: 'subtle'
-    }, () => row.original.isActive ? 'Active' : 'Inactive')
+    }, () => row.original.isActive ? 'Actif' : 'Inactif')
   },
   {
     accessorKey: 'updatedAt',
-    header: 'Updated',
+    header: 'Mis à jour',
     cell: ({ row }) => formatDateTime(row.original.updatedAt)
   },
   {
@@ -195,7 +195,7 @@ const columns: TableColumn<CatalogItemRecord>[] = [
 <template>
   <UDashboardPanel id="catalog-list">
     <template #header>
-      <UDashboardNavbar title="Catalog">
+      <UDashboardNavbar title="Catalogue">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -203,11 +203,11 @@ const columns: TableColumn<CatalogItemRecord>[] = [
         <template #right>
           <UButton
             icon="i-lucide-package-plus"
-            label="Quick item"
+            label="Article rapide"
             variant="subtle"
             @click="createOpen = true"
           />
-          <UButton to="/catalog/new" icon="i-lucide-arrow-up-right" label="Full form" />
+          <UButton to="/catalog/new" icon="i-lucide-arrow-up-right" label="Fiche complète" />
         </template>
       </UDashboardNavbar>
 
@@ -216,10 +216,10 @@ const columns: TableColumn<CatalogItemRecord>[] = [
           <UInput
             v-model="search"
             icon="i-lucide-search"
-            placeholder="Search products, services or parts"
+            placeholder="Rechercher des produits, services ou pièces"
             class="max-w-md"
           />
-          <USwitch v-model="activeOnly" label="Active only" />
+          <USwitch v-model="activeOnly" label="Actifs seulement" />
         </div>
 
         <UDropdownMenu
@@ -228,7 +228,15 @@ const columns: TableColumn<CatalogItemRecord>[] = [
               ?.getAllColumns()
               .filter((column: DashboardTableColumn) => column.getCanHide())
               .map((column: DashboardTableColumn) => ({
-                label: upperFirst(column.id),
+                label: ({
+                  name: 'Article',
+                  type: 'Type',
+                  defaultPrice: 'Prix TTC',
+                  vatRate: 'TVA',
+                  isActive: 'Statut',
+                  updatedAt: 'Mis à jour',
+                  actions: 'Actions'
+                } as Record<string, string>)[column.id] || upperFirst(column.id),
                 type: 'checkbox' as const,
                 checked: column.getIsVisible(),
                 onUpdateChecked(checked: boolean) {
@@ -242,7 +250,7 @@ const columns: TableColumn<CatalogItemRecord>[] = [
           :content="{ align: 'end' }"
         >
           <UButton
-            label="Columns"
+            label="Colonnes"
             color="neutral"
             variant="outline"
             trailing-icon="i-lucide-settings-2"
@@ -254,9 +262,9 @@ const columns: TableColumn<CatalogItemRecord>[] = [
     <template #body>
       <div class="space-y-4">
         <div class="grid gap-4 md:grid-cols-3">
-          <PosSummaryCard title="Catalog items" :value="String(items?.length || 0)" icon="i-lucide-package-search" />
-          <PosSummaryCard title="Visible" :value="String(filteredItems.length)" icon="i-lucide-filter" />
-          <PosSummaryCard title="Active" :value="String((items || []).filter(item => item.isActive).length)" icon="i-lucide-badge-check" />
+          <PosSummaryCard title="Articles" :value="String(items?.length || 0)" icon="i-lucide-package-search" />
+          <PosSummaryCard title="Visibles" :value="String(filteredItems.length)" icon="i-lucide-filter" />
+          <PosSummaryCard title="Actifs" :value="String((items || []).filter(item => item.isActive).length)" icon="i-lucide-badge-check" />
         </div>
 
         <UTable
@@ -283,15 +291,15 @@ const columns: TableColumn<CatalogItemRecord>[] = [
           <template #empty>
             <UEmpty
               icon="i-lucide-package-search"
-              title="No catalog items found"
-              description="Create an item or adjust the current filters."
+              title="Aucun article trouvé"
+              description="Créez un article ou ajustez les filtres actuels."
             />
           </template>
         </UTable>
 
         <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
           <p class="text-sm text-toned">
-            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredItems.length }} item(s)
+            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredItems.length }} article(s)
           </p>
 
           <UPagination
@@ -303,22 +311,22 @@ const columns: TableColumn<CatalogItemRecord>[] = [
         </div>
       </div>
     </template>
-
-    <PosCatalogItemSlideover
-      v-model:open="createOpen"
-      title="Quick catalog item"
-      description="Add a product, service, part, or labor item without leaving the list."
-      submit-label="Create item"
-      @save="saveItem"
-    />
-
-    <PosCatalogItemSlideover
-      v-model:open="editOpen"
-      title="Edit catalog item"
-      description="Adjust prix TTC, TVA, or availability inline from the operator list."
-      submit-label="Save changes"
-      :initial-value="editingItemForm"
-      @save="saveItem"
-    />
   </UDashboardPanel>
+
+  <PosCatalogItemSlideover
+    v-model:open="createOpen"
+    title="Article rapide"
+    description="Ajoutez un produit, service, pièce ou poste de main-d’œuvre sans quitter la liste."
+    submit-label="Créer l’article"
+    @save="saveItem"
+  />
+
+  <PosCatalogItemSlideover
+    v-model:open="editOpen"
+    title="Modifier l’article"
+    description="Ajustez le prix TTC, la TVA ou la disponibilité directement depuis la liste opérateur."
+    submit-label="Enregistrer les modifications"
+    :initial-value="editingItemForm"
+    @save="saveItem"
+  />
 </template>

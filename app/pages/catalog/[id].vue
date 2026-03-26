@@ -23,7 +23,7 @@ async function saveItem(payload: {
   })
 
   toast.add({
-    title: 'Catalog item updated',
+    title: 'Article mis à jour',
     color: 'success'
   })
 
@@ -34,7 +34,7 @@ async function saveItem(payload: {
 <template>
   <UDashboardPanel id="catalog-detail">
     <template #header>
-      <UDashboardNavbar :title="item?.name || 'Catalog item'">
+      <UDashboardNavbar :title="item?.name || 'Article du catalogue'">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -42,7 +42,7 @@ async function saveItem(payload: {
         <template #right>
           <UButton
             to="/catalog"
-            label="Back to catalog"
+            label="Retour au catalogue"
             variant="ghost"
             color="neutral"
           />
@@ -56,10 +56,10 @@ async function saveItem(payload: {
           <template #header>
             <div>
               <h2 class="text-lg font-semibold text-highlighted">
-                Edit catalog item
+                Modifier l’article
               </h2>
               <p class="text-sm text-toned">
-                Keep the shared commercial defaults consistent across direct sales and repair documents.
+                Gardez des valeurs commerciales cohérentes entre ventes directes et documents de réparation.
               </p>
             </div>
           </template>
@@ -67,7 +67,7 @@ async function saveItem(payload: {
           <PosCatalogItemForm
             v-if="item"
             :initial-value="item"
-            submit-label="Save item"
+            submit-label="Enregistrer l’article"
             @save="saveItem"
           />
         </UCard>
@@ -77,7 +77,7 @@ async function saveItem(payload: {
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Item snapshot
+                  Aperçu de l’article
                 </h2>
               </div>
             </template>
@@ -86,17 +86,17 @@ async function saveItem(payload: {
               <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">
                 <span class="text-sm text-toned">Type</span>
                 <UBadge :color="catalogItemTypeColors[item?.type || 'product']" variant="subtle">
-                  {{ item ? catalogItemTypeLabels[item.type] : 'Product' }}
+                  {{ item ? catalogItemTypeLabels[item.type] : 'Produit' }}
                 </UBadge>
               </div>
               <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">
-                <span class="text-sm text-toned">Status</span>
+                <span class="text-sm text-toned">Statut</span>
                 <UBadge :color="item?.isActive ? 'success' : 'neutral'" variant="subtle">
-                  {{ item?.isActive ? 'Active' : 'Inactive' }}
+                  {{ item?.isActive ? 'Actif' : 'Inactif' }}
                 </UBadge>
               </div>
               <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">
-                <span class="text-sm text-toned">Last update</span>
+                <span class="text-sm text-toned">Dernière mise à jour</span>
                 <span class="text-sm font-medium text-highlighted">{{ item ? formatDateTime(item.updatedAt) : '-' }}</span>
               </div>
             </div>
@@ -106,19 +106,19 @@ async function saveItem(payload: {
             <PosSummaryCard
               title="Prix TTC"
               :value="formatCurrency(item?.defaultPrice || 0)"
-              description="Stored in integer cents for predictable totals."
+              description="Stocké en centimes entiers pour des totaux fiables."
               icon="i-lucide-wallet"
             />
             <PosSummaryCard
               title="TVA"
               :value="`${item?.vatRate || 0}%`"
-              description="Applied to new document lines by default."
+              description="Appliquée par défaut aux nouvelles lignes de document."
               icon="i-lucide-percent"
             />
             <PosSummaryCard
               title="SKU"
-              :value="item?.sku || 'Not set'"
-              description="Optional internal or shelf reference."
+              :value="item?.sku || 'Non défini'"
+              description="Référence interne ou rayon optionnelle."
               icon="i-lucide-scan-line"
             />
           </div>

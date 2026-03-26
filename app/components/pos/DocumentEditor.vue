@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import type { FormSubmitEvent } from '@nuxt/ui'
+import type { FormSubmitEvent, TableColumn } from '@nuxt/ui'
 import {
   documentStatusLabels,
   documentStatuses,
@@ -33,7 +33,7 @@ const props = withDefaults(defineProps<{
   fixedTicketId?: number | null
 }>(), {
   initialValue: () => ({}),
-  submitLabel: 'Save document',
+  submitLabel: 'Enregistrer le document',
   allowedTypes: () => ['quote', 'invoice', 'receipt', 'credit_note'],
   fixedCustomerId: null,
   fixedTicketId: null
@@ -53,21 +53,21 @@ const emit = defineEmits<{
 
 const lineSchema = z.object({
   catalogItemId: z.coerce.number().int().positive().optional().nullable(),
-  label: z.string().trim().min(1, 'Label is required'),
-  quantity: z.coerce.number().int('Quantity must be a whole number').positive('Quantity must be greater than 0'),
-  unitPrice: z.coerce.number().min(0, 'Unit price must be positive'),
+  label: z.string().trim().min(1, 'Le libellé est obligatoire'),
+  quantity: z.coerce.number().int('La quantité doit être un nombre entier').positive('La quantité doit être supérieure à 0'),
+  unitPrice: z.coerce.number().min(0, 'Le prix unitaire doit être positif'),
   vatRate: z.coerce.number().min(0).max(100),
   categoryHint: z.enum(lineCategoryHints).optional().nullable()
 })
 
 const schema = z.object({
-  type: z.enum(documentTypes).refine(value => props.allowedTypes.includes(value), 'Document type is not allowed'),
+  type: z.enum(documentTypes).refine(value => props.allowedTypes.includes(value), 'Ce type de document n’est pas autorisé'),
   status: z.enum(documentStatuses),
-  customerId: z.coerce.number().int().positive('Customer is required'),
+  customerId: z.coerce.number().int().positive('Le client est obligatoire'),
   ticketId: z.coerce.number().int().positive().optional().nullable(),
-  issuedAt: z.string().min(1, 'Issue date is required'),
+  issuedAt: z.string().min(1, 'La date d’émission est obligatoire'),
   notes: z.string().optional().default(''),
-  lines: z.array(lineSchema).min(1, 'At least one line is required')
+  lines: z.array(lineSchema).min(1, 'Au moins une ligne est obligatoire')
 })
 
 type Schema = z.output<typeof schema>
@@ -91,11 +91,6 @@ function createLine() {
   }
 }
 
-const customerItems = computed(() => props.customers.map(customer => ({
-  label: customer.displayName,
-  value: customer.id
-})))
-
 const documentTypeItems = computed(() => props.allowedTypes.map(type => ({
   label: documentTypeLabels[type],
   value: type
@@ -116,6 +111,69 @@ const catalogItemsList = computed(() => props.catalogItems.map(item => ({
   value: item.id
 })))
 
+const lineColumns: TableColumn<Schema['lines'][number]>[] = [
+  {
+    id: 'item',
+    header: 'Article / Libellé',
+    meta: {
+      class: {
+        th: 'w-[38%] min-w-[20rem]',
+        td: 'align-top'
+      }
+    }
+  },
+  {
+    id: 'category',
+    header: 'Catégorie',
+    meta: {
+      class: {
+        th: 'w-[16%] min-w-[10rem]',
+        td: 'align-top'
+      }
+    }
+  },
+  {
+    accessorKey: 'quantity',
+    header: 'Quantité',
+    meta: {
+      class: {
+        th: 'w-[12%] min-w-[8rem]',
+        td: 'align-top'
+      }
+    }
+  },
+  {
+    accessorKey: 'unitPrice',
+    header: 'Prix unitaire TTC',
+    meta: {
+      class: {
+        th: 'w-[16%] min-w-[10rem]',
+        td: 'align-top'
+      }
+    }
+  },
+  {
+    id: 'total',
+    header: 'Total TTC',
+    meta: {
+      class: {
+        th: 'w-[12%] min-w-[9rem] text-right',
+        td: 'align-top text-right'
+      }
+    }
+  },
+  {
+    id: 'actions',
+    header: '',
+    meta: {
+      class: {
+        th: 'w-12',
+        td: 'align-top text-right'
+      }
+    }
+  }
+]
+
 const state = reactive<Schema>({
   type: 'invoice',
   status: 'issued',
@@ -129,7 +187,7 @@ const state = reactive<Schema>({
 watchEffect(() => {
   state.type = props.initialValue.type || props.allowedTypes[0] || 'invoice'
   state.status = props.initialValue.status || 'issued'
-  state.customerId = props.fixedCustomerId ?? props.initialValue.customerId ?? props.customers[0]?.id ?? 0
+  state.customerId = props.fixedCustomerId ?? props.initialValue.customerId ?? 0
   state.ticketId = props.fixedTicketId ?? props.initialValue.ticketId ?? null
   state.issuedAt = toDateTimeLocal(props.initialValue.issuedAt)
   state.notes = props.initialValue.notes || ''
@@ -232,7 +290,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
     @submit="onSubmit"
   >
     <div class="grid gap-4 xl:grid-cols-4">
-      <UFormField label="Document type" name="type">
+      <UFormField label="Type de document" name="type">
         <USelectMenu
           v-model="state.type"
           :items="documentTypeItems"
@@ -241,7 +299,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         />
       </UFormField>
 
-      <UFormField label="Status" name="status">
+      <UFormField label="Statut" name="status">
         <USelectMenu
           v-model="state.status"
           :items="documentStatusItems"
@@ -250,27 +308,25 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         />
       </UFormField>
 
-      <UFormField label="Customer" name="customerId" class="xl:col-span-2">
-        <USelectMenu
-          v-model="state.customerId"
-          :items="customerItems"
-          value-key="value"
-          placeholder="Select customer"
-          :search-input="{ placeholder: 'Search customers' }"
+      <UFormField label="Client" name="customerId" class="xl:col-span-2">
+        <PosCustomerSelectField
+          :model-value="state.customerId || null"
+          :customers="props.customers"
+          placeholder="Choisir un client"
           :disabled="fixedCustomerId !== null"
-          class="w-full"
+          @update:model-value="state.customerId = $event || 0"
         />
       </UFormField>
     </div>
 
     <div class="grid gap-4 md:grid-cols-2">
-      <UFormField label="Issued at" name="issuedAt">
+      <UFormField label="Émis le" name="issuedAt">
         <UInput v-model="state.issuedAt" type="datetime-local" class="w-full" />
       </UFormField>
 
-      <UFormField label="Linked ticket" name="ticketId">
+      <UFormField label="Ticket lié" name="ticketId">
         <UInput
-          :model-value="state.ticketId ? String(state.ticketId) : 'Direct sale / standalone document'"
+          :model-value="state.ticketId ? String(state.ticketId) : 'Vente directe / document autonome'"
           :disabled="true"
           class="w-full"
         />
@@ -281,7 +337,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       <UTextarea
         v-model="state.notes"
         :rows="4"
-        placeholder="Internal or printable notes"
+        placeholder="Notes internes ou imprimables"
         class="w-full"
       />
     </UFormField>
@@ -291,134 +347,186 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 class="font-semibold text-highlighted">
-              Document lines
+              Lignes du document
             </h3>
             <p class="text-sm text-toned">
-              Direct sales stay document-only. Ticket-linked documents can still reuse the same commercial lines.
+              Les ventes directes restent sans ticket. Les documents liés à un ticket peuvent réutiliser les mêmes lignes commerciales.
             </p>
           </div>
 
           <UButton
             icon="i-lucide-plus"
-            label="Add line"
+            label="Ajouter une ligne"
             variant="subtle"
             @click="addLine"
           />
         </div>
       </template>
 
-      <div class="space-y-4">
-        <div
-          v-for="(line, index) in state.lines"
-          :key="index"
-          class="rounded-2xl border border-default bg-muted/20 p-4"
+      <div class="overflow-x-auto">
+        <UTable
+          :data="state.lines"
+          :columns="lineColumns"
+          sticky="header"
+          :ui="{
+            root: 'rounded-2xl border border-default bg-default shadow-sm',
+            base: 'min-w-[64rem] table-fixed border-separate border-spacing-0',
+            thead: '[&>tr]:bg-elevated/80 [&>tr]:after:content-none',
+            tbody: '[&>tr]:last:[&>td]:border-b-0',
+            th: 'border-b border-default px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-toned',
+            td: 'border-b border-default px-3 py-3 align-top',
+            separator: 'h-0'
+          }"
         >
-          <div class="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p class="font-medium text-highlighted">
-                Line {{ index + 1 }}
-              </p>
-              <div class="flex flex-wrap items-center gap-2 text-sm text-toned">
-                <span>Total {{ formatCurrency(getLineTotal(line)) }}</span>
-                <UBadge color="neutral" variant="subtle">
-                  TVA incl. {{ line.vatRate }}%
-                </UBadge>
+          <template #item-cell="{ row }">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 text-xs">
+                  <UBadge
+                    color="neutral"
+                    variant="subtle"
+                    size="sm"
+                    :label="`Ligne ${row.index + 1}`"
+                  />
+                  <span class="text-toned">TVA incl. {{ row.original.vatRate }}%</span>
+                </div>
+
+                <p class="text-xs text-toned">
+                  {{ row.original.catalogItemId ? 'Catalogue lié' : 'Saisie libre' }}
+                </p>
               </div>
+
+              <UFormField :name="`lines.${row.index}.catalogItemId`">
+                <USelectMenu
+                  v-model="row.original.catalogItemId"
+                  :items="catalogItemsList"
+                  value-key="value"
+                  placeholder="Rechercher dans le catalogue"
+                  :search-input="{ placeholder: 'Rechercher un produit ou service', size: 'sm' }"
+                  clear
+                  size="sm"
+                  class="w-full"
+                  @update:model-value="updateLineFromCatalog(row.index)"
+                />
+              </UFormField>
+
+              <UFormField :name="`lines.${row.index}.label`">
+                <UInput
+                  v-model="row.original.label"
+                  size="sm"
+                  variant="subtle"
+                  class="w-full"
+                  placeholder="Libellé de la ligne"
+                />
+              </UFormField>
             </div>
+          </template>
 
-            <UButton
-              icon="i-lucide-trash"
-              color="error"
-              variant="ghost"
-              :disabled="state.lines.length === 1"
-              @click="removeLine(index)"
-            />
-          </div>
-
-          <div class="grid gap-4 xl:grid-cols-6">
-            <UFormField :name="`lines.${index}.catalogItemId`" label="Catalog item" class="xl:col-span-2">
+          <template #category-cell="{ row }">
+            <UFormField :name="`lines.${row.index}.categoryHint`">
               <USelectMenu
-                v-model="line.catalogItemId"
-                :items="catalogItemsList"
-                value-key="value"
-                placeholder="Search catalog"
-                :search-input="{ placeholder: 'Search products or services' }"
-                clear
-                class="w-full"
-                @update:model-value="updateLineFromCatalog(index)"
-              />
-            </UFormField>
-
-            <UFormField :name="`lines.${index}.label`" label="Label" class="xl:col-span-2">
-              <UInput v-model="line.label" class="w-full" />
-            </UFormField>
-
-            <UFormField :name="`lines.${index}.categoryHint`" label="Category">
-              <USelectMenu
-                v-model="line.categoryHint"
+                v-model="row.original.categoryHint"
                 :items="categoryItems"
                 value-key="value"
+                placeholder="Catégorie"
                 clear
+                size="sm"
+                variant="subtle"
+                :search-input="false"
                 class="w-full"
               />
             </UFormField>
+          </template>
 
-            <div class="rounded-2xl border border-dashed border-default px-4 py-3">
-              <p class="text-xs uppercase tracking-wide text-toned">
-                Total TTC
-              </p>
-              <p class="mt-2 font-semibold text-highlighted">
-                {{ formatCurrency(getLineSubtotal(line)) }}
-              </p>
-            </div>
-          </div>
-
-          <div class="mt-4 grid gap-4 md:grid-cols-2">
-            <UFormField :name="`lines.${index}.quantity`" label="Quantity">
+          <template #quantity-cell="{ row }">
+            <UFormField :name="`lines.${row.index}.quantity`">
               <UInputNumber
-                v-model="line.quantity"
+                v-model="row.original.quantity"
                 :min="1"
                 :step="1"
+                size="sm"
+                variant="subtle"
+                :increment="{ variant: 'ghost' }"
+                :decrement="{ variant: 'ghost' }"
                 class="w-full"
               />
             </UFormField>
+          </template>
 
-            <UFormField :name="`lines.${index}.unitPrice`" label="Unit price (CHF, TVA incl.)">
+          <template #unitPrice-cell="{ row }">
+            <UFormField :name="`lines.${row.index}.unitPrice`">
               <UInputNumber
-                v-model="line.unitPrice"
+                v-model="row.original.unitPrice"
                 :min="0"
                 :step="0.05"
+                size="sm"
+                variant="subtle"
+                :increment="{ variant: 'ghost' }"
+                :decrement="{ variant: 'ghost' }"
                 :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
                 class="w-full"
               />
             </UFormField>
-          </div>
-        </div>
+          </template>
+
+          <template #total-cell="{ row }">
+            <div class="space-y-1 text-right">
+              <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+                Total
+              </p>
+              <p class="text-base font-semibold text-highlighted">
+                {{ formatCurrency(getLineTotal(row.original)) }}
+              </p>
+            </div>
+          </template>
+
+          <template #actions-cell="{ row }">
+            <UButton
+              icon="i-lucide-trash"
+              color="error"
+              variant="ghost"
+              size="sm"
+              :disabled="state.lines.length === 1"
+              :aria-label="`Supprimer la ligne ${row.index + 1}`"
+              @click="removeLine(row.index)"
+            />
+          </template>
+
+          <template #empty>
+            <UEmpty
+              icon="i-lucide-list"
+              title="Aucune ligne"
+              description="Ajoutez au moins une ligne pour enregistrer le document."
+              size="sm"
+              variant="naked"
+            />
+          </template>
+        </UTable>
       </div>
 
       <template #footer>
-        <div class="grid gap-3 md:grid-cols-3">
-          <div class="rounded-2xl border border-default px-4 py-3">
+        <div class="grid gap-3 lg:grid-cols-3">
+          <div class="rounded-xl border border-default px-4 py-3">
             <p class="text-xs uppercase tracking-wide text-toned">
               Total HT
             </p>
-            <p class="mt-2 font-semibold text-highlighted">
+            <p class="mt-1 text-base font-semibold text-highlighted sm:text-lg">
               {{ formatCurrency(totals.subtotal) }}
             </p>
           </div>
-          <div class="rounded-2xl border border-default px-4 py-3">
+          <div class="rounded-xl border border-default px-4 py-3">
             <p class="text-xs uppercase tracking-wide text-toned">
               TVA incluse
             </p>
-            <p class="mt-2 font-semibold text-highlighted">
+            <p class="mt-1 text-base font-semibold text-highlighted sm:text-lg">
               {{ formatCurrency(totals.taxAmount) }}
             </p>
           </div>
-          <div class="rounded-2xl border border-default bg-default px-4 py-3">
+          <div class="rounded-xl border border-default bg-default px-4 py-3">
             <p class="text-xs uppercase tracking-wide text-toned">
               Total TTC
             </p>
-            <p class="mt-2 text-lg font-semibold text-highlighted">
+            <p class="mt-1 text-base font-semibold text-highlighted sm:text-lg">
               {{ formatCurrency(totals.total) }}
             </p>
           </div>

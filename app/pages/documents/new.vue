@@ -37,7 +37,7 @@ async function saveDocument(payload: {
   })
 
   toast.add({
-    title: 'Document created',
+    title: 'Document créé',
     color: 'success'
   })
 
@@ -48,7 +48,7 @@ async function saveDocument(payload: {
 <template>
   <UDashboardPanel id="document-create">
     <template #header>
-      <UDashboardNavbar title="New Document">
+      <UDashboardNavbar title="Nouveau document">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -60,10 +60,10 @@ async function saveDocument(payload: {
         <template #header>
           <div>
             <h2 class="text-lg font-semibold text-highlighted">
-              Direct sale or standalone document
+              Vente directe ou document autonome
             </h2>
             <p class="text-sm text-toned">
-              Use this for direct accessory sales, quick support services, standalone quotes, or ticket-linked billing when needed.
+              À utiliser pour les ventes d’accessoires directes, les services rapides, les devis autonomes, ou la facturation liée à un ticket.
             </p>
           </div>
         </template>
@@ -74,7 +74,7 @@ async function saveDocument(payload: {
           :catalog-items="catalogItems"
           :fixed-customer-id="customerId"
           :fixed-ticket-id="ticketId"
-          submit-label="Create document"
+          submit-label="Créer le document"
           @save="saveDocument"
         />
       </UCard>

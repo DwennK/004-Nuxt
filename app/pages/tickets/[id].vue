@@ -23,10 +23,10 @@ const workflowOpen = ref(false)
 const activeTab = ref('overview')
 
 const tabItems = [
-  { label: 'Overview', value: 'overview', icon: 'i-lucide-clipboard-list' },
-  { label: 'Workflow', value: 'workflow', icon: 'i-lucide-workflow' },
+  { label: 'Vue d’ensemble', value: 'overview', icon: 'i-lucide-clipboard-list' },
+  { label: 'Suivi', value: 'workflow', icon: 'i-lucide-workflow' },
   { label: 'Documents', value: 'documents', icon: 'i-lucide-files' },
-  { label: 'Payments', value: 'payments', icon: 'i-lucide-wallet' }
+  { label: 'Paiements', value: 'payments', icon: 'i-lucide-wallet' }
 ]
 
 const [{ data: ticket, refresh: refreshTicket }, { data: customers }] = await Promise.all([
@@ -42,6 +42,8 @@ async function saveTicket(payload: {
   model: string
   serialNumber: string
   imei: string
+  accessCode: string
+  simCode: string
   issueDescription: string
   internalNotes: string
   openedAt: string
@@ -53,7 +55,7 @@ async function saveTicket(payload: {
   })
 
   toast.add({
-    title: 'Ticket updated',
+    title: 'Ticket mis à jour',
     color: 'success'
   })
 
@@ -62,14 +64,14 @@ async function saveTicket(payload: {
 
 async function createQuote() {
   const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/quote`, { method: 'POST' })
-  toast.add({ title: 'Quote created', color: 'success' })
+  toast.add({ title: 'Devis créé', color: 'success' })
   await refreshTicket()
   await navigateTo(`/documents/${document.id}`)
 }
 
 async function createInvoice() {
   const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/invoice`, { method: 'POST' })
-  toast.add({ title: 'Invoice created', color: 'success' })
+  toast.add({ title: 'Facture créée', color: 'success' })
   await refreshTicket()
   await navigateTo(`/documents/${document.id}`)
 }
@@ -84,7 +86,7 @@ async function changeStatus(payload: {
   })
 
   workflowOpen.value = false
-  toast.add({ title: 'Ticket status updated', color: 'success' })
+  toast.add({ title: 'Statut du ticket mis à jour', color: 'success' })
   await refreshTicket()
 }
 
@@ -95,7 +97,7 @@ async function closeTicket(payload: { internalNotes: string }) {
   })
 
   workflowOpen.value = false
-  toast.add({ title: 'Ticket closed', color: 'success' })
+  toast.add({ title: 'Ticket clôturé', color: 'success' })
   await refreshTicket()
 }
 
@@ -113,7 +115,7 @@ const documentColumns: TableColumn<TicketDetail['documents'][number]>[] = [
   },
   {
     accessorKey: 'issuedAt',
-    header: 'Issued',
+    header: 'Émis le',
     cell: ({ row }) => formatDateTime(row.original.issuedAt)
   },
   {
@@ -126,7 +128,7 @@ const documentColumns: TableColumn<TicketDetail['documents'][number]>[] = [
 const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
   {
     accessorKey: 'method',
-    header: 'Method',
+    header: 'Mode de paiement',
     cell: ({ row }) => h(UBadge, {
       color: paymentMethodColors[row.original.method],
       variant: 'subtle'
@@ -139,13 +141,13 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
   },
   {
     accessorKey: 'paidAt',
-    header: 'Encaisse a',
+    header: 'Encaissé à',
     cell: ({ row }) => formatDateTime(row.original.paidAt)
   },
   {
     accessorKey: 'reference',
-    header: 'Reference',
-    cell: ({ row }) => row.original.reference || 'No reference'
+    header: 'Référence',
+    cell: ({ row }) => row.original.reference || 'Aucune référence'
   }
 ]
 </script>
@@ -153,7 +155,7 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
 <template>
   <UDashboardPanel id="ticket-detail">
     <template #header>
-      <UDashboardNavbar :title="ticket?.ticketNumber || 'Ticket detail'">
+      <UDashboardNavbar :title="ticket?.ticketNumber || 'Détail du ticket'">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -161,17 +163,17 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
         <template #right>
           <UButton
             icon="i-lucide-workflow"
-            label="Workflow"
+            label="Suivi"
             variant="subtle"
             @click="workflowOpen = true"
           />
           <UButton
             icon="i-lucide-scroll-text"
-            label="Create quote"
+            label="Créer un devis"
             variant="subtle"
             @click="createQuote"
           />
-          <UButton icon="i-lucide-receipt" label="Create invoice" @click="createInvoice" />
+          <UButton icon="i-lucide-receipt" label="Créer une facture" @click="createInvoice" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -179,10 +181,10 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
     <template #body>
       <div v-if="ticket" class="space-y-6">
         <div class="grid gap-4 md:grid-cols-4">
-          <PosSummaryCard title="Status" :value="ticketStatusLabels[ticket.status]" icon="i-lucide-badge-check" />
-          <PosSummaryCard title="Linked documents" :value="String(ticket.documents.length)" icon="i-lucide-file-stack" />
-          <PosSummaryCard title="Linked payments" :value="String(ticket.payments.length)" icon="i-lucide-wallet" />
-          <PosSummaryCard title="Ticket total paid" :value="formatCurrency(ticket.payments.reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-wallet-cards" />
+          <PosSummaryCard title="Statut" :value="ticketStatusLabels[ticket.status]" icon="i-lucide-badge-check" />
+          <PosSummaryCard title="Documents liés" :value="String(ticket.documents.length)" icon="i-lucide-file-stack" />
+          <PosSummaryCard title="Paiements liés" :value="String(ticket.payments.length)" icon="i-lucide-wallet" />
+          <PosSummaryCard title="Total encaissé" :value="formatCurrency(ticket.payments.reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-wallet-cards" />
         </div>
 
         <UTabs
@@ -197,10 +199,10 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Ticket editor
+                  Édition du ticket
                 </h2>
                 <p class="text-sm text-toned">
-                  Workflow stays in the ticket. Commercial billing stays in the linked documents.
+                  Le suivi reste dans le ticket. La facturation commerciale reste dans les documents liés.
                 </p>
               </div>
             </template>
@@ -208,7 +210,7 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
             <PosTicketForm
               :customers="customers || []"
               :initial-value="ticket"
-              submit-label="Save ticket"
+              submit-label="Enregistrer le ticket"
               @save="saveTicket"
             />
           </UCard>
@@ -218,7 +220,7 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
               <template #header>
                 <div>
                   <h2 class="text-lg font-semibold text-highlighted">
-                    Customer and device
+                    Client et appareil
                   </h2>
                 </div>
               </template>
@@ -233,14 +235,16 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
                 </div>
                 <div class="rounded-2xl border border-default bg-muted/20 p-4">
                   <p class="font-medium text-highlighted">
-                    {{ ticket.brand || 'Brand not set' }} {{ ticket.model || '' }}
+                    {{ ticket.brand || 'Marque non définie' }} {{ ticket.model || '' }}
                   </p>
-                  <p>{{ ticket.imei || 'No IMEI' }}</p>
-                  <p>{{ ticket.serialNumber || 'No serial number' }}</p>
+                  <p>IMEI: {{ ticket.imei || 'Aucun IMEI' }}</p>
+                  <p>S/N: {{ ticket.serialNumber || 'Aucun numéro de série' }}</p>
+                  <p>Accès: {{ ticket.accessCode || 'Aucun code d’accès renseigné' }}</p>
+                  <p>SIM: {{ ticket.simCode || 'Aucun code SIM renseigné' }}</p>
                 </div>
                 <div class="rounded-2xl border border-default p-4">
                   <p class="text-xs uppercase tracking-wide text-toned">
-                    Issue description
+                    Description du problème
                   </p>
                   <p class="mt-2 text-sm text-highlighted">
                     {{ ticket.issueDescription }}
@@ -253,28 +257,28 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
               <template #header>
                 <div>
                   <h2 class="text-lg font-semibold text-highlighted">
-                    Current workflow
+                    Suivi actuel
                   </h2>
                 </div>
               </template>
 
               <div class="space-y-3">
                 <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">
-                  <span class="text-sm text-toned">Current status</span>
+                  <span class="text-sm text-toned">Statut actuel</span>
                   <UBadge :color="ticketStatusColors[ticket.status]" variant="subtle">
                     {{ ticketStatusLabels[ticket.status] }}
                   </UBadge>
                 </div>
                 <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">
-                  <span class="text-sm text-toned">Opened at</span>
+                  <span class="text-sm text-toned">Ouvert le</span>
                   <span class="text-sm font-medium text-highlighted">{{ formatDateTime(ticket.openedAt) }}</span>
                 </div>
                 <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">
-                  <span class="text-sm text-toned">Closed at</span>
-                  <span class="text-sm font-medium text-highlighted">{{ ticket.closedAt ? formatDateTime(ticket.closedAt) : 'Still open' }}</span>
+                  <span class="text-sm text-toned">Clôturé le</span>
+                  <span class="text-sm font-medium text-highlighted">{{ ticket.closedAt ? formatDateTime(ticket.closedAt) : 'Toujours ouvert' }}</span>
                 </div>
                 <UButton
-                  label="Open workflow actions"
+                  label="Ouvrir les actions de suivi"
                   icon="i-lucide-workflow"
                   variant="subtle"
                   block
@@ -290,28 +294,28 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Workflow snapshot
+                  Aperçu du suivi
                 </h2>
               </div>
             </template>
 
             <div class="space-y-3">
               <div class="flex items-center justify-between rounded-2xl border border-default px-4 py-3">
-                <span class="text-sm text-toned">Status</span>
+                <span class="text-sm text-toned">Statut</span>
                 <UBadge :color="ticketStatusColors[ticket.status]" variant="subtle">
                   {{ ticketStatusLabels[ticket.status] }}
                 </UBadge>
               </div>
               <div class="rounded-2xl border border-default px-4 py-3">
                 <p class="text-xs uppercase tracking-wide text-toned">
-                  Internal notes
+                  Notes internes
                 </p>
                 <p class="mt-2 text-sm text-highlighted">
-                  {{ ticket.internalNotes || 'No internal notes yet.' }}
+                  {{ ticket.internalNotes || 'Aucune note interne pour le moment.' }}
                 </p>
               </div>
               <UButton
-                label="Change status or close ticket"
+                label="Changer le statut ou clôturer"
                 icon="i-lucide-workflow"
                 block
                 @click="workflowOpen = true"
@@ -323,24 +327,24 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
             <template #header>
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
-                  Billing actions
+                  Actions de facturation
                 </h2>
                 <p class="text-sm text-toned">
-                  Quotes and invoices remain separate commercial objects.
+                  Les devis et factures restent des objets commerciaux séparés.
                 </p>
               </div>
             </template>
 
             <div class="grid gap-4 md:grid-cols-2">
               <UButton
-                label="Create quote"
+                label="Créer un devis"
                 icon="i-lucide-scroll-text"
                 variant="subtle"
                 class="justify-start"
                 @click="createQuote"
               />
               <UButton
-                label="Create invoice"
+                label="Créer une facture"
                 icon="i-lucide-receipt"
                 class="justify-start"
                 @click="createInvoice"
@@ -353,10 +357,10 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
           <template #header>
             <div>
               <h2 class="text-lg font-semibold text-highlighted">
-                Linked documents
+                Documents liés
               </h2>
               <p class="text-sm text-toned">
-                Quotes, invoices, receipts, and credit notes linked to this tracked case.
+                Devis, factures, reçus et avoirs liés à ce dossier suivi.
               </p>
             </div>
           </template>
@@ -365,8 +369,8 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
             <template #empty>
               <UEmpty
                 icon="i-lucide-files"
-                title="No linked documents"
-                description="Create a quote or invoice from the ticket toolbar."
+                title="Aucun document lié"
+                description="Créez un devis ou une facture depuis la barre d’actions du ticket."
               />
             </template>
           </UTable>
@@ -376,10 +380,10 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
           <template #header>
             <div>
               <h2 class="text-lg font-semibold text-highlighted">
-                Linked payments
+                Paiements liés
               </h2>
               <p class="text-sm text-toned">
-                Cashflow recorded against ticket-linked documents.
+                Encaissements enregistrés sur les documents liés au ticket.
               </p>
             </div>
           </template>
@@ -388,22 +392,22 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
             <template #empty>
               <UEmpty
                 icon="i-lucide-wallet"
-                title="No linked payments"
-                description="Payments recorded on linked documents will appear here."
+                title="Aucun paiement lié"
+                description="Les paiements enregistrés sur les documents liés apparaîtront ici."
               />
             </template>
           </UTable>
         </UCard>
       </div>
-
-      <PosTicketWorkflowSlideover
-        v-if="ticket"
-        v-model:open="workflowOpen"
-        :initial-status="ticket.status"
-        :initial-notes="ticket.internalNotes"
-        @update-status="changeStatus"
-        @close-ticket="closeTicket"
-      />
     </template>
   </UDashboardPanel>
+
+  <PosTicketWorkflowSlideover
+    v-if="ticket"
+    v-model:open="workflowOpen"
+    :initial-status="ticket.status"
+    :initial-notes="ticket.internalNotes"
+    @update-status="changeStatus"
+    @close-ticket="closeTicket"
+  />
 </template>

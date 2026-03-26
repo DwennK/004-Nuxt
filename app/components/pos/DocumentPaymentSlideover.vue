@@ -17,7 +17,7 @@ const emit = defineEmits<{
 
 const schema = z.object({
   method: z.enum(paymentMethods),
-  amount: z.coerce.number().min(0, 'Amount must be positive'),
+  amount: z.coerce.number().min(0, 'Le montant doit être positif'),
   reference: z.string().optional().default(''),
   notes: z.string().optional().default('')
 })
@@ -53,8 +53,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 <template>
   <USlideover
     v-model:open="open"
-    title="Record payment"
-    description="Payments stay separate from the document so end-of-day reporting can work off actual cashflow."
+    title="Enregistrer un paiement"
+    description="Les paiements restent séparés du document pour permettre un reporting de caisse fiable."
     side="right"
     :ui="{ content: 'max-w-xl' }"
   >
@@ -67,14 +67,14 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       >
         <div class="rounded-2xl border border-default bg-muted/20 px-4 py-3">
           <p class="text-xs uppercase tracking-wide text-toned">
-            Remaining balance
+            Reste à payer
           </p>
           <p class="mt-2 text-lg font-semibold text-highlighted">
             {{ formatCurrency(balanceDue) }}
           </p>
         </div>
 
-        <UFormField label="Method" name="method">
+        <UFormField label="Mode de paiement" name="method">
           <USelectMenu
             v-model="state.method"
             :items="methodItems"
@@ -83,7 +83,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           />
         </UFormField>
 
-        <UFormField label="Amount (CHF)" name="amount">
+        <UFormField label="Montant (CHF)" name="amount">
           <UInputNumber
             v-model="state.amount"
             :min="0"
@@ -93,8 +93,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           />
         </UFormField>
 
-        <UFormField label="Reference" name="reference">
-          <UInput v-model="state.reference" class="w-full" placeholder="Terminal reference, TWINT, bank note" />
+        <UFormField label="Référence" name="reference">
+          <UInput v-model="state.reference" class="w-full" placeholder="Référence terminal, TWINT, virement" />
         </UFormField>
 
         <UFormField label="Notes" name="notes">
@@ -102,12 +102,12 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             v-model="state.notes"
             :rows="4"
             class="w-full"
-            placeholder="Optional payment note"
+            placeholder="Note de paiement optionnelle"
           />
         </UFormField>
 
         <div class="flex justify-end">
-          <UButton type="submit" label="Record payment" icon="i-lucide-wallet" />
+          <UButton type="submit" label="Enregistrer le paiement" icon="i-lucide-wallet" />
         </div>
       </UForm>
     </template>

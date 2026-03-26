@@ -18,6 +18,34 @@ export type PaymentMethod = (typeof paymentMethods)[number]
 export type PaymentStatus = (typeof paymentStatuses)[number]
 export type LineCategoryHint = (typeof lineCategoryHints)[number]
 
+export interface CustomerUpsertInput {
+  displayName?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  companyName?: string | null
+  phone?: string | null
+  email?: string | null
+  addressLine1?: string | null
+  addressLine2?: string | null
+  postalCode?: string | null
+  city?: string | null
+  notes?: string | null
+}
+
+export interface CustomerFormValue {
+  displayName: string
+  firstName: string
+  lastName: string
+  companyName: string
+  phone: string
+  email: string
+  addressLine1: string
+  addressLine2: string
+  postalCode: string
+  city: string
+  notes: string
+}
+
 export interface CustomerRecord {
   id: number
   firstName: string
@@ -57,6 +85,8 @@ export interface TicketRecord {
   model: string | null
   serialNumber: string | null
   imei: string | null
+  accessCode: string | null
+  simCode: string | null
   issueDescription: string
   internalNotes: string | null
   openedAt: string
