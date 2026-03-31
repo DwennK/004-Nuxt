@@ -15,7 +15,15 @@ type SaleLine = {
 const toast = useToast()
 
 const saleType = ref<'receipt' | 'invoice'>('receipt')
-const attachCustomer = ref(false)
+const receiptAttachCustomer = ref(false)
+const attachCustomer = computed({
+  get: () => saleType.value === 'invoice' || receiptAttachCustomer.value,
+  set: (value: boolean) => {
+    if (saleType.value === 'receipt') {
+      receiptAttachCustomer.value = value
+    }
+  }
+})
 const search = ref('')
 const selectedCustomerId = ref<number | null>(null)
 const lines = ref<SaleLine[]>([])
@@ -34,12 +42,6 @@ const [{ data: customers }, { data: catalogItems }] = await Promise.all([
 
 watchEffect(() => {
   customerPool.value = customers.value ? [...customers.value] : []
-})
-
-watch(saleType, (value) => {
-  if (value === 'invoice') {
-    attachCustomer.value = true
-  }
 })
 
 const activeItems = computed(() => (catalogItems.value || []).filter(item => item.isActive))
@@ -191,7 +193,7 @@ async function ensureCounterCustomer() {
 function resetSaleState() {
   search.value = ''
   lines.value = []
-  attachCustomer.value = saleType.value === 'invoice'
+  receiptAttachCustomer.value = false
   selectedCustomerId.value = saleType.value === 'invoice' ? selectedCustomerId.value : null
 }
 

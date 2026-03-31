@@ -56,7 +56,7 @@ async function saveDocument(payload: {
     </template>
 
     <template #body>
-      <UCard class="mx-auto w-full max-w-6xl">
+      <UCard class="mx-auto w-full max-w-6xl shrink-0">
         <template #header>
           <div>
             <h2 class="text-lg font-semibold text-highlighted">
