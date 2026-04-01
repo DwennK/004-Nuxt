@@ -94,55 +94,145 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
     </template>
 
     <template #body>
-      <div v-if="summary" class="space-y-6">
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <PosSummaryCard title="Total encaissé aujourd’hui" :value="formatCurrency(summary.totalPaid)" icon="i-lucide-wallet-cards" />
-          <PosSummaryCard title="Tickets ouverts" :value="String(summary.ticketStats.openCount)" icon="i-lucide-wrench" />
-          <PosSummaryCard title="Ouverts aujourd’hui" :value="String(summary.ticketStats.openedToday)" icon="i-lucide-folder-plus" />
-          <PosSummaryCard title="Clôturés aujourd’hui" :value="String(summary.ticketStats.closedToday)" icon="i-lucide-folder-check" />
+      <div v-if="summary" class="space-y-4">
+        <div class="rounded-2xl border border-default/80 bg-muted/20 px-4 py-3">
+          <div class="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div class="flex flex-wrap items-center gap-2">
+              <UBadge color="primary" variant="subtle" size="sm">
+                {{ date }}
+              </UBadge>
+              <span class="text-sm text-toned">
+                {{ summary.paidDocuments.length }} encaissement(s) comptabilisé(s)
+              </span>
+            </div>
+
+            <div class="grid gap-2 sm:grid-cols-4">
+              <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+                  Total encaissé
+                </p>
+                <p class="text-sm font-semibold text-highlighted">
+                  {{ formatCurrency(summary.totalPaid) }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+                  Tickets ouverts
+                </p>
+                <p class="text-sm font-semibold text-highlighted">
+                  {{ summary.ticketStats.openCount }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+                  Ouverts
+                </p>
+                <p class="text-sm font-semibold text-highlighted">
+                  {{ summary.ticketStats.openedToday }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+                  Clôturés
+                </p>
+                <p class="text-sm font-semibold text-highlighted">
+                  {{ summary.ticketStats.closedToday }}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <UCard>
+        <div class="grid gap-4 xl:h-[calc(100vh-16.5rem)] xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
             <template #header>
-              <div>
-                <h2 class="text-lg font-semibold text-highlighted">
-                  Factures et reçus encaissés
-                </h2>
-                <p class="text-sm text-toned">
-                  Documents dont les encaissements sont attribués au jour sélectionné.
-                </p>
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h2 class="text-base font-semibold text-highlighted">
+                    Factures et reçus encaissés
+                  </h2>
+                </div>
+                <span class="text-xs text-toned">
+                  {{ summary.paidDocuments.length }} ligne(s)
+                </span>
               </div>
             </template>
 
-            <UTable
-              :data="summary.paidDocuments"
-              :columns="paidDocumentColumns"
-              sticky="header"
-              :ui="{
-                base: 'table-fixed border-separate border-spacing-0',
-                thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
-                tbody: '[&>tr]:last:[&>td]:border-b-0',
-                th: 'py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-                td: 'border-b border-default align-top',
-                separator: 'h-0'
-              }"
-            >
-              <template #empty>
-                <UEmpty
-                  icon="i-lucide-receipt"
-                  title="Aucun document encaissé"
-                  description="Aucun paiement n’a été comptabilisé à la date sélectionnée."
-                />
-              </template>
-            </UTable>
+            <div class="xl:max-h-[calc(100vh-22rem)] xl:overflow-auto pr-1">
+              <UTable
+                :data="summary.paidDocuments"
+                :columns="paidDocumentColumns"
+                sticky="header"
+                :ui="{
+                  base: 'table-fixed border-separate border-spacing-0',
+                  thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
+                  tbody: '[&>tr]:last:[&>td]:border-b-0',
+                  th: 'py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
+                  td: 'border-b border-default align-top',
+                  separator: 'h-0'
+                }"
+              >
+                <template #empty>
+                  <UEmpty
+                    icon="i-lucide-receipt"
+                    title="Aucun document encaissé"
+                    description="Aucun paiement n’a été comptabilisé à la date sélectionnée."
+                  />
+                </template>
+              </UTable>
+            </div>
           </UCard>
 
-          <div class="space-y-6">
-            <UCard>
+          <div class="space-y-4 xl:min-h-0 xl:overflow-y-auto pr-1">
+            <UCard :ui="{ body: 'space-y-3 p-4', header: 'p-4 pb-0' }">
               <template #header>
                 <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
+                  <h2 class="text-base font-semibold text-highlighted">
+                    Clôture
+                  </h2>
+                </div>
+              </template>
+
+              <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <div class="rounded-2xl border border-default bg-muted/20 px-4 py-3">
+                  <p class="text-xs uppercase tracking-wide text-toned">
+                    Total encaissé
+                  </p>
+                  <p class="mt-2 text-lg font-semibold text-highlighted">
+                    {{ formatCurrency(summary.totalPaid) }}
+                  </p>
+                </div>
+                <div class="rounded-2xl border border-default px-4 py-3">
+                  <p class="text-xs uppercase tracking-wide text-toned">
+                    Tickets ouverts
+                  </p>
+                  <p class="mt-1 font-semibold text-highlighted">
+                    {{ summary.ticketStats.openCount }}
+                  </p>
+                </div>
+                <div class="rounded-2xl border border-default px-4 py-3">
+                  <p class="text-xs uppercase tracking-wide text-toned">
+                    Ouverts aujourd’hui
+                  </p>
+                  <p class="mt-1 font-semibold text-highlighted">
+                    {{ summary.ticketStats.openedToday }}
+                  </p>
+                </div>
+                <div class="rounded-2xl border border-default px-4 py-3">
+                  <p class="text-xs uppercase tracking-wide text-toned">
+                    Clôturés aujourd’hui
+                  </p>
+                  <p class="mt-1 font-semibold text-highlighted">
+                    {{ summary.ticketStats.closedToday }}
+                  </p>
+                </div>
+              </div>
+            </UCard>
+
+            <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }">
+              <template #header>
+                <div>
+                  <h2 class="text-base font-semibold text-highlighted">
                     Par mode de paiement
                   </h2>
                 </div>
@@ -151,7 +241,7 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
               <UTable
                 :data="summary.totalsByMethod"
                 :columns="paymentMethodColumns"
-                :ui="{ td: 'align-top' }"
+                :ui="{ td: 'align-top', th: 'py-2' }"
               >
                 <template #empty>
                   <UEmpty
@@ -165,22 +255,19 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
               </UTable>
             </UCard>
 
-            <UCard>
+            <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }">
               <template #header>
                 <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
+                  <h2 class="text-base font-semibold text-highlighted">
                     Répartition du chiffre d’affaires
                   </h2>
-                  <p class="text-sm text-toned">
-                    Basée sur les lignes de documents encaissés pour le jour sélectionné.
-                  </p>
                 </div>
               </template>
 
               <UTable
                 :data="summary.turnoverByCategory"
                 :columns="turnoverColumns"
-                :ui="{ td: 'align-top' }"
+                :ui="{ td: 'align-top', th: 'py-2' }"
               >
                 <template #empty>
                   <UEmpty
