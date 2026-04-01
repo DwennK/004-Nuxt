@@ -2,6 +2,7 @@
 import type { TableColumn } from '@nuxt/ui'
 import { getPaginationRowModel } from '@tanstack/table-core'
 import { upperFirst } from 'scule'
+import type { LocationQueryValue } from 'vue-router'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
 import { catalogItemTypeColors, catalogItemTypeLabels } from '~~/shared/constants/pos'
 import type { CatalogItemRecord } from '~~/shared/types/pos'
@@ -10,6 +11,8 @@ import { formatCurrency } from '~~/shared/utils/pos'
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
+const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
@@ -59,8 +62,94 @@ const editingItemForm = computed(() => {
   }
 })
 
+function getQueryValue(value: LocationQueryValue | LocationQueryValue[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+function replaceCatalogQuery(updates: Record<string, string | null>) {
+  const nextQuery = Object.fromEntries(
+    Object.entries({
+      ...route.query,
+      ...updates
+    }).filter(([, value]) => value !== null)
+  )
+
+  return router.replace({ query: nextQuery })
+}
+
+function openCreateSlideover(options: { syncQuery?: boolean } = {}) {
+  const { syncQuery = true } = options
+
+  editingItem.value = null
+  editOpen.value = false
+  createOpen.value = true
+
+  if (syncQuery) {
+    void replaceCatalogQuery({ create: '1', edit: null })
+  }
+}
+
+function openEditSlideover(item: CatalogItemRecord, options: { syncQuery?: boolean } = {}) {
+  const { syncQuery = true } = options
+
+  editingItem.value = item
+  createOpen.value = false
+  editOpen.value = true
+
+  if (syncQuery) {
+    void replaceCatalogQuery({ edit: String(item.id), create: null })
+  }
+}
+
 watch([search, activeOnly], () => {
   pagination.value.pageIndex = 0
+})
+
+watch([items, () => route.query.edit, () => route.query.create], () => {
+  const createQuery = getQueryValue(route.query.create)
+  const editQuery = getQueryValue(route.query.edit)
+
+  if (createQuery) {
+    openCreateSlideover({ syncQuery: false })
+    return
+  }
+
+  if (editQuery) {
+    const item = (items.value || []).find(item => String(item.id) === editQuery)
+
+    if (item) {
+      openEditSlideover(item, { syncQuery: false })
+      return
+    }
+
+    if (items.value) {
+      createOpen.value = false
+      editOpen.value = false
+      editingItem.value = null
+      void replaceCatalogQuery({ edit: null })
+    }
+    return
+  }
+
+  createOpen.value = false
+  editOpen.value = false
+  editingItem.value = null
+}, { immediate: true })
+
+watch(createOpen, (open) => {
+  if (!open && getQueryValue(route.query.create)) {
+    void replaceCatalogQuery({ create: null })
+  }
+})
+
+watch(editOpen, (open) => {
+  if (!open) {
+    editingItem.value = null
+  }
+
+  if (!open && getQueryValue(route.query.edit)) {
+    void replaceCatalogQuery({ edit: null })
+  }
 })
 
 async function saveItem(payload: {
@@ -102,17 +191,10 @@ async function removeItem(id: number) {
 
 function getRowItems(item: CatalogItemRecord) {
   return [[{
-    label: 'Ouvrir l’article',
-    icon: 'i-lucide-arrow-up-right',
-    onSelect() {
-      navigateTo(`/catalog/${item.id}`)
-    }
-  }], [{
-    label: 'Modification rapide',
+    label: 'Modifier l’article',
     icon: 'i-lucide-pencil',
     onSelect() {
-      editingItem.value = item
-      editOpen.value = true
+      openEditSlideover(item)
     }
   }, {
     label: 'Supprimer',
@@ -223,11 +305,10 @@ function catalogItemColors(type: CatalogItemRecord['type']) {
         <template #right>
           <UButton
             icon="i-lucide-package-plus"
-            label="Article rapide"
+            label="Nouvel article"
             variant="subtle"
-            @click="createOpen = true"
+            @click="openCreateSlideover()"
           />
-          <UButton to="/catalog/new" icon="i-lucide-arrow-up-right" label="Fiche complète" />
         </template>
       </UDashboardNavbar>
 
@@ -306,7 +387,7 @@ function catalogItemColors(type: CatalogItemRecord['type']) {
             td: 'border-b border-default py-2 align-middle text-sm',
             separator: 'h-0'
           }"
-          @select="(_, row) => navigateTo(`/catalog/${row.original.id}`)"
+          @select="(_, row) => openEditSlideover(row.original)"
         >
           <template #empty>
             <UEmpty
@@ -335,7 +416,7 @@ function catalogItemColors(type: CatalogItemRecord['type']) {
 
   <PosCatalogItemSlideover
     v-model:open="createOpen"
-    title="Article rapide"
+    title="Nouvel article"
     description="Ajoutez un produit, service, pièce ou poste de main-d’œuvre sans quitter la liste."
     submit-label="Créer l’article"
     @save="saveItem"
