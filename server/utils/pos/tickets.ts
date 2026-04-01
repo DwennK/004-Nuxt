@@ -293,6 +293,7 @@ function getWorkflowActions(status: TicketStatus): TicketWorkflowAction[] {
 
 function getTicketCommercialSummary(documentRows: DocumentRecord[], paymentRows: PaymentRecord[]): TicketCommercialSummary {
   const quote = documentRows.find(document => document.type === 'quote') || null
+  const customerOrder = documentRows.find(document => document.type === 'customer_order') || null
   const invoice = documentRows.find(document => document.type === 'invoice') || null
   const latestDocument = documentRows[0] || null
   const payableDocuments = documentRows.filter(document =>
@@ -322,6 +323,7 @@ function getTicketCommercialSummary(documentRows: DocumentRecord[], paymentRows:
 
   return {
     quote,
+    customerOrder,
     invoice,
     latestDocument,
     payableDocument,
@@ -352,7 +354,7 @@ function getTicketWorkflowSummary(ticket: TicketRecord, commercialSummary: Ticke
       case 'new':
         return 'Lancer le diagnostic'
       case 'diagnosis':
-        return 'Établir le devis ou demander l’accord client'
+        return 'Établir le devis, la commande ou demander l’accord client'
       case 'awaiting_customer_approval':
         return 'Relancer le client ou enregistrer sa décision'
       case 'approved':
@@ -401,11 +403,11 @@ function buildSyntheticEvents(ticket: TicketRecord, documentRows: DocumentRecord
   for (const document of documentRows) {
     const label = document.type === 'quote'
       ? 'Devis créé'
-      : document.type === 'invoice'
-        ? 'Facture créée'
-        : document.type === 'receipt'
-          ? 'Reçu créé'
-          : 'Avoir créé'
+      : document.type === 'customer_order'
+        ? 'Commande créée'
+        : document.type === 'invoice'
+          ? 'Facture créée'
+          : 'Reçu créé'
 
     events.push({
       id: `synthetic-document-${document.id}`,
@@ -653,6 +655,21 @@ export async function createQuoteFromTicket(ticketId: number) {
     ticketId,
     issuedAt: new Date().toISOString(),
     notes: `Quote created from ${ticket.ticketNumber}.`,
+    lines: existingLines.length ? existingLines : buildFallbackLines(ticket)
+  })
+}
+
+export async function createCustomerOrderFromTicket(ticketId: number) {
+  const ticket = await getTicketById(ticketId)
+  const existingLines = await cloneDocumentLinesFromLatest(ticketId, 'quote')
+
+  return createDocumentRecord({
+    type: 'customer_order',
+    status: 'issued',
+    customerId: ticket.customerId,
+    ticketId,
+    issuedAt: new Date().toISOString(),
+    notes: `Commande créée depuis ${ticket.ticketNumber}.`,
     lines: existingLines.length ? existingLines : buildFallbackLines(ticket)
   })
 }

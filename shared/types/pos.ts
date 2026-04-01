@@ -16,6 +16,7 @@ export type TicketStatus = (typeof ticketStatuses)[number]
 export type TicketWorkflowStep = (typeof ticketWorkflowSteps)[number]
 export type DocumentType = (typeof documentTypes)[number]
 export type DocumentStatus = (typeof documentStatuses)[number]
+export type PrintProfile = 'a4' | 'thermal'
 export type PaymentMethod = (typeof paymentMethods)[number]
 export type PaymentStatus = (typeof paymentStatuses)[number]
 export type LineCategoryHint = (typeof lineCategoryHints)[number]
@@ -158,6 +159,7 @@ export interface TicketWorkflowSummary {
 
 export interface TicketCommercialSummary {
   quote: DocumentRecord | null
+  customerOrder: DocumentRecord | null
   invoice: DocumentRecord | null
   latestDocument: DocumentRecord | null
   payableDocument: DocumentRecord | null

@@ -304,6 +304,10 @@ const pagination = ref({
   pageIndex: 0,
   pageSize: 10
 })
+
+function handleImeiScan(value: string) {
+  model.value = value
+}
 </script>
 
 <template>
@@ -328,12 +332,20 @@ const pagination = ref({
 
     <template #body>
       <div class="flex flex-wrap items-center justify-between gap-1.5">
-        <UInput
-          v-model="model"
-          class="max-w-sm"
-          icon="i-lucide-search"
-          placeholder="Filtrer les modèles..."
-        />
+        <div class="flex gap-2">
+          <UInput
+            v-model="model"
+            class="max-w-sm"
+            icon="i-lucide-search"
+            placeholder="Filtrer par modèle ou IMEI..."
+          />
+          <PosBarcodeScanner
+            title="Scanner un IMEI"
+            description="Scannez le code-barres IMEI pour rechercher dans le stock."
+            trigger-aria-label="Scanner un IMEI"
+            @scanned="handleImeiScan"
+          />
+        </div>
 
         <div class="flex flex-wrap items-center gap-1.5">
           <SmartphonesDeleteModal
@@ -444,4 +456,5 @@ const pagination = ref({
       </div>
     </template>
   </UDashboardPanel>
+
 </template>

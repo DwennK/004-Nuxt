@@ -38,7 +38,7 @@ Still present in the repo as older/secondary modules:
 The project follows these rules:
 
 - a `ticket` is only for tracked work cases: repairs, diagnostics, follow-up support, or any case where the device is kept by the store
-- a `document` is the commercial object: quote, invoice, receipt, credit note
+- a `document` is the commercial object: quote, customer order, invoice, receipt
 - a `payment` is the cashflow object and is tracked separately
 - direct accessory sales do not require a ticket
 - quick support services do not require a ticket if there is no follow-up

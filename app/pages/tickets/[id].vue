@@ -22,6 +22,7 @@ import type {
   TicketEvent,
   TicketWorkflowAction
 } from '~~/shared/types/pos'
+import { supportsTicketPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
 type TimelineItem = TicketEvent & {
@@ -48,6 +49,14 @@ const [{ data: ticket, refresh: refreshTicket }, { data: customers }] = await Pr
   useFetch<CustomerRecord[]>('/api/customers')
 ])
 
+const activeTab = ref('suivi')
+
+const tabItems = computed(() => [
+  { label: 'Suivi', icon: 'i-lucide-clock', value: 'suivi' },
+  { label: 'Documents', icon: 'i-lucide-files', value: 'documents', badge: ticket.value?.documents.length || 0 },
+  { label: 'Client & Appareil', icon: 'i-lucide-user', value: 'client' }
+])
+
 const workflowStepIndex = computed(() => {
   if (!ticket.value) {
     return 0
@@ -64,6 +73,7 @@ const workflowStepItems = computed(() => ticketWorkflowSteps.map(step => ({
 
 const isTicketMutable = computed(() => ticket.value ? !['closed', 'cancelled'].includes(ticket.value.status) : false)
 const canCreateQuote = computed(() => isTicketMutable.value && !ticket.value?.commercialSummary.quote)
+const canCreateCustomerOrder = computed(() => isTicketMutable.value && !ticket.value?.commercialSummary.customerOrder)
 const canCreateInvoice = computed(() => isTicketMutable.value && !ticket.value?.commercialSummary.invoice)
 const payableDocument = computed(() => ticket.value?.commercialSummary.payableDocument || null)
 const canRecordPayment = computed(() =>
@@ -71,6 +81,7 @@ const canRecordPayment = computed(() =>
   && Boolean(payableDocument.value)
   && Boolean(ticket.value?.commercialSummary.balanceDue)
 )
+const supportsThermalPrint = supportsTicketPrintProfile('thermal')
 
 const documentColumns: TableColumn<TicketDetail['documents'][number]>[] = [
   {
@@ -166,7 +177,7 @@ function getEventDescription(event: TicketEvent) {
   }
 
   if (event.kind === 'ticket_closed') {
-    return 'Le dossier est terminé et ne demande plus d’action atelier.'
+    return 'Le dossier est terminé et ne demande plus d\'action atelier.'
   }
 
   if (event.kind === 'document_created') {
@@ -266,6 +277,18 @@ async function createQuote() {
   await refreshTicket()
 }
 
+async function createOrder() {
+  const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/order`, { method: 'POST' })
+
+  toast.add({
+    title: 'Commande créée',
+    description: `Document #${document.documentNumber}`,
+    color: 'success'
+  })
+
+  await refreshTicket()
+}
+
 async function createInvoice() {
   const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/invoice`, { method: 'POST' })
 
@@ -344,6 +367,14 @@ async function saveTicket(payload: {
 
         <template #right>
           <UButton
+            v-if="supportsThermalPrint"
+            :to="`/tickets/${id}/print`"
+            label="Imprimer ticket atelier"
+            icon="i-lucide-printer"
+            color="neutral"
+            variant="subtle"
+          />
+          <UButton
             label="Modifier le ticket"
             icon="i-lucide-pencil"
             color="neutral"
@@ -355,413 +386,366 @@ async function saveTicket(payload: {
     </template>
 
     <template #body>
-      <div v-if="ticket" class="space-y-6">
-        <UCard
-          variant="subtle"
-          :ui="{
-            root: 'rounded-3xl',
-            body: 'space-y-5 p-5 sm:p-6'
-          }"
-        >
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div class="space-y-3">
-              <div class="flex flex-wrap items-center gap-2">
-                <UBadge :color="ticketTypeColors[ticket.type]" variant="subtle">
-                  {{ ticketTypeLabels[ticket.type] }}
-                </UBadge>
-                <UBadge :color="ticketStatusColors[ticket.status]" variant="subtle">
-                  {{ ticket.workflow.currentStatusLabel }}
-                </UBadge>
-                <UBadge color="neutral" variant="outline">
-                  Étape · {{ ticket.workflow.stepLabel }}
-                </UBadge>
-              </div>
-
-              <div class="space-y-1">
-                <h1 class="text-2xl font-semibold text-highlighted">
-                  {{ ticket.brand || 'Appareil à préciser' }} {{ ticket.model || '' }}
-                </h1>
-                <p class="text-sm text-toned">
-                  {{ ticket.issueDescription }}
-                </p>
-              </div>
-
-              <UAlert
-                v-if="ticket.workflow.blockerLabel"
-                color="warning"
-                variant="soft"
-                icon="i-lucide-triangle-alert"
-                :title="ticket.workflow.blockerLabel"
-                description="Le ticket demande une action explicite avant de poursuivre normalement."
-              />
-            </div>
-
-            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div class="rounded-2xl border border-default bg-default px-4 py-3">
-                <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                  Prochaine action
-                </p>
-                <p class="mt-2 text-sm font-medium text-highlighted">
-                  {{ ticket.workflow.nextActionLabel }}
-                </p>
-              </div>
-
-              <div class="rounded-2xl border border-default bg-default px-4 py-3">
-                <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                  État commercial
-                </p>
-                <p class="mt-2 text-sm font-medium text-highlighted">
-                  {{ ticket.commercialSummary.paymentStateLabel }}
-                </p>
-              </div>
-
-              <div class="rounded-2xl border border-default bg-default px-4 py-3">
-                <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                  Encaissé
-                </p>
-                <p class="mt-2 text-sm font-medium text-highlighted">
-                  {{ formatCurrency(ticket.commercialSummary.totalPaid) }}
-                </p>
-              </div>
-
-              <div class="rounded-2xl border border-default bg-default px-4 py-3">
-                <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                  Restant
-                </p>
-                <p class="mt-2 text-sm font-medium text-highlighted">
-                  {{ formatCurrency(ticket.commercialSummary.balanceDue) }}
-                </p>
-              </div>
+      <div v-if="ticket" class="space-y-3">
+        <!-- Compact summary band -->
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div class="flex items-center gap-3">
+            <h1 class="text-xl font-semibold text-highlighted">
+              {{ ticket.brand || 'Appareil' }} {{ ticket.model || '' }}
+            </h1>
+            <div class="flex items-center gap-1.5">
+              <UBadge :color="ticketTypeColors[ticket.type]" variant="subtle" size="sm">
+                {{ ticketTypeLabels[ticket.type] }}
+              </UBadge>
+              <UBadge :color="ticketStatusColors[ticket.status]" variant="subtle" size="sm">
+                {{ ticket.workflow.currentStatusLabel }}
+              </UBadge>
             </div>
           </div>
 
-          <UStepper
-            :items="workflowStepItems"
-            :default-value="workflowStepIndex"
-            disabled
-            color="primary"
-          />
-        </UCard>
+          <USeparator orientation="vertical" class="hidden h-5 xl:block" />
 
-        <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1.2fr)_24rem]">
-          <div class="space-y-6">
-            <UCard :ui="{ body: 'space-y-5 p-5 sm:p-6' }">
-              <template #header>
-                <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
-                    Historique du dossier
-                  </h2>
-                  <p class="text-sm text-toned">
-                    Le ticket raconte maintenant ce qui s’est passé et pas seulement son statut courant.
-                  </p>
-                </div>
-              </template>
+          <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+            <span class="text-toned">
+              {{ ticket.workflow.nextActionLabel }}
+            </span>
+            <span class="text-toned">
+              {{ ticket.commercialSummary.paymentStateLabel }}
+            </span>
+            <span class="font-medium text-highlighted">
+              {{ formatCurrency(ticket.commercialSummary.totalPaid) }} encaissé
+            </span>
+            <span v-if="ticket.commercialSummary.balanceDue" class="font-medium text-warning">
+              {{ formatCurrency(ticket.commercialSummary.balanceDue) }} restant
+            </span>
+          </div>
+        </div>
 
-              <UTimeline
-                :items="timelineItems"
-                color="primary"
-              >
-                <template #wrapper="{ item }">
-                  <div class="space-y-2 rounded-2xl border border-default bg-default p-4">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                      <div class="space-y-1">
-                        <p class="font-medium text-highlighted">
-                          {{ item.title }}
+        <p class="line-clamp-2 text-sm text-toned">
+          {{ ticket.issueDescription }}
+        </p>
+
+        <UAlert
+          v-if="ticket.workflow.blockerLabel"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-triangle-alert"
+          :title="ticket.workflow.blockerLabel"
+        />
+
+        <UStepper
+          :items="workflowStepItems"
+          :default-value="workflowStepIndex"
+          disabled
+          color="primary"
+          size="sm"
+        />
+
+        <!-- Main two-column layout -->
+        <div class="grid items-start gap-4 xl:h-[calc(100vh-19rem)] xl:grid-cols-[minmax(0,1fr)_18rem]">
+          <!-- Left: tabbed content -->
+          <div class="xl:min-h-0">
+            <UTabs
+              v-model="activeTab"
+              :items="tabItems"
+              variant="link"
+              :content="false"
+            />
+
+            <div class="mt-4 xl:h-[calc(100vh-23rem)]">
+              <!-- Suivi tab -->
+              <div v-if="activeTab === 'suivi'" class="xl:h-full xl:overflow-y-auto pr-1">
+                <UTimeline
+                  :items="timelineItems"
+                  color="primary"
+                >
+                  <template #wrapper="{ item: event }">
+                    <div class="space-y-2 rounded-xl border border-default bg-default p-3">
+                      <div class="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p class="text-sm font-medium text-highlighted">
+                            {{ event.title }}
+                          </p>
+                          <p class="text-xs text-toned">
+                            {{ event.date }}
+                          </p>
+                        </div>
+                        <UBadge
+                          v-if="event.isSynthetic"
+                          color="neutral"
+                          variant="outline"
+                          size="xs"
+                        >
+                          Reconstruit
+                        </UBadge>
+                      </div>
+
+                      <p class="text-sm text-toned">
+                        {{ event.description }}
+                      </p>
+
+                      <div v-if="event.note" class="rounded-lg border border-default bg-muted/30 px-3 py-2">
+                        <p class="text-xs text-toned">
+                          Note
                         </p>
-                        <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                          {{ item.date }}
+                        <p class="text-sm text-highlighted">
+                          {{ event.note }}
                         </p>
                       </div>
 
-                      <UBadge
-                        v-if="item.isSynthetic"
+                      <UButton
+                        v-if="getEventDocumentId(event)"
+                        :to="`/documents/${getEventDocumentId(event)}`"
+                        label="Ouvrir le document"
+                        icon="i-lucide-arrow-up-right"
+                        size="xs"
                         color="neutral"
-                        variant="outline"
-                        size="sm"
-                      >
-                        Historique reconstruit
-                      </UBadge>
+                        variant="soft"
+                      />
                     </div>
+                  </template>
+                </UTimeline>
+              </div>
 
-                    <p class="text-sm text-toned">
-                      {{ item.description }}
-                    </p>
-
-                    <div v-if="item.note" class="rounded-xl border border-default bg-muted/30 p-3">
-                      <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                        Note
-                      </p>
-                      <p class="mt-1 text-sm text-highlighted">
-                        {{ item.note }}
-                      </p>
+              <!-- Documents tab -->
+              <div v-else-if="activeTab === 'documents'" class="grid gap-4 xl:h-full xl:grid-cols-[minmax(0,1fr)_18rem]">
+                <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
+                  <template #header>
+                    <div class="flex items-center justify-between gap-3">
+                      <h3 class="text-sm font-medium text-highlighted">
+                        Documents liés
+                      </h3>
+                      <span class="text-xs text-toned">
+                        {{ ticket.documents.length }} document(s)
+                      </span>
                     </div>
+                  </template>
 
-                    <UButton
-                      v-if="getEventDocumentId(item)"
-                      :to="`/documents/${getEventDocumentId(item)}`"
-                      label="Ouvrir le document"
-                      icon="i-lucide-arrow-up-right"
-                      size="sm"
-                      color="neutral"
-                      variant="soft"
-                    />
+                  <div class="xl:max-h-[calc(100vh-28rem)] xl:overflow-auto pr-1">
+                    <UTable :data="ticket.documents" :columns="documentColumns" sticky="header">
+                      <template #empty>
+                        <UEmpty
+                          icon="i-lucide-files"
+                          title="Aucun document lié"
+                          description="Créez un devis, une commande ou une facture depuis les actions."
+                        />
+                      </template>
+                    </UTable>
                   </div>
-                </template>
-              </UTimeline>
-            </UCard>
+                </UCard>
 
-            <div class="grid gap-6 xl:grid-cols-2">
-              <UCard>
-                <template #header>
-                  <div>
-                    <h2 class="text-lg font-semibold text-highlighted">
-                      Documents liés
-                    </h2>
-                    <p class="text-sm text-toned">
-                      Le devis et la facture restent séparés, mais leur état reste visible depuis le ticket.
+                <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
+                  <template #header>
+                    <div class="flex items-center justify-between gap-3">
+                      <h3 class="text-sm font-medium text-highlighted">
+                        Paiements
+                      </h3>
+                      <span class="text-xs text-toned">
+                        {{ ticket.payments.length }} paiement(s)
+                      </span>
+                    </div>
+                  </template>
+
+                  <div class="xl:max-h-[calc(100vh-28rem)] xl:overflow-auto pr-1">
+                    <UTable :data="ticket.payments" :columns="paymentColumns" sticky="header">
+                      <template #empty>
+                        <UEmpty
+                          icon="i-lucide-wallet"
+                          title="Aucun paiement"
+                          description="Les paiements enregistrés apparaîtront ici."
+                        />
+                      </template>
+                    </UTable>
+                  </div>
+                </UCard>
+              </div>
+
+              <!-- Client tab -->
+              <div v-else-if="activeTab === 'client'" class="space-y-4 text-sm xl:h-full xl:overflow-y-auto pr-1">
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div class="rounded-xl border border-default p-4">
+                    <p class="text-xs uppercase tracking-[0.14em] text-toned">
+                      Client
+                    </p>
+                    <p class="mt-2 font-medium text-highlighted">
+                      {{ ticket.customer.displayName }}
+                    </p>
+                    <p class="text-toned">
+                      {{ ticket.customer.phone || 'Pas de téléphone' }}
+                    </p>
+                    <p class="text-toned">
+                      {{ ticket.customer.email || 'Pas d\'e-mail' }}
                     </p>
                   </div>
-                </template>
 
-                <UTable :data="ticket.documents" :columns="documentColumns" sticky="header">
-                  <template #empty>
-                    <UEmpty
-                      icon="i-lucide-files"
-                      title="Aucun document lié"
-                      description="Créez un devis ou une facture depuis la colonne d’actions."
-                    />
-                  </template>
-                </UTable>
-              </UCard>
-
-              <UCard>
-                <template #header>
-                  <div>
-                    <h2 class="text-lg font-semibold text-highlighted">
-                      Paiements liés
-                    </h2>
-                    <p class="text-sm text-toned">
-                      Les encaissements du dossier apparaissent directement dans la même vue.
+                  <div class="rounded-xl border border-default p-4">
+                    <p class="text-xs uppercase tracking-[0.14em] text-toned">
+                      Appareil
                     </p>
+                    <p class="mt-2 font-medium text-highlighted">
+                      {{ ticket.brand || 'Marque ?' }} {{ ticket.model || '' }}
+                    </p>
+                    <div class="mt-1 space-y-0.5 text-toned">
+                      <p>IMEI: {{ ticket.imei || '—' }}</p>
+                      <p>S/N: {{ ticket.serialNumber || '—' }}</p>
+                      <p>Accès: {{ ticket.accessCode || '—' }}</p>
+                      <p>SIM: {{ ticket.simCode || '—' }}</p>
+                    </div>
                   </div>
-                </template>
-
-                <UTable :data="ticket.payments" :columns="paymentColumns" sticky="header">
-                  <template #empty>
-                    <UEmpty
-                      icon="i-lucide-wallet"
-                      title="Aucun paiement lié"
-                      description="Les paiements enregistrés sur les documents liés apparaîtront ici."
-                    />
-                  </template>
-                </UTable>
-              </UCard>
-            </div>
-
-            <UCard v-if="editOpen">
-              <template #header>
-                <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
-                    Modifier les informations du ticket
-                  </h2>
-                  <p class="text-sm text-toned">
-                    Édition détaillée du ticket, séparée de la lecture opérationnelle du dossier.
-                  </p>
                 </div>
-              </template>
 
-              <PosTicketForm
-                :customers="customers || []"
-                :initial-value="ticket"
-                submit-label="Enregistrer les modifications"
-                @save="saveTicket"
-              />
-            </UCard>
+                <div class="flex gap-4 text-xs text-toned">
+                  <span>Ouvert le {{ formatDateTime(ticket.openedAt) }}</span>
+                  <span>MAJ {{ formatDateTime(ticket.updatedAt) }}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="space-y-6 xl:sticky xl:top-4">
-            <UCard>
+          <!-- Right: compact sticky sidebar -->
+          <div class="space-y-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-19rem)] xl:overflow-y-auto pr-1">
+            <!-- Workflow actions -->
+            <UCard :ui="{ body: 'p-3 sm:p-3 space-y-2' }">
               <template #header>
-                <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
-                    Actions du ticket
-                  </h2>
-                  <p class="text-sm text-toned">
-                    Les prochaines actions utiles dépendent du statut courant et de l’état commercial du dossier.
-                  </p>
-                </div>
+                <h2 class="text-sm font-semibold text-highlighted">
+                  Actions
+                </h2>
               </template>
 
-              <div class="space-y-3">
-                <template v-if="ticket.workflow.actions.length">
-                  <UButton
-                    v-for="action in ticket.workflow.actions"
-                    :key="action.id"
-                    :label="action.label"
-                    :description="action.description"
-                    :icon="action.icon"
-                    :color="action.color"
-                    variant="soft"
-                    block
-                    class="justify-start"
-                    @click="openWorkflowAction(action)"
-                  />
-                </template>
-
-                <UAlert
-                  v-else
-                  color="neutral"
+              <template v-if="ticket.workflow.actions.length">
+                <UButton
+                  v-for="action in ticket.workflow.actions"
+                  :key="action.id"
+                  :label="action.label"
+                  :icon="action.icon"
+                  :color="action.color"
                   variant="soft"
-                  icon="i-lucide-check-check"
-                  title="Aucune action de suivi"
-                  description="Le ticket n’a plus de progression atelier disponible."
+                  size="sm"
+                  block
+                  class="justify-start"
+                  @click="openWorkflowAction(action)"
                 />
-              </div>
+              </template>
+
+              <UAlert
+                v-else
+                color="neutral"
+                variant="soft"
+                icon="i-lucide-check-check"
+                title="Aucune action de suivi"
+                description="Plus de progression atelier disponible."
+              />
             </UCard>
 
-            <UCard>
+            <!-- Commercial -->
+            <UCard :ui="{ body: 'p-3 sm:p-3 space-y-2' }">
               <template #header>
-                <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
-                    Dossier commercial
-                  </h2>
-                </div>
+                <h2 class="text-sm font-semibold text-highlighted">
+                  Commercial
+                </h2>
               </template>
 
-              <div class="space-y-3">
-                <div class="rounded-2xl border border-default px-4 py-3">
-                  <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                    Devis courant
-                  </p>
-                  <div class="mt-2 flex items-center justify-between gap-3">
-                    <div>
-                      <p class="font-medium text-highlighted">
-                        {{ ticket.commercialSummary.quote?.documentNumber || 'Aucun devis' }}
-                      </p>
-                      <p class="text-sm text-toned">
-                        {{ ticket.commercialSummary.quote ? documentStatusLabels[ticket.commercialSummary.quote.status] : 'Pas encore créé' }}
-                      </p>
-                    </div>
-                    <UButton
-                      v-if="ticket.commercialSummary.quote"
-                      :to="`/documents/${ticket.commercialSummary.quote.id}`"
-                      icon="i-lucide-arrow-up-right"
-                      color="neutral"
-                      variant="ghost"
-                    />
+              <div class="space-y-2 text-sm">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-xs text-toned">
+                      Devis
+                    </p>
+                    <p class="font-medium text-highlighted">
+                      {{ ticket.commercialSummary.quote?.documentNumber || '—' }}
+                    </p>
                   </div>
-                </div>
-
-                <div class="rounded-2xl border border-default px-4 py-3">
-                  <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                    Facture courante
-                  </p>
-                  <div class="mt-2 flex items-center justify-between gap-3">
-                    <div>
-                      <p class="font-medium text-highlighted">
-                        {{ ticket.commercialSummary.invoice?.documentNumber || 'Aucune facture' }}
-                      </p>
-                      <p class="text-sm text-toned">
-                        {{ ticket.commercialSummary.invoice ? `${documentStatusLabels[ticket.commercialSummary.invoice.status]} · ${formatCurrency(ticket.commercialSummary.invoice.total)}` : 'Pas encore émise' }}
-                      </p>
-                    </div>
-                    <UButton
-                      v-if="ticket.commercialSummary.invoice"
-                      :to="`/documents/${ticket.commercialSummary.invoice.id}`"
-                      icon="i-lucide-arrow-up-right"
-                      color="neutral"
-                      variant="ghost"
-                    />
-                  </div>
-                </div>
-
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                   <UButton
-                    v-if="canCreateQuote"
-                    label="Créer un devis"
-                    icon="i-lucide-scroll-text"
-                    variant="soft"
-                    block
-                    class="justify-start"
-                    @click="createQuote"
-                  />
-
-                  <UButton
-                    v-if="canCreateInvoice"
-                    label="Créer une facture"
-                    icon="i-lucide-receipt"
-                    block
-                    class="justify-start"
-                    @click="createInvoice"
-                  />
-
-                  <UButton
-                    v-if="canRecordPayment"
-                    label="Enregistrer un paiement"
-                    icon="i-lucide-wallet"
-                    color="success"
-                    variant="soft"
-                    block
-                    class="justify-start"
-                    @click="paymentOpen = true"
-                  />
-
-                  <UButton
-                    v-if="ticket.commercialSummary.latestDocument"
-                    :to="`/documents/${ticket.commercialSummary.latestDocument.id}`"
-                    label="Ouvrir le dernier document"
+                    v-if="ticket.commercialSummary.quote"
+                    :to="`/documents/${ticket.commercialSummary.quote.id}`"
                     icon="i-lucide-arrow-up-right"
                     color="neutral"
                     variant="ghost"
-                    block
-                    class="justify-start"
+                    size="xs"
+                  />
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-xs text-toned">
+                      Commande
+                    </p>
+                    <p class="font-medium text-highlighted">
+                      {{ ticket.commercialSummary.customerOrder?.documentNumber || '—' }}
+                    </p>
+                  </div>
+                  <UButton
+                    v-if="ticket.commercialSummary.customerOrder"
+                    :to="`/documents/${ticket.commercialSummary.customerOrder.id}`"
+                    icon="i-lucide-arrow-up-right"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                  />
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-xs text-toned">
+                      Facture
+                    </p>
+                    <p class="font-medium text-highlighted">
+                      {{ ticket.commercialSummary.invoice?.documentNumber || '—' }}
+                    </p>
+                  </div>
+                  <UButton
+                    v-if="ticket.commercialSummary.invoice"
+                    :to="`/documents/${ticket.commercialSummary.invoice.id}`"
+                    icon="i-lucide-arrow-up-right"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
                   />
                 </div>
               </div>
-            </UCard>
 
-            <UCard>
-              <template #header>
-                <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
-                    Client et appareil
-                  </h2>
-                </div>
-              </template>
-
-              <div class="space-y-4 text-sm text-toned">
-                <div>
-                  <p class="font-medium text-highlighted">
-                    {{ ticket.customer.displayName }}
-                  </p>
-                  <p>{{ ticket.customer.phone || 'Téléphone non renseigné' }}</p>
-                  <p>{{ ticket.customer.email || 'E-mail non renseigné' }}</p>
-                </div>
-
-                <div class="rounded-2xl border border-default bg-muted/20 p-4">
-                  <p class="font-medium text-highlighted">
-                    {{ ticket.brand || 'Marque non définie' }} {{ ticket.model || '' }}
-                  </p>
-                  <p>IMEI: {{ ticket.imei || 'Aucun IMEI' }}</p>
-                  <p>S/N: {{ ticket.serialNumber || 'Aucun numéro de série' }}</p>
-                  <p>Accès: {{ ticket.accessCode || 'Aucun code d’accès' }}</p>
-                  <p>SIM: {{ ticket.simCode || 'Aucun code SIM' }}</p>
-                </div>
-
-                <div class="rounded-2xl border border-default p-4">
-                  <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                    Ouvert le
-                  </p>
-                  <p class="mt-1 font-medium text-highlighted">
-                    {{ formatDateTime(ticket.openedAt) }}
-                  </p>
-                  <p class="mt-3 text-xs uppercase tracking-[0.14em] text-toned">
-                    Dernière mise à jour
-                  </p>
-                  <p class="mt-1 font-medium text-highlighted">
-                    {{ formatDateTime(ticket.updatedAt) }}
-                  </p>
-                </div>
+              <div class="space-y-1.5">
+                <UButton
+                  v-if="canCreateQuote"
+                  label="Créer un devis"
+                  icon="i-lucide-scroll-text"
+                  variant="soft"
+                  size="sm"
+                  block
+                  class="justify-start"
+                  @click="createQuote"
+                />
+                <UButton
+                  v-if="canCreateCustomerOrder"
+                  label="Créer une commande"
+                  icon="i-lucide-clipboard-plus"
+                  color="warning"
+                  variant="soft"
+                  size="sm"
+                  block
+                  class="justify-start"
+                  @click="createOrder"
+                />
+                <UButton
+                  v-if="canCreateInvoice"
+                  label="Créer une facture"
+                  icon="i-lucide-receipt"
+                  size="sm"
+                  block
+                  class="justify-start"
+                  @click="createInvoice"
+                />
+                <UButton
+                  v-if="canRecordPayment"
+                  label="Encaisser"
+                  icon="i-lucide-wallet"
+                  color="success"
+                  variant="soft"
+                  size="sm"
+                  block
+                  class="justify-start"
+                  @click="paymentOpen = true"
+                />
               </div>
             </UCard>
           </div>
@@ -783,4 +767,21 @@ async function saveTicket(payload: {
     :balance-due="ticket?.commercialSummary.balanceDue || 0"
     @save="markPaid"
   />
+
+  <USlideover
+    v-model:open="editOpen"
+    title="Modifier le ticket"
+    description="Modifier les informations du ticket."
+    :ui="{ content: 'max-w-xl' }"
+  >
+    <template #body>
+      <PosTicketForm
+        v-if="ticket"
+        :customers="customers || []"
+        :initial-value="ticket"
+        submit-label="Enregistrer les modifications"
+        @save="saveTicket"
+      />
+    </template>
+  </USlideover>
 </template>

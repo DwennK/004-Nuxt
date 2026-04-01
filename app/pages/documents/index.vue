@@ -10,7 +10,7 @@ import {
   documentTypeLabels
 } from '~~/shared/constants/pos'
 import type { DocumentListItem } from '~~/shared/types/pos'
-import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
+import { formatCurrency, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
@@ -143,13 +143,15 @@ const columns: TableColumn<DocumentListItem>[] = [
     header: 'Total TTC',
     cell: ({ row }) => h('div', { class: 'space-y-1 text-right' }, [
       h('p', { class: 'font-medium text-highlighted' }, formatCurrency(row.original.total)),
-      h('p', { class: 'text-sm text-toned' }, `Encaissé ${formatCurrency(row.original.paidAmount)}`)
+      h('p', { class: 'text-sm text-toned' }, isPayableDocumentType(row.original.type)
+        ? `Encaissé ${formatCurrency(row.original.paidAmount)}`
+        : 'Non encaissable')
     ])
   },
   {
     accessorKey: 'balanceDue',
     header: 'Reste à payer',
-    cell: ({ row }) => formatCurrency(row.original.balanceDue)
+    cell: ({ row }) => isPayableDocumentType(row.original.type) ? formatCurrency(row.original.balanceDue) : '—'
   },
   {
     accessorKey: 'issuedAt',
@@ -183,7 +185,7 @@ const columns: TableColumn<DocumentListItem>[] = [
         </template>
 
         <template #right>
-          <UButton to="/documents/new" icon="i-lucide-file-plus-2" label="Facture / reçu direct" />
+          <UButton to="/documents/new" icon="i-lucide-file-plus-2" label="Nouveau document" />
         </template>
       </UDashboardNavbar>
 

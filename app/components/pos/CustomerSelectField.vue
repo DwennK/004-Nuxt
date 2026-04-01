@@ -151,6 +151,22 @@ function hardenSearchInput() {
   input.spellcheck = false
 }
 
+function releasePageScrollIfSafe() {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const hasOpenDialog = Boolean(document.querySelector('[role="dialog"][data-state="open"]'))
+
+  if (hasOpenDialog) {
+    return
+  }
+
+  document.body.style.removeProperty('overflow')
+  document.body.style.removeProperty('padding-right')
+  document.documentElement.style.removeProperty('overflow')
+}
+
 watch(menuOpen, async (open) => {
   if (!open) {
     return
@@ -160,6 +176,21 @@ watch(menuOpen, async (open) => {
   requestAnimationFrame(() => {
     hardenSearchInput()
   })
+})
+
+watch(createOpen, async (open) => {
+  if (open) {
+    return
+  }
+
+  await nextTick()
+  requestAnimationFrame(() => {
+    releasePageScrollIfSafe()
+  })
+})
+
+onBeforeUnmount(() => {
+  releasePageScrollIfSafe()
 })
 </script>
 

@@ -59,6 +59,27 @@ Prefer semantic UI tokens and utilities over raw Tailwind palette classes when p
 
 Do not make the UI bland just to be safe. Strong hierarchy, dense professional layouts, and clear workflows are good. Match the existing app rather than defaulting to generic admin boilerplate.
 
+### POS UX Preferences
+
+Default to practical, dense POS interfaces rather than spacious dashboard layouts.
+
+- Keep the main task visible in the viewport whenever reasonably possible, especially on desktop.
+- Prefer local scroll inside tables, lists, and side panels over long page-level scrolling.
+- Make the primary work surface obvious:
+  - sale flow: cart first
+  - ticket flow: current operational state first
+  - document flow: overview / lines / payments, not decorative panels
+- Avoid duplicate information across the same screen. If an action already exists in the header, it usually should not consume a full tab or card again.
+- Prefer read mode by default and move full editing into slideovers, modals, or explicit edit actions when that improves density.
+- Hide secondary or fallback UI until needed:
+  - quick picks can be contextual
+  - search results can live in a dropdown / combobox instead of a permanent block
+  - advanced options should stay collapsed unless actively used
+- Reduce large explanatory text. Short labels, good defaults, and visible actions are preferred over long helper copy.
+- When designing a two-column layout, the center/left area should hold the primary object being manipulated; the right rail should stay secondary and action-oriented.
+- For cart, line-item, and POS operator views, compact icon actions are preferred for reorder / clone / delete when they remain understandable.
+- Treat empty states carefully: do not let them create large dead zones if the screen can instead surface the next likely action.
+
 ## Domain Rules
 
 Respect the POS model described in `README.md`:

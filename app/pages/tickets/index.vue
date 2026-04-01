@@ -59,6 +59,13 @@ async function createQuote(ticketId: number) {
   await navigateTo(`/documents/${document.id}`)
 }
 
+async function createOrder(ticketId: number) {
+  const document = await $fetch<DocumentDetail>(`/api/tickets/${ticketId}/order`, { method: 'POST' })
+  toast.add({ title: 'Commande créée', color: 'success' })
+  await refresh()
+  await navigateTo(`/documents/${document.id}`)
+}
+
 async function createInvoice(ticketId: number) {
   const document = await $fetch<DocumentDetail>(`/api/tickets/${ticketId}/invoice`, { method: 'POST' })
   toast.add({ title: 'Facture créée', color: 'success' })
@@ -84,6 +91,12 @@ function getRowItems(ticket: TicketListItem) {
     icon: 'i-lucide-scroll-text',
     onSelect() {
       createQuote(ticket.id)
+    }
+  }, {
+    label: 'Créer une commande',
+    icon: 'i-lucide-clipboard-plus',
+    onSelect() {
+      createOrder(ticket.id)
     }
   }, {
     label: 'Créer une facture',

@@ -50,21 +50,19 @@ async function saveTicket(payload: {
     </template>
 
     <template #body>
-      <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-4">
-        <div class="flex flex-wrap items-start justify-between gap-3 rounded-3xl border border-default bg-default/80 px-4 py-4 shadow-sm sm:px-5">
-          <div class="space-y-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <h1 class="text-xl font-semibold text-highlighted">
-                Réparation rapide
-              </h1>
-              <UBadge color="warning" variant="subtle" size="sm">
-                Comptoir atelier
-              </UBadge>
-            </div>
-            <p class="text-sm text-toned">
-              Dites le modèle et la panne comme au comptoir, annoncez le prix, prenez les coordonnées, créez le ticket.
-            </p>
+      <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-default/80 bg-muted/20 px-4 py-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <UBadge color="warning" variant="subtle" size="sm">
+              Comptoir atelier
+            </UBadge>
+            <span class="text-sm text-toned">
+              Saisie dense: appareil, panne, client, création.
+            </span>
           </div>
+          <span class="text-xs text-toned">
+            Les détails avancés restent optionnels.
+          </span>
         </div>
 
         <PosTicketForm

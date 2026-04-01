@@ -14,6 +14,7 @@ import type {
   DocumentRecord,
   PaymentRecord
 } from '~~/shared/types/pos'
+import { isPayableDocumentType } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
 import {
   calculateDocumentTotals,
@@ -78,12 +79,12 @@ function getDocumentCreatedLabel(type: DocumentRecord['type']) {
   switch (type) {
     case 'quote':
       return 'Devis créé'
+    case 'customer_order':
+      return 'Commande créée'
     case 'invoice':
       return 'Facture créée'
     case 'receipt':
       return 'Reçu créé'
-    case 'credit_note':
-      return 'Avoir créé'
   }
 }
 
@@ -150,7 +151,7 @@ export async function listDocuments(filters?: {
     customerName: row.customerCompanyName || `${row.customerFirstName} ${row.customerLastName}`,
     ticketNumber: row.ticketNumber,
     paidAmount: Number(row.paidAmount || 0),
-    balanceDue: row.total - Number(row.paidAmount || 0)
+    balanceDue: isPayableDocumentType(row.type) ? row.total - Number(row.paidAmount || 0) : 0
   }))
 }
 
@@ -272,7 +273,7 @@ export async function createDocumentRecord(input: {
 
   const detail = await getDocumentById(document.id)
 
-  if (detail.ticketId && (detail.type === 'quote' || detail.type === 'invoice')) {
+  if (detail.ticketId && (detail.type === 'quote' || detail.type === 'customer_order' || detail.type === 'invoice')) {
     await createTicketEvent({
       ticketId: detail.ticketId,
       kind: 'document_created',
@@ -332,6 +333,13 @@ export async function updateDocumentRecord(id: number, input: {
     throw createError({
       statusCode: 404,
       statusMessage: 'Document not found'
+    })
+  }
+
+  if (!isPayableDocumentType(document.type)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'This document type cannot be paid directly'
     })
   }
 

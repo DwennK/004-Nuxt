@@ -10,7 +10,7 @@ import {
   lineCategoryLabels
 } from '~~/shared/constants/pos'
 import type { CatalogItemRecord, CustomerRecord, DocumentDetail, DocumentStatus, DocumentType } from '~~/shared/types/pos'
-import { formatCurrency, getCatalogItemTypeLabel } from '~~/shared/utils/pos'
+import { formatCurrency, getCatalogItemTypeLabel, isPayableDocumentType } from '~~/shared/utils/pos'
 
 type EditableLinePayload = {
   catalogItemId: number | null
@@ -34,7 +34,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   initialValue: () => ({}),
   submitLabel: 'Enregistrer le document',
-  allowedTypes: () => ['quote', 'invoice', 'receipt', 'credit_note'],
+  allowedTypes: () => ['quote', 'customer_order', 'invoice', 'receipt'],
   fixedCustomerId: null,
   fixedTicketId: null
 })
@@ -96,10 +96,12 @@ const documentTypeItems = computed(() => props.allowedTypes.map(type => ({
   value: type
 })))
 
-const documentStatusItems = documentStatuses.map(status => ({
-  label: documentStatusLabels[status],
-  value: status
-}))
+const documentStatusItems = computed(() => documentStatuses
+  .filter(status => isPayableDocumentType(state.type) || status !== 'paid')
+  .map(status => ({
+    label: documentStatusLabels[status],
+    value: status
+  })))
 
 const categoryItems = lineCategoryHints.map(category => ({
   label: lineCategoryLabels[category],
@@ -203,6 +205,12 @@ watchEffect(() => {
     : [createLine()]
 })
 
+watch(() => state.type, (type) => {
+  if (!isPayableDocumentType(type) && state.status === 'paid') {
+    state.status = 'issued'
+  }
+})
+
 const totals = computed(() => {
   const total = state.lines.reduce((sum, line) => {
     return sum + Math.round((line.quantity || 0) * (line.unitPrice || 0) * 100)
@@ -279,6 +287,30 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       categoryHint: line.categoryHint || null
     }))
   })
+}
+
+function handleBarcodeScan(value: string) {
+  const match = props.catalogItems.find((item) => {
+    return item.sku?.toLowerCase() === value.toLowerCase()
+      || item.name.toLowerCase() === value.toLowerCase()
+  })
+
+  if (match) {
+    const newLine = createLine()
+    newLine.catalogItemId = match.id
+    newLine.label = match.name
+    newLine.unitPrice = match.defaultPrice / 100
+    newLine.vatRate = match.vatRate
+    newLine.categoryHint = match.type === 'product' ? 'accessory' : match.type === 'service' ? 'service' : 'repair'
+
+    const emptyIndex = state.lines.findIndex(line => !line.label && !line.catalogItemId)
+
+    if (emptyIndex >= 0) {
+      state.lines[emptyIndex] = newLine
+    } else {
+      state.lines.push(newLine)
+    }
+  }
 }
 
 function selectAllOnFocus(event: FocusEvent) {
@@ -366,12 +398,21 @@ function selectAllOnFocus(event: FocusEvent) {
             </p>
           </div>
 
-          <UButton
-            icon="i-lucide-plus"
-            label="Ajouter une ligne"
-            variant="subtle"
-            @click="addLine"
-          />
+          <div class="flex gap-2">
+            <PosBarcodeScanner
+              trigger-label="Scanner"
+              title="Scanner un article"
+              description="Scannez le code-barres d'un article pour l'ajouter comme ligne."
+              trigger-aria-label="Scanner un article"
+              @scanned="handleBarcodeScan"
+            />
+            <UButton
+              icon="i-lucide-plus"
+              label="Ajouter une ligne"
+              variant="subtle"
+              @click="addLine"
+            />
+          </div>
         </div>
       </template>
 

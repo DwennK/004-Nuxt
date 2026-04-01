@@ -759,7 +759,7 @@ async function seedOperations() {
   }
 
   const repairTicket = await db.insert(tickets).values({
-    ticketNumber: 'TIC-2026-0001',
+    ticketNumber: 'TIC-1',
     customerId: repairCustomer.id,
     type: 'repair',
     status: 'in_progress',
@@ -820,7 +820,7 @@ async function seedOperations() {
   }])
 
   const quote = await db.insert(documents).values({
-    documentNumber: 'QUO-2026-0001',
+    documentNumber: 'DE-1',
     type: 'quote',
     status: 'issued',
     customerId: repairCustomer.id,
@@ -835,7 +835,7 @@ async function seedOperations() {
   }).returning()
 
   const receipt = await db.insert(documents).values({
-    documentNumber: 'REC-2026-0001',
+    documentNumber: 'RE-1',
     type: 'receipt',
     status: 'paid',
     customerId: accessoryCustomer.id,
@@ -850,7 +850,7 @@ async function seedOperations() {
   }).returning()
 
   const supportInvoice = await db.insert(documents).values({
-    documentNumber: 'INV-2026-0001',
+    documentNumber: 'FA-1',
     type: 'invoice',
     status: 'paid',
     customerId: supportCustomer.id,
@@ -983,8 +983,7 @@ export async function ensurePosSchema() {
 export async function generateTicketNumber() {
   await ensurePosSchema()
 
-  const year = new Date().getFullYear()
-  const prefix = `TIC-${year}-`
+  const prefix = 'TIC-'
   const db = useDb()
   const latest = await db.select({ ticketNumber: tickets.ticketNumber })
     .from(tickets)
@@ -995,14 +994,13 @@ export async function generateTicketNumber() {
   const lastNumber = latest[0]?.ticketNumber?.split('-').pop()
   const sequence = (lastNumber ? Number(lastNumber) : 0) + 1
 
-  return `${prefix}${String(sequence).padStart(4, '0')}`
+  return `${prefix}${sequence}`
 }
 
 export async function generateDocumentNumber(type: DocumentType) {
   await ensurePosSchema()
 
-  const year = new Date().getFullYear()
-  const prefix = `${documentTypePrefixes[type]}-${year}-`
+  const prefix = `${documentTypePrefixes[type]}-`
   const db = useDb()
   const latest = await db.select({ documentNumber: documents.documentNumber })
     .from(documents)
@@ -1013,7 +1011,7 @@ export async function generateDocumentNumber(type: DocumentType) {
   const lastNumber = latest[0]?.documentNumber?.split('-').pop()
   const sequence = (lastNumber ? Number(lastNumber) : 0) + 1
 
-  return `${prefix}${String(sequence).padStart(4, '0')}`
+  return `${prefix}${sequence}`
 }
 
 export async function createTicketEvent(input: {

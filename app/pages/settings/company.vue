@@ -156,7 +156,7 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
       <UFormField
         name="name"
         label="Nom"
-        description="Nom commercial affiché sur les devis, factures, reçus et avoirs."
+        description="Nom commercial affiché sur les devis, commandes, factures et reçus."
         required
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { documentTypeLabels, paymentMethodLabels } from '~~/shared/constants/pos'
 import type { CatalogItemRecord, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
+import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency } from '~~/shared/utils/pos'
 
 type SaleLine = {
@@ -30,6 +31,9 @@ const lines = ref<SaleLine[]>([])
 const isSaving = ref<PaymentMethod | null>(null)
 const lastCreatedDocument = ref<DocumentDetail | null>(null)
 const customerPool = ref<CustomerRecord[]>([])
+const searchOpen = ref(false)
+const highlightedItemIndex = ref(0)
+let searchCloseTimeout: ReturnType<typeof setTimeout> | null = null
 
 const [{ data: customers }, { data: catalogItems }] = await Promise.all([
   useFetch<CustomerRecord[]>('/api/customers'),
@@ -72,6 +76,14 @@ const filteredItems = computed(() => {
   }).slice(0, 10)
 })
 
+const searchPanelItems = computed(() => {
+  return search.value.trim() ? filteredItems.value : quickPickItems.value
+})
+
+const searchPanelTitle = computed(() => {
+  return search.value.trim() ? 'Résultats' : 'Raccourcis comptoir'
+})
+
 const totals = computed(() => {
   const total = lines.value.reduce((sum, line) => sum + (line.quantity * line.unitPrice), 0)
   const taxAmount = lines.value.reduce((sum, line) => {
@@ -91,10 +103,6 @@ const totals = computed(() => {
   }
 })
 
-const selectedCustomer = computed(() => {
-  return customerPool.value.find(customer => customer.id === selectedCustomerId.value) || null
-})
-
 const canCharge = computed(() => {
   if (!lines.value.length) {
     return false
@@ -105,6 +113,28 @@ const canCharge = computed(() => {
   }
 
   return !attachCustomer.value || Boolean(selectedCustomerId.value)
+})
+
+watch(searchPanelItems, (items) => {
+  if (!items.length) {
+    highlightedItemIndex.value = 0
+    return
+  }
+
+  if (highlightedItemIndex.value >= items.length) {
+    highlightedItemIndex.value = 0
+  }
+})
+
+watch(search, (value) => {
+  highlightedItemIndex.value = 0
+
+  if (value.trim()) {
+    openSearchPanel()
+    return
+  }
+
+  cancelSearchClose()
 })
 
 function getCategoryHint(item: CatalogItemRecord): SaleLine['categoryHint'] {
@@ -135,6 +165,9 @@ function addCatalogItem(item: CatalogItemRecord) {
     vatRate: item.vatRate,
     categoryHint: getCategoryHint(item)
   })
+
+  closeSearchPanel()
+  search.value = ''
 }
 
 function incrementLine(index: number) {
@@ -156,15 +189,145 @@ function decrementLine(index: number) {
   line.quantity -= 1
 }
 
-function addFirstMatch() {
-  const item = filteredItems.value[0]
+function removeLine(index: number) {
+  if (!lines.value[index]) {
+    return
+  }
 
-  if (!item) {
+  lines.value.splice(index, 1)
+}
+
+function cloneLine(index: number) {
+  const line = lines.value[index]
+
+  if (!line) {
+    return
+  }
+
+  lines.value.splice(index + 1, 0, {
+    ...line
+  })
+}
+
+function moveLine(index: number, direction: 'up' | 'down') {
+  const targetIndex = direction === 'up' ? index - 1 : index + 1
+
+  if (!lines.value[index] || targetIndex < 0 || targetIndex >= lines.value.length) {
+    return
+  }
+
+  const [line] = lines.value.splice(index, 1)
+
+  if (!line) {
+    return
+  }
+
+  lines.value.splice(targetIndex, 0, line)
+}
+
+function addFirstMatch() {
+  const item = searchPanelItems.value[highlightedItemIndex.value] || filteredItems.value[0]
+
+  if (!item || !search.value.trim()) {
     return
   }
 
   addCatalogItem(item)
-  search.value = ''
+}
+
+function openSearchPanel() {
+  cancelSearchClose()
+  searchOpen.value = true
+}
+
+function closeSearchPanel() {
+  cancelSearchClose()
+  searchOpen.value = false
+  highlightedItemIndex.value = 0
+}
+
+function scheduleSearchClose() {
+  cancelSearchClose()
+  searchCloseTimeout = setTimeout(() => {
+    searchOpen.value = false
+    highlightedItemIndex.value = 0
+  }, 120)
+}
+
+function cancelSearchClose() {
+  if (searchCloseTimeout) {
+    clearTimeout(searchCloseTimeout)
+    searchCloseTimeout = null
+  }
+}
+
+function highlightNextResult() {
+  if (!searchPanelItems.value.length) {
+    return
+  }
+
+  highlightedItemIndex.value = (highlightedItemIndex.value + 1) % searchPanelItems.value.length
+}
+
+function highlightPreviousResult() {
+  if (!searchPanelItems.value.length) {
+    return
+  }
+
+  highlightedItemIndex.value = highlightedItemIndex.value <= 0
+    ? searchPanelItems.value.length - 1
+    : highlightedItemIndex.value - 1
+}
+
+function handleSearchKeydown(event: KeyboardEvent) {
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    openSearchPanel()
+    highlightNextResult()
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    openSearchPanel()
+    highlightPreviousResult()
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeSearchPanel()
+    return
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    addFirstMatch()
+  }
+}
+
+function handleBarcodeScan(value: string) {
+  const match = activeItems.value.find((item) => {
+    return item.sku?.toLowerCase() === value.toLowerCase()
+      || item.name.toLowerCase() === value.toLowerCase()
+  })
+
+  if (match) {
+    addCatalogItem(match)
+    toast.add({
+      title: 'Article scanné',
+      description: `${match.name} ajouté au panier.`,
+      color: 'success'
+    })
+  } else {
+    search.value = value
+    openSearchPanel()
+    toast.add({
+      title: 'Code scanné',
+      description: `Aucun article trouvé pour "${value}". Résultats filtrés.`,
+      color: 'warning'
+    })
+  }
 }
 
 async function ensureCounterCustomer() {
@@ -192,6 +355,7 @@ async function ensureCounterCustomer() {
 
 function resetSaleState() {
   search.value = ''
+  closeSearchPanel()
   lines.value = []
   receiptAttachCustomer.value = false
   selectedCustomerId.value = saleType.value === 'invoice' ? selectedCustomerId.value : null
@@ -274,23 +438,7 @@ async function completeSale(method: PaymentMethod) {
     </template>
 
     <template #body>
-      <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-5">
-        <div class="flex flex-wrap items-start justify-between gap-3 rounded-3xl border border-default bg-default/80 px-4 py-4 shadow-sm sm:px-5">
-          <div class="space-y-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <h1 class="text-xl font-semibold text-highlighted">
-                Vente comptoir
-              </h1>
-              <UBadge color="success" variant="subtle" size="sm">
-                Reçu par défaut
-              </UBadge>
-            </div>
-            <p class="text-sm text-toned">
-              Recherchez un article, ajoutez-le au panier, encaissez avec le mode de paiement choisi. Le client reste optionnel tant qu’il ne demande pas de facture nominative.
-            </p>
-          </div>
-        </div>
-
+      <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-4">
         <UAlert
           v-if="lastCreatedDocument"
           color="success"
@@ -302,113 +450,126 @@ async function completeSale(method: PaymentMethod) {
           <template #actions>
             <div class="flex flex-wrap gap-2">
               <UButton
-                :to="`/documents/${lastCreatedDocument.id}/print`"
-                label="Aperçu imprimable"
+                :to="`/documents/${lastCreatedDocument.id}/print?profile=a4`"
+                label="Imprimer A4"
+                size="sm"
+              />
+              <UButton
+                v-if="supportsDocumentPrintProfile(lastCreatedDocument.type, 'thermal')"
+                :to="`/documents/${lastCreatedDocument.id}/print?profile=thermal`"
+                label="Imprimer thermique"
+                color="neutral"
+                variant="soft"
                 size="sm"
               />
               <UButton
                 :to="`/documents/${lastCreatedDocument.id}`"
                 label="Voir le document"
                 color="neutral"
-                variant="soft"
+                variant="ghost"
                 size="sm"
               />
             </div>
           </template>
         </UAlert>
 
-        <div class="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div class="space-y-5">
+        <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div class="space-y-4">
             <UCard
               variant="subtle"
               :ui="{
-                root: 'rounded-3xl',
-                body: 'space-y-5 p-4 sm:p-5',
-                header: 'p-4 pb-0 sm:p-5 sm:pb-0'
+                root: 'overflow-visible rounded-[2rem] shadow-sm',
+                body: 'space-y-4 p-4 sm:p-4',
+                header: 'p-4 pb-0 sm:p-4 sm:pb-0'
               }"
             >
               <template #header>
-                <div class="space-y-1">
-                  <h2 class="text-base font-semibold text-highlighted">
-                    Article / recherche
-                  </h2>
-                  <p class="text-sm text-toned">
-                    La recherche garde le focus. `Entrée` ajoute le premier résultat.
-                  </p>
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div class="space-y-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h2 class="text-base font-semibold text-highlighted">
+                        Recherche article
+                      </h2>
+                      <UBadge color="neutral" variant="soft" size="sm">
+                        Entrée ajoute le premier résultat
+                      </UBadge>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-toned">
+                    <span>{{ lines.length ? `${lines.length} ligne(s)` : 'Panier vide' }}</span>
+                    <span>{{ formatCurrency(totals.total) }}</span>
+                  </div>
                 </div>
               </template>
 
-              <UInput
-                v-model="search"
-                icon="i-lucide-search"
-                class="w-full"
-                placeholder="cable, coque, chargeur, verre..."
-                autofocus
-                @keydown.enter.prevent="addFirstMatch"
-              />
-
-              <div class="space-y-3">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="text-sm font-medium text-highlighted">
-                    Raccourcis comptoir
-                  </h3>
-                  <span class="text-xs text-toned">
-                    {{ quickPickItems.length ? `${quickPickItems.length} article(s)` : 'Configurez les raccourcis dans le catalogue' }}
-                  </span>
+              <div
+                class="relative"
+                @focusin="cancelSearchClose"
+                @focusout="scheduleSearchClose"
+                @pointerdown="openSearchPanel"
+              >
+                <div class="flex gap-2">
+                  <UInput
+                    v-model="search"
+                    icon="i-lucide-search"
+                    size="xl"
+                    class="flex-1"
+                    placeholder="cable, coque, chargeur, verre..."
+                    autofocus
+                    @keydown="handleSearchKeydown"
+                  />
+                  <PosBarcodeScanner
+                    title="Scanner un article"
+                    description="Scannez le code-barres ou QR code d'un article pour l'ajouter au panier."
+                    trigger-size="lg"
+                    trigger-aria-label="Scanner un code-barres"
+                    @scanned="handleBarcodeScan"
+                  />
                 </div>
 
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <UButton
-                    v-for="item in quickPickItems"
-                    :key="item.id"
-                    type="button"
-                    color="neutral"
-                    variant="soft"
-                    class="h-auto min-h-20 justify-start rounded-2xl px-4 py-3 text-left"
-                    @click="addCatalogItem(item)"
-                  >
-                    <div class="space-y-1">
-                      <p class="font-medium text-highlighted">
-                        {{ item.name }}
-                      </p>
-                      <p class="text-xs text-toned">
-                        {{ formatCurrency(item.defaultPrice) }}
-                      </p>
-                    </div>
-                  </UButton>
-                </div>
-              </div>
-
-              <div class="space-y-3">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="text-sm font-medium text-highlighted">
-                    Résultats
-                  </h3>
-                  <span class="text-xs text-toned">
-                    {{ filteredItems.length }} résultat(s)
-                  </span>
-                </div>
-
-                <div class="space-y-2">
-                  <button
-                    v-for="item in filteredItems"
-                    :key="item.id"
-                    type="button"
-                    class="flex w-full items-center justify-between rounded-2xl border border-default bg-default/70 px-4 py-3 text-left transition hover:border-primary/30 hover:bg-primary/5"
-                    @click="addCatalogItem(item)"
-                  >
-                    <div class="min-w-0">
-                      <p class="truncate text-sm font-medium text-highlighted">
-                        {{ item.name }}
-                      </p>
-                      <p class="truncate text-xs text-toned">
-                        {{ item.sku || 'Sans SKU' }}
-                      </p>
-                    </div>
-                    <span class="shrink-0 text-sm font-medium text-highlighted">
-                      {{ formatCurrency(item.defaultPrice) }}
+                <div
+                  v-if="searchOpen"
+                  class="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
+                >
+                  <div class="flex items-center justify-between gap-3 px-2 pb-2">
+                    <p class="text-sm font-medium text-highlighted">
+                      {{ searchPanelTitle }}
+                    </p>
+                    <span class="text-xs text-toned">
+                      {{ searchPanelItems.length }} article(s)
                     </span>
-                  </button>
+                  </div>
+
+                  <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
+                    <button
+                      v-for="(item, index) in searchPanelItems"
+                      :key="item.id"
+                      type="button"
+                      class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
+                      :class="index === highlightedItemIndex
+                        ? 'bg-primary/8 ring-1 ring-primary/20'
+                        : 'hover:bg-muted/60'"
+                      @mouseenter="highlightedItemIndex = index"
+                      @click="addCatalogItem(item)"
+                    >
+                      <div class="min-w-0">
+                        <p class="truncate text-sm font-medium text-highlighted">
+                          {{ item.name }}
+                        </p>
+                        <p class="truncate text-xs text-toned">
+                          {{ item.sku || 'Raccourci comptoir' }}
+                        </p>
+                      </div>
+                      <span class="shrink-0 text-sm font-medium text-highlighted">
+                        {{ formatCurrency(item.defaultPrice) }}
+                      </span>
+                    </button>
+                  </div>
+
+                  <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                    Aucun article trouvé pour cette recherche.
+                  </div>
                 </div>
               </div>
             </UCard>
@@ -416,19 +577,29 @@ async function completeSale(method: PaymentMethod) {
             <UCard
               variant="subtle"
               :ui="{
-                root: 'rounded-3xl',
-                body: 'space-y-4 p-4 sm:p-5',
-                header: 'p-4 pb-0 sm:p-5 sm:pb-0'
+                root: 'rounded-[2rem] shadow-sm',
+                body: 'space-y-4 p-4 sm:p-4',
+                header: 'p-4 pb-0 sm:p-4 sm:pb-0'
               }"
             >
               <template #header>
-                <div class="space-y-1">
-                  <h2 class="text-base font-semibold text-highlighted">
-                    Panier
-                  </h2>
-                  <p class="text-sm text-toned">
-                    Ajustez les quantités sans quitter l’écran.
-                  </p>
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 class="text-base font-semibold text-highlighted">
+                      Panier
+                    </h2>
+                    <p class="text-sm text-toned">
+                      {{ lines.length ? `${lines.length} ligne(s)` : 'Ajoutez un article via la recherche.' }}
+                    </p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+                      Total
+                    </p>
+                    <p class="text-2xl font-semibold text-highlighted">
+                      {{ formatCurrency(totals.total) }}
+                    </p>
+                  </div>
                 </div>
               </template>
 
@@ -436,31 +607,32 @@ async function completeSale(method: PaymentMethod) {
                 v-if="!lines.length"
                 icon="i-lucide-shopping-bag"
                 title="Panier vide"
-                description="Ajoutez un article rapide ou utilisez la recherche."
+                description="Lancez une recherche ou scannez un article."
+                class="py-8"
               />
 
-              <div v-else class="space-y-3">
+              <div v-else class="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
                 <div
                   v-for="(line, index) in lines"
                   :key="`${line.catalogItemId || line.label}-${index}`"
-                  class="flex items-center gap-3 rounded-2xl border border-default bg-default/70 px-4 py-3"
+                  class="grid gap-3 rounded-2xl border border-default bg-default px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto_auto_auto]"
                 >
-                  <div class="min-w-0 flex-1">
+                  <div class="min-w-0">
                     <p class="truncate text-sm font-medium text-highlighted">
                       {{ line.label }}
                     </p>
-                    <p class="text-xs text-toned">
-                      {{ formatCurrency(line.unitPrice) }} · TVA {{ line.vatRate }}%
+                    <p class="mt-1 text-xs text-toned">
+                      {{ formatCurrency(line.unitPrice) }} l’unité
                     </p>
                   </div>
 
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-1">
                     <UButton
                       type="button"
                       icon="i-lucide-minus"
                       color="neutral"
                       variant="soft"
-                      size="sm"
+                      size="xs"
                       @click="decrementLine(index)"
                     />
                     <span class="w-8 text-center text-sm font-medium text-highlighted">
@@ -471,36 +643,87 @@ async function completeSale(method: PaymentMethod) {
                       icon="i-lucide-plus"
                       color="neutral"
                       variant="soft"
-                      size="sm"
+                      size="xs"
                       @click="incrementLine(index)"
                     />
                   </div>
 
-                  <div class="w-24 text-right text-sm font-semibold text-highlighted">
-                    {{ formatCurrency(line.quantity * line.unitPrice) }}
+                  <div class="text-left md:w-28 md:text-right">
+                    <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+                      Ligne
+                    </p>
+                    <p class="text-lg font-semibold text-highlighted">
+                      {{ formatCurrency(line.quantity * line.unitPrice) }}
+                    </p>
+                  </div>
+
+                  <div class="flex items-center justify-end gap-1 md:w-34">
+                    <UButton
+                      type="button"
+                      icon="i-lucide-arrow-up"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      :disabled="index === 0"
+                      :aria-label="`Monter ${line.label}`"
+                      @click="moveLine(index, 'up')"
+                    />
+                    <UButton
+                      type="button"
+                      icon="i-lucide-arrow-down"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      :disabled="index === lines.length - 1"
+                      :aria-label="`Descendre ${line.label}`"
+                      @click="moveLine(index, 'down')"
+                    />
+                    <UButton
+                      type="button"
+                      icon="i-lucide-copy"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      :aria-label="`Cloner ${line.label}`"
+                      @click="cloneLine(index)"
+                    />
+                    <UButton
+                      type="button"
+                      icon="i-lucide-trash-2"
+                      color="error"
+                      variant="ghost"
+                      size="xs"
+                      :aria-label="`Supprimer ${line.label}`"
+                      @click="removeLine(index)"
+                    />
                   </div>
                 </div>
               </div>
             </UCard>
           </div>
 
-          <div class="space-y-5 xl:sticky xl:top-4">
+          <div class="space-y-4 xl:sticky xl:top-3">
             <UCard
               variant="subtle"
               :ui="{
-                root: 'rounded-3xl shadow-sm',
-                body: 'space-y-5 p-4 sm:p-5',
-                header: 'p-4 pb-0 sm:p-5 sm:pb-0'
+                root: 'rounded-[2rem] shadow-sm',
+                body: 'space-y-4 p-4 sm:p-4',
+                header: 'p-4 pb-0 sm:p-4 sm:pb-0'
               }"
             >
               <template #header>
-                <div class="space-y-1">
-                  <h2 class="text-base font-semibold text-highlighted">
-                    Encaissement
-                  </h2>
-                  <p class="text-sm text-toned">
-                    Choisissez le document, puis cliquez directement sur le mode de paiement.
-                  </p>
+                <div class="flex items-start justify-between gap-3">
+                  <div class="space-y-1">
+                    <h2 class="text-base font-semibold text-highlighted">
+                      Encaissement
+                    </h2>
+                    <p class="text-sm text-toned">
+                      Type de document, client éventuel, puis paiement direct.
+                    </p>
+                  </div>
+                  <UBadge color="primary" variant="soft" size="sm">
+                    {{ lines.length ? `${lines.length} ligne(s)` : 'Panier vide' }}
+                  </UBadge>
                 </div>
               </template>
 
@@ -527,7 +750,6 @@ async function completeSale(method: PaymentMethod) {
                 v-if="saleType === 'receipt'"
                 label="Client nominatif"
                 name="attachCustomer"
-                description="Activez seulement si le client veut apparaître sur le document."
               >
                 <USwitch v-model="attachCustomer" label="Associer un client à ce reçu" />
               </UFormField>
@@ -547,7 +769,7 @@ async function completeSale(method: PaymentMethod) {
                 />
               </UFormField>
 
-              <div class="space-y-2 rounded-2xl border border-default bg-default/70 p-4">
+              <div class="space-y-2 rounded-2xl border border-default bg-default/70 px-4 py-3">
                 <div class="flex items-center justify-between gap-3 text-sm">
                   <span class="text-toned">Sous-total HT</span>
                   <span class="font-medium text-highlighted">{{ formatCurrency(totals.subtotal) }}</span>
@@ -562,12 +784,12 @@ async function completeSale(method: PaymentMethod) {
                 </div>
               </div>
 
-              <div class="space-y-3">
+              <div class="space-y-2">
                 <h3 class="text-sm font-medium text-highlighted">
                   Paiement direct
                 </h3>
 
-                <div class="grid gap-2">
+                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                   <UButton
                     v-for="method in ['cash', 'card', 'twint', 'bank_transfer']"
                     :key="method"
@@ -576,14 +798,11 @@ async function completeSale(method: PaymentMethod) {
                     :icon="isSaving === method ? 'i-lucide-loader-circle' : 'i-lucide-badge-check'"
                     :loading="isSaving === method"
                     :disabled="!canCharge || Boolean(isSaving)"
+                    size="lg"
                     class="justify-center"
                     @click="completeSale(method as PaymentMethod)"
                   />
                 </div>
-              </div>
-
-              <div class="rounded-2xl border border-dashed border-default px-4 py-3 text-xs text-toned">
-                {{ selectedCustomer?.displayName || 'Client comptoir automatique si aucun client n’est associé.' }}
               </div>
             </UCard>
           </div>

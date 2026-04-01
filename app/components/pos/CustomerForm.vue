@@ -2,6 +2,7 @@
 import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import type { CustomerFormValue, CustomerUpsertInput } from '~~/shared/types/pos'
+import type { PostalCodeLookupResult } from '~~/shared/types/lookups'
 
 const props = withDefaults(defineProps<{
   initialValue?: Partial<CustomerUpsertInput>
@@ -82,6 +83,14 @@ const state = reactive<CustomerFormValue>({
   notes: ''
 })
 
+const postalCodeSuggestions = ref<string[]>([])
+const isPostalCodeLookupPending = ref(false)
+const lastAutoFilledCity = ref<string | null>(null)
+const normalizedPostalCode = computed(() => state.postalCode.replace(/\D+/g, '').slice(0, 4))
+const shouldShowPostalCodeSuggestions = computed(() => postalCodeSuggestions.value.length > 1)
+
+let postalCodeLookupRequestId = 0
+
 watchEffect(() => {
   const displayName = props.initialValue.displayName
     || [props.initialValue.firstName, props.initialValue.lastName].filter(Boolean).join(' ').trim()
@@ -99,6 +108,85 @@ watchEffect(() => {
   state.city = props.initialValue.city || ''
   state.notes = props.initialValue.notes || ''
 })
+
+watch(() => state.postalCode, (value) => {
+  const sanitizedPostalCode = value.replace(/\D+/g, '').slice(0, 4)
+
+  if (value !== sanitizedPostalCode) {
+    state.postalCode = sanitizedPostalCode
+  }
+})
+
+watch(() => state.city, (value) => {
+  if (lastAutoFilledCity.value && value !== lastAutoFilledCity.value) {
+    lastAutoFilledCity.value = null
+  }
+})
+
+const lookupPostalCode = useDebounceFn(async (postalCode: string) => {
+  const requestId = ++postalCodeLookupRequestId
+
+  isPostalCodeLookupPending.value = true
+
+  try {
+    const result = await $fetch<PostalCodeLookupResult>('/api/lookups/postal-codes', {
+      query: { postalCode }
+    })
+
+    if (requestId !== postalCodeLookupRequestId) {
+      return
+    }
+
+    postalCodeSuggestions.value = result.localities
+
+    const currentCity = state.city.trim()
+    const canAutoFillCity = !currentCity || currentCity === lastAutoFilledCity.value
+
+    if (result.localities.length === 1 && canAutoFillCity) {
+      state.city = result.localities[0]!
+      lastAutoFilledCity.value = result.localities[0]!
+      return
+    }
+
+    if (currentCity && lastAutoFilledCity.value === currentCity && !result.localities.includes(currentCity)) {
+      state.city = ''
+      lastAutoFilledCity.value = null
+    }
+  } catch {
+    if (requestId !== postalCodeLookupRequestId) {
+      return
+    }
+
+    postalCodeSuggestions.value = []
+  } finally {
+    if (requestId === postalCodeLookupRequestId) {
+      isPostalCodeLookupPending.value = false
+    }
+  }
+}, 200)
+
+watch(normalizedPostalCode, (postalCode) => {
+  postalCodeLookupRequestId += 1
+
+  if (postalCode.length !== 4) {
+    postalCodeSuggestions.value = []
+    isPostalCodeLookupPending.value = false
+
+    if (lastAutoFilledCity.value && state.city === lastAutoFilledCity.value) {
+      state.city = ''
+      lastAutoFilledCity.value = null
+    }
+
+    return
+  }
+
+  lookupPostalCode(postalCode)
+}, { immediate: true })
+
+function applySuggestedCity(city: string) {
+  state.city = city
+  lastAutoFilledCity.value = city
+}
 
 function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
   emit('save', {
@@ -262,11 +350,37 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
         <USeparator />
         <div class="grid gap-4 md:grid-cols-2">
           <UFormField label="Code postal" name="postalCode" hint="Optionnel">
-            <UInput v-model="state.postalCode" class="w-full" />
+            <UInput
+              v-model="state.postalCode"
+              class="w-full"
+              inputmode="numeric"
+              maxlength="4"
+              autocomplete="off"
+              placeholder="1003"
+            />
           </UFormField>
 
           <UFormField label="Ville" name="city" hint="Optionnel">
-            <UInput v-model="state.city" class="w-full" />
+            <div class="space-y-2">
+              <UInput v-model="state.city" class="w-full" autocomplete="off" />
+
+              <div v-if="isPostalCodeLookupPending" class="text-xs text-toned">
+                Recherche des localités du NPA…
+              </div>
+
+              <div v-else-if="shouldShowPostalCodeSuggestions" class="flex flex-wrap gap-2">
+                <UButton
+                  v-for="city in postalCodeSuggestions"
+                  :key="city"
+                  type="button"
+                  color="neutral"
+                  variant="soft"
+                  size="xs"
+                  :label="city"
+                  @click="applySuggestedCity(city)"
+                />
+              </div>
+            </div>
           </UFormField>
         </div>
       </UPageCard>
@@ -317,11 +431,37 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
 
       <div class="grid gap-4 md:grid-cols-2">
         <UFormField label="Code postal" name="postalCode" hint="Optionnel">
-          <UInput v-model="state.postalCode" class="w-full" />
+          <UInput
+            v-model="state.postalCode"
+            class="w-full"
+            inputmode="numeric"
+            maxlength="4"
+            autocomplete="off"
+            placeholder="1003"
+          />
         </UFormField>
 
         <UFormField label="Ville" name="city" hint="Optionnel">
-          <UInput v-model="state.city" class="w-full" />
+          <div class="space-y-2">
+            <UInput v-model="state.city" class="w-full" autocomplete="off" />
+
+            <div v-if="isPostalCodeLookupPending" class="text-xs text-toned">
+              Recherche des localités du NPA…
+            </div>
+
+            <div v-else-if="shouldShowPostalCodeSuggestions" class="flex flex-wrap gap-2">
+              <UButton
+                v-for="city in postalCodeSuggestions"
+                :key="city"
+                type="button"
+                color="neutral"
+                variant="soft"
+                size="xs"
+                :label="city"
+                @click="applySuggestedCity(city)"
+              />
+            </div>
+          </div>
         </UFormField>
       </div>
 

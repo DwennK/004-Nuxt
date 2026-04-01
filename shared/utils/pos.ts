@@ -2,6 +2,7 @@ import {
   catalogItemTypeLabels,
   documentStatusLabels,
   documentTypeLabels,
+  payableDocumentTypes,
   lineCategoryLabels,
   paymentMethodLabels,
   paymentStatusLabels,
@@ -134,6 +135,10 @@ export function getTicketStatusLabel(value: TicketStatus) {
 
 export function getDocumentTypeLabel(value: DocumentType) {
   return documentTypeLabels[value]
+}
+
+export function isPayableDocumentType(value: DocumentType) {
+  return payableDocumentTypes.includes(value as (typeof payableDocumentTypes)[number])
 }
 
 export function getDocumentStatusLabel(value: DocumentStatus) {

@@ -159,23 +159,6 @@ const deviceSummary = computed(() => {
   return value || 'Appareil à préciser'
 })
 
-const openedAtSummary = computed(() => {
-  if (!state.openedAt) {
-    return 'À définir'
-  }
-
-  const date = new Date(state.openedAt)
-
-  if (Number.isNaN(date.getTime())) {
-    return 'À définir'
-  }
-
-  return new Intl.DateTimeFormat('fr-CH', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(date)
-})
-
 const completionItems = computed(() => {
   return [
     {
@@ -237,6 +220,14 @@ function handleCustomerCreated(customer: CustomerRecord) {
   createdCustomer.value = customer
 }
 
+function handleImeiScan(value: string) {
+  state.imei = value
+
+  if (!advancedOpen.value && props.layout === 'intake') {
+    advancedOpen.value = true
+  }
+}
+
 function applyRepairSuggestion(suggestion: RepairSuggestion) {
   intakeQuery.value = `${suggestion.model} ${suggestion.issueLabel}`
   state.brand = suggestion.brand
@@ -251,127 +242,132 @@ function applyRepairSuggestion(suggestion: RepairSuggestion) {
     :id="formId"
     :schema="schema"
     :state="state"
-    :class="props.layout === 'page' ? 'space-y-4' : 'space-y-5'"
+    :class="props.layout === 'page' ? 'space-y-4' : props.layout === 'intake' ? 'space-y-4' : 'space-y-5'"
     @submit="onSubmit"
   >
     <template v-if="props.layout === 'intake'">
-      <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6">
-        <div class="space-y-5">
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-3xl',
-              body: 'space-y-5 p-4 sm:p-5',
-              header: 'p-4 pb-0 sm:p-5 sm:pb-0'
-            }"
-          >
-            <template #header>
+      <div class="space-y-4">
+        <UCard
+          variant="subtle"
+          :ui="{
+            root: 'rounded-[2rem] shadow-sm',
+            body: 'space-y-4 p-4 sm:p-4',
+            header: 'p-4 pb-0 sm:p-4 sm:pb-0'
+          }"
+        >
+          <template #header>
+            <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="space-y-1">
                 <div class="flex flex-wrap items-center gap-2">
                   <h2 class="text-base font-semibold text-highlighted">
-                    Appareil / panne
+                    Saisie comptoir
                   </h2>
                   <UBadge color="warning" variant="subtle" size="sm">
                     Réparation rapide
                   </UBadge>
+                  <UBadge :color="ticketStatusColors[state.status]" variant="soft" size="sm">
+                    {{ ticketStatusLabels[state.status] }}
+                  </UBadge>
                 </div>
                 <p class="text-sm text-toned">
-                  Tapez comme au comptoir: modèle + panne. Le ticket se préremplit dès qu’un tarif connu est reconnu.
+                  Modèle + panne, puis client. Le reste vient après si nécessaire.
                 </p>
               </div>
-            </template>
 
-            <UFormField
-              label="Saisie rapide"
-              name="intakeQuery"
-              description="Ex. iphone 14 ecran, s23 ultra batterie, iphone 15 port charge"
-            >
-              <UInput
-                v-model="intakeQuery"
-                icon="i-lucide-scan-search"
-                class="w-full"
-                placeholder="iphone 14 ecran"
-                autofocus
-              />
-            </UFormField>
-
-            <div class="flex flex-wrap gap-2">
-              <UButton
-                v-for="hint in repairSearchButtons"
-                :key="hint.key"
-                type="button"
-                color="neutral"
-                variant="soft"
-                size="sm"
-                :label="hint.label"
-                @click="hint.action()"
-              />
-            </div>
-
-            <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]">
-              <div class="space-y-4">
-                <div class="grid gap-4 md:grid-cols-2">
-                  <UFormField label="Marque" name="brand" hint="Auto ou manuel">
-                    <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
-                  </UFormField>
-
-                  <UFormField label="Modèle" name="model" hint="Auto ou manuel">
-                    <UInput v-model="state.model" class="w-full" placeholder="iPhone 14, Galaxy S23..." />
-                  </UFormField>
-                </div>
-
-                <UFormField
-                  label="Problème constaté"
-                  name="issueDescription"
-                  required
-                >
-                  <UTextarea
-                    v-model="state.issueDescription"
-                    class="w-full"
-                    :rows="3"
-                    placeholder="Ex. écran fissuré, batterie faible, port de charge endommagé..."
-                  />
-                </UFormField>
-              </div>
-
-              <div class="rounded-3xl border border-primary/20 bg-primary/5 p-4">
-                <p class="text-xs uppercase tracking-[0.14em] text-primary/80">
-                  Prix suggéré
-                </p>
-                <p class="mt-2 text-2xl font-semibold text-highlighted">
-                  {{ quotedPrice }}
-                </p>
-                <p class="mt-1 text-sm text-toned">
-                  {{ bestRepairSuggestion?.issueLabel || 'Aucune suggestion fiable pour cette saisie.' }}
-                </p>
-                <p v-if="bestRepairSuggestion" class="mt-2 text-xs text-toned">
-                  {{ bestRepairSuggestion.model }} · {{ bestRepairSuggestion.brand }}
-                </p>
+              <div class="flex flex-wrap gap-2">
+                <UButton
+                  type="button"
+                  label="Pattern"
+                  icon="i-lucide-grid-3x3"
+                  color="neutral"
+                  variant="soft"
+                  size="sm"
+                  @click="patternOpen = true"
+                />
+                <UButton
+                  type="button"
+                  :label="advancedOpen ? 'Masquer avancé' : 'Afficher avancé'"
+                  :icon="advancedOpen ? 'i-lucide-chevrons-up-down' : 'i-lucide-sliders-horizontal'"
+                  color="neutral"
+                  variant="soft"
+                  size="sm"
+                  @click="advancedOpen = !advancedOpen"
+                />
               </div>
             </div>
-          </UCard>
+          </template>
 
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-3xl',
-              body: 'space-y-4 p-4 sm:p-5',
-              header: 'p-4 pb-0 sm:p-5 sm:pb-0'
-            }"
+          <UFormField
+            label="Saisie rapide"
+            name="intakeQuery"
+            hint="Ex. iphone 14 ecran, s23 ultra batterie, iphone 15 port charge"
           >
-            <template #header>
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div class="space-y-1">
-                  <h2 class="text-base font-semibold text-highlighted">
-                    Client
-                  </h2>
-                  <p class="text-sm text-toned">
-                    Prenez le strict nécessaire puis créez le ticket. La fiche client peut être enrichie ensuite.
-                  </p>
-                </div>
-              </div>
-            </template>
+            <UInput
+              v-model="intakeQuery"
+              icon="i-lucide-scan-search"
+              size="xl"
+              class="w-full"
+              placeholder="iphone 14 ecran"
+              autofocus
+            />
+          </UFormField>
 
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              v-for="hint in repairSearchButtons"
+              :key="hint.key"
+              type="button"
+              color="neutral"
+              variant="soft"
+              size="xs"
+              :label="hint.label"
+              @click="hint.action()"
+            />
+          </div>
+
+          <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_15rem]">
+            <div class="grid gap-3 md:grid-cols-2">
+              <UFormField label="Marque" name="brand" hint="Auto ou manuel">
+                <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
+              </UFormField>
+
+              <UFormField label="Modèle" name="model" hint="Auto ou manuel">
+                <UInput v-model="state.model" class="w-full" placeholder="iPhone 14, Galaxy S23..." />
+              </UFormField>
+
+              <UFormField
+                label="Problème constaté"
+                name="issueDescription"
+                required
+                class="md:col-span-2"
+              >
+                <UTextarea
+                  v-model="state.issueDescription"
+                  class="w-full"
+                  :rows="2"
+                  autoresize
+                  placeholder="Ex. écran fissuré, batterie faible, port de charge endommagé..."
+                />
+              </UFormField>
+            </div>
+
+            <div class="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3">
+              <p class="text-[11px] uppercase tracking-[0.16em] text-primary/80">
+                Prix suggéré
+              </p>
+              <p class="mt-2 text-2xl font-semibold text-highlighted">
+                {{ quotedPrice }}
+              </p>
+              <p class="mt-1 text-sm text-toned">
+                {{ bestRepairSuggestion?.issueLabel || 'Aucune suggestion fiable pour cette saisie.' }}
+              </p>
+              <p v-if="bestRepairSuggestion" class="mt-2 text-xs text-toned">
+                {{ bestRepairSuggestion.model }} · {{ bestRepairSuggestion.brand }}
+              </p>
+            </div>
+          </div>
+
+          <div class="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_11rem_13rem]">
             <UFormField
               label="Client"
               name="customerId"
@@ -386,237 +382,152 @@ function applyRepairSuggestion(suggestion: RepairSuggestion) {
               />
             </UFormField>
 
-            <div class="grid gap-4 md:grid-cols-2">
-              <UFormField label="Statut" name="status" required>
+            <UFormField label="Statut" name="status" required>
+              <USelect
+                v-model="state.status"
+                :items="statusItems"
+                value-key="value"
+                class="w-full"
+              />
+            </UFormField>
+
+            <UFormField label="Ouvert le" name="openedAt" required>
+              <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
+            </UFormField>
+          </div>
+
+          <div
+            v-if="advancedOpen"
+            class="space-y-3 rounded-2xl border border-default/80 bg-muted/20 p-4"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 class="text-sm font-medium text-highlighted">
+                  Champs avancés
+                </h3>
+                <p class="text-xs text-toned">
+                  À ouvrir seulement pour IMEI, accès, notes ou diagnostic détaillé.
+                </p>
+              </div>
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <UFormField label="Type" name="type" required>
                 <USelect
-                  v-model="state.status"
-                  :items="statusItems"
+                  v-model="state.type"
+                  :items="ticketTypeItems"
                   value-key="value"
                   class="w-full"
                 />
               </UFormField>
 
-              <UFormField label="Ouvert le" name="openedAt" required>
-                <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
-              </UFormField>
-            </div>
-          </UCard>
-
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-3xl',
-              body: 'space-y-4 p-4 sm:p-5',
-              header: 'p-4 pb-0 sm:p-5 sm:pb-0'
-            }"
-          >
-            <template #header>
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div class="space-y-1">
-                  <h2 class="text-base font-semibold text-highlighted">
-                    Champs avancés
-                  </h2>
-                  <p class="text-sm text-toned">
-                    Ouvrez seulement si vous avez besoin d’IMEI, de codes ou de notes atelier détaillées.
-                  </p>
-                </div>
-
-                <UButton
-                  type="button"
-                  :label="advancedOpen ? 'Réduire' : 'Afficher'"
-                  :icon="advancedOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-                  color="neutral"
-                  variant="soft"
-                  size="sm"
-                  @click="advancedOpen = !advancedOpen"
-                />
-              </div>
-            </template>
-
-            <div v-if="advancedOpen" class="space-y-4">
-              <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <UFormField label="Type" name="type" required>
-                  <USelect
-                    v-model="state.type"
-                    :items="ticketTypeItems"
-                    value-key="value"
-                    class="w-full"
+              <UFormField label="IMEI" name="imei" hint="Optionnel">
+                <div class="flex gap-2">
+                  <UInput v-model="state.imei" class="flex-1" placeholder="356..." />
+                  <PosBarcodeScanner
+                    title="Scanner IMEI / N° de série"
+                    description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
+                    trigger-aria-label="Scanner IMEI"
+                    @scanned="handleImeiScan"
                   />
-                </UFormField>
+                </div>
+              </UFormField>
 
-                <UFormField label="IMEI" name="imei" hint="Optionnel">
-                  <UInput v-model="state.imei" class="w-full" placeholder="356..." />
-                </UFormField>
+              <UFormField label="N° de série" name="serialNumber" hint="Optionnel">
+                <UInput v-model="state.serialNumber" class="w-full" placeholder="Numéro de série" />
+              </UFormField>
 
-                <UFormField label="N° de série" name="serialNumber" hint="Optionnel">
-                  <UInput v-model="state.serialNumber" class="w-full" placeholder="Numéro de série" />
-                </UFormField>
-              </div>
-
-              <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]">
-                <UFormField label="Code / accès appareil" name="accessCode" hint="Optionnel">
-                  <div class="space-y-2">
-                    <UInput
-                      v-model="state.accessCode"
-                      class="w-full"
-                      placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
-                    />
-                    <UButton
-                      type="button"
-                      label="Dessiner un pattern Android"
-                      icon="i-lucide-grid-3x3"
-                      color="neutral"
-                      variant="soft"
-                      size="sm"
-                      @click="patternOpen = true"
-                    />
-                  </div>
-                </UFormField>
-
-                <UFormField label="Code SIM" name="simCode" hint="Optionnel">
-                  <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
-                </UFormField>
-              </div>
-
-              <UFormField
-                label="Notes internes"
-                name="internalNotes"
-                hint="Optionnel"
-              >
-                <UTextarea
-                  v-model="state.internalNotes"
-                  class="w-full"
-                  :rows="4"
-                  placeholder="Diagnostic initial, accessoires laissés, pièces à commander..."
-                />
+              <UFormField label="Code SIM" name="simCode" hint="Optionnel">
+                <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
               </UFormField>
             </div>
-          </UCard>
-        </div>
 
-        <div class="lg:sticky lg:top-4">
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-3xl shadow-sm',
-              body: 'space-y-5 p-4 sm:p-5',
-              header: 'p-4 pb-0 sm:p-5 sm:pb-0',
-              footer: 'p-4 pt-0 sm:p-5 sm:pt-0'
-            }"
-          >
-            <template #header>
-              <div class="space-y-3">
-                <div class="flex flex-wrap items-center gap-2">
-                  <UBadge :color="ticketTypeColors[state.type]" variant="subtle">
-                    {{ ticketTypeLabels[state.type] }}
-                  </UBadge>
-                  <UBadge :color="ticketStatusColors[state.status]" variant="subtle">
-                    {{ ticketStatusLabels[state.status] }}
-                  </UBadge>
-                </div>
+            <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
+              <UFormField label="Code / accès appareil" name="accessCode" hint="Optionnel">
+                <UInput
+                  v-model="state.accessCode"
+                  class="w-full"
+                  placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
+                />
+              </UFormField>
 
-                <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
-                    Prêt à créer
-                  </h2>
-                  <p class="text-sm text-toned">
-                    Le ticket reste sous vos yeux pendant toute la saisie.
-                  </p>
-                </div>
-              </div>
-            </template>
-
-            <div class="space-y-3">
-              <div class="rounded-2xl border border-default bg-default/70 p-4">
-                <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                  Client
-                </p>
-                <p class="mt-1 text-sm font-medium text-highlighted">
-                  {{ currentCustomer?.displayName || 'Aucun client sélectionné' }}
-                </p>
-                <p v-if="currentCustomer?.phone || currentCustomer?.email" class="mt-1 text-xs text-toned">
-                  {{ [currentCustomer?.phone, currentCustomer?.email].filter(Boolean).join(' · ') }}
-                </p>
-              </div>
-
-              <div class="rounded-2xl border border-default bg-default/70 p-4">
-                <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                  Offre annoncée
-                </p>
-                <p class="mt-1 text-sm font-medium text-highlighted">
-                  {{ bestRepairSuggestion?.issueLabel || 'Tarif à confirmer' }}
+              <div class="rounded-xl border border-default bg-default/70 px-3 py-2.5">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+                  Saisie rapide
                 </p>
                 <p class="mt-1 text-xs text-toned">
-                  {{ bestRepairSuggestion ? `${bestRepairSuggestion.model} · ${quotedPrice}` : deviceSummary }}
-                </p>
-              </div>
-
-              <div class="rounded-2xl border border-default bg-default/70 p-4">
-                <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                  Entrée atelier
-                </p>
-                <p class="mt-1 text-sm font-medium text-highlighted">
-                  {{ openedAtSummary }}
+                  IMEI scanné ou pattern Android si nécessaire.
                 </p>
               </div>
             </div>
 
-            <div class="space-y-2">
-              <div
-                v-for="item in completionItems"
-                :key="item.label"
-                class="flex items-start gap-3 rounded-2xl border border-default/80 bg-muted/20 px-3 py-2.5"
-              >
+            <UFormField
+              label="Notes internes"
+              name="internalNotes"
+              hint="Optionnel"
+            >
+              <UTextarea
+                v-model="state.internalNotes"
+                class="w-full"
+                :rows="3"
+                autoresize
+                placeholder="Diagnostic initial, accessoires laissés, pièces à commander..."
+              />
+            </UFormField>
+          </div>
+        </UCard>
+
+        <div class="sticky bottom-3 z-10">
+          <div class="rounded-2xl border border-default bg-default/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-default/80">
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-center">
+              <div class="flex flex-wrap items-center gap-2 xl:min-w-[19rem]">
+                <UBadge :color="ticketTypeColors[state.type]" variant="subtle">
+                  {{ ticketTypeLabels[state.type] }}
+                </UBadge>
+                <UBadge :color="ticketStatusColors[state.status]" variant="subtle">
+                  {{ ticketStatusLabels[state.status] }}
+                </UBadge>
+                <span class="text-xs text-toned">
+                  {{ currentCustomer?.displayName || 'Client à sélectionner' }}
+                </span>
+                <span class="text-xs text-toned">
+                  {{ bestRepairSuggestion ? quotedPrice : 'Tarif à confirmer' }}
+                </span>
+              </div>
+
+              <div class="grid flex-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
                 <div
-                  class="mt-0.5 flex size-5 items-center justify-center rounded-full"
-                  :class="item.done ? 'bg-success/12 text-success' : 'bg-neutral/12 text-toned'"
+                  v-for="item in completionItems"
+                  :key="item.label"
+                  class="flex items-center gap-2 rounded-xl border border-default/80 bg-default/70 px-2.5 py-2"
                 >
-                  <UIcon :name="item.done ? 'i-lucide-check' : 'i-lucide-dot'" class="size-3.5" />
-                </div>
-                <div class="min-w-0">
-                  <p class="text-sm font-medium text-highlighted">
-                    {{ item.label }}
-                  </p>
-                  <p class="truncate text-xs text-toned">
-                    {{ item.value }}
-                  </p>
+                  <div
+                    class="flex size-4 items-center justify-center rounded-full"
+                    :class="item.done ? 'bg-success/12 text-success' : 'bg-neutral/12 text-toned'"
+                  >
+                    <UIcon :name="item.done ? 'i-lucide-check' : 'i-lucide-dot'" class="size-3" />
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-[11px] font-medium text-highlighted">
+                      {{ item.label }}
+                    </p>
+                    <p class="truncate text-[11px] text-toned">
+                      {{ item.value }}
+                    </p>
+                  </div>
                 </div>
               </div>
+
+              <UButton
+                v-if="props.showSubmit"
+                type="submit"
+                :label="props.submitLabel"
+                icon="i-lucide-save"
+                size="xl"
+                class="w-full justify-center xl:w-auto xl:min-w-52"
+              />
             </div>
-
-            <template #footer>
-              <div class="space-y-3">
-                <UButton
-                  v-if="props.showSubmit"
-                  type="submit"
-                  :label="props.submitLabel"
-                  icon="i-lucide-save"
-                  size="xl"
-                  class="w-full justify-center"
-                />
-
-                <UButton
-                  type="button"
-                  label="Dessiner un pattern Android"
-                  icon="i-lucide-grid-3x3"
-                  color="neutral"
-                  variant="soft"
-                  class="w-full justify-center"
-                  @click="patternOpen = true"
-                />
-
-                <UButton
-                  type="button"
-                  :label="advancedOpen ? 'Masquer les champs avancés' : 'Afficher les champs avancés'"
-                  :icon="advancedOpen ? 'i-lucide-panel-top-close' : 'i-lucide-panel-top-open'"
-                  color="neutral"
-                  variant="ghost"
-                  class="w-full justify-center"
-                  @click="advancedOpen = !advancedOpen"
-                />
-              </div>
-            </template>
-          </UCard>
+          </div>
         </div>
       </div>
     </template>
@@ -697,7 +608,15 @@ function applyRepairSuggestion(suggestion: RepairSuggestion) {
           </UFormField>
 
           <UFormField label="IMEI" name="imei" hint="Optionnel">
-            <UInput v-model="state.imei" class="w-full" />
+            <div class="flex gap-2">
+              <UInput v-model="state.imei" class="flex-1" />
+              <PosBarcodeScanner
+                title="Scanner IMEI / N° de série"
+                description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
+                trigger-aria-label="Scanner IMEI"
+                @scanned="handleImeiScan"
+              />
+            </div>
           </UFormField>
 
           <UFormField label="Numéro de série" name="serialNumber" hint="Optionnel">
@@ -804,7 +723,15 @@ function applyRepairSuggestion(suggestion: RepairSuggestion) {
         </UFormField>
 
         <UFormField label="IMEI" name="imei" hint="Optionnel">
-          <UInput v-model="state.imei" class="w-full" />
+          <div class="flex gap-2">
+            <UInput v-model="state.imei" class="flex-1" />
+            <PosBarcodeScanner
+              title="Scanner IMEI / N° de série"
+              description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
+              trigger-aria-label="Scanner IMEI"
+              @scanned="handleImeiScan"
+            />
+          </div>
         </UFormField>
       </div>
 

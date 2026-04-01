@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CatalogItemRecord, CustomerRecord, DocumentDetail } from '~~/shared/types/pos'
+import type { CatalogItemRecord, CustomerRecord, DocumentDetail, DocumentStatus, DocumentType } from '~~/shared/types/pos'
 
 const route = useRoute()
 const toast = useToast()
@@ -16,8 +16,8 @@ const [{ data: customers }, { data: catalogItems }] = await Promise.all([
 ])
 
 async function saveDocument(payload: {
-  type: 'quote' | 'invoice' | 'receipt' | 'credit_note'
-  status: 'draft' | 'issued' | 'paid' | 'cancelled'
+  type: DocumentType
+  status: DocumentStatus
   customerId: number
   ticketId: number | null
   issuedAt: string
@@ -63,7 +63,7 @@ async function saveDocument(payload: {
               Document avancé
             </h2>
             <p class="text-sm text-toned">
-              À utiliser pour les devis, factures, reçus ou avoirs hors flux rapide, avec contrôle complet des lignes et du client.
+              À utiliser pour les devis, commandes, factures ou reçus hors flux rapide, avec contrôle complet des lignes et du client.
             </p>
           </div>
         </template>
