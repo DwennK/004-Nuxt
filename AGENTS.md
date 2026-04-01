@@ -110,6 +110,8 @@ Prefer narrow, explicit server utilities in `server/utils/pos` over putting busi
 
 Prefer focused changes over broad refactors.
 
+When changes span multiple concerns, split them into separate commits by logical unit. Prefer one coherent commit per fix, feature, refactor, or documentation change rather than mixing unrelated work together.
+
 Before creating a new component, composable, or utility, check whether a nearby existing one can be extended.
 
 Preserve French user-facing copy unless the task asks for a rewrite.
