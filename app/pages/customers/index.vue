@@ -4,7 +4,6 @@ import { getPaginationRowModel } from '@tanstack/table-core'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
 import type { CustomerFormValue, CustomerRecord } from '~~/shared/types/pos'
-import { formatDateTime } from '~~/shared/utils/pos'
 
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
@@ -151,9 +150,11 @@ const columns: TableColumn<CustomerRecord>[] = [
       class: '-mx-2.5',
       onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
     }),
-    cell: ({ row }) => h('div', { class: 'min-w-0' }, [
-      h('p', { class: 'font-medium text-highlighted truncate' }, row.original.displayName),
-      h('p', { class: 'text-sm text-toned truncate' }, row.original.companyName || row.original.email)
+    cell: ({ row }) => h('div', { class: 'min-w-0 leading-tight' }, [
+      h('p', { class: 'truncate font-medium text-highlighted' }, row.original.displayName),
+      row.original.companyName
+        ? h('p', { class: 'truncate text-xs text-toned' }, row.original.companyName)
+        : null
     ])
   },
   {
@@ -174,7 +175,11 @@ const columns: TableColumn<CustomerRecord>[] = [
   {
     accessorKey: 'updatedAt',
     header: 'Mis à jour',
-    cell: ({ row }) => formatDateTime(row.original.updatedAt)
+    cell: ({ row }) => new Intl.DateTimeFormat('fr-CH', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(new Date(row.original.updatedAt))
   },
   {
     id: 'actions',
@@ -280,8 +285,8 @@ const columns: TableColumn<CustomerRecord>[] = [
             base: 'table-fixed border-separate border-spacing-0',
             thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
             tbody: '[&>tr]:last:[&>td]:border-b-0',
-            th: 'py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-            td: 'border-b border-default align-top',
+            th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
+            td: 'border-b border-default py-2 align-middle text-sm',
             separator: 'h-0'
           }"
           @select="(_, row) => navigateTo(`/customers/${row.original.id}`)"
