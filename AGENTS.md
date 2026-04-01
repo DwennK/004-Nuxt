@@ -85,6 +85,7 @@ Default to practical, dense POS interfaces rather than spacious dashboard layout
 When debugging or checking the UI with Playwright:
 
 - Reuse the same Playwright session and browser window by default.
+- Open Playwright in a full-width desktop window by default. If a new session is needed, resize it before interacting so the layout is not tested in a narrow viewport by accident.
 - Do not open a new Chrome window for every check or iteration.
 - When changing flow on the same app, prefer `goto`, refresh, clearing local UI state, or reusing the existing tab before creating a new session.
 - Only open a new Playwright window when the current session is broken, unrecoverable, or must be isolated on purpose.
