@@ -51,20 +51,6 @@ async function saveTicket(payload: {
 
     <template #body>
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-default/80 bg-muted/20 px-4 py-3">
-          <div class="flex flex-wrap items-center gap-2">
-            <UBadge color="warning" variant="subtle" size="sm">
-              Comptoir atelier
-            </UBadge>
-            <span class="text-sm text-toned">
-              Saisie dense: appareil, panne, client, création.
-            </span>
-          </div>
-          <span class="text-xs text-toned">
-            Les détails avancés restent optionnels.
-          </span>
-        </div>
-
         <PosTicketForm
           v-if="customers"
           layout="intake"
