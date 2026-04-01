@@ -80,6 +80,16 @@ Default to practical, dense POS interfaces rather than spacious dashboard layout
 - For cart, line-item, and POS operator views, compact icon actions are preferred for reorder / clone / delete when they remain understandable.
 - Treat empty states carefully: do not let them create large dead zones if the screen can instead surface the next likely action.
 
+### Playwright Workflow
+
+When debugging or checking the UI with Playwright:
+
+- Reuse the same Playwright session and browser window by default.
+- Do not open a new Chrome window for every check or iteration.
+- When changing flow on the same app, prefer `goto`, refresh, clearing local UI state, or reusing the existing tab before creating a new session.
+- Only open a new Playwright window when the current session is broken, unrecoverable, or must be isolated on purpose.
+- Minimize window churn: assume the user should not need to close extra browser windows created during routine UI work.
+
 ## Domain Rules
 
 Respect the POS model described in `README.md`:
