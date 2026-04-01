@@ -90,10 +90,14 @@ const statusItems = ticketStatuses.map(status => ({
   value: status
 }))
 
+const toast = useToast()
 const patternOpen = ref(false)
 const advancedOpen = ref(false)
 const intakeQuery = ref('')
 const createdCustomer = ref<CustomerRecord | null>(null)
+const searchOpen = ref(false)
+const highlightedSuggestionIndex = ref(0)
+let searchCloseTimeout: ReturnType<typeof setTimeout> | null = null
 
 const state = reactive<Schema>({
   customerId: 0,
@@ -189,6 +193,10 @@ const completionItems = computed(() => {
   ]
 })
 
+const searchPanelTitle = computed(() => {
+  return intakeQuery.value.trim() ? 'Résultats atelier' : 'Raccourcis atelier'
+})
+
 watch(bestRepairSuggestion, (suggestion) => {
   if (!suggestion || props.layout !== 'intake') {
     return
@@ -199,6 +207,28 @@ watch(bestRepairSuggestion, (suggestion) => {
   state.type = 'repair'
   state.issueDescription = suggestion.issueLabel
 }, { immediate: true })
+
+watch(suggestedRepairMatches, (items) => {
+  if (!items.length) {
+    highlightedSuggestionIndex.value = 0
+    return
+  }
+
+  if (highlightedSuggestionIndex.value >= items.length) {
+    highlightedSuggestionIndex.value = 0
+  }
+})
+
+watch(intakeQuery, (value) => {
+  highlightedSuggestionIndex.value = 0
+
+  if (value.trim()) {
+    openSearchPanel()
+    return
+  }
+
+  cancelSearchClose()
+})
 
 function onSubmit(event: FormSubmitEvent<Schema>) {
   emit('save', {
@@ -234,6 +264,128 @@ function applyRepairSuggestion(suggestion: RepairSuggestion) {
   state.model = suggestion.model
   state.type = 'repair'
   state.issueDescription = suggestion.issueLabel
+  closeSearchPanel()
+}
+
+function openSearchPanel() {
+  cancelSearchClose()
+  searchOpen.value = true
+}
+
+function closeSearchPanel() {
+  cancelSearchClose()
+  searchOpen.value = false
+  highlightedSuggestionIndex.value = 0
+}
+
+function scheduleSearchClose() {
+  cancelSearchClose()
+  searchCloseTimeout = setTimeout(() => {
+    searchOpen.value = false
+    highlightedSuggestionIndex.value = 0
+  }, 120)
+}
+
+function cancelSearchClose() {
+  if (searchCloseTimeout) {
+    clearTimeout(searchCloseTimeout)
+    searchCloseTimeout = null
+  }
+}
+
+function highlightNextResult() {
+  if (!suggestedRepairMatches.value.length) {
+    return
+  }
+
+  highlightedSuggestionIndex.value = (highlightedSuggestionIndex.value + 1) % suggestedRepairMatches.value.length
+}
+
+function highlightPreviousResult() {
+  if (!suggestedRepairMatches.value.length) {
+    return
+  }
+
+  highlightedSuggestionIndex.value = highlightedSuggestionIndex.value <= 0
+    ? suggestedRepairMatches.value.length - 1
+    : highlightedSuggestionIndex.value - 1
+}
+
+function applyFirstSearchResult() {
+  const suggestion = suggestedRepairMatches.value[highlightedSuggestionIndex.value] || suggestedRepairMatches.value[0]
+
+  if (!suggestion) {
+    return
+  }
+
+  applyRepairSuggestion(suggestion)
+}
+
+function handleSearchKeydown(event: KeyboardEvent) {
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    openSearchPanel()
+    highlightNextResult()
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    openSearchPanel()
+    highlightPreviousResult()
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeSearchPanel()
+    return
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    applyFirstSearchResult()
+  }
+}
+
+function handleIntakeScan(value: string) {
+  const sanitizedValue = value.trim()
+
+  if (!sanitizedValue) {
+    return
+  }
+
+  const normalizedNumericValue = sanitizedValue.replace(/\s+/g, '')
+
+  if (/^\d{8,}$/.test(normalizedNumericValue)) {
+    handleImeiScan(normalizedNumericValue)
+    toast.add({
+      title: 'IMEI scanné',
+      description: 'Renseigné dans les champs avancés du ticket.',
+      color: 'success'
+    })
+    return
+  }
+
+  const match = getRepairSuggestionResult(sanitizedValue).bestMatch
+
+  if (match) {
+    applyRepairSuggestion(match)
+    toast.add({
+      title: 'Réparation détectée',
+      description: `${match.model} · ${match.issueLabel}`,
+      color: 'success'
+    })
+    return
+  }
+
+  intakeQuery.value = sanitizedValue
+  openSearchPanel()
+  toast.add({
+    title: 'Code scanné',
+    description: `Aucune correspondance directe pour "${sanitizedValue}". Suggestions filtrées.`,
+    color: 'warning'
+  })
 }
 </script>
 
@@ -302,14 +454,75 @@ function applyRepairSuggestion(suggestion: RepairSuggestion) {
             name="intakeQuery"
             hint="Ex. iphone 14 ecran, s23 ultra batterie, iphone 15 port charge"
           >
-            <UInput
-              v-model="intakeQuery"
-              icon="i-lucide-scan-search"
-              size="xl"
-              class="w-full"
-              placeholder="iphone 14 ecran"
-              autofocus
-            />
+            <div
+              class="relative"
+              @focusin="cancelSearchClose"
+              @focusout="scheduleSearchClose"
+              @pointerdown="openSearchPanel"
+            >
+              <div class="flex gap-2">
+                <UInput
+                  v-model="intakeQuery"
+                  icon="i-lucide-scan-search"
+                  size="xl"
+                  class="flex-1"
+                  placeholder="iphone 14 ecran"
+                  autofocus
+                  @keydown="handleSearchKeydown"
+                />
+                <PosBarcodeScanner
+                  title="Scanner une référence ou un IMEI"
+                  description="Scannez un code-barres ou QR code pour préremplir la saisie rapide ou l’IMEI."
+                  trigger-size="lg"
+                  trigger-aria-label="Scanner une référence"
+                  @scanned="handleIntakeScan"
+                />
+              </div>
+
+              <div
+                v-if="searchOpen"
+                class="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
+              >
+                <div class="flex items-center justify-between gap-3 px-2 pb-2">
+                  <p class="text-sm font-medium text-highlighted">
+                    {{ searchPanelTitle }}
+                  </p>
+                  <span class="text-xs text-toned">
+                    {{ suggestedRepairMatches.length }} suggestion(s)
+                  </span>
+                </div>
+
+                <div v-if="suggestedRepairMatches.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
+                  <button
+                    v-for="(suggestion, index) in suggestedRepairMatches"
+                    :key="`${suggestion.model}-${suggestion.issueKey}`"
+                    type="button"
+                    class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
+                    :class="index === highlightedSuggestionIndex
+                      ? 'bg-primary/8 ring-1 ring-primary/20'
+                      : 'hover:bg-muted/60'"
+                    @mouseenter="highlightedSuggestionIndex = index"
+                    @click="applyRepairSuggestion(suggestion)"
+                  >
+                    <div class="min-w-0">
+                      <p class="truncate text-sm font-medium text-highlighted">
+                        {{ suggestion.model }}
+                      </p>
+                      <p class="truncate text-xs text-toned">
+                        {{ suggestion.issueLabel }} · {{ suggestion.brand }}
+                      </p>
+                    </div>
+                    <span class="shrink-0 text-sm font-medium text-highlighted">
+                      {{ formatCurrency(suggestion.priceCents) }}
+                    </span>
+                  </button>
+                </div>
+
+                <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                  Aucune suggestion trouvée pour cette saisie.
+                </div>
+              </div>
+            </div>
           </UFormField>
 
           <div class="flex flex-wrap gap-2">
