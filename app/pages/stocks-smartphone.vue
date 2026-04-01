@@ -191,10 +191,6 @@ const columns: TableColumn<SmartphoneStock>[] = [
       })
   },
   {
-    accessorKey: 'id',
-    header: 'ID'
-  },
-  {
     accessorKey: 'model',
     header: ({ column }) => {
       const isSorted = column.getIsSorted()
@@ -386,7 +382,6 @@ function handleImeiScan(value: string) {
                 .filter((column: any) => column.getCanHide())
                 .map((column: any) => ({
                   label: ({
-                    id: 'ID',
                     model: 'Modèle',
                     imei: 'IMEI',
                     sku: 'SKU',

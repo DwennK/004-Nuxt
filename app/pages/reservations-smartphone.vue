@@ -202,10 +202,6 @@ const columns: TableColumn<SmartphoneReservationRequest>[] = [
       })
   },
   {
-    accessorKey: 'id',
-    header: 'ID'
-  },
-  {
     accessorKey: 'name',
     header: ({ column }) => {
       const isSorted = column.getIsSorted()
@@ -395,7 +391,6 @@ const pagination = ref({
                 .filter((column: any) => column.getCanHide())
                 .map((column: any) => ({
                   label: ({
-                    id: 'ID',
                     name: 'Nom',
                     phone: 'Téléphone',
                     model: 'Modèle',
