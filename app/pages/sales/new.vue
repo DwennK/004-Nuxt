@@ -191,7 +191,6 @@ function decrementLine(index: number) {
   }
 
   if (line.quantity <= 1) {
-    lines.value.splice(index, 1)
     return
   }
 
@@ -703,6 +702,7 @@ function selectAllOnFocus(event: FocusEvent) {
                       color="neutral"
                       variant="soft"
                       size="xs"
+                      :disabled="line.quantity <= 1"
                       @click="decrementLine(index)"
                     />
                     <span class="w-8 text-center text-sm font-medium text-highlighted">
