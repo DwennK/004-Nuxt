@@ -5,9 +5,8 @@ import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
 import { catalogItemTypeColors, catalogItemTypeLabels } from '~~/shared/constants/pos'
 import type { CatalogItemRecord } from '~~/shared/types/pos'
-import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
+import { formatCurrency } from '~~/shared/utils/pos'
 
-const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
@@ -140,23 +139,28 @@ const columns: TableColumn<CatalogItemRecord>[] = [
       class: '-mx-2.5',
       onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
     }),
-    cell: ({ row }) => h('div', { class: 'min-w-0' }, [
-      h('p', { class: 'font-medium text-highlighted truncate' }, row.original.name),
-      h('div', { class: 'mt-1 flex flex-wrap items-center gap-2 text-sm text-toned' }, [
-        h('span', { class: 'truncate' }, row.original.sku || 'Aucun SKU'),
+    cell: ({ row }) => h('div', { class: 'min-w-0 leading-tight' }, [
+      h('div', { class: 'flex items-center gap-2' }, [
+        h('p', { class: 'truncate font-medium text-highlighted' }, row.original.name),
         row.original.isQuickPick
-          ? h(UBadge, { color: 'primary', variant: 'soft', size: 'sm' }, () => 'Raccourci')
+          ? h('span', { class: 'shrink-0 text-[11px] font-medium uppercase tracking-[0.12em] text-primary' }, 'Raccourci')
           : null
-      ])
+      ]),
+      h('p', { class: 'truncate text-xs text-toned' }, row.original.sku || 'Sans SKU')
     ])
   },
   {
     accessorKey: 'type',
     header: 'Type',
-    cell: ({ row }) => h(UBadge, {
-      color: catalogItemTypeColors[row.original.type],
-      variant: 'subtle'
-    }, () => catalogItemTypeLabels[row.original.type])
+    cell: ({ row }) => h('span', {
+      class: {
+        'text-info': catalogItemColors(row.original.type) === 'info',
+        'text-success': catalogItemColors(row.original.type) === 'success',
+        'text-warning': catalogItemColors(row.original.type) === 'warning',
+        'text-toned': catalogItemColors(row.original.type) === 'neutral',
+        'text-sm font-medium': true
+      }
+    }, catalogItemTypeLabels[row.original.type])
   },
   {
     accessorKey: 'defaultPrice',
@@ -171,15 +175,20 @@ const columns: TableColumn<CatalogItemRecord>[] = [
   {
     accessorKey: 'isActive',
     header: 'Statut',
-    cell: ({ row }) => h(UBadge, {
-      color: row.original.isActive ? 'success' : 'neutral',
-      variant: 'subtle'
-    }, () => row.original.isActive ? 'Actif' : 'Inactif')
+    cell: ({ row }) => h('span', {
+      class: row.original.isActive
+        ? 'text-sm font-medium text-success'
+        : 'text-sm font-medium text-toned'
+    }, row.original.isActive ? 'Actif' : 'Inactif')
   },
   {
     accessorKey: 'updatedAt',
     header: 'Mis à jour',
-    cell: ({ row }) => formatDateTime(row.original.updatedAt)
+    cell: ({ row }) => new Intl.DateTimeFormat('fr-CH', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(new Date(row.original.updatedAt))
   },
   {
     id: 'actions',
@@ -197,6 +206,10 @@ const columns: TableColumn<CatalogItemRecord>[] = [
     ))
   }
 ]
+
+function catalogItemColors(type: CatalogItemRecord['type']) {
+  return catalogItemTypeColors[type]
+}
 </script>
 
 <template>
@@ -289,8 +302,8 @@ const columns: TableColumn<CatalogItemRecord>[] = [
             base: 'table-fixed border-separate border-spacing-0',
             thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
             tbody: '[&>tr]:last:[&>td]:border-b-0',
-            th: 'py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-            td: 'border-b border-default align-top',
+            th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
+            td: 'border-b border-default py-2 align-middle text-sm',
             separator: 'h-0'
           }"
           @select="(_, row) => navigateTo(`/catalog/${row.original.id}`)"
