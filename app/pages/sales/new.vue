@@ -2,9 +2,10 @@
 import { documentTypeLabels, paymentMethodLabels } from '~~/shared/constants/pos'
 import type { CatalogItemRecord, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
-import { formatCurrency } from '~~/shared/utils/pos'
+import { formatCurrency, parseCurrencyInput } from '~~/shared/utils/pos'
 
 type SaleLine = {
+  id: string
   catalogItemId: number | null
   label: string
   quantity: number
@@ -33,6 +34,7 @@ const lastCreatedDocument = ref<DocumentDetail | null>(null)
 const customerPool = ref<CustomerRecord[]>([])
 const searchOpen = ref(false)
 const highlightedItemIndex = ref(0)
+let nextSaleLineId = 0
 let searchCloseTimeout: ReturnType<typeof setTimeout> | null = null
 
 const [{ data: customers }, { data: catalogItems }] = await Promise.all([
@@ -149,6 +151,13 @@ function getCategoryHint(item: CatalogItemRecord): SaleLine['categoryHint'] {
   return 'repair'
 }
 
+function createSaleLine(input: Omit<SaleLine, 'id'>): SaleLine {
+  return {
+    id: `sale-line-${nextSaleLineId++}`,
+    ...input
+  }
+}
+
 function addCatalogItem(item: CatalogItemRecord) {
   const existing = lines.value.find(line => line.catalogItemId === item.id)
 
@@ -157,14 +166,14 @@ function addCatalogItem(item: CatalogItemRecord) {
     return
   }
 
-  lines.value.push({
+  lines.value.push(createSaleLine({
     catalogItemId: item.id,
     label: item.name,
     quantity: 1,
     unitPrice: item.defaultPrice,
     vatRate: item.vatRate,
     categoryHint: getCategoryHint(item)
-  })
+  }))
 
   closeSearchPanel()
   search.value = ''
@@ -205,7 +214,8 @@ function cloneLine(index: number) {
   }
 
   lines.value.splice(index + 1, 0, {
-    ...line
+    ...line,
+    id: `sale-line-${nextSaleLineId++}`
   })
 }
 
@@ -223,6 +233,32 @@ function moveLine(index: number, direction: 'up' | 'down') {
   }
 
   lines.value.splice(targetIndex, 0, line)
+}
+
+function detachLineFromCatalog(line: SaleLine) {
+  line.catalogItemId = null
+}
+
+function updateLineLabel(index: number, value: string) {
+  const line = lines.value[index]
+
+  if (!line) {
+    return
+  }
+
+  detachLineFromCatalog(line)
+  line.label = value
+}
+
+function updateLineUnitPrice(index: number, value: number | null) {
+  const line = lines.value[index]
+
+  if (!line) {
+    return
+  }
+
+  detachLineFromCatalog(line)
+  line.unitPrice = Math.max(parseCurrencyInput(value || 0), 0)
 }
 
 function addFirstMatch() {
@@ -391,7 +427,7 @@ async function completeSale(method: PaymentMethod) {
         ticketId: null,
         issuedAt: new Date().toISOString(),
         notes: null,
-        lines: lines.value
+        lines: lines.value.map(({ id: _id, ...line }) => line)
       }
     })
 
@@ -414,6 +450,18 @@ async function completeSale(method: PaymentMethod) {
   } finally {
     isSaving.value = null
   }
+}
+
+function selectAllOnFocus(event: FocusEvent) {
+  const target = event.target
+
+  if (!(target instanceof HTMLInputElement)) {
+    return
+  }
+
+  requestAnimationFrame(() => {
+    target.select()
+  })
 }
 </script>
 
@@ -614,19 +662,41 @@ async function completeSale(method: PaymentMethod) {
               <div v-else class="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
                 <div
                   v-for="(line, index) in lines"
-                  :key="`${line.catalogItemId || line.label}-${index}`"
-                  class="grid gap-3 rounded-2xl border border-default bg-default px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto_auto_auto]"
+                  :key="line.id"
+                  class="grid gap-2 rounded-2xl border border-default bg-default px-3 py-3 md:grid-cols-[minmax(0,1fr)_4.75rem_auto_9rem_auto] md:items-center"
                 >
                   <div class="min-w-0">
-                    <p class="truncate text-sm font-medium text-highlighted">
-                      {{ line.label }}
-                    </p>
-                    <p class="mt-1 text-xs text-toned">
-                      {{ formatCurrency(line.unitPrice) }} l’unité
-                    </p>
+                    <UInput
+                      :id="`sale-line-label-${line.id}`"
+                      :model-value="line.label"
+                      size="sm"
+                      class="w-full"
+                      placeholder="Libellé de la ligne"
+                      @update:model-value="updateLineLabel(index, String($event || ''))"
+                    />
                   </div>
 
-                  <div class="flex items-center gap-1">
+                  <div class="md:min-w-0 md:justify-self-start">
+                    <label :for="`sale-line-price-${line.id}`" class="sr-only">
+                      Prix unitaire
+                    </label>
+                    <UInputNumber
+                      :id="`sale-line-price-${line.id}`"
+                      :model-value="line.unitPrice / 100"
+                      :min="0"
+                      :step="0.05"
+                      :increment="false"
+                      :decrement="false"
+                      size="sm"
+                      variant="subtle"
+                      :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
+                      class="w-[4.75rem]"
+                      @update:model-value="updateLineUnitPrice(index, $event)"
+                      @focus="selectAllOnFocus"
+                    />
+                  </div>
+
+                  <div class="flex items-center gap-1 justify-self-start md:justify-self-center">
                     <UButton
                       type="button"
                       icon="i-lucide-minus"
@@ -648,16 +718,13 @@ async function completeSale(method: PaymentMethod) {
                     />
                   </div>
 
-                  <div class="text-left md:w-28 md:text-right">
-                    <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                      Ligne
-                    </p>
+                  <div class="text-left md:text-right">
                     <p class="text-lg font-semibold text-highlighted">
                       {{ formatCurrency(line.quantity * line.unitPrice) }}
                     </p>
                   </div>
 
-                  <div class="flex items-center justify-end gap-1 md:w-34">
+                  <div class="flex items-center justify-end gap-1">
                     <UButton
                       type="button"
                       icon="i-lucide-arrow-up"
