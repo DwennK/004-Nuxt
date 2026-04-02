@@ -327,11 +327,6 @@ export async function updateDocumentRecord(id: number, input: {
   if (nextStatus !== 'cancelled' && isPayable) {
     if (paidTotal >= totals.total && totals.total > 0) {
       resolvedStatus = 'paid'
-    } else if (nextStatus === 'paid') {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'A full payment is required before marking this document as paid'
-      })
     } else if (nextStatus !== 'draft') {
       resolvedStatus = 'issued'
     }
