@@ -23,8 +23,7 @@ import {
   generateDocumentNumber,
   getDocumentPaymentTotals,
   mapCustomer,
-  normalizeOptionalText,
-  syncDocumentStatus
+  normalizeOptionalText
 } from './core'
 
 export function mapDocument(row: typeof documents.$inferSelect): DocumentRecord {
@@ -311,10 +310,37 @@ export async function updateDocumentRecord(id: number, input: {
 
   const db = useDb()
   const totals = calculateDocumentTotals(input.lines)
+  const nextStatus = input.status || 'issued'
+  const isPayable = isPayableDocumentType(input.type)
+
+  if (!isPayable && nextStatus === 'paid') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'This document type cannot be paid directly'
+    })
+  }
+
+  const paidTotal = isPayable ? await getDocumentPaymentTotals(id) : 0
+
+  let resolvedStatus = nextStatus
+
+  if (nextStatus !== 'cancelled' && isPayable) {
+    if (paidTotal >= totals.total && totals.total > 0) {
+      resolvedStatus = 'paid'
+    } else if (nextStatus === 'paid') {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'A full payment is required before marking this document as paid'
+      })
+    } else if (nextStatus !== 'draft') {
+      resolvedStatus = 'issued'
+    }
+  }
+
   const updatedRows = await db.update(documents)
     .set({
       type: input.type,
-      status: input.status || 'issued',
+      status: resolvedStatus,
       customerId: input.customerId,
       ticketId: input.ticketId ?? null,
       issuedAt: input.issuedAt,
@@ -336,13 +362,6 @@ export async function updateDocumentRecord(id: number, input: {
     })
   }
 
-  if (!isPayableDocumentType(document.type)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'This document type cannot be paid directly'
-    })
-  }
-
   await db.delete(documentLines).where(eq(documentLines.documentId, id))
   await db.insert(documentLines).values(totals.lines.map((line, index) => ({
     documentId: id,
@@ -354,8 +373,6 @@ export async function updateDocumentRecord(id: number, input: {
     lineTotal: line.lineTotal,
     categoryHint: input.lines[index]!.categoryHint ?? null
   })))
-
-  await syncDocumentStatus(id)
 
   return getDocumentById(id)
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
+import type { DocumentSavePayload } from '~~/app/composables/useDocumentDraft'
 import {
   documentStatusColors,
   documentStatusLabels,
@@ -10,7 +11,7 @@ import {
   paymentMethodColors,
   paymentMethodLabels
 } from '~~/shared/constants/pos'
-import type { CatalogItemRecord, CustomerRecord, DocumentDetail, DocumentStatus, DocumentType } from '~~/shared/types/pos'
+import type { CatalogItemRecord, CustomerRecord, DocumentDetail } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
 
@@ -20,9 +21,8 @@ const NuxtLink = resolveComponent('NuxtLink')
 const route = useRoute()
 const toast = useToast()
 const id = computed(() => Number(route.params.id))
-const activeTab = ref('overview')
+const activeTab = ref('lines')
 const paymentOpen = ref(false)
-const editOpen = ref(false)
 
 const tabItems = [
   { label: 'Vue d’ensemble', value: 'overview', icon: 'i-lucide-file-text' },
@@ -52,22 +52,7 @@ const customerContactLine = computed(() => {
   return [document.value.customer.phone, document.value.customer.email].filter(Boolean).join(' · ') || 'Aucun contact'
 })
 
-async function saveDocument(payload: {
-  type: DocumentType
-  status: DocumentStatus
-  customerId: number
-  ticketId: number | null
-  issuedAt: string
-  notes: string
-  lines: Array<{
-    catalogItemId: number | null
-    label: string
-    quantity: number
-    unitPrice: number
-    vatRate: number
-    categoryHint: 'accessory' | 'repair' | 'service' | null
-  }>
-}) {
+async function saveDocument(payload: DocumentSavePayload) {
   await $fetch(`/api/documents/${id.value}`, {
     method: 'PATCH',
     body: payload
@@ -78,7 +63,6 @@ async function saveDocument(payload: {
     color: 'success'
   })
 
-  editOpen.value = false
   await refresh()
 }
 
@@ -178,13 +162,6 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
             label="Enregistrer un paiement"
             variant="subtle"
             @click="paymentOpen = true"
-          />
-          <UButton
-            label="Modifier"
-            icon="i-lucide-pencil"
-            color="neutral"
-            variant="ghost"
-            @click="editOpen = true"
           />
           <UButton
             v-if="supportsA4Print"
@@ -408,137 +385,16 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
         </div>
 
         <div v-else-if="activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)] xl:grid-cols-[minmax(0,1fr)_18rem]">
-          <UCard :ui="{ body: 'space-y-4 p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
-            <template #header>
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <h2 class="text-base font-semibold text-highlighted">
-                    Lignes du document
-                  </h2>
-                  <p class="text-sm text-toned">
-                    Vue opérateur compacte. L’édition complète reste disponible à la demande.
-                  </p>
-                </div>
-                <UButton
-                  label="Modifier le document"
-                  icon="i-lucide-pencil"
-                  size="sm"
-                  color="neutral"
-                  variant="soft"
-                  @click="editOpen = true"
-                />
-              </div>
-            </template>
-
-            <div class="xl:max-h-[calc(100vh-27rem)] xl:overflow-auto pr-1">
-              <UTable :data="document.lines" :columns="lineColumns" sticky="header">
-                <template #empty>
-                  <UEmpty
-                    icon="i-lucide-list"
-                    title="Aucune ligne"
-                    description="Ajoutez des lignes dans l’éditeur complet."
-                  />
-                </template>
-              </UTable>
-            </div>
-
-            <div class="grid gap-3 md:grid-cols-3">
-              <div class="rounded-2xl border border-default px-4 py-3">
-                <p class="text-xs uppercase tracking-wide text-toned">
-                  Total HT
-                </p>
-                <p class="mt-1 font-semibold text-highlighted">
-                  {{ formatCurrency(document.subtotal) }}
-                </p>
-              </div>
-              <div class="rounded-2xl border border-default px-4 py-3">
-                <p class="text-xs uppercase tracking-wide text-toned">
-                  TVA incluse
-                </p>
-                <p class="mt-1 font-semibold text-highlighted">
-                  {{ formatCurrency(document.taxAmount) }}
-                </p>
-              </div>
-              <div class="rounded-2xl border border-default px-4 py-3">
-                <p class="text-xs uppercase tracking-wide text-toned">
-                  Total TTC
-                </p>
-                <p class="mt-1 font-semibold text-highlighted">
-                  {{ formatCurrency(document.total) }}
-                </p>
-              </div>
-            </div>
-          </UCard>
-
-          <div class="space-y-4 xl:min-h-0 xl:overflow-y-auto pr-1">
-            <UCard :ui="{ body: 'space-y-3 p-4', header: 'p-4 pb-0' }">
-              <template #header>
-                <div>
-                  <h2 class="text-base font-semibold text-highlighted">
-                    Contexte
-                  </h2>
-                </div>
-              </template>
-
-              <div class="space-y-2 text-sm">
-                <div class="flex items-center justify-between gap-3">
-                  <span class="text-toned">Type</span>
-                  <UBadge :color="documentTypeColors[document.type]" variant="subtle" size="sm">
-                    {{ documentTypeLabels[document.type] }}
-                  </UBadge>
-                </div>
-                <div class="flex items-center justify-between gap-3">
-                  <span class="text-toned">Statut</span>
-                  <UBadge :color="documentStatusColors[document.status]" variant="subtle" size="sm">
-                    {{ documentStatusLabels[document.status] }}
-                  </UBadge>
-                </div>
-                <div class="flex items-center justify-between gap-3">
-                  <span class="text-toned">Client</span>
-                  <span class="font-medium text-highlighted text-right">{{ document.customer.displayName }}</span>
-                </div>
-                <div class="flex items-start justify-between gap-3">
-                  <span class="text-toned">Émis le</span>
-                  <span class="font-medium text-highlighted text-right">{{ formatDateTime(document.issuedAt) }}</span>
-                </div>
-              </div>
-            </UCard>
-
-            <UCard :ui="{ body: 'space-y-3 p-4', header: 'p-4 pb-0' }">
-              <template #header>
-                <div>
-                  <h2 class="text-base font-semibold text-highlighted">
-                    Liaison et notes
-                  </h2>
-                </div>
-              </template>
-
-              <div class="space-y-3 text-sm">
-                <div>
-                  <p class="text-xs uppercase tracking-wide text-toned">
-                    Ticket
-                  </p>
-                  <template v-if="document.ticket">
-                    <NuxtLink :to="`/tickets/${document.ticket.id}`" class="mt-1 inline-flex font-medium text-primary">
-                      {{ document.ticket.ticketNumber }}
-                    </NuxtLink>
-                  </template>
-                  <p v-else class="mt-1 text-toned">
-                    Vente directe / document autonome
-                  </p>
-                </div>
-
-                <div class="rounded-2xl border border-default bg-muted/20 px-4 py-3">
-                  <p class="text-xs uppercase tracking-wide text-toned">
-                    Notes
-                  </p>
-                  <p class="mt-2 text-sm text-highlighted">
-                    {{ document.notes || 'Aucune note sur ce document.' }}
-                  </p>
-                </div>
-              </div>
-            </UCard>
-          </div>
+          <PosDocumentEditor
+            v-if="customers && catalogItems"
+            :customers="customers"
+            :catalog-items="catalogItems"
+            :initial-value="document"
+            :fixed-ticket-id="document.ticketId"
+            submit-label="Enregistrer le document"
+            class="xl:col-span-2"
+            @save="saveDocument"
+          />
         </div>
 
         <div v-else-if="activeTab === 'payments'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)] xl:grid-cols-[minmax(0,1fr)_18rem]">
@@ -629,23 +485,4 @@ const paymentColumns: TableColumn<DocumentDetail['payments'][number]>[] = [
     :balance-due="balanceDue"
     @save="markPaid"
   />
-
-  <USlideover
-    v-model:open="editOpen"
-    title="Modifier le document"
-    description="Édition complète des lignes et du contexte commercial."
-    :ui="{ content: 'max-w-5xl' }"
-  >
-    <template #body>
-      <PosDocumentEditor
-        v-if="document"
-        :customers="customers || []"
-        :catalog-items="catalogItems || []"
-        :initial-value="document"
-        :fixed-ticket-id="document.ticketId"
-        submit-label="Enregistrer le document"
-        @save="saveDocument"
-      />
-    </template>
-  </USlideover>
 </template>

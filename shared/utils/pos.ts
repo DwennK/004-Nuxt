@@ -116,6 +116,14 @@ export function parseCurrencyInput(value: string | number) {
   return Math.round(parsed * 100)
 }
 
+export function normalizeSearchText(value: string | null | undefined) {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
 export function formatCustomerName(customer: {
   firstName: string
   lastName: string

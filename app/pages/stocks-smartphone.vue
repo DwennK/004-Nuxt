@@ -451,5 +451,4 @@ function handleImeiScan(value: string) {
       </div>
     </template>
   </UDashboardPanel>
-
 </template>

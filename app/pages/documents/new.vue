@@ -56,17 +56,15 @@ async function saveDocument(payload: {
     </template>
 
     <template #body>
-      <UCard class="mx-auto w-full max-w-6xl shrink-0">
-        <template #header>
-          <div>
-            <h2 class="text-lg font-semibold text-highlighted">
-              Document avancé
-            </h2>
-            <p class="text-sm text-toned">
-              À utiliser pour les devis, commandes, factures ou reçus hors flux rapide, avec contrôle complet des lignes et du client.
-            </p>
-          </div>
-        </template>
+      <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-4">
+        <div>
+          <h2 class="text-lg font-semibold text-highlighted">
+            Document avancé
+          </h2>
+          <p class="text-sm text-toned">
+            À utiliser pour les devis, commandes, factures ou reçus hors flux rapide, avec contrôle complet des lignes et du client.
+          </p>
+        </div>
 
         <PosDocumentEditor
           v-if="customers && catalogItems"
@@ -77,7 +75,7 @@ async function saveDocument(payload: {
           submit-label="Créer le document"
           @save="saveDocument"
         />
-      </UCard>
+      </div>
     </template>
   </UDashboardPanel>
 </template>

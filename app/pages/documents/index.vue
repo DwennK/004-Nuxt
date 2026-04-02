@@ -10,7 +10,7 @@ import {
   documentTypeLabels
 } from '~~/shared/constants/pos'
 import type { DocumentListItem } from '~~/shared/types/pos'
-import { formatCurrency, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
+import { formatCurrency, formatDateTime, isPayableDocumentType, toDateInputValue } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
@@ -22,7 +22,8 @@ const table = useTemplateRef<DashboardTableInstance>('table')
 const search = ref('')
 const typeFilter = ref<'all' | DocumentListItem['type']>('all')
 const statusFilter = ref<'all' | DocumentListItem['status']>('all')
-const dateFilter = ref('')
+const dateFrom = ref('')
+const dateTo = ref('')
 const pagination = ref({
   pageIndex: 0,
   pageSize: 10
@@ -54,13 +55,15 @@ const filteredDocuments = computed(() => {
 
     const matchesType = typeFilter.value === 'all' || document.type === typeFilter.value
     const matchesStatus = statusFilter.value === 'all' || document.status === statusFilter.value
-    const matchesDate = !dateFilter.value || toDateInputValue(new Date(document.issuedAt)) === dateFilter.value
+    const issuedDate = toDateInputValue(new Date(document.issuedAt))
+    const matchesDateFrom = !dateFrom.value || issuedDate >= dateFrom.value
+    const matchesDateTo = !dateTo.value || issuedDate <= dateTo.value
 
-    return matchesSearch && matchesType && matchesStatus && matchesDate
+    return matchesSearch && matchesType && matchesStatus && matchesDateFrom && matchesDateTo
   })
 })
 
-watch([search, typeFilter, statusFilter, dateFilter], () => {
+watch([search, typeFilter, statusFilter, dateFrom, dateTo], () => {
   pagination.value.pageIndex = 0
 })
 
@@ -68,14 +71,16 @@ const hasActiveFilters = computed(() =>
   !!search.value.trim()
   || typeFilter.value !== 'all'
   || statusFilter.value !== 'all'
-  || !!dateFilter.value
+  || !!dateFrom.value
+  || !!dateTo.value
 )
 
 function resetFilters() {
   search.value = ''
   typeFilter.value = 'all'
   statusFilter.value = 'all'
-  dateFilter.value = ''
+  dateFrom.value = ''
+  dateTo.value = ''
 }
 
 async function removeDocument(id: number) {
@@ -209,7 +214,14 @@ const columns: TableColumn<DocumentListItem>[] = [
             value-key="value"
             class="w-48"
           />
-          <UInput v-model="dateFilter" type="date" class="w-44" />
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-toned">Début</span>
+            <UInput v-model="dateFrom" type="date" class="w-40" />
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-toned">Fin</span>
+            <UInput v-model="dateTo" type="date" class="w-40" />
+          </div>
           <UButton
             v-if="hasActiveFilters"
             color="neutral"
@@ -290,7 +302,7 @@ const columns: TableColumn<DocumentListItem>[] = [
             <UEmpty
               icon="i-lucide-files"
               title="Aucun document trouvé"
-              description="Ajustez les filtres ou créez un nouveau document."
+              description="Ajustez la période ou les filtres pour voir des documents."
             />
           </template>
         </UTable>

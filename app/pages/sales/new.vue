@@ -2,7 +2,7 @@
 import { documentTypeLabels, paymentMethodLabels } from '~~/shared/constants/pos'
 import type { CatalogItemRecord, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
-import { formatCurrency, parseCurrencyInput } from '~~/shared/utils/pos'
+import { formatCurrency, normalizeSearchText, parseCurrencyInput } from '~~/shared/utils/pos'
 
 type SaleLine = {
   id: string
@@ -63,7 +63,7 @@ const quickPickItems = computed(() => {
 })
 
 const filteredItems = computed(() => {
-  const term = search.value.trim().toLowerCase()
+  const term = normalizeSearchText(search.value)
 
   if (!term) {
     return quickPickItems.value
@@ -74,7 +74,7 @@ const filteredItems = computed(() => {
       item.name,
       item.sku,
       item.type
-    ].some(value => value?.toLowerCase().includes(term))
+    ].some(value => normalizeSearchText(value).includes(term))
   }).slice(0, 10)
 })
 
@@ -342,9 +342,10 @@ function handleSearchKeydown(event: KeyboardEvent) {
 }
 
 function handleBarcodeScan(value: string) {
+  const normalizedValue = normalizeSearchText(value)
   const match = activeItems.value.find((item) => {
-    return item.sku?.toLowerCase() === value.toLowerCase()
-      || item.name.toLowerCase() === value.toLowerCase()
+    return normalizeSearchText(item.sku) === normalizedValue
+      || normalizeSearchText(item.name) === normalizedValue
   })
 
   if (match) {

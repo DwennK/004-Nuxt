@@ -28,8 +28,7 @@ export function useBarcodeScanner(options: BarcodeScannerOptions = {}) {
 
     try {
       detector = new BarcodeDetector({ formats })
-    }
-    catch {
+    } catch {
       isSupported.value = false
       error.value = 'BarcodeDetector non supporté sur ce navigateur.'
       return
@@ -48,8 +47,7 @@ export function useBarcodeScanner(options: BarcodeScannerOptions = {}) {
       await video.play()
       isScanning.value = true
       detect()
-    }
-    catch {
+    } catch {
       error.value = 'Impossible d\'accéder à la caméra. Vérifiez les permissions.'
     }
   }
@@ -72,8 +70,7 @@ export function useBarcodeScanner(options: BarcodeScannerOptions = {}) {
           onDetected?.(value)
         }
       }
-    }
-    catch {
+    } catch {
       // Frame detection error, continue scanning
     }
 

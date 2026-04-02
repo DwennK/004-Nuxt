@@ -22,7 +22,8 @@ const table = useTemplateRef<DashboardTableInstance>('table')
 const search = ref('')
 const methodFilter = ref<'all' | PaymentListItem['method']>('all')
 const statusFilter = ref<'all' | PaymentListItem['status']>('all')
-const dateFilter = ref(toDateInputValue())
+const dateFrom = ref('')
+const dateTo = ref('')
 const pagination = ref({
   pageIndex: 0,
   pageSize: 10
@@ -54,15 +55,33 @@ const filteredPayments = computed(() => {
 
     const matchesMethod = methodFilter.value === 'all' || payment.method === methodFilter.value
     const matchesStatus = statusFilter.value === 'all' || payment.status === statusFilter.value
-    const matchesDate = !dateFilter.value || toDateInputValue(new Date(payment.paidAt)) === dateFilter.value
+    const paymentDate = toDateInputValue(new Date(payment.paidAt))
+    const matchesDateFrom = !dateFrom.value || paymentDate >= dateFrom.value
+    const matchesDateTo = !dateTo.value || paymentDate <= dateTo.value
 
-    return matchesSearch && matchesMethod && matchesStatus && matchesDate
+    return matchesSearch && matchesMethod && matchesStatus && matchesDateFrom && matchesDateTo
   })
 })
 
-watch([search, methodFilter, statusFilter, dateFilter], () => {
+watch([search, methodFilter, statusFilter, dateFrom, dateTo], () => {
   pagination.value.pageIndex = 0
 })
+
+const hasActiveFilters = computed(() =>
+  !!search.value.trim()
+  || methodFilter.value !== 'all'
+  || statusFilter.value !== 'all'
+  || !!dateFrom.value
+  || !!dateTo.value
+)
+
+function resetFilters() {
+  search.value = ''
+  methodFilter.value = 'all'
+  statusFilter.value = 'all'
+  dateFrom.value = ''
+  dateTo.value = ''
+}
 
 async function removePayment(id: number) {
   await $fetch(`/api/payments/${id}`, { method: 'DELETE' })
@@ -180,7 +199,22 @@ const columns: TableColumn<PaymentListItem>[] = [
             value-key="value"
             class="w-44"
           />
-          <UInput v-model="dateFilter" type="date" class="w-44" />
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-toned">Début</span>
+            <UInput v-model="dateFrom" type="date" class="w-40" />
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-toned">Fin</span>
+            <UInput v-model="dateTo" type="date" class="w-40" />
+          </div>
+          <UButton
+            v-if="hasActiveFilters"
+            color="neutral"
+            variant="outline"
+            icon="i-lucide-x"
+            label="Réinitialiser"
+            @click="resetFilters"
+          />
         </div>
 
         <UDropdownMenu
@@ -253,7 +287,7 @@ const columns: TableColumn<PaymentListItem>[] = [
             <UEmpty
               icon="i-lucide-wallet"
               title="Aucun paiement trouvé"
-              description="Ajustez la date ou les filtres pour voir des résultats."
+              description="Ajustez la période ou les filtres pour voir des résultats."
             />
           </template>
         </UTable>
