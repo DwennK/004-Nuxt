@@ -20,7 +20,7 @@ const pagination = ref({
   pageIndex: 0,
   pageSize: 10
 })
-const sorting = ref([{ id: 'ticketNumber', desc: false }])
+const sorting = ref([{ id: 'openedAt', desc: true }])
 const columnVisibility = ref()
 
 const statusItems = [
@@ -157,7 +157,18 @@ const columns: TableColumn<TicketListItem>[] = [
   },
   {
     accessorKey: 'openedAt',
-    header: 'Ouvert le',
+    header: ({ column }) => h(UButton, {
+      color: 'neutral',
+      variant: 'ghost',
+      label: 'Ouvert le',
+      icon: column.getIsSorted() === 'asc'
+        ? 'i-lucide-arrow-up'
+        : column.getIsSorted() === 'desc'
+          ? 'i-lucide-arrow-down'
+          : 'i-lucide-arrow-up-down',
+      class: '-mx-2.5',
+      onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
+    }),
     cell: ({ row }) => formatDateTime(row.original.openedAt)
   },
   {
