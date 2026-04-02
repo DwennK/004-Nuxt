@@ -73,11 +73,19 @@ const schema = z.object({
 type Schema = z.output<typeof schema>
 
 function toDateTimeLocal(value?: string | null) {
-  if (!value) {
-    return new Date().toISOString().slice(0, 16)
+  const date = value ? new Date(value) : new Date()
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
   }
 
-  return new Date(value).toISOString().slice(0, 16)
+  const pad = (part: number) => String(part).padStart(2, '0')
+
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate())
+  ].join('-') + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 const ticketTypeItems = ticketTypes.map(type => ({
@@ -554,13 +562,10 @@ function handleIntakeScan(value: string) {
             }"
           >
             <template #header>
-              <div class="space-y-1">
+              <div>
                 <h2 class="text-base font-semibold text-highlighted">
                   Client
                 </h2>
-                <p class="text-sm text-toned">
-                  Recherche d’abord, création rapide si le client n’existe pas encore.
-                </p>
               </div>
             </template>
 
@@ -611,7 +616,12 @@ function handleIntakeScan(value: string) {
                 <UInput v-model="state.serialNumber" class="w-full" placeholder="Numéro de série" />
               </UFormField>
 
-              <UFormField label="Code / accès appareil" name="accessCode" hint="Optionnel" class="xl:col-span-2">
+              <UFormField
+                label="Code / accès appareil"
+                name="accessCode"
+                hint="Optionnel"
+                class="xl:col-span-2"
+              >
                 <UInput
                   v-model="state.accessCode"
                   class="w-full"
