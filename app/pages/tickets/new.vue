@@ -55,7 +55,7 @@ async function saveTicket(payload: {
           v-if="customers"
           layout="intake"
           :customers="customers"
-          :initial-value="{ customerId: customerId || undefined }"
+          :initial-value="{ customerId: customerId || undefined, type: 'repair' }"
           submit-label="Créer le ticket"
           @save="saveTicket"
         />
