@@ -20,6 +20,7 @@ import type {
   PaymentMethod,
   TicketDetail,
   TicketEvent,
+  TicketStatus,
   TicketWorkflowAction
 } from '~~/shared/types/pos'
 import { supportsTicketPrintProfile } from '~~/shared/utils/print'
@@ -33,6 +34,7 @@ type TimelineItem = TicketEvent & {
 }
 
 const UBadge = resolveComponent('UBadge')
+const UDropdownMenu = resolveComponent('UDropdownMenu')
 const NuxtLink = resolveComponent('NuxtLink')
 
 const route = useRoute()
@@ -50,6 +52,17 @@ const [{ data: ticket, refresh: refreshTicket }, { data: customers }] = await Pr
 ])
 
 const activeTab = ref('suivi')
+
+const operationalStatuses: TicketStatus[] = [
+  'new',
+  'diagnosis',
+  'awaiting_customer_approval',
+  'approved',
+  'in_progress',
+  'waiting_parts',
+  'ready_for_pickup',
+  'delivered'
+]
 
 const tabItems = computed(() => [
   { label: 'Suivi', icon: 'i-lucide-clock', value: 'suivi' },
@@ -82,6 +95,68 @@ const canRecordPayment = computed(() =>
   && Boolean(ticket.value?.commercialSummary.balanceDue)
 )
 const supportsThermalPrint = supportsTicketPrintProfile('thermal')
+
+const statusMenuItems = computed(() => {
+  if (!ticket.value || !isTicketMutable.value) {
+    return []
+  }
+
+  const statusItems = operationalStatuses
+    .filter(status => status !== ticket.value?.status)
+    .map(status => ({
+      label: ticketStatusLabels[status],
+      color: ticketStatusColors[status],
+      onSelect() {
+        changeTicketStatus(status)
+      }
+    }))
+
+  const finalItems: Array<{
+    label: string
+    icon: string
+    color: 'success' | 'error'
+    onSelect: () => void
+  }> = [{
+    label: 'Annuler le ticket',
+    icon: 'i-lucide-circle-x',
+    color: 'error',
+    onSelect() {
+      openWorkflowAction({
+        id: 'cancel-ticket-inline',
+        kind: 'status',
+        label: 'Annuler le ticket',
+        description: 'Le dossier est abandonné. Une confirmation explicite est requise.',
+        icon: 'i-lucide-circle-x',
+        color: 'error',
+        targetStatus: 'cancelled'
+      })
+    }
+  }]
+
+  if (ticket.value.status === 'delivered') {
+    finalItems.push({
+      label: 'Clôturer le ticket',
+      icon: 'i-lucide-check-check',
+      color: 'success',
+      onSelect() {
+        openWorkflowAction({
+          id: 'close-ticket-inline',
+          kind: 'close',
+          label: 'Clôturer le ticket',
+          description: 'Le dossier est terminé et archivé.',
+          icon: 'i-lucide-check-check',
+          color: 'success',
+          targetStatus: null
+        })
+      }
+    })
+  }
+
+  return [
+    statusItems,
+    finalItems
+  ]
+})
 
 const documentColumns: TableColumn<TicketDetail['documents'][number]>[] = [
   {
@@ -225,6 +300,27 @@ function openWorkflowAction(action: TicketWorkflowAction) {
   workflowOpen.value = true
 }
 
+async function changeTicketStatus(status: TicketStatus, internalNotes?: string) {
+  if (!ticket.value || ticket.value.status === status) {
+    return
+  }
+
+  await $fetch(`/api/tickets/${id.value}/status`, {
+    method: 'POST',
+    body: {
+      status,
+      internalNotes: internalNotes ?? ticket.value.internalNotes
+    }
+  })
+
+  toast.add({
+    title: `Statut mis à jour · ${ticketStatusLabels[status]}`,
+    color: 'success'
+  })
+
+  await refreshTicket()
+}
+
 async function handleWorkflowSubmit(payload: {
   action: TicketWorkflowAction
   internalNotes: string
@@ -245,24 +341,14 @@ async function handleWorkflowSubmit(payload: {
       title: 'Ticket clôturé',
       color: 'success'
     })
-  } else if (payload.action.targetStatus) {
-    await $fetch(`/api/tickets/${id.value}/status`, {
-      method: 'POST',
-      body: {
-        status: payload.action.targetStatus,
-        internalNotes: payload.internalNotes
-      }
-    })
 
-    toast.add({
-      title: payload.action.label,
-      color: 'success'
-    })
+    await refreshTicket()
+  } else if (payload.action.targetStatus) {
+    await changeTicketStatus(payload.action.targetStatus, payload.internalNotes)
   }
 
   workflowOpen.value = false
   selectedWorkflowAction.value = null
-  await refreshTicket()
 }
 
 async function createQuote() {
@@ -366,6 +452,25 @@ async function saveTicket(payload: {
         </template>
 
         <template #right>
+          <UDropdownMenu
+            v-slot="{ open }"
+            :items="statusMenuItems"
+            :content="{ align: 'end', side: 'bottom' }"
+            :disabled="!isTicketMutable"
+            :ui="{ content: 'min-w-64' }"
+          >
+            <UButton
+              :label="ticket?.workflow.currentStatusLabel || 'Statut'"
+              :color="ticket ? ticketStatusColors[ticket.status] : 'neutral'"
+              size="sm"
+              trailing-icon="i-lucide-chevron-down"
+              :disabled="!isTicketMutable"
+              :ui="{
+                trailingIcon: ['transition-transform duration-200', open ? 'rotate-180' : undefined].filter(Boolean).join(' ')
+              }"
+            />
+          </UDropdownMenu>
+
           <UButton
             v-if="supportsThermalPrint"
             :to="`/tickets/${id}/print`"
@@ -396,9 +501,6 @@ async function saveTicket(payload: {
             <div class="flex items-center gap-1.5">
               <UBadge :color="ticketTypeColors[ticket.type]" variant="subtle" size="sm">
                 {{ ticketTypeLabels[ticket.type] }}
-              </UBadge>
-              <UBadge :color="ticketStatusColors[ticket.status]" variant="subtle" size="sm">
-                {{ ticket.workflow.currentStatusLabel }}
               </UBadge>
             </div>
           </div>
@@ -604,39 +706,6 @@ async function saveTicket(payload: {
 
           <!-- Right: compact sticky sidebar -->
           <div class="space-y-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-19rem)] xl:overflow-y-auto pr-1">
-            <!-- Workflow actions -->
-            <UCard :ui="{ body: 'p-3 sm:p-3 space-y-2' }">
-              <template #header>
-                <h2 class="text-sm font-semibold text-highlighted">
-                  Actions
-                </h2>
-              </template>
-
-              <template v-if="ticket.workflow.actions.length">
-                <UButton
-                  v-for="action in ticket.workflow.actions"
-                  :key="action.id"
-                  :label="action.label"
-                  :icon="action.icon"
-                  :color="action.color"
-                  variant="soft"
-                  size="sm"
-                  block
-                  class="justify-start"
-                  @click="openWorkflowAction(action)"
-                />
-              </template>
-
-              <UAlert
-                v-else
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-check-check"
-                title="Aucune action de suivi"
-                description="Plus de progression atelier disponible."
-              />
-            </UCard>
-
             <!-- Commercial -->
             <UCard :ui="{ body: 'p-3 sm:p-3 space-y-2' }">
               <template #header>
