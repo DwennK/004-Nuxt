@@ -462,7 +462,7 @@ async function saveTicket(payload: {
             <UButton
               :label="ticket?.workflow.currentStatusLabel || 'Statut'"
               :color="ticket ? ticketStatusColors[ticket.status] : 'neutral'"
-              size="sm"
+              variant="subtle"
               trailing-icon="i-lucide-chevron-down"
               :disabled="!isTicketMutable"
               :ui="{
