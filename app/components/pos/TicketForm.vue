@@ -408,13 +408,10 @@ function handleIntakeScan(value: string) {
             }"
           >
             <template #header>
-              <div class="space-y-1">
+              <div>
                 <h2 class="text-base font-semibold text-highlighted">
                   Saisie rapide
                 </h2>
-                <p class="text-sm text-toned">
-                  Modèle + panne, puis client. Le ticket de réparation se prépare ici, le reste suit.
-                </p>
               </div>
             </template>
 
@@ -517,13 +514,10 @@ function handleIntakeScan(value: string) {
             }"
           >
             <template #header>
-              <div class="space-y-1">
+              <div>
                 <h2 class="text-base font-semibold text-highlighted">
                   Réparation
                 </h2>
-                <p class="text-sm text-toned">
-                  Les champs principaux doivent rester rapides à lire et à corriger.
-                </p>
               </div>
             </template>
 
@@ -589,49 +583,60 @@ function handleIntakeScan(value: string) {
             }"
           >
             <template #header>
-              <div class="space-y-1">
+              <div>
                 <h2 class="text-base font-semibold text-highlighted">
                   Données appareil
                 </h2>
-                <p class="text-sm text-toned">
-                  IMEI, accès et notes restent visibles, mais passent après la saisie cœur.
-                </p>
               </div>
             </template>
 
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <UFormField label="IMEI" name="imei" hint="Optionnel">
-                <div class="flex gap-2">
-                  <UInput v-model="state.imei" class="flex-1" placeholder="356..." />
-                  <PosBarcodeScanner
-                    title="Scanner IMEI / N° de série"
-                    description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
-                    trigger-aria-label="Scanner IMEI"
-                    @scanned="handleImeiScan"
-                  />
-                </div>
-              </UFormField>
+            <div class="space-y-3">
+              <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_15rem]">
+                <UFormField
+                  label="Code / accès appareil"
+                  name="accessCode"
+                  hint="Optionnel"
+                >
+                  <div class="space-y-2">
+                    <UInput
+                      v-model="state.accessCode"
+                      class="w-full"
+                      placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
+                    />
+                    <UButton
+                      type="button"
+                      label="Dessiner un pattern Android"
+                      icon="i-lucide-grid-3x3"
+                      color="neutral"
+                      variant="soft"
+                      class="justify-start"
+                      @click="patternOpen = true"
+                    />
+                  </div>
+                </UFormField>
 
-              <UFormField label="N° de série" name="serialNumber" hint="Optionnel">
-                <UInput v-model="state.serialNumber" class="w-full" placeholder="Numéro de série" />
-              </UFormField>
+                <UFormField label="Code SIM" name="simCode" hint="Optionnel">
+                  <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
+                </UFormField>
+              </div>
 
-              <UFormField
-                label="Code / accès appareil"
-                name="accessCode"
-                hint="Optionnel"
-                class="xl:col-span-2"
-              >
-                <UInput
-                  v-model="state.accessCode"
-                  class="w-full"
-                  placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
-                />
-              </UFormField>
+              <div class="grid gap-3 md:grid-cols-2">
+                <UFormField label="IMEI" name="imei" hint="Optionnel">
+                  <div class="flex gap-2">
+                    <UInput v-model="state.imei" class="flex-1" placeholder="356..." />
+                    <PosBarcodeScanner
+                      title="Scanner IMEI / N° de série"
+                      description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
+                      trigger-aria-label="Scanner IMEI"
+                      @scanned="handleImeiScan"
+                    />
+                  </div>
+                </UFormField>
 
-              <UFormField label="Code SIM" name="simCode" hint="Optionnel">
-                <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
-              </UFormField>
+                <UFormField label="N° de série" name="serialNumber" hint="Optionnel">
+                  <UInput v-model="state.serialNumber" class="w-full" placeholder="Numéro de série" />
+                </UFormField>
+              </div>
             </div>
 
             <UFormField
@@ -707,17 +712,6 @@ function handleIntakeScan(value: string) {
             <UFormField label="Ouvert le" name="openedAt" required>
               <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
             </UFormField>
-
-            <UButton
-              type="button"
-              label="Pattern Android"
-              icon="i-lucide-grid-3x3"
-              color="neutral"
-              variant="soft"
-              block
-              class="justify-center"
-              @click="patternOpen = true"
-            />
           </UCard>
 
           <UCard
