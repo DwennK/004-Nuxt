@@ -6,7 +6,6 @@ import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table
 import {
   documentStatusColors,
   documentStatusLabels,
-  documentTypeColors,
   documentTypeLabels
 } from '~~/shared/constants/pos'
 import type { DocumentListItem } from '~~/shared/types/pos'
@@ -112,6 +111,29 @@ function getRowItems(document: DocumentListItem) {
   }]]
 }
 
+function getDocumentStatusBadge(status: DocumentListItem['status']) {
+  if (status === 'draft' || status === 'cancelled') {
+    return {
+      label: documentStatusLabels[status],
+      color: documentStatusColors[status]
+    }
+  }
+
+  return null
+}
+
+function getBalanceDueClass(document: DocumentListItem) {
+  if (!isPayableDocumentType(document.type)) {
+    return 'text-toned'
+  }
+
+  if (document.balanceDue > 0) {
+    return 'font-medium text-warning'
+  }
+
+  return 'text-toned'
+}
+
 const columns: TableColumn<DocumentListItem>[] = [
   {
     accessorKey: 'documentNumber',
@@ -127,36 +149,33 @@ const columns: TableColumn<DocumentListItem>[] = [
       class: '-mx-2.5',
       onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
     }),
-    cell: ({ row }) => h('div', { class: 'space-y-1' }, [
-      h('p', { class: 'font-medium text-highlighted' }, row.original.documentNumber),
-      h('div', { class: 'flex flex-wrap gap-2' }, [
-        h(UBadge, { color: documentTypeColors[row.original.type], variant: 'subtle' }, () => documentTypeLabels[row.original.type]),
-        h(UBadge, { color: documentStatusColors[row.original.status], variant: 'subtle' }, () => documentStatusLabels[row.original.status])
+    cell: ({ row }) => {
+      const statusBadge = getDocumentStatusBadge(row.original.status)
+
+      return h('div', { class: 'flex items-center gap-2 min-w-0' }, [
+        h('p', { class: 'truncate font-medium text-highlighted' }, row.original.documentNumber),
+        statusBadge
+          ? h(UBadge, { color: statusBadge.color, variant: 'subtle', size: 'sm' }, () => statusBadge.label)
+          : null
       ])
-    ])
+    }
   },
   {
     accessorKey: 'customerName',
     header: 'Client',
-    cell: ({ row }) => h('div', { class: 'min-w-0' }, [
-      h('p', { class: 'font-medium truncate' }, row.original.customerName),
-      h('p', { class: 'text-sm text-toned truncate' }, row.original.ticketNumber || 'Vente directe / autonome')
-    ])
+    cell: ({ row }) => h('div', { class: 'truncate font-medium' }, row.original.customerName)
   },
   {
     accessorKey: 'total',
     header: 'Total TTC',
-    cell: ({ row }) => h('div', { class: 'space-y-1 text-right' }, [
-      h('p', { class: 'font-medium text-highlighted' }, formatCurrency(row.original.total)),
-      h('p', { class: 'text-sm text-toned' }, isPayableDocumentType(row.original.type)
-        ? `Encaissé ${formatCurrency(row.original.paidAmount)}`
-        : 'Non encaissable')
-    ])
+    cell: ({ row }) => h('div', { class: 'text-right font-medium text-highlighted' }, formatCurrency(row.original.total))
   },
   {
     accessorKey: 'balanceDue',
     header: 'Reste à payer',
-    cell: ({ row }) => isPayableDocumentType(row.original.type) ? formatCurrency(row.original.balanceDue) : '—'
+    cell: ({ row }) => h('span', {
+      class: getBalanceDueClass(row.original)
+    }, isPayableDocumentType(row.original.type) ? formatCurrency(row.original.balanceDue) : '—')
   },
   {
     accessorKey: 'issuedAt',
@@ -292,8 +311,8 @@ const columns: TableColumn<DocumentListItem>[] = [
             base: 'table-fixed border-separate border-spacing-0',
             thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
             tbody: '[&>tr]:last:[&>td]:border-b-0',
-            th: 'py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-            td: 'border-b border-default align-top',
+            th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
+            td: 'border-b border-default py-2 align-middle text-sm',
             separator: 'h-0'
           }"
           @select="(_, row) => navigateTo(`/documents/${row.original.id}`)"

@@ -106,6 +106,25 @@ function getRowItems(payment: PaymentListItem) {
   }]]
 }
 
+function getCompactPaymentMethodLabel(method: PaymentListItem['method']) {
+  if (method === 'bank_transfer') {
+    return 'Virement'
+  }
+
+  return paymentMethodLabels[method]
+}
+
+function getPaymentStatusBadge(status: PaymentListItem['status']) {
+  if (status === 'paid') {
+    return null
+  }
+
+  return {
+    label: paymentStatusLabels[status],
+    color: paymentStatusColors[status]
+  }
+}
+
 const columns: TableColumn<PaymentListItem>[] = [
   {
     accessorKey: 'amount',
@@ -121,31 +140,40 @@ const columns: TableColumn<PaymentListItem>[] = [
       class: '-mx-2.5',
       onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
     }),
-    cell: ({ row }) => h('div', { class: 'space-y-1' }, [
-      h('p', { class: 'font-medium text-highlighted' }, formatCurrency(row.original.amount)),
-      h('div', { class: 'flex flex-wrap gap-2' }, [
-        h(UBadge, { color: paymentMethodColors[row.original.method], variant: 'subtle' }, () => paymentMethodLabels[row.original.method]),
-        h(UBadge, { color: paymentStatusColors[row.original.status], variant: 'subtle' }, () => paymentStatusLabels[row.original.status])
+    cell: ({ row }) => {
+      const statusBadge = getPaymentStatusBadge(row.original.status)
+
+      return h('div', { class: 'flex items-center gap-2 min-w-0' }, [
+        h('p', { class: 'shrink-0 font-medium text-highlighted' }, formatCurrency(row.original.amount)),
+        h(UBadge, {
+          color: paymentMethodColors[row.original.method],
+          variant: 'subtle',
+          size: 'sm'
+        }, () => getCompactPaymentMethodLabel(row.original.method)),
+        statusBadge
+          ? h(UBadge, {
+              color: statusBadge.color,
+              variant: 'subtle',
+              size: 'sm'
+            }, () => statusBadge.label)
+          : null
       ])
-    ])
+    }
   },
   {
     accessorKey: 'customerName',
     header: 'Client',
-    cell: ({ row }) => h('div', { class: 'min-w-0' }, [
-      h('p', { class: 'font-medium truncate' }, row.original.customerName || 'Passage comptoir / non défini'),
-      h('p', { class: 'text-sm text-toned truncate' }, row.original.documentNumber)
-    ])
+    cell: ({ row }) => h('div', { class: 'truncate font-medium' }, row.original.customerName || 'Passage comptoir')
   },
   {
     accessorKey: 'documentType',
     header: 'Document',
-    cell: ({ row }) => row.original.documentType
+    cell: ({ row }) => h('span', { class: 'font-medium text-highlighted' }, row.original.documentNumber)
   },
   {
     accessorKey: 'reference',
     header: 'Référence',
-    cell: ({ row }) => row.original.reference || 'Aucune référence'
+    cell: ({ row }) => h('span', { class: row.original.reference ? '' : 'text-toned' }, row.original.reference || '—')
   },
   {
     accessorKey: 'paidAt',
@@ -277,8 +305,8 @@ const columns: TableColumn<PaymentListItem>[] = [
             base: 'table-fixed border-separate border-spacing-0',
             thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
             tbody: '[&>tr]:last:[&>td]:border-b-0',
-            th: 'py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-            td: 'border-b border-default align-top',
+            th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
+            td: 'border-b border-default py-2 align-middle text-sm',
             separator: 'h-0'
           }"
           @select="(_, row) => navigateTo(`/documents/${row.original.documentId}`)"
