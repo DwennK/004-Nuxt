@@ -10,6 +10,7 @@ import { countBusinessDays } from '~~/shared/utils/pos'
 const props = defineProps<{
   employees: EmployeeRecord[]
   editingEntry?: VacationEntryListItem | null
+  prefillDate?: string | null
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -62,7 +63,7 @@ function parseToCalendarDate(dateStr: string) {
   return new CalendarDate(y!, m!, d!)
 }
 
-watch(() => props.editingEntry, (entry) => {
+watch([() => props.editingEntry, () => props.prefillDate], ([entry, prefill]) => {
   if (entry) {
     state.employeeId = entry.employeeId
     state.type = entry.type
@@ -84,8 +85,15 @@ watch(() => props.editingEntry, (entry) => {
     state.type = 'full_day'
     state.status = 'approved'
     state.notes = ''
-    dateRange.value = undefined
-    singleDate.value = undefined
+
+    if (prefill) {
+      const d = parseToCalendarDate(prefill)
+      dateRange.value = { start: d, end: d }
+      singleDate.value = d
+    } else {
+      dateRange.value = undefined
+      singleDate.value = undefined
+    }
   }
 }, { immediate: true })
 
