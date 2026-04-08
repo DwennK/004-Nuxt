@@ -8,41 +8,22 @@
 
 Nuxt 4 POS and shop-management app for a physical tech store.
 
-The project is built for day-to-day in-store operations with a pragmatic business split between:
+The app is built for day-to-day in-store operations with a clear business split between:
 
-- repair and tracked service tickets
+- tracked repair and service tickets
 - direct sales
 - commercial documents
 - payments and cashflow
-- daily closing checks
+- end-of-day closing checks
 
 It uses Nuxt server routes, Drizzle ORM, and Turso/libSQL, and is deployed through Nitro to Cloudflare Workers.
-
-## What The App Covers
-
-Primary POS scope:
-
-- customers
-- catalog items
-- direct sales
-- repair / service tickets
-- commercial documents
-- document lines
-- payments
-- end-of-day reporting
-
-Secondary modules still present in the repo:
-
-- smartphone stock management
-- smartphone reservation flows
-- inbox / notifications / settings pages
 
 ## Core Business Model
 
 The project follows these rules:
 
 - a `ticket` is an operational work case: repair, diagnostic, follow-up support, or any tracked intervention
-- a `document` is the commercial object: quote, customer order, invoice, receipt
+- a `document` is the commercial object: quote, customer order, invoice, receipt, or credit note
 - a `payment` is the cashflow object and is tracked separately from tickets and documents
 - direct sales can happen without a ticket
 - quick support can happen without a ticket when there is no follow-up workflow
@@ -54,27 +35,32 @@ Typical flows:
 - direct sale: `Quick sale -> Receipt or invoice -> Payment`
 - quick support: `Invoice or receipt -> Payment`
 
-## Current Operator Flows
+## Module Status
 
-Main routes used in daily operations:
+Core POS scope:
 
-- dashboard: [`app/pages/index.vue`](./app/pages/index.vue)
-- quick sale: [`app/pages/sales/new.vue`](./app/pages/sales/new.vue)
-- tickets: [`app/pages/tickets/index.vue`](./app/pages/tickets/index.vue)
-- ticket detail: [`app/pages/tickets/[id].vue`](./app/pages/tickets/[id].vue)
-- documents: [`app/pages/documents/index.vue`](./app/pages/documents/index.vue)
-- document creation: [`app/pages/documents/new.vue`](./app/pages/documents/new.vue)
-- document detail / inline editing: [`app/pages/documents/[id]/index.vue`](./app/pages/documents/[id]/index.vue)
-- document printing: [`app/pages/documents/[id]/print.vue`](./app/pages/documents/[id]/print.vue)
-- payments: [`app/pages/payments/index.vue`](./app/pages/payments/index.vue)
-- daily report: [`app/pages/reports/daily.vue`](./app/pages/reports/daily.vue)
+- customers
+- catalog items
+- direct sales
+- repair / service tickets
+- commercial documents
+- document lines
+- payments
+- end-of-day reporting
+- company settings
 
-Current UX direction:
+Secondary business modules:
 
-- `sales/new` is the fast operator flow for direct sales
-- `tickets` is the tracked repair / service flow
-- document detail is now a lines-first workspace with inline editing for the document and its lines
-- payments remain a separate object and screen, even when attached to a document
+- smartphone stock management
+- smartphone reservation flows
+- vacation tracking
+
+Demo / scaffold areas still present in the repo:
+
+- members
+- notifications
+- generic profile settings
+- inbox shell
 
 ## Stack
 
@@ -91,6 +77,15 @@ Current UX direction:
 - `@vueuse/nuxt`
 - `Cloudflare Workers` via Nitro
 
+## Prerequisites
+
+Before running the app locally, make sure you have:
+
+- Node.js LTS
+- `npm` 10+ (the repo declares `npm@10.9.0`)
+- a Turso / libSQL database
+- valid `TURSO_URL` and `TURSO_TOKEN` values
+
 ## Quick Start
 
 Install dependencies:
@@ -105,18 +100,22 @@ Create a local environment file:
 cp .env.example .env
 ```
 
+Fill in the required database credentials in `.env`.
+
 Run the dev server:
 
 ```bash
 npm run dev
 ```
 
-Then open the main POS flows:
+Main routes to check first:
 
+- `/`
 - `/sales/new`
 - `/tickets`
 - `/documents`
 - `/payments`
+- `/reports/daily`
 
 ## Environment Variables
 
@@ -128,11 +127,13 @@ TURSO_URL=
 TURSO_TOKEN=
 ```
 
-- `NUXT_PUBLIC_SITE_URL`: public site URL
+- `NUXT_PUBLIC_SITE_URL`: public site URL, mainly used for OG image generation
 - `TURSO_URL`: Turso database URL
 - `TURSO_TOKEN`: Turso auth token
 
-## Useful Scripts
+## Local Workflow
+
+Useful scripts:
 
 ```bash
 npm run dev
@@ -148,12 +149,14 @@ npm run cf-typegen
 
 Recommended local workflow:
 
-1. `npm run dev`
-2. `npm run lint`
-3. `npm run typecheck`
-4. `npm run build` when changing app wiring, server routes, or deployment-sensitive behavior
+1. `npm install`
+2. `cp .env.example .env`
+3. `npm run dev`
+4. `npm run lint`
+5. `npm run typecheck`
+6. `npm run build` when changing app wiring, server routes, or deployment-sensitive behavior
 
-## Data And POS Rules
+## Data Model And Bootstrap
 
 Key implementation details:
 
@@ -164,7 +167,15 @@ Key implementation details:
 - ticket numbers and document numbers are generated server-side
 - customer, ticket, document, and payment types are centralized in the shared POS layer
 - the POS bootstrap includes compatibility logic for older customer table shapes
-- sample data is bootstrapped on first POS access
+
+On first access to POS-backed flows, the app can automatically:
+
+- ensure the main POS schema exists
+- run compatibility migrations for legacy structures
+- create company settings if missing
+- recalculate stored document totals
+- seed sample POS data
+- create vacation-related tables
 
 Main tables:
 
@@ -174,6 +185,8 @@ Main tables:
 - `documents`
 - `document_lines`
 - `payments`
+- `employees`
+- `vacation_entries`
 
 Key files:
 
@@ -248,44 +261,38 @@ server/api/
     end-of-day.get.ts
 ```
 
-Other app routes also exist for:
+Other routes also exist for:
 
 - company settings
-- members / notifications demo endpoints
 - Swiss postal code lookup
 - smartphone stock and reservation flows
+- vacation tracking
+- demo / scaffold endpoints such as members and notifications
 
-## Frontend Structure
+## Main UI Routes
 
-Main app pages:
+Core navigation exposed in the dashboard shell:
 
-```text
-app/pages/
-  index.vue
-  sales/
-    new.vue
-  customers/
-    index.vue
-    new.vue
-    [id].vue
-  catalog/
-    index.vue
-    new.vue
-    [id].vue
-  tickets/
-    index.vue
-    new.vue
-    [id].vue
-  documents/
-    index.vue
-    new.vue
-    [id]/index.vue
-    [id]/print.vue
-  payments/
-    index.vue
-  reports/
-    daily.vue
-```
+- overview: [`app/pages/index.vue`](./app/pages/index.vue)
+- customers: [`app/pages/customers/index.vue`](./app/pages/customers/index.vue)
+- catalog: [`app/pages/catalog/index.vue`](./app/pages/catalog/index.vue)
+- tickets: [`app/pages/tickets/index.vue`](./app/pages/tickets/index.vue)
+- documents: [`app/pages/documents/index.vue`](./app/pages/documents/index.vue)
+- payments: [`app/pages/payments/index.vue`](./app/pages/payments/index.vue)
+- daily report: [`app/pages/reports/daily.vue`](./app/pages/reports/daily.vue)
+- smartphone stock: [`app/pages/stocks-smartphone.vue`](./app/pages/stocks-smartphone.vue)
+- smartphone reservations: [`app/pages/reservations-smartphone.vue`](./app/pages/reservations-smartphone.vue)
+- vacations: [`app/pages/vacances.vue`](./app/pages/vacances.vue)
+- settings: [`app/pages/settings.vue`](./app/pages/settings.vue)
+- inbox: [`app/pages/inbox.vue`](./app/pages/inbox.vue)
+
+Main operator flows:
+
+- quick sale: [`app/pages/sales/new.vue`](./app/pages/sales/new.vue)
+- ticket detail: [`app/pages/tickets/[id].vue`](./app/pages/tickets/[id].vue)
+- document creation: [`app/pages/documents/new.vue`](./app/pages/documents/new.vue)
+- document detail / inline editing: [`app/pages/documents/[id]/index.vue`](./app/pages/documents/[id]/index.vue)
+- document printing: [`app/pages/documents/[id]/print.vue`](./app/pages/documents/[id]/print.vue)
 
 Important POS UI components:
 
@@ -304,6 +311,7 @@ Important composables:
 
 - [`app/composables/useDocumentDraft.ts`](./app/composables/useDocumentDraft.ts)
 - [`app/composables/useBarcodeScanner.ts`](./app/composables/useBarcodeScanner.ts)
+- [`app/composables/useDashboard.ts`](./app/composables/useDashboard.ts)
 
 The default dashboard navigation is defined in [`app/layouts/default.vue`](./app/layouts/default.vue).
 
@@ -331,10 +339,17 @@ Relevant files:
 
 The app uses the `cloudflare_module` Nitro preset configured in [`nuxt.config.ts`](./nuxt.config.ts).
 
+Deployment workflow:
+
+```bash
+npm run build
+npm run preview
+npm run deploy
+```
+
 Notes:
 
-- use the provided npm scripts instead of calling `wrangler deploy` from the repo root directly
-- deployment goes through `.output`
+- use the provided npm scripts instead of calling `wrangler` from the repo root directly
+- preview and deploy both run against `.output`
 - if you change the data model, update [`server/db/schema.ts`](./server/db/schema.ts) first, then run `npm run db:push`
-- if you change server routes, Nitro or Worker-sensitive behavior, run `npm run build`
-
+- if you change server routes, Nitro behavior, or Cloudflare Worker-sensitive logic, run `npm run build`
