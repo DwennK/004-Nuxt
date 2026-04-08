@@ -249,13 +249,6 @@ const searchPanelItems = computed(() => {
   return intakeQuery.value.trim() ? serviceSearchResult.value.suggestedMatches : quickPickServices.value
 })
 const quotedPrice = computed(() => bestSuggestedService.value ? formatCurrency(bestSuggestedService.value.defaultPrice) : 'À confirmer')
-const serviceQuickPickButtons = computed(() => {
-  return quickPickServices.value.map(service => ({
-    key: String(service.id),
-    label: service.name,
-    action: () => applyCatalogService(service)
-  }))
-})
 
 const deviceSummary = computed(() => {
   const value = [state.brand.trim(), state.model.trim()].filter(Boolean).join(' ')
@@ -576,19 +569,6 @@ function handleIntakeScan(value: string) {
                   Aucune suggestion trouvée pour cette saisie.
                 </div>
               </div>
-            </div>
-
-            <div v-if="!intakeQuery.trim() && serviceQuickPickButtons.length" class="flex flex-wrap gap-2">
-              <UButton
-                v-for="hint in serviceQuickPickButtons"
-                :key="hint.key"
-                type="button"
-                color="neutral"
-                variant="soft"
-                size="xs"
-                :label="hint.label"
-                @click="hint.action()"
-              />
             </div>
           </UCard>
 
