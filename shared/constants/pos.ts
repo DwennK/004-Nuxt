@@ -152,3 +152,30 @@ export const documentTypePrefixes: Record<(typeof documentTypes)[number], string
   invoice: 'FA',
   receipt: 'RE'
 }
+
+export const vacationEntryTypes = ['full_day', 'half_day_am', 'half_day_pm'] as const
+export const vacationEntryStatuses = ['pending', 'approved', 'rejected'] as const
+
+export const vacationEntryTypeLabels: Record<(typeof vacationEntryTypes)[number], string> = {
+  full_day: 'Journée complète',
+  half_day_am: 'Demi-journée (matin)',
+  half_day_pm: 'Demi-journée (après-midi)'
+}
+
+export const vacationEntryStatusLabels: Record<(typeof vacationEntryStatuses)[number], string> = {
+  pending: 'En attente',
+  approved: 'Approuvé',
+  rejected: 'Refusé'
+}
+
+export const vacationEntryStatusColors: Record<(typeof vacationEntryStatuses)[number], 'warning' | 'success' | 'error'> = {
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'error'
+}
+
+export const employeeColorPalette = [
+  '#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6',
+  '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6',
+  '#e11d48', '#84cc16'
+] as const

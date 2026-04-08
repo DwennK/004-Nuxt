@@ -172,3 +172,113 @@ export function getLineCategoryLabel(value: LineCategoryHint | null | undefined)
 export function sumMoney(values: Array<number | null | undefined>) {
   return values.reduce<number>((total, value) => total + (value || 0), 0)
 }
+
+function computeEasterDate(year: number): Date {
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const d = Math.floor(b / 4)
+  const e = b % 4
+  const f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3)
+  const h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4)
+  const k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31)
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  return new Date(year, month - 1, day)
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+function formatDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+export interface SwissHoliday {
+  date: string
+  name: string
+}
+
+export function getSwissHolidays(year: number): SwissHoliday[] {
+  const easter = computeEasterDate(year)
+
+  const goodFriday = addDays(easter, -2)
+  const easterMonday = addDays(easter, 1)
+  const ascension = addDays(easter, 39)
+  const whitMonday = addDays(easter, 50)
+
+  return [
+    { date: `${year}-01-01`, name: 'Nouvel An' },
+    { date: `${year}-01-02`, name: 'Saint-Berchtold' },
+    { date: formatDateKey(goodFriday), name: 'Vendredi Saint' },
+    { date: formatDateKey(easterMonday), name: 'Lundi de Pâques' },
+    { date: formatDateKey(ascension), name: 'Ascension' },
+    { date: formatDateKey(whitMonday), name: 'Lundi de Pentecôte' },
+    { date: `${year}-08-01`, name: 'Fête nationale' },
+    { date: `${year}-12-25`, name: 'Noël' },
+    { date: `${year}-12-26`, name: 'Saint-Étienne' }
+  ]
+}
+
+export function getSwissHolidaySet(year: number): Set<string> {
+  return new Set(getSwissHolidays(year).map(h => h.date))
+}
+
+export function getSwissHolidayMap(year: number): Map<string, string> {
+  return new Map(getSwissHolidays(year).map(h => [h.date, h.name]))
+}
+
+export function isWorkingDay(date: Date, holidaySet?: Set<string>): boolean {
+  if (date.getDay() === 0) return false
+
+  if (holidaySet) {
+    const key = formatDateKey(date)
+    if (holidaySet.has(key)) return false
+  }
+
+  return true
+}
+
+export function countBusinessDays(startDateStr: string, endDateStr: string): number {
+  const start = new Date(startDateStr + 'T00:00:00')
+  const end = new Date(endDateStr + 'T00:00:00')
+
+  if (start > end) return 0
+
+  const startYear = start.getFullYear()
+  const endYear = end.getFullYear()
+  const holidaySet = new Set<string>()
+  for (let y = startYear; y <= endYear; y++) {
+    for (const h of getSwissHolidays(y)) {
+      holidaySet.add(h.date)
+    }
+  }
+
+  let count = 0
+  const current = new Date(start)
+
+  while (current <= end) {
+    if (isWorkingDay(current, holidaySet)) {
+      count++
+    }
+    current.setDate(current.getDate() + 1)
+  }
+
+  return count
+}
+
+export function countBusinessDaysInYear(startDateStr: string, endDateStr: string, year: number): number {
+  const yearStart = `${year}-01-01`
+  const yearEnd = `${year}-12-31`
+  const effectiveStart = startDateStr > yearStart ? startDateStr : yearStart
+  const effectiveEnd = endDateStr < yearEnd ? endDateStr : yearEnd
+
+  return countBusinessDays(effectiveStart, effectiveEnd)
+}

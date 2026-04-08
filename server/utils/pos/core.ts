@@ -959,6 +959,47 @@ async function seedPosData() {
   await seedOperations()
 }
 
+async function createVacationTables() {
+  const client = useTursoClient()
+
+  await client.batch([
+    `
+      CREATE TABLE IF NOT EXISTS employees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        email TEXT,
+        color TEXT NOT NULL,
+        vacation_days_per_year INTEGER NOT NULL DEFAULT 25,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `,
+    `
+      CREATE TABLE IF NOT EXISTS vacation_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id INTEGER NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'full_day',
+        status TEXT NOT NULL DEFAULT 'pending',
+        business_days REAL NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+      )
+    `,
+    'CREATE INDEX IF NOT EXISTS employees_last_name_idx ON employees(last_name)',
+    'CREATE INDEX IF NOT EXISTS employees_is_active_idx ON employees(is_active)',
+    'CREATE INDEX IF NOT EXISTS vacation_entries_employee_id_idx ON vacation_entries(employee_id)',
+    'CREATE INDEX IF NOT EXISTS vacation_entries_start_date_idx ON vacation_entries(start_date)',
+    'CREATE INDEX IF NOT EXISTS vacation_entries_end_date_idx ON vacation_entries(end_date)',
+    'CREATE INDEX IF NOT EXISTS vacation_entries_status_idx ON vacation_entries(status)'
+  ], 'write')
+}
+
 export async function ensurePosSchema() {
   if (!posSchemaPromise) {
     posSchemaPromise = (async () => {
@@ -971,6 +1012,7 @@ export async function ensurePosSchema() {
       await ensureCompanySettingsRow()
       await refreshStoredDocumentTotals()
       await seedPosData()
+      await createVacationTables()
     })().catch((error) => {
       posSchemaPromise = null
       throw error

@@ -67,6 +67,13 @@ const links = [[{
   onSelect: () => {
     open.value = false
   }
+}, {
+  label: 'Vacances',
+  icon: 'i-lucide-umbrella',
+  to: '/vacances',
+  onSelect: () => {
+    open.value = false
+  }
 }], [{
   label: 'Paramètres',
   icon: 'i-lucide-settings',

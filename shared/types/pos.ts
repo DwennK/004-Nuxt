@@ -7,7 +7,9 @@ import type {
   paymentStatuses,
   ticketStatuses,
   ticketTypes,
-  ticketWorkflowSteps
+  ticketWorkflowSteps,
+  vacationEntryStatuses,
+  vacationEntryTypes
 } from '../constants/pos'
 
 export type CatalogItemType = (typeof catalogItemTypes)[number]
@@ -242,6 +244,51 @@ export interface PaymentListItem extends PaymentRecord {
   customerName: string | null
   documentNumber: string
   documentType: DocumentType
+}
+
+export type VacationEntryType = (typeof vacationEntryTypes)[number]
+export type VacationEntryStatus = (typeof vacationEntryStatuses)[number]
+
+export interface EmployeeRecord {
+  id: number
+  firstName: string
+  lastName: string
+  email: string | null
+  color: string
+  displayName: string
+  initials: string
+  vacationDaysPerYear: number
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface VacationEntryRecord {
+  id: number
+  employeeId: number
+  startDate: string
+  endDate: string
+  type: VacationEntryType
+  status: VacationEntryStatus
+  businessDays: number
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface VacationEntryListItem extends VacationEntryRecord {
+  employeeName: string
+  employeeColor: string
+  employeeInitials: string
+}
+
+export interface EmployeeVacationSummary {
+  employee: EmployeeRecord
+  year: number
+  totalDays: number
+  usedDays: number
+  pendingDays: number
+  remainingDays: number
 }
 
 export interface DailySummary {

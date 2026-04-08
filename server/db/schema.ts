@@ -188,6 +188,39 @@ export const smartphoneStocks = sqliteTable('smartphone_stocks', {
   skuIdx: uniqueIndex('smartphone_stocks_sku_idx').on(table.sku)
 }))
 
+export const employees = sqliteTable('employees', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  firstName: text('first_name').notNull(),
+  lastName: text('last_name').notNull(),
+  email: text('email'),
+  color: text('color').notNull(),
+  vacationDaysPerYear: integer('vacation_days_per_year').notNull().default(25),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, table => ({
+  lastNameIdx: index('employees_last_name_idx').on(table.lastName),
+  activeIdx: index('employees_is_active_idx').on(table.isActive)
+}))
+
+export const vacationEntries = sqliteTable('vacation_entries', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  employeeId: integer('employee_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
+  startDate: text('start_date').notNull(),
+  endDate: text('end_date').notNull(),
+  type: text('type', { enum: ['full_day', 'half_day_am', 'half_day_pm'] }).notNull().default('full_day'),
+  status: text('status', { enum: ['pending', 'approved', 'rejected'] }).notNull().default('pending'),
+  businessDays: real('business_days').notNull(),
+  notes: text('notes'),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, table => ({
+  employeeIdx: index('vacation_entries_employee_id_idx').on(table.employeeId),
+  startDateIdx: index('vacation_entries_start_date_idx').on(table.startDate),
+  endDateIdx: index('vacation_entries_end_date_idx').on(table.endDate),
+  statusIdx: index('vacation_entries_status_idx').on(table.status)
+}))
+
 export const smartphoneReservationRequests = sqliteTable('smartphone_reservation_requests', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),

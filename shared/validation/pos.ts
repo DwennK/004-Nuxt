@@ -7,7 +7,9 @@ import {
   paymentMethods,
   paymentStatuses,
   ticketStatuses,
-  ticketTypes
+  ticketTypes,
+  vacationEntryStatuses,
+  vacationEntryTypes
 } from '../constants/pos'
 
 const optionalText = z.string().trim().optional().nullable().transform((value) => {
@@ -137,3 +139,27 @@ export const ticketStatusUpdateSchema = z.object({
   status: z.enum(ticketStatuses),
   internalNotes: optionalText
 })
+
+export const employeeInputSchema = z.object({
+  firstName: z.string().trim().min(1, 'Le prénom est obligatoire'),
+  lastName: z.string().trim().min(1, 'Le nom est obligatoire'),
+  email: optionalEmail,
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Couleur invalide'),
+  vacationDaysPerYear: z.coerce.number().int().min(0).max(365).default(25),
+  isActive: z.coerce.boolean().default(true)
+})
+
+export const vacationEntryInputSchema = z.object({
+  employeeId: z.coerce.number().int().positive(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide'),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide'),
+  type: z.enum(vacationEntryTypes).default('full_day'),
+  status: z.enum(vacationEntryStatuses).default('pending'),
+  notes: optionalText
+}).refine(
+  data => data.startDate <= data.endDate,
+  { message: 'La date de fin doit être après la date de début', path: ['endDate'] }
+).refine(
+  data => data.type === 'full_day' || data.startDate === data.endDate,
+  { message: 'Les demi-journées doivent avoir la même date de début et de fin', path: ['type'] }
+)
