@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, like, sql, sum } from 'drizzle-orm'
+import { and, desc, eq, isNotNull, sql, sum } from 'drizzle-orm'
 import {
   catalogItems,
   companySettings,
@@ -272,6 +272,12 @@ async function createPosTables() {
       )
     `,
     `
+      CREATE TABLE IF NOT EXISTS number_sequences (
+        scope TEXT PRIMARY KEY,
+        last_value INTEGER NOT NULL
+      )
+    `,
+    `
       CREATE TABLE IF NOT EXISTS ticket_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ticket_id INTEGER NOT NULL,
@@ -323,14 +329,14 @@ async function createPosTables() {
     'CREATE UNIQUE INDEX IF NOT EXISTS catalog_items_sku_idx ON catalog_items(sku)',
     'CREATE INDEX IF NOT EXISTS catalog_items_type_idx ON catalog_items(type)',
     'CREATE INDEX IF NOT EXISTS catalog_items_is_active_idx ON catalog_items(is_active)',
-    'CREATE INDEX IF NOT EXISTS tickets_ticket_number_idx ON tickets(ticket_number)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS tickets_ticket_number_idx ON tickets(ticket_number)',
     'CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets(customer_id)',
     'CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets(status)',
     'CREATE INDEX IF NOT EXISTS tickets_opened_at_idx ON tickets(opened_at)',
     'CREATE INDEX IF NOT EXISTS ticket_events_ticket_id_idx ON ticket_events(ticket_id)',
     'CREATE INDEX IF NOT EXISTS ticket_events_occurred_at_idx ON ticket_events(occurred_at)',
     'CREATE INDEX IF NOT EXISTS ticket_events_kind_idx ON ticket_events(kind)',
-    'CREATE INDEX IF NOT EXISTS documents_document_number_idx ON documents(document_number)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS documents_document_number_idx ON documents(document_number)',
     'CREATE INDEX IF NOT EXISTS documents_customer_id_idx ON documents(customer_id)',
     'CREATE INDEX IF NOT EXISTS documents_ticket_id_idx ON documents(ticket_id)',
     'CREATE INDEX IF NOT EXISTS documents_type_idx ON documents(type)',
@@ -488,6 +494,48 @@ async function migrateCompanySettingsColumns() {
 
   if (!columns.has('footer_notes')) {
     statements.push('ALTER TABLE company_settings ADD COLUMN footer_notes TEXT')
+  }
+
+  if (!statements.length) {
+    return
+  }
+
+  await client.batch(statements, 'write')
+}
+
+async function ensureUniqueNumberIndexes() {
+  const client = useTursoClient()
+  const [documentIndexes, ticketIndexes, duplicateDocuments, duplicateTickets] = await Promise.all([
+    client.execute(`PRAGMA index_list('documents')`),
+    client.execute(`PRAGMA index_list('tickets')`),
+    client.execute(`
+      SELECT 1
+      FROM documents
+      GROUP BY document_number
+      HAVING COUNT(*) > 1
+      LIMIT 1
+    `),
+    client.execute(`
+      SELECT 1
+      FROM tickets
+      GROUP BY ticket_number
+      HAVING COUNT(*) > 1
+      LIMIT 1
+    `)
+  ])
+
+  const documentNumberIndex = documentIndexes.rows.find(row => String(row.name) === 'documents_document_number_idx')
+  const ticketNumberIndex = ticketIndexes.rows.find(row => String(row.name) === 'tickets_ticket_number_idx')
+  const statements: string[] = []
+
+  if (!duplicateDocuments.rows.length && documentNumberIndex && Number(documentNumberIndex.unique) !== 1) {
+    statements.push('DROP INDEX IF EXISTS documents_document_number_idx')
+    statements.push('CREATE UNIQUE INDEX IF NOT EXISTS documents_document_number_idx ON documents(document_number)')
+  }
+
+  if (!duplicateTickets.rows.length && ticketNumberIndex && Number(ticketNumberIndex.unique) !== 1) {
+    statements.push('DROP INDEX IF EXISTS tickets_ticket_number_idx')
+    statements.push('CREATE UNIQUE INDEX IF NOT EXISTS tickets_ticket_number_idx ON tickets(ticket_number)')
   }
 
   if (!statements.length) {
@@ -1009,6 +1057,7 @@ export async function ensurePosSchema() {
       await migrateTicketAccessColumns()
       await migrateCompanySettingsColumns()
       await migrateDocumentLinesQuantityToInteger()
+      await ensureUniqueNumberIndexes()
       await ensureCompanySettingsRow()
       await refreshStoredDocumentTotals()
       await seedPosData()
@@ -1026,15 +1075,33 @@ export async function generateTicketNumber() {
   await ensurePosSchema()
 
   const prefix = 'TIC-'
-  const db = useDb()
-  const latest = await db.select({ ticketNumber: tickets.ticketNumber })
-    .from(tickets)
-    .where(like(tickets.ticketNumber, `${prefix}%`))
-    .orderBy(desc(tickets.ticketNumber))
-    .limit(1)
+  const client = useTursoClient()
+  const result = await client.execute({
+    sql: `
+      INSERT INTO number_sequences (scope, last_value)
+      VALUES (
+        ?,
+        COALESCE((
+          SELECT MAX(CAST(SUBSTR(ticket_number, LENGTH(?) + 1) AS INTEGER))
+          FROM tickets
+          WHERE ticket_number LIKE ?
+        ), 0) + 1
+      )
+      ON CONFLICT(scope) DO UPDATE
+      SET last_value = number_sequences.last_value + 1
+      RETURNING last_value
+    `,
+    args: ['ticket', prefix, `${prefix}%`]
+  })
 
-  const lastNumber = latest[0]?.ticketNumber?.split('-').pop()
-  const sequence = (lastNumber ? Number(lastNumber) : 0) + 1
+  const sequence = Number(result.rows[0]?.last_value || 0)
+
+  if (!sequence) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Could not generate ticket number'
+    })
+  }
 
   return `${prefix}${sequence}`
 }
@@ -1043,15 +1110,34 @@ export async function generateDocumentNumber(type: DocumentType) {
   await ensurePosSchema()
 
   const prefix = `${documentTypePrefixes[type]}-`
-  const db = useDb()
-  const latest = await db.select({ documentNumber: documents.documentNumber })
-    .from(documents)
-    .where(and(eq(documents.type, type), like(documents.documentNumber, `${prefix}%`)))
-    .orderBy(desc(documents.documentNumber))
-    .limit(1)
+  const client = useTursoClient()
+  const result = await client.execute({
+    sql: `
+      INSERT INTO number_sequences (scope, last_value)
+      VALUES (
+        ?,
+        COALESCE((
+          SELECT MAX(CAST(SUBSTR(document_number, LENGTH(?) + 1) AS INTEGER))
+          FROM documents
+          WHERE type = ?
+            AND document_number LIKE ?
+        ), 0) + 1
+      )
+      ON CONFLICT(scope) DO UPDATE
+      SET last_value = number_sequences.last_value + 1
+      RETURNING last_value
+    `,
+    args: [`document:${type}`, prefix, type, `${prefix}%`]
+  })
 
-  const lastNumber = latest[0]?.documentNumber?.split('-').pop()
-  const sequence = (lastNumber ? Number(lastNumber) : 0) + 1
+  const sequence = Number(result.rows[0]?.last_value || 0)
+
+  if (!sequence) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Could not generate document number'
+    })
+  }
 
   return `${prefix}${sequence}`
 }

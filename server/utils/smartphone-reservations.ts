@@ -1,38 +1,9 @@
-import { asc, eq, inArray, sql } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
 import type { SmartphoneReservationRequest, SmartphoneReservationStatus } from '~/types'
 import { smartphoneReservationRequests } from '../db/schema'
 import { useDb, useTursoClient } from './turso'
 
 type SmartphoneReservationRow = typeof smartphoneReservationRequests.$inferSelect
-
-const seedSmartphoneReservations: SmartphoneReservationRequest[] = [{
-  id: 1,
-  name: 'Lucas Martin',
-  phone: '+41 79 555 12 12',
-  model: 'iPhone 15 Pro',
-  storage: '256 Go',
-  requestedAt: '2026-03-18',
-  status: 'pending',
-  notes: 'Souhaite etre rappele en fin de journee.'
-}, {
-  id: 2,
-  name: 'Emma Favre',
-  phone: '+41 78 444 22 22',
-  model: 'Samsung Galaxy S24',
-  storage: '128 Go',
-  requestedAt: '2026-03-20',
-  status: 'contacted',
-  notes: 'Echange possible avec son ancien appareil.'
-}, {
-  id: 3,
-  name: 'Noah Garcia',
-  phone: '+41 76 333 45 67',
-  model: 'iPhone 14',
-  storage: '128 Go',
-  requestedAt: '2026-03-22',
-  status: 'sold',
-  notes: 'Dossier clos, reserve puis vendu.'
-}]
 
 function normalizeOptionalText(value: string) {
   const normalized = value.trim()
@@ -91,19 +62,6 @@ export async function ensureSmartphoneReservationsTable() {
       ON smartphone_reservation_requests(status)
     `
   ], 'write')
-
-  const db = useDb()
-  const result = await db.select({ count: sql<number>`count(*)` }).from(smartphoneReservationRequests)
-  const count = Number(result[0]?.count || 0)
-
-  if (count > 0) {
-    return
-  }
-
-  await db.insert(smartphoneReservationRequests).values(seedSmartphoneReservations.map(request => ({
-    ...request,
-    notes: normalizeOptionalText(request.notes)
-  })))
 }
 
 export async function listSmartphoneReservations() {

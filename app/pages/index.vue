@@ -314,20 +314,24 @@ const activityColumns = computed<TableColumn<ActivityRow>[]>(() => {
               </template>
 
               <div class="space-y-3">
-                <UButton
-                  to="/tickets/new"
-                  label="Nouvelle réparation"
-                  icon="i-lucide-wrench"
-                  size="xl"
-                  class="justify-start"
-                />
-                <UButton
-                  to="/sales/new"
-                  label="Vente rapide"
-                  icon="i-lucide-receipt"
-                  size="xl"
-                  class="justify-start"
-                />
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <UButton
+                    to="/tickets/new"
+                    label="Nouvelle réparation"
+                    icon="i-lucide-wrench"
+                    size="xl"
+                    block
+                    class="justify-start"
+                  />
+                  <UButton
+                    to="/sales/new"
+                    label="Vente rapide"
+                    icon="i-lucide-receipt"
+                    size="xl"
+                    block
+                    class="justify-start"
+                  />
+                </div>
 
                 <div class="flex flex-col gap-3 sm:flex-row">
                   <UDropdownMenu

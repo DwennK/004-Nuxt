@@ -58,6 +58,39 @@ const state = reactive<Schema>({
   notes: ''
 })
 
+function formatPhoneDisplay(value: string) {
+  const trimmed = value.trim()
+  const digits = trimmed.replace(/\D+/g, '')
+
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 8)} ${digits.slice(8, 10)}`
+  }
+
+  if (digits.length === 11 && digits.startsWith('41')) {
+    return `+${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 9)} ${digits.slice(9, 11)}`
+  }
+
+  return trimmed
+}
+
+function normalizePhoneInput(value: string) {
+  const trimmed = value.trim()
+  const digits = trimmed.replace(/\D+/g, '')
+
+  if (!digits) {
+    return ''
+  }
+
+  return trimmed.startsWith('+') ? `+${digits}` : digits
+}
+
+const phoneDisplay = computed({
+  get: () => formatPhoneDisplay(state.phone),
+  set: (value: string) => {
+    state.phone = normalizePhoneInput(value)
+  }
+})
+
 const isEditing = computed(() => props.mode === 'edit')
 
 watch(() => open.value, (value) => {
@@ -151,7 +184,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         </UFormField>
 
         <UFormField label="Téléphone" name="phone">
-          <UInput v-model="state.phone" class="w-full" placeholder="+41 79 123 45 67" />
+          <UInput v-model="phoneDisplay" class="w-full" placeholder="+41 79 123 45 67" />
         </UFormField>
 
         <UFormField label="Modèle" name="model">
