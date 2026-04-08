@@ -508,82 +508,76 @@ function handleIntakeScan(value: string) {
               </div>
             </template>
 
-            <UFormField
-              label="Recherche atelier"
-              name="intakeQuery"
-              hint="Ex. iphone 14 ecran, s23 ultra batterie, iphone 15 port charge"
+            <div
+              class="relative"
+              :class="searchOpen ? 'z-30' : ''"
+              @focusin="cancelSearchClose"
+              @focusout="scheduleSearchClose"
+              @pointerdown="openSearchPanel"
             >
+              <div class="flex gap-2">
+                <UInput
+                  v-model="intakeQuery"
+                  icon="i-lucide-scan-search"
+                  size="xl"
+                  class="flex-1"
+                  placeholder="iphone 14 ecran"
+                  autofocus
+                  @keydown="handleSearchKeydown"
+                />
+                <PosBarcodeScanner
+                  title="Scanner une référence ou un IMEI"
+                  description="Scannez un code-barres ou QR code pour préremplir la saisie rapide ou l’IMEI."
+                  trigger-size="lg"
+                  trigger-aria-label="Scanner une référence"
+                  @scanned="handleIntakeScan"
+                />
+              </div>
+
               <div
-                class="relative"
-                :class="searchOpen ? 'z-30' : ''"
-                @focusin="cancelSearchClose"
-                @focusout="scheduleSearchClose"
-                @pointerdown="openSearchPanel"
+                v-if="searchOpen"
+                class="absolute inset-x-0 top-full z-50 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
               >
-                <div class="flex gap-2">
-                  <UInput
-                    v-model="intakeQuery"
-                    icon="i-lucide-scan-search"
-                    size="xl"
-                    class="flex-1"
-                    placeholder="iphone 14 ecran"
-                    autofocus
-                    @keydown="handleSearchKeydown"
-                  />
-                  <PosBarcodeScanner
-                    title="Scanner une référence ou un IMEI"
-                    description="Scannez un code-barres ou QR code pour préremplir la saisie rapide ou l’IMEI."
-                    trigger-size="lg"
-                    trigger-aria-label="Scanner une référence"
-                    @scanned="handleIntakeScan"
-                  />
+                <div class="flex items-center justify-between gap-3 px-2 pb-2">
+                  <p class="text-sm font-medium text-highlighted">
+                    {{ searchPanelTitle }}
+                  </p>
+                  <span class="text-xs text-toned">
+                    {{ searchPanelItems.length }} suggestion(s)
+                  </span>
                 </div>
 
-                <div
-                  v-if="searchOpen"
-                  class="absolute inset-x-0 top-full z-50 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
-                >
-                  <div class="flex items-center justify-between gap-3 px-2 pb-2">
-                    <p class="text-sm font-medium text-highlighted">
-                      {{ searchPanelTitle }}
-                    </p>
-                    <span class="text-xs text-toned">
-                      {{ searchPanelItems.length }} suggestion(s)
+                <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
+                  <button
+                    v-for="(suggestion, index) in searchPanelItems"
+                    :key="suggestion.id"
+                    type="button"
+                    class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
+                    :class="index === highlightedSuggestionIndex
+                      ? 'bg-primary/8 ring-1 ring-primary/20'
+                      : 'hover:bg-muted/60'"
+                    @mouseenter="highlightedSuggestionIndex = index"
+                    @click="applyCatalogService(suggestion)"
+                  >
+                    <div class="min-w-0">
+                      <p class="truncate text-sm font-medium text-highlighted">
+                        {{ suggestion.name }}
+                      </p>
+                      <p class="truncate text-xs text-toned">
+                        {{ suggestion.model || suggestion.category }} · {{ suggestion.serviceKind || 'Prestation atelier' }}
+                      </p>
+                    </div>
+                    <span class="shrink-0 text-sm font-medium text-highlighted">
+                      {{ formatCurrency(suggestion.defaultPrice) }}
                     </span>
-                  </div>
+                  </button>
+                </div>
 
-                  <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
-                    <button
-                      v-for="(suggestion, index) in searchPanelItems"
-                      :key="suggestion.id"
-                      type="button"
-                      class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
-                      :class="index === highlightedSuggestionIndex
-                        ? 'bg-primary/8 ring-1 ring-primary/20'
-                        : 'hover:bg-muted/60'"
-                      @mouseenter="highlightedSuggestionIndex = index"
-                      @click="applyCatalogService(suggestion)"
-                    >
-                      <div class="min-w-0">
-                        <p class="truncate text-sm font-medium text-highlighted">
-                          {{ suggestion.name }}
-                        </p>
-                        <p class="truncate text-xs text-toned">
-                          {{ suggestion.model || suggestion.category }} · {{ suggestion.serviceKind || 'Prestation atelier' }}
-                        </p>
-                      </div>
-                      <span class="shrink-0 text-sm font-medium text-highlighted">
-                        {{ formatCurrency(suggestion.defaultPrice) }}
-                      </span>
-                    </button>
-                  </div>
-
-                  <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
-                    Aucune suggestion trouvée pour cette saisie.
-                  </div>
+                <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                  Aucune suggestion trouvée pour cette saisie.
                 </div>
               </div>
-            </UFormField>
+            </div>
 
             <div v-if="!intakeQuery.trim() && serviceQuickPickButtons.length" class="flex flex-wrap gap-2">
               <UButton
