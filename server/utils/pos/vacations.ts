@@ -1,7 +1,14 @@
-import { asc, eq, and, gte, lte, sql } from 'drizzle-orm'
+import { asc, eq, and, gte, lte } from 'drizzle-orm'
 import { employees, vacationEntries } from '~~/server/db/schema'
 import { employeeColorPalette } from '~~/shared/constants/pos'
-import type { EmployeeRecord, EmployeeVacationSummary, VacationEntryListItem, VacationEntryRecord } from '~~/shared/types/pos'
+import type {
+  EmployeeRecord,
+  EmployeeVacationSummary,
+  VacationEntryListItem,
+  VacationEntryRecord,
+  VacationEntryStatus,
+  VacationEntryType
+} from '~~/shared/types/pos'
 import { countBusinessDays, countBusinessDaysInYear } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
 import { ensurePosSchema, normalizeOptionalText } from './core'
@@ -184,16 +191,17 @@ export async function createVacationEntry(input: {
   employeeId: number
   startDate: string
   endDate: string
-  type?: string
-  status?: string
+  type?: VacationEntryType
+  status?: VacationEntryStatus
   notes?: string | null
 }) {
   await ensurePosSchema()
   const db = useDb()
   const now = new Date().toISOString()
 
-  const type = input.type || 'full_day'
-  const businessDays = type === 'full_day'
+  const entryType: VacationEntryType = input.type || 'full_day'
+  const entryStatus: VacationEntryStatus = input.status || 'pending'
+  const businessDays = entryType === 'full_day'
     ? countBusinessDays(input.startDate, input.endDate)
     : 0.5
 
@@ -201,8 +209,8 @@ export async function createVacationEntry(input: {
     employeeId: input.employeeId,
     startDate: input.startDate,
     endDate: input.endDate,
-    type,
-    status: input.status || 'pending',
+    type: entryType,
+    status: entryStatus,
     businessDays,
     notes: normalizeOptionalText(input.notes),
     createdAt: now,
@@ -216,8 +224,8 @@ export async function updateVacationEntry(id: number, input: {
   employeeId?: number
   startDate?: string
   endDate?: string
-  type?: string
-  status?: string
+  type?: VacationEntryType
+  status?: VacationEntryStatus
   notes?: string | null
 }) {
   await ensurePosSchema()
@@ -230,9 +238,9 @@ export async function updateVacationEntry(id: number, input: {
 
   const startDate = input.startDate ?? existing[0].startDate
   const endDate = input.endDate ?? existing[0].endDate
-  const type = input.type ?? existing[0].type
+  const entryType: VacationEntryType = input.type ?? existing[0].type
 
-  const businessDays = type === 'full_day'
+  const businessDays = entryType === 'full_day'
     ? countBusinessDays(startDate, endDate)
     : 0.5
 
@@ -241,7 +249,7 @@ export async function updateVacationEntry(id: number, input: {
       employeeId: input.employeeId ?? existing[0].employeeId,
       startDate,
       endDate,
-      type,
+      type: entryType,
       status: input.status ?? existing[0].status,
       businessDays,
       notes: input.notes !== undefined ? normalizeOptionalText(input.notes) : existing[0].notes,

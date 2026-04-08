@@ -1,22 +1,22 @@
 <script setup lang="ts">
+import type { EmployeeRecord } from '~~/shared/types/pos'
+
+type EmployeeFormValue = Partial<Pick<EmployeeRecord, 'firstName' | 'lastName' | 'email' | 'color' | 'vacationDaysPerYear' | 'isActive'>>
+type EmployeeFormPayload = Pick<EmployeeRecord, 'firstName' | 'lastName' | 'color' | 'vacationDaysPerYear' | 'isActive'> & {
+  email: string
+}
+
 defineProps<{
   title: string
   description: string
   submitLabel: string
-  initialValue?: {
-    firstName?: string
-    lastName?: string
-    email?: string | null
-    color?: string
-    vacationDaysPerYear?: number
-    isActive?: boolean
-  }
+  initialValue?: EmployeeFormValue
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
 
 const emit = defineEmits<{
-  save: [payload: any]
+  save: [payload: EmployeeFormPayload]
 }>()
 </script>
 

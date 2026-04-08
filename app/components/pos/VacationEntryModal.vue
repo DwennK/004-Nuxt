@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import type { FormSubmitEvent } from '@nuxt/ui'
 import { CalendarDate } from '@internationalized/date'
-import type { DateRange } from '@internationalized/date'
 import { vacationEntryTypes, vacationEntryStatuses, vacationEntryTypeLabels, vacationEntryStatusLabels } from '~~/shared/constants/pos'
-import type { EmployeeRecord, VacationEntryListItem } from '~~/shared/types/pos'
+import type { EmployeeRecord, VacationEntryListItem, VacationEntryRecord } from '~~/shared/types/pos'
 import { countBusinessDays } from '~~/shared/utils/pos'
+
+type CalendarDateRange = {
+  start: CalendarDate
+  end: CalendarDate
+}
+
+type VacationEntryModalPayload = Pick<VacationEntryRecord, 'employeeId' | 'startDate' | 'endDate' | 'type' | 'status' | 'notes'>
 
 const props = defineProps<{
   employees: EmployeeRecord[]
@@ -16,7 +21,7 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { default: false })
 
 const emit = defineEmits<{
-  save: [payload: any]
+  save: [payload: VacationEntryModalPayload]
 }>()
 
 const schema = z.object({
@@ -25,14 +30,19 @@ const schema = z.object({
   status: z.enum(vacationEntryStatuses)
 })
 
-const state = reactive({
+const state = reactive<{
+  employeeId: number
+  type: VacationEntryRecord['type']
+  status: VacationEntryRecord['status']
+  notes: string
+}>({
   employeeId: 0,
   type: 'full_day' as (typeof vacationEntryTypes)[number],
   status: 'approved' as (typeof vacationEntryStatuses)[number],
   notes: ''
 })
 
-const dateRange = ref<DateRange>()
+const dateRange = ref<CalendarDateRange>()
 const singleDate = ref<CalendarDate>()
 
 const typeItems = vacationEntryTypes.map(t => ({ label: vacationEntryTypeLabels[t], value: t }))
@@ -97,7 +107,7 @@ watch([() => props.editingEntry, () => props.prefillDate], ([entry, prefill]) =>
   }
 }, { immediate: true })
 
-function onSubmit(_event: FormSubmitEvent<any>) {
+function onSubmit() {
   let startDate: string
   let endDate: string
 
@@ -129,7 +139,12 @@ function onSubmit(_event: FormSubmitEvent<any>) {
     :description="editingEntry ? 'Modifiez les détails de cette absence.' : 'Planifiez une absence pour un employé.'"
   >
     <template #body>
-      <UForm :schema="schema" :state="state" class="space-y-5" @submit="onSubmit">
+      <UForm
+        :schema="schema"
+        :state="state"
+        class="space-y-5"
+        @submit="onSubmit"
+      >
         <UFormField label="Employé" name="employeeId">
           <USelect
             v-model="state.employeeId"
@@ -175,7 +190,12 @@ function onSubmit(_event: FormSubmitEvent<any>) {
         </div>
 
         <div class="flex justify-end gap-2">
-          <UButton label="Annuler" color="neutral" variant="ghost" @click="open = false" />
+          <UButton
+            label="Annuler"
+            color="neutral"
+            variant="ghost"
+            @click="open = false"
+          />
           <UButton type="submit" :label="editingEntry ? 'Enregistrer' : 'Créer'" icon="i-lucide-save" />
         </div>
       </UForm>

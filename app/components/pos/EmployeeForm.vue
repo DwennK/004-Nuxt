@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import type { FormSubmitEvent } from '@nuxt/ui'
 import { employeeColorPalette } from '~~/shared/constants/pos'
+import type { EmployeeRecord } from '~~/shared/types/pos'
+
+type EmployeeFormValue = Partial<Pick<EmployeeRecord, 'firstName' | 'lastName' | 'email' | 'color' | 'vacationDaysPerYear' | 'isActive'>>
+type EmployeeFormState = Pick<EmployeeRecord, 'firstName' | 'lastName' | 'color' | 'vacationDaysPerYear' | 'isActive'> & {
+  email: string
+}
 
 const props = withDefaults(defineProps<{
-  initialValue?: {
-    firstName?: string
-    lastName?: string
-    email?: string | null
-    color?: string
-    vacationDaysPerYear?: number
-    isActive?: boolean
-  }
+  initialValue?: EmployeeFormValue
   submitLabel?: string
 }>(), {
   initialValue: () => ({}),
@@ -19,7 +17,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  save: [payload: typeof state]
+  save: [payload: EmployeeFormState]
 }>()
 
 const schema = z.object({
@@ -31,7 +29,7 @@ const schema = z.object({
   isActive: z.coerce.boolean().default(true)
 })
 
-const state = reactive({
+const state = reactive<EmployeeFormState>({
   firstName: '',
   lastName: '',
   email: '',
@@ -49,13 +47,18 @@ watchEffect(() => {
   state.isActive = props.initialValue.isActive ?? true
 })
 
-function onSubmit(_event: FormSubmitEvent<typeof state>) {
+function onSubmit() {
   emit('save', { ...state })
 }
 </script>
 
 <template>
-  <UForm :schema="schema" :state="state" class="space-y-5" @submit="onSubmit">
+  <UForm
+    :schema="schema"
+    :state="state"
+    class="space-y-5"
+    @submit="onSubmit"
+  >
     <div class="grid gap-4 md:grid-cols-2">
       <UFormField label="Prénom" name="firstName">
         <UInput v-model="state.firstName" class="w-full" autofocus />
@@ -86,7 +89,13 @@ function onSubmit(_event: FormSubmitEvent<typeof state>) {
 
     <div class="grid gap-4 md:grid-cols-2">
       <UFormField label="Jours de vacances / an" name="vacationDaysPerYear">
-        <UInput v-model.number="state.vacationDaysPerYear" type="number" :min="0" :max="365" class="w-full" />
+        <UInput
+          v-model.number="state.vacationDaysPerYear"
+          type="number"
+          :min="0"
+          :max="365"
+          class="w-full"
+        />
       </UFormField>
 
       <UFormField label="Statut" name="isActive">

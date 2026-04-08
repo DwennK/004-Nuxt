@@ -2,7 +2,13 @@
 import type { TableColumn, TabsItem } from '@nuxt/ui'
 import { getPaginationRowModel } from '@tanstack/table-core'
 import { CalendarDate } from '@internationalized/date'
-import type { EmployeeRecord, EmployeeVacationSummary, VacationEntryListItem } from '~~/shared/types/pos'
+import type {
+  EmployeeRecord,
+  EmployeeVacationSummary,
+  VacationEntryListItem,
+  VacationEntryRecord,
+  VacationEntryStatus
+} from '~~/shared/types/pos'
 import { vacationEntryTypeLabels, vacationEntryStatusLabels, vacationEntryStatusColors } from '~~/shared/constants/pos'
 import { formatDate, getSwissHolidayMap, getSwissHolidays } from '~~/shared/utils/pos'
 
@@ -11,6 +17,13 @@ const UBadge = resolveComponent('UBadge')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
+
+type EmployeeFormPayload = Pick<EmployeeRecord, 'firstName' | 'lastName' | 'color' | 'vacationDaysPerYear' | 'isActive'> & {
+  email: string
+}
+
+type VacationEntryPayload = Pick<VacationEntryRecord, 'employeeId' | 'startDate' | 'endDate' | 'type' | 'status' | 'notes'>
+type SelectItem<T> = { label: string, value: T }
 
 const currentYear = new Date().getFullYear()
 const selectedYear = ref(currentYear)
@@ -63,7 +76,7 @@ const editingEmployeeForm = computed(() => {
   }
 })
 
-async function saveEmployee(payload: any) {
+async function saveEmployee(payload: EmployeeFormPayload) {
   if (editingEmployee.value) {
     await $fetch(`/api/employees/${editingEmployee.value.id}`, { method: 'PATCH', body: payload })
     toast.add({ title: 'Employe mis a jour', color: 'success' })
@@ -195,7 +208,7 @@ function openEditVacation(entry: VacationEntryListItem) {
   vacationModalOpen.value = true
 }
 
-async function saveVacationEntry(payload: any) {
+async function saveVacationEntry(payload: VacationEntryPayload) {
   if (editingEntry.value) {
     await $fetch(`/api/vacations/${editingEntry.value.id}`, { method: 'PATCH', body: payload })
     toast.add({ title: 'Absence mise a jour', color: 'success' })
@@ -288,16 +301,16 @@ const overlapDays = computed(() => {
 
 // --- Entries list with filters, sort, pagination ---
 const filterEmployee = ref<number | null>(null)
-const filterStatus = ref<string | null>(null)
+const filterStatus = ref<VacationEntryStatus | null>(null)
 const entriesPagination = ref({ pageIndex: 0, pageSize: 15 })
 
-const employeeFilterItems = computed(() => [
-  { label: 'Tous les employes', value: null as any },
+const employeeFilterItems = computed<SelectItem<number | null>[]>(() => [
+  { label: 'Tous les employes', value: null },
   ...(employees.value || []).filter(e => e.isActive).map(e => ({ label: e.displayName, value: e.id }))
 ])
 
-const statusFilterItems = [
-  { label: 'Tous les statuts', value: null as any },
+const statusFilterItems: SelectItem<VacationEntryStatus | null>[] = [
+  { label: 'Tous les statuts', value: null },
   { label: 'Approuve', value: 'approved' },
   { label: 'En attente', value: 'pending' },
   { label: 'Refuse', value: 'rejected' }
@@ -367,12 +380,6 @@ function exportCSV() {
   URL.revokeObjectURL(url)
 }
 
-// --- Today button ---
-const todayCalendarDate = computed(() => {
-  const now = new Date()
-  return new CalendarDate(now.getFullYear(), now.getMonth() + 1, 1)
-})
-
 const calendarRef = ref()
 </script>
 
@@ -401,7 +408,12 @@ const calendarRef = ref()
     </template>
 
     <template #body>
-      <UTabs v-model="selectedTab" :items="tabs" :unmount-on-hide="false" class="w-full">
+      <UTabs
+        v-model="selectedTab"
+        :items="tabs"
+        :unmount-on-hide="false"
+        class="w-full"
+      >
         <template #calendar>
           <div class="space-y-6 p-1">
             <!-- Overlap warnings -->
@@ -420,7 +432,12 @@ const calendarRef = ref()
                 >
                   {{ formatDate(overlap.date) }} : {{ overlap.names.join(', ') }}
                 </UBadge>
-                <UBadge v-if="overlapDays.length > 10" color="warning" variant="subtle" size="xs">
+                <UBadge
+                  v-if="overlapDays.length > 10"
+                  color="warning"
+                  variant="subtle"
+                  size="xs"
+                >
                   +{{ overlapDays.length - 10 }} autres
                 </UBadge>
               </div>
@@ -534,7 +551,9 @@ const calendarRef = ref()
 
             <!-- Swiss holidays list -->
             <div class="space-y-1">
-              <h3 class="text-sm font-medium text-highlighted">Jours feries {{ selectedYear }}</h3>
+              <h3 class="text-sm font-medium text-highlighted">
+                Jours feries {{ selectedYear }}
+              </h3>
               <div class="flex flex-wrap gap-2">
                 <UBadge
                   v-for="holiday in getSwissHolidays(selectedYear)"
@@ -615,7 +634,12 @@ const calendarRef = ref()
                         { label: 'Supprimer', icon: 'i-lucide-trash', color: 'error', onSelect: () => removeVacationEntry(entry.id) }
                       ]]"
                     >
-                      <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" size="xs" />
+                      <UButton
+                        icon="i-lucide-ellipsis-vertical"
+                        color="neutral"
+                        variant="ghost"
+                        size="xs"
+                      />
                     </UDropdownMenu>
                   </div>
                 </div>
@@ -678,7 +702,9 @@ const calendarRef = ref()
               <template #empty>
                 <div class="flex flex-col items-center gap-2 py-10 text-center">
                   <UIcon name="i-lucide-users" class="size-8 text-dimmed" />
-                  <p class="text-sm text-toned">Aucun employe. Commencez par en ajouter un.</p>
+                  <p class="text-sm text-toned">
+                    Aucun employe. Commencez par en ajouter un.
+                  </p>
                   <UButton label="Ajouter un employe" size="sm" @click="createEmployeeOpen = true" />
                 </div>
               </template>
@@ -750,19 +776,25 @@ const calendarRef = ref()
                     <div class="flex items-center justify-between text-[10px] text-toned">
                       <div class="flex items-center gap-2">
                         <span class="flex items-center gap-1">
-                          <span class="inline-block size-1.5 rounded-full" :class="{
-                            'bg-success': summaryColor(summary) === 'success',
-                            'bg-warning': summaryColor(summary) === 'warning',
-                            'bg-error': summaryColor(summary) === 'error'
-                          }" />
+                          <span
+                            class="inline-block size-1.5 rounded-full"
+                            :class="{
+                              'bg-success': summaryColor(summary) === 'success',
+                              'bg-warning': summaryColor(summary) === 'warning',
+                              'bg-error': summaryColor(summary) === 'error'
+                            }"
+                          />
                           {{ summary.usedDays }}j pris
                         </span>
                         <span v-if="summary.pendingDays > 0" class="flex items-center gap-1">
-                          <span class="inline-block size-1.5 rounded-full opacity-40" :class="{
-                            'bg-success': summaryColor(summary) === 'success',
-                            'bg-warning': summaryColor(summary) === 'warning',
-                            'bg-error': summaryColor(summary) === 'error'
-                          }" />
+                          <span
+                            class="inline-block size-1.5 rounded-full opacity-40"
+                            :class="{
+                              'bg-success': summaryColor(summary) === 'success',
+                              'bg-warning': summaryColor(summary) === 'warning',
+                              'bg-error': summaryColor(summary) === 'error'
+                            }"
+                          />
                           {{ summary.pendingDays }}j en attente
                         </span>
                       </div>
@@ -771,11 +803,13 @@ const calendarRef = ref()
 
                   <div class="flex items-center justify-between text-xs text-toned">
                     <span>{{ summary.usedDays + summary.pendingDays }} / {{ summary.totalDays }} jours</span>
-                    <span :class="{
-                      'text-success font-medium': summary.remainingDays > 5,
-                      'text-warning font-medium': summary.remainingDays > 0 && summary.remainingDays <= 5,
-                      'text-error font-medium': summary.remainingDays <= 0
-                    }">
+                    <span
+                      :class="{
+                        'text-success font-medium': summary.remainingDays > 5,
+                        'text-warning font-medium': summary.remainingDays > 0 && summary.remainingDays <= 5,
+                        'text-error font-medium': summary.remainingDays <= 0
+                      }"
+                    >
                       {{ summary.remainingDays }} restant(s)
                     </span>
                   </div>
@@ -848,7 +882,9 @@ const calendarRef = ref()
             </div>
           </div>
         </div>
-        <p v-else class="text-sm text-toned">Aucune absence ce jour.</p>
+        <p v-else class="text-sm text-toned">
+          Aucune absence ce jour.
+        </p>
 
         <UButton
           icon="i-lucide-plus"
@@ -870,8 +906,18 @@ const calendarRef = ref()
         Toutes ses absences seront egalement supprimees. Cette action est irreversible.
       </p>
       <div class="flex justify-end gap-2 mt-4">
-        <UButton label="Annuler" color="neutral" variant="ghost" @click="deleteConfirmOpen = false" />
-        <UButton label="Supprimer" color="error" icon="i-lucide-trash" @click="removeEmployee" />
+        <UButton
+          label="Annuler"
+          color="neutral"
+          variant="ghost"
+          @click="deleteConfirmOpen = false"
+        />
+        <UButton
+          label="Supprimer"
+          color="error"
+          icon="i-lucide-trash"
+          @click="removeEmployee"
+        />
       </div>
     </template>
   </UModal>
