@@ -45,7 +45,7 @@ export const catalogItems = sqliteTable('catalog_items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
   sku: text('sku'),
-  type: text('type', { enum: ['product', 'service'] }).notNull(),
+  type: text('type', { enum: ['product', 'repair', 'service'] }).notNull(),
   category: text('category').notNull().default('Autre'),
   brand: text('brand'),
   model: text('model'),

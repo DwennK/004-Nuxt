@@ -7,7 +7,7 @@ import { formatCurrency, normalizeSearchText } from '~~/shared/utils/pos'
 
 const props = withDefaults(defineProps<{
   customers: CustomerRecord[]
-  serviceItems?: CatalogItemRecord[]
+  repairItems?: CatalogItemRecord[]
   initialValue?: Partial<{
     customerId: number | null
     type: (typeof ticketTypes)[number]
@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<{
   showSubmit?: boolean
   submitLabel?: string
 }>(), {
-  serviceItems: () => [],
+  repairItems: () => [],
   initialValue: () => ({}),
   formId: undefined,
   layout: 'compact',
@@ -143,11 +143,11 @@ const currentCustomer = computed(() => {
     || (createdCustomer.value?.id === state.customerId ? createdCustomer.value : null)
 })
 
-const catalogServiceItems = computed(() => {
-  return props.serviceItems.filter(item => item.type === 'service' && item.isActive)
+const catalogRepairItems = computed(() => {
+  return props.repairItems.filter(item => item.type === 'repair' && item.isActive)
 })
 const quickPickServices = computed(() => {
-  return catalogServiceItems.value.slice(0, 6)
+  return catalogRepairItems.value.slice(0, 6)
 })
 
 function buildServiceSearchText(item: CatalogItemRecord) {
@@ -229,7 +229,7 @@ function getCatalogServiceResult(query: string) {
     }
   }
 
-  const matches = catalogServiceItems.value
+  const matches = catalogRepairItems.value
     .map(item => ({
       item,
       score: scoreCatalogService(item, normalizedQuery)

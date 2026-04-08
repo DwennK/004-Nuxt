@@ -1,4 +1,4 @@
-export const catalogItemTypes = ['product', 'service'] as const
+export const catalogItemTypes = ['product', 'repair', 'service'] as const
 export const catalogArticleCategories = [
   'Accessoires',
   'Smartphones',
@@ -9,13 +9,21 @@ export const catalogArticleCategories = [
   'Protection',
   'Autre'
 ] as const
-export const catalogServiceCategories = [
+export const catalogRepairCategories = [
   'iPhone',
   'Samsung',
   'iPad',
   'MacBook',
   'PC',
   'Console',
+  'Autre'
+] as const
+export const catalogServiceCategories = [
+  'Diagnostic',
+  'Support',
+  'Transfert',
+  'Configuration',
+  'Nettoyage',
   'Autre'
 ] as const
 export const catalogServiceKindSuggestions = [
@@ -55,11 +63,13 @@ export const payableDocumentTypes = ['invoice', 'receipt'] as const
 
 export const catalogItemTypeLabels: Record<(typeof catalogItemTypes)[number], string> = {
   product: 'Article',
-  service: 'Prestation'
+  repair: 'Réparation',
+  service: 'Service'
 }
 
-export const catalogItemTypeColors: Record<(typeof catalogItemTypes)[number], 'info' | 'success'> = {
+export const catalogItemTypeColors: Record<(typeof catalogItemTypes)[number], 'info' | 'warning' | 'success'> = {
   product: 'info',
+  repair: 'warning',
   service: 'success'
 }
 

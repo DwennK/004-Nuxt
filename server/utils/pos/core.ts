@@ -485,8 +485,59 @@ async function migrateCatalogStructure() {
   await client.batch(statements, 'write')
 
   await client.batch([
-    `UPDATE catalog_items SET type = 'service' WHERE type IN ('repair_part', 'labor')`,
-    `UPDATE catalog_items SET category = 'Autre' WHERE trim(coalesce(category, '')) = ''`
+    `UPDATE catalog_items SET type = 'repair' WHERE type IN ('repair_part', 'labor')`,
+    `UPDATE catalog_items SET category = 'Autre' WHERE trim(coalesce(category, '')) = ''`,
+    `UPDATE catalog_items
+      SET type = 'repair'
+      WHERE type = 'service'
+        AND (
+          trim(coalesce(brand, '')) != ''
+          OR trim(coalesce(model, '')) != ''
+          OR category NOT IN ('Service', 'Autre', 'Diagnostic', 'Support', 'Transfert', 'Configuration', 'Nettoyage')
+        )`,
+    `UPDATE catalog_items
+      SET category = 'Diagnostic'
+      WHERE type = 'service'
+        AND category = 'Service'
+        AND lower(coalesce(service_kind, name, '')) like '%diagnostic%'`,
+    `UPDATE catalog_items
+      SET category = 'Support'
+      WHERE type = 'service'
+        AND category = 'Service'
+        AND (
+          lower(coalesce(service_kind, name, '')) like '%support%'
+          OR lower(coalesce(service_kind, name, '')) like '%assistance%'
+          OR lower(coalesce(service_kind, name, '')) like '%whatsapp%'
+        )`,
+    `UPDATE catalog_items
+      SET category = 'Transfert'
+      WHERE type = 'service'
+        AND category = 'Service'
+        AND (
+          lower(coalesce(service_kind, name, '')) like '%transfert%'
+          OR lower(coalesce(service_kind, name, '')) like '%transfer%'
+          OR lower(coalesce(service_kind, name, '')) like '%migration%'
+        )`,
+    `UPDATE catalog_items
+      SET category = 'Configuration'
+      WHERE type = 'service'
+        AND category = 'Service'
+        AND lower(coalesce(service_kind, name, '')) like '%configuration%'`,
+    `UPDATE catalog_items
+      SET category = 'Nettoyage'
+      WHERE type = 'service'
+        AND category = 'Service'
+        AND lower(coalesce(service_kind, name, '')) like '%nettoyage%'`,
+    `UPDATE catalog_items
+      SET category = 'Autre'
+      WHERE type = 'service'
+        AND category = 'Autre'
+        AND trim(coalesce(brand, '')) = ''
+        AND trim(coalesce(model, '')) = ''`,
+    `UPDATE catalog_items
+      SET category = 'Autre'
+      WHERE type = 'service'
+        AND category = 'Service'`
   ], 'write')
 }
 
@@ -778,7 +829,7 @@ async function seedCatalogItems() {
       name: 'Diagnostic',
       sku: 'SERV-DIAG',
       type: 'service',
-      category: 'Autre',
+      category: 'Diagnostic',
       brand: null,
       model: null,
       serviceKind: 'Diagnostic',
@@ -793,7 +844,7 @@ async function seedCatalogItems() {
       name: 'WhatsApp Support 20 min',
       sku: 'SERV-WA-20',
       type: 'service',
-      category: 'Autre',
+      category: 'Support',
       brand: null,
       model: null,
       serviceKind: 'Support WhatsApp',
@@ -808,7 +859,7 @@ async function seedCatalogItems() {
       name: 'Data Transfer',
       sku: 'SERV-DATA',
       type: 'service',
-      category: 'Autre',
+      category: 'Transfert',
       brand: null,
       model: null,
       serviceKind: 'Transfert de données',
@@ -837,7 +888,7 @@ async function seedRepairCatalogServices() {
     model: catalogItems.model,
     serviceKind: catalogItems.serviceKind
   }).from(catalogItems)
-    .where(eq(catalogItems.type, 'service'))
+    .where(eq(catalogItems.type, 'repair'))
 
   const existingSkus = new Set(existingRows.map(row => row.sku).filter((sku): sku is string => Boolean(sku)))
   const existingServiceKeys = new Set(existingRows.map(row => `${row.brand || ''}::${row.model || ''}::${row.serviceKind || ''}`))

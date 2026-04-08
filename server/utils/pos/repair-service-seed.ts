@@ -202,7 +202,7 @@ function expandMatrix(brand: string, category: string, matrix: RepairMatrixEntry
       return {
         name: `${issue.issueLabel} ${fullModel}`,
         sku: buildServiceSku(brand, fullModel, issue.issueKey),
-        type: 'service',
+        type: 'repair',
         category,
         brand,
         model: fullModel,

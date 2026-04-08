@@ -5,11 +5,11 @@ const route = useRoute()
 const toast = useToast()
 const customerId = computed(() => Number(route.query.customerId || 0))
 
-const [{ data: customers }, { data: serviceItems }] = await Promise.all([
+const [{ data: customers }, { data: repairItems }] = await Promise.all([
   useFetch<CustomerRecord[]>('/api/customers'),
   useFetch<CatalogItemRecord[]>('/api/catalog-items', {
     query: {
-      type: 'service',
+      type: 'repair',
       activeOnly: true
     }
   })
@@ -63,7 +63,7 @@ async function saveTicket(payload: {
           v-if="customers"
           layout="intake"
           :customers="customers"
-          :service-items="serviceItems || []"
+          :repair-items="repairItems || []"
           :initial-value="{ customerId: customerId || undefined, type: 'repair' }"
           submit-label="Créer le ticket"
           @save="saveTicket"

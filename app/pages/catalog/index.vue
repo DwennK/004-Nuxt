@@ -1,126 +1,174 @@
 <script setup lang="ts">
-import type { TableColumn, TabsItem } from "@nuxt/ui";
-import { getPaginationRowModel } from "@tanstack/table-core";
-import type { LocationQueryValue } from "vue-router";
-import type { DashboardTableInstance } from "~/types/table";
+import type { TableColumn, TabsItem } from '@nuxt/ui'
+import { getPaginationRowModel } from '@tanstack/table-core'
+import type { LocationQueryValue } from 'vue-router'
+import type { DashboardTableInstance } from '~/types/table'
 import type {
   CatalogItemInput,
   CatalogItemRecord,
-  CatalogItemType,
-} from "~~/shared/types/pos";
+  CatalogItemType
+} from '~~/shared/types/pos'
 import {
   catalogArticleCategories,
-  catalogServiceCategories,
-} from "~~/shared/constants/pos";
-import { formatCurrency, normalizeSearchText } from "~~/shared/utils/pos";
+  catalogRepairCategories,
+  catalogServiceCategories
+} from '~~/shared/constants/pos'
+import { formatCurrency, normalizeSearchText } from '~~/shared/utils/pos'
 
-type CatalogView = "articles" | "services";
-const ALL_CATEGORIES = "__all__";
+type CatalogView = 'articles' | 'repairs' | 'services'
+const ALL_CATEGORIES = '__all__'
 
-const UButton = resolveComponent("UButton");
-const UBadge = resolveComponent("UBadge");
-const UDropdownMenu = resolveComponent("UDropdownMenu");
+const UButton = resolveComponent('UButton')
+const UBadge = resolveComponent('UBadge')
+const UDropdownMenu = resolveComponent('UDropdownMenu')
 
-const route = useRoute();
-const router = useRouter();
-const toast = useToast();
-const articleTable = useTemplateRef<DashboardTableInstance>("articleTable");
-const serviceTable = useTemplateRef<DashboardTableInstance>("serviceTable");
+const route = useRoute()
+const router = useRouter()
+const toast = useToast()
+const articleTable = useTemplateRef<DashboardTableInstance>('articleTable')
+const repairTable = useTemplateRef<DashboardTableInstance>('repairTable')
+const serviceTable = useTemplateRef<DashboardTableInstance>('serviceTable')
 
-const activeView = ref<CatalogView>("articles");
-const createOpen = ref(false);
-const editOpen = ref(false);
-const editingItem = ref<CatalogItemRecord | null>(null);
-const createType = ref<CatalogItemType>("product");
+const activeView = ref<CatalogView>('articles')
+const createOpen = ref(false)
+const editOpen = ref(false)
+const editingItem = ref<CatalogItemRecord | null>(null)
+const createType = ref<CatalogItemType>('product')
 
-const articleSearch = ref("");
-const serviceSearch = ref("");
-const articleCategory = ref(ALL_CATEGORIES);
-const serviceCategory = ref(ALL_CATEGORIES);
-const articleActiveOnly = ref(false);
-const serviceActiveOnly = ref(false);
+const articleSearch = ref('')
+const repairSearch = ref('')
+const serviceSearch = ref('')
+const articleCategory = ref(ALL_CATEGORIES)
+const repairCategory = ref(ALL_CATEGORIES)
+const serviceCategory = ref(ALL_CATEGORIES)
+const articleActiveOnly = ref(false)
+const repairActiveOnly = ref(false)
+const serviceActiveOnly = ref(false)
 
-const articlePagination = ref({ pageIndex: 0, pageSize: 10 });
-const servicePagination = ref({ pageIndex: 0, pageSize: 10 });
-const articleSorting = ref([{ id: "name", desc: false }]);
-const serviceSorting = ref([{ id: "name", desc: false }]);
+const articlePagination = ref({ pageIndex: 0, pageSize: 10 })
+const repairPagination = ref({ pageIndex: 0, pageSize: 10 })
+const servicePagination = ref({ pageIndex: 0, pageSize: 10 })
+const articleSorting = ref([{ id: 'name', desc: false }])
+const repairSorting = ref([{ id: 'name', desc: false }])
+const serviceSorting = ref([{ id: 'name', desc: false }])
 
 const {
   data: items,
   status,
-  refresh,
-} = await useFetch<CatalogItemRecord[]>("/api/catalog-items");
+  refresh
+} = await useFetch<CatalogItemRecord[]>('/api/catalog-items')
 
 const tabItems: TabsItem[] = [
   {
-    label: "Articles",
-    icon: "i-lucide-package",
-    value: "articles",
-    slot: "articles",
+    label: 'Articles',
+    icon: 'i-lucide-package',
+    value: 'articles',
+    slot: 'articles'
   },
   {
-    label: "Prestations",
-    icon: "i-lucide-wrench",
-    value: "services",
-    slot: "services",
+    label: 'Réparations',
+    icon: 'i-lucide-wrench',
+    value: 'repairs',
+    slot: 'repairs'
   },
-];
+  {
+    label: 'Services',
+    icon: 'i-lucide-briefcase-business',
+    value: 'services',
+    slot: 'services'
+  }
+]
 
 function getQueryValue(
-  value: LocationQueryValue | LocationQueryValue[] | undefined,
+  value: LocationQueryValue | LocationQueryValue[] | undefined
 ) {
-  return Array.isArray(value) ? value[0] : value;
+  return Array.isArray(value) ? value[0] : value
 }
 
 function replaceCatalogQuery(updates: Record<string, string | null>) {
   const nextQuery = Object.fromEntries(
     Object.entries({
       ...route.query,
-      ...updates,
-    }).filter(([, value]) => value !== null),
-  );
+      ...updates
+    }).filter(([, value]) => value !== null)
+  )
 
-  return router.replace({ query: nextQuery });
+  return router.replace({ query: nextQuery })
 }
 
 function getViewType(view: CatalogView) {
-  return view === "articles" ? "product" : "service";
+  if (view === 'articles') {
+    return 'product'
+  }
+
+  return view === 'repairs' ? 'repair' : 'service'
 }
 
-function getViewForItemType(type: CatalogItemType): CatalogView {
-  return type === "product" ? "articles" : "services";
+function getViewForItem(item: CatalogItemRecord): CatalogView {
+  if (item.type === 'product') {
+    return 'articles'
+  }
+
+  return item.type === 'repair' ? 'repairs' : 'services'
+}
+
+function getCreateUpdateTitle(
+  type: CatalogItemType,
+  action: 'created' | 'updated' | 'deleted'
+) {
+  if (type === 'product') {
+    return action === 'deleted'
+      ? 'Article supprimé'
+      : action === 'updated'
+        ? 'Article mis à jour'
+        : 'Article créé'
+  }
+
+  if (type === 'repair') {
+    return action === 'deleted'
+      ? 'Réparation supprimée'
+      : action === 'updated'
+        ? 'Réparation mise à jour'
+        : 'Réparation créée'
+  }
+
+  return action === 'deleted'
+    ? 'Service supprimé'
+    : action === 'updated'
+      ? 'Service mis à jour'
+      : 'Service créé'
 }
 
 function openCreateSlideover(
   view: CatalogView = activeView.value,
-  options: { syncQuery?: boolean } = {},
+  options: { syncQuery?: boolean } = {}
 ) {
-  const { syncQuery = true } = options;
+  const { syncQuery = true } = options
 
-  activeView.value = view;
-  createType.value = getViewType(view);
-  editingItem.value = null;
-  editOpen.value = false;
-  createOpen.value = true;
+  activeView.value = view
+  createType.value = getViewType(view)
+  editingItem.value = null
+  editOpen.value = false
+  createOpen.value = true
 
   if (syncQuery) {
-    void replaceCatalogQuery({ create: "1", edit: null });
+    void replaceCatalogQuery({ create: '1', edit: null })
   }
 }
 
 function openEditSlideover(
   item: CatalogItemRecord,
-  options: { syncQuery?: boolean } = {},
+  options: { syncQuery?: boolean } = {}
 ) {
-  const { syncQuery = true } = options;
+  const { syncQuery = true } = options
 
-  activeView.value = getViewForItemType(item.type);
-  editingItem.value = item;
-  createOpen.value = false;
-  editOpen.value = true;
+  activeView.value = getViewForItem(item)
+  editingItem.value = item
+  createOpen.value = false
+  editOpen.value = true
 
   if (syncQuery) {
-    void replaceCatalogQuery({ edit: String(item.id), create: null });
+    void replaceCatalogQuery({ edit: String(item.id), create: null })
   }
 }
 
@@ -128,26 +176,26 @@ function filterItems(
   type: CatalogItemType,
   search: string,
   category: string,
-  activeOnly: boolean,
+  activeOnly: boolean
 ) {
-  const term = normalizeSearchText(search);
-  const requestedCategory = category === ALL_CATEGORIES ? "" : category.trim();
+  const term = normalizeSearchText(search)
+  const requestedCategory = category === ALL_CATEGORIES ? '' : category.trim()
 
   return (items.value || []).filter((item) => {
     if (item.type !== type) {
-      return false;
+      return false
     }
 
     if (activeOnly && !item.isActive) {
-      return false;
+      return false
     }
 
     if (requestedCategory && item.category !== requestedCategory) {
-      return false;
+      return false
     }
 
     if (!term) {
-      return true;
+      return true
     }
 
     return [
@@ -157,74 +205,103 @@ function filterItems(
       item.brand,
       item.model,
       item.serviceKind,
-      item.keywords.join(" "),
-    ].some((value) => normalizeSearchText(value).includes(term));
-  });
+      item.keywords.join(' ')
+    ].some(value => normalizeSearchText(value).includes(term))
+  })
 }
 
 const articleItems = computed(() =>
   filterItems(
-    "product",
+    'product',
     articleSearch.value,
     articleCategory.value,
-    articleActiveOnly.value,
-  ),
-);
+    articleActiveOnly.value
+  )
+)
+const repairItems = computed(() =>
+  filterItems(
+    'repair',
+    repairSearch.value,
+    repairCategory.value,
+    repairActiveOnly.value
+  )
+)
 const serviceItems = computed(() =>
   filterItems(
-    "service",
+    'service',
     serviceSearch.value,
     serviceCategory.value,
-    serviceActiveOnly.value,
-  ),
-);
+    serviceActiveOnly.value
+  )
+)
 
 const articleCategoryOptions = computed(() => {
   const values = new Set([
     ...catalogArticleCategories,
     ...(items.value || [])
-      .filter((item) => item.type === "product")
-      .map((item) => item.category),
-  ]);
+      .filter(item => item.type === 'product')
+      .map(item => item.category)
+  ])
 
   return [
-    { label: "Toutes les catégories", value: ALL_CATEGORIES },
+    { label: 'Toutes les catégories', value: ALL_CATEGORIES },
     ...Array.from(values)
       .filter(Boolean)
       .sort()
-      .map((value) => ({ label: value, value })),
-  ];
-});
+      .map(value => ({ label: value, value }))
+  ]
+})
+
+const repairCategoryOptions = computed(() => {
+  const values = new Set([
+    ...catalogRepairCategories,
+    ...(items.value || [])
+      .filter(item => item.type === 'repair')
+      .map(item => item.category)
+  ])
+
+  return [
+    { label: 'Toutes les catégories', value: ALL_CATEGORIES },
+    ...Array.from(values)
+      .filter(Boolean)
+      .sort()
+      .map(value => ({ label: value, value }))
+  ]
+})
 
 const serviceCategoryOptions = computed(() => {
   const values = new Set([
     ...catalogServiceCategories,
     ...(items.value || [])
-      .filter((item) => item.type === "service")
-      .map((item) => item.category),
-  ]);
+      .filter(item => item.type === 'service')
+      .map(item => item.category)
+  ])
 
   return [
-    { label: "Toutes les catégories", value: ALL_CATEGORIES },
+    { label: 'Toutes les catégories', value: ALL_CATEGORIES },
     ...Array.from(values)
       .filter(Boolean)
       .sort()
-      .map((value) => ({ label: value, value })),
-  ];
-});
+      .map(value => ({ label: value, value }))
+  ]
+})
 
 const createInitialValue = computed<Partial<CatalogItemInput>>(() => ({
   type: createType.value,
-  category: "Autre",
+  category: activeView.value === 'services'
+    ? 'Diagnostic'
+    : activeView.value === 'repairs'
+      ? 'iPhone'
+      : 'Autre',
   brand: null,
   model: null,
   serviceKind: null,
-  keywords: [],
-}));
+  keywords: []
+}))
 
 const editingItemForm = computed(() => {
   if (!editingItem.value) {
-    return undefined;
+    return undefined
   }
 
   return {
@@ -238,295 +315,386 @@ const editingItemForm = computed(() => {
     keywords: editingItem.value.keywords,
     defaultPrice: editingItem.value.defaultPrice,
     vatRate: editingItem.value.vatRate,
-    isActive: editingItem.value.isActive,
-  };
-});
+    isActive: editingItem.value.isActive
+  }
+})
 
 const articleColumns: TableColumn<CatalogItemRecord>[] = [
   {
-    accessorKey: "name",
-    header: "Article",
+    accessorKey: 'name',
+    header: 'Article',
     cell: ({ row }) =>
-      h("div", { class: "min-w-0 leading-tight" }, [
+      h('div', { class: 'min-w-0 leading-tight' }, [
         h(
-          "p",
-          { class: "truncate font-medium text-highlighted" },
-          row.original.name,
+          'p',
+          { class: 'truncate font-medium text-highlighted' },
+          row.original.name
         ),
         h(
-          "p",
-          { class: "truncate text-xs text-toned" },
-          row.original.sku || "Sans SKU",
-        ),
-      ]),
+          'p',
+          { class: 'truncate text-xs text-toned' },
+          row.original.sku || 'Sans SKU'
+        )
+      ])
   },
   {
-    accessorKey: "category",
-    header: "Catégorie",
+    accessorKey: 'category',
+    header: 'Catégorie',
     cell: ({ row }) =>
       h(UBadge, {
-        color: "neutral",
-        variant: "subtle",
-        label: row.original.category,
-      }),
+        color: 'neutral',
+        variant: 'subtle',
+        label: row.original.category
+      })
   },
   {
-    accessorKey: "defaultPrice",
-    header: "Prix TTC",
-    cell: ({ row }) => formatCurrency(row.original.defaultPrice),
+    accessorKey: 'defaultPrice',
+    header: 'Prix TTC',
+    cell: ({ row }) => formatCurrency(row.original.defaultPrice)
   },
   {
-    accessorKey: "isActive",
-    header: "Statut",
+    accessorKey: 'isActive',
+    header: 'Statut',
     cell: ({ row }) =>
       h(
-        "span",
+        'span',
         {
           class: row.original.isActive
-            ? "text-sm font-medium text-success"
-            : "text-sm font-medium text-toned",
+            ? 'text-sm font-medium text-success'
+            : 'text-sm font-medium text-toned'
         },
-        row.original.isActive ? "Actif" : "Inactif",
-      ),
+        row.original.isActive ? 'Actif' : 'Inactif'
+      )
   },
   {
-    accessorKey: "updatedAt",
-    header: "Mis à jour",
+    accessorKey: 'updatedAt',
+    header: 'Mis à jour',
     cell: ({ row }) =>
-      new Intl.DateTimeFormat("fr-CH", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(new Date(row.original.updatedAt)),
+      new Intl.DateTimeFormat('fr-CH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      }).format(new Date(row.original.updatedAt))
   },
   {
-    id: "actions",
+    id: 'actions',
     cell: ({ row }) =>
       h(
-        "div",
-        { class: "text-right" },
+        'div',
+        { class: 'text-right' },
         h(
           UDropdownMenu,
           {
-            content: { align: "end" },
-            items: getRowItems(row.original),
+            content: { align: 'end' },
+            items: getRowItems(row.original)
           },
           () =>
             h(UButton, {
-              icon: "i-lucide-ellipsis-vertical",
-              color: "neutral",
-              variant: "ghost",
-            }),
+              icon: 'i-lucide-ellipsis-vertical',
+              color: 'neutral',
+              variant: 'ghost'
+            })
+        )
+      )
+  }
+]
+
+const repairColumns: TableColumn<CatalogItemRecord>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Réparation',
+    cell: ({ row }) =>
+      h('div', { class: 'min-w-0 leading-tight' }, [
+        h(
+          'p',
+          { class: 'truncate font-medium text-highlighted' },
+          row.original.name
         ),
-      ),
+        h(
+          'p',
+          { class: 'truncate text-xs text-toned' },
+          row.original.serviceKind || 'Intervention non précisée'
+        )
+      ])
   },
-];
+  {
+    accessorKey: 'category',
+    header: 'Catégorie',
+    cell: ({ row }) =>
+      h(UBadge, {
+        color: 'neutral',
+        variant: 'subtle',
+        label: row.original.category
+      })
+  },
+  {
+    accessorKey: 'device',
+    header: 'Appareil',
+    cell: ({ row }) =>
+      row.original.model || row.original.brand || 'Réparation générique'
+  },
+  {
+    accessorKey: 'defaultPrice',
+    header: 'Prix TTC',
+    cell: ({ row }) => formatCurrency(row.original.defaultPrice)
+  },
+  {
+    accessorKey: 'isActive',
+    header: 'Statut',
+    cell: ({ row }) =>
+      h(
+        'span',
+        {
+          class: row.original.isActive
+            ? 'text-sm font-medium text-success'
+            : 'text-sm font-medium text-toned'
+        },
+        row.original.isActive ? 'Actif' : 'Inactif'
+      )
+  },
+  {
+    accessorKey: 'updatedAt',
+    header: 'Mis à jour',
+    cell: ({ row }) =>
+      new Intl.DateTimeFormat('fr-CH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      }).format(new Date(row.original.updatedAt))
+  },
+  {
+    id: 'actions',
+    cell: ({ row }) =>
+      h(
+        'div',
+        { class: 'text-right' },
+        h(
+          UDropdownMenu,
+          {
+            content: { align: 'end' },
+            items: getRowItems(row.original)
+          },
+          () =>
+            h(UButton, {
+              icon: 'i-lucide-ellipsis-vertical',
+              color: 'neutral',
+              variant: 'ghost'
+            })
+        )
+      )
+  }
+]
 
 const serviceColumns: TableColumn<CatalogItemRecord>[] = [
   {
-    accessorKey: "name",
-    header: "Prestation",
+    accessorKey: 'name',
+    header: 'Service',
     cell: ({ row }) =>
-      h("div", { class: "min-w-0 leading-tight" }, [
+      h('div', { class: 'min-w-0 leading-tight' }, [
         h(
-          "p",
-          { class: "truncate font-medium text-highlighted" },
-          row.original.name,
+          'p',
+          { class: 'truncate font-medium text-highlighted' },
+          row.original.name
         ),
         h(
-          "p",
-          { class: "truncate text-xs text-toned" },
-          row.original.serviceKind || "Intervention non précisée",
-        ),
-      ]),
+          'p',
+          { class: 'truncate text-xs text-toned' },
+          row.original.serviceKind || 'Service générique'
+        )
+      ])
   },
   {
-    accessorKey: "category",
-    header: "Catégorie",
+    accessorKey: 'category',
+    header: 'Catégorie',
     cell: ({ row }) =>
       h(UBadge, {
-        color: "neutral",
-        variant: "subtle",
-        label: row.original.category,
-      }),
+        color: 'neutral',
+        variant: 'subtle',
+        label: row.original.category
+      })
   },
   {
-    accessorKey: "device",
-    header: "Appareil",
-    cell: ({ row }) =>
-      row.original.model || row.original.brand || "Prestation générique",
+    accessorKey: 'defaultPrice',
+    header: 'Prix TTC',
+    cell: ({ row }) => formatCurrency(row.original.defaultPrice)
   },
   {
-    accessorKey: "defaultPrice",
-    header: "Prix TTC",
-    cell: ({ row }) => formatCurrency(row.original.defaultPrice),
-  },
-  {
-    accessorKey: "isActive",
-    header: "Statut",
+    accessorKey: 'isActive',
+    header: 'Statut',
     cell: ({ row }) =>
       h(
-        "span",
+        'span',
         {
           class: row.original.isActive
-            ? "text-sm font-medium text-success"
-            : "text-sm font-medium text-toned",
+            ? 'text-sm font-medium text-success'
+            : 'text-sm font-medium text-toned'
         },
-        row.original.isActive ? "Actif" : "Inactif",
-      ),
+        row.original.isActive ? 'Actif' : 'Inactif'
+      )
   },
   {
-    accessorKey: "updatedAt",
-    header: "Mis à jour",
+    accessorKey: 'updatedAt',
+    header: 'Mis à jour',
     cell: ({ row }) =>
-      new Intl.DateTimeFormat("fr-CH", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(new Date(row.original.updatedAt)),
+      new Intl.DateTimeFormat('fr-CH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      }).format(new Date(row.original.updatedAt))
   },
   {
-    id: "actions",
+    id: 'actions',
     cell: ({ row }) =>
       h(
-        "div",
-        { class: "text-right" },
+        'div',
+        { class: 'text-right' },
         h(
           UDropdownMenu,
           {
-            content: { align: "end" },
-            items: getRowItems(row.original),
+            content: { align: 'end' },
+            items: getRowItems(row.original)
           },
           () =>
             h(UButton, {
-              icon: "i-lucide-ellipsis-vertical",
-              color: "neutral",
-              variant: "ghost",
-            }),
-        ),
-      ),
-  },
-];
+              icon: 'i-lucide-ellipsis-vertical',
+              color: 'neutral',
+              variant: 'ghost'
+            })
+        )
+      )
+  }
+]
 
 async function saveItem(payload: CatalogItemInput) {
-  const label = payload.type === "service" ? "Prestation" : "Article";
-
   if (editingItem.value) {
     await $fetch(`/api/catalog-items/${editingItem.value.id}`, {
-      method: "PATCH",
-      body: payload,
-    });
+      method: 'PATCH',
+      body: payload
+    })
 
-    toast.add({ title: `${label} mise à jour`, color: "success" });
-    editOpen.value = false;
-    editingItem.value = null;
+    toast.add({
+      title: getCreateUpdateTitle(payload.type, 'updated'),
+      color: 'success'
+    })
+    editOpen.value = false
+    editingItem.value = null
   } else {
-    await $fetch("/api/catalog-items", {
-      method: "POST",
-      body: payload,
-    });
+    await $fetch('/api/catalog-items', {
+      method: 'POST',
+      body: payload
+    })
 
-    toast.add({ title: `${label} créée`, color: "success" });
-    createOpen.value = false;
+    toast.add({
+      title: getCreateUpdateTitle(payload.type, 'created'),
+      color: 'success'
+    })
+    createOpen.value = false
   }
 
-  await refresh();
+  await refresh()
 }
 
 async function removeItem(item: CatalogItemRecord) {
-  await $fetch(`/api/catalog-items/${item.id}`, { method: "DELETE" });
+  await $fetch(`/api/catalog-items/${item.id}`, { method: 'DELETE' })
   toast.add({
-    title:
-      item.type === "service" ? "Prestation supprimée" : "Article supprimé",
-    color: "success",
-  });
-  await refresh();
+    title: getCreateUpdateTitle(item.type, 'deleted'),
+    color: 'success'
+  })
+  await refresh()
 }
 
 function getRowItems(item: CatalogItemRecord) {
-  const label = item.type === "service" ? "la prestation" : "l’article";
+  const label = item.type === 'product'
+    ? 'l’article'
+    : item.type === 'repair'
+      ? 'la réparation'
+      : 'le service'
 
   return [
     [
       {
         label: `Modifier ${label}`,
-        icon: "i-lucide-pencil",
+        icon: 'i-lucide-pencil',
         onSelect() {
-          openEditSlideover(item);
-        },
+          openEditSlideover(item)
+        }
       },
       {
-        label: "Supprimer",
-        icon: "i-lucide-trash",
-        color: "error",
+        label: 'Supprimer',
+        icon: 'i-lucide-trash',
+        color: 'error',
         onSelect() {
-          removeItem(item);
-        },
-      },
-    ],
-  ];
+          removeItem(item)
+        }
+      }
+    ]
+  ]
 }
 
 watch([articleSearch, articleCategory, articleActiveOnly], () => {
-  articlePagination.value.pageIndex = 0;
-});
+  articlePagination.value.pageIndex = 0
+})
+
+watch([repairSearch, repairCategory, repairActiveOnly], () => {
+  repairPagination.value.pageIndex = 0
+})
 
 watch([serviceSearch, serviceCategory, serviceActiveOnly], () => {
-  servicePagination.value.pageIndex = 0;
-});
+  servicePagination.value.pageIndex = 0
+})
 
 watch(
   [items, () => route.query.edit, () => route.query.create],
   () => {
-    const createQuery = getQueryValue(route.query.create);
-    const editQuery = getQueryValue(route.query.edit);
+    const createQuery = getQueryValue(route.query.create)
+    const editQuery = getQueryValue(route.query.edit)
 
     if (createQuery) {
-      openCreateSlideover(activeView.value, { syncQuery: false });
-      return;
+      openCreateSlideover(activeView.value, { syncQuery: false })
+      return
     }
 
     if (editQuery) {
       const item = (items.value || []).find(
-        (candidate) => String(candidate.id) === editQuery,
-      );
+        candidate => String(candidate.id) === editQuery
+      )
 
       if (item) {
-        openEditSlideover(item, { syncQuery: false });
-        return;
+        openEditSlideover(item, { syncQuery: false })
+        return
       }
 
       if (items.value) {
-        createOpen.value = false;
-        editOpen.value = false;
-        editingItem.value = null;
-        void replaceCatalogQuery({ edit: null });
+        createOpen.value = false
+        editOpen.value = false
+        editingItem.value = null
+        void replaceCatalogQuery({ edit: null })
       }
-      return;
+      return
     }
 
-    createOpen.value = false;
-    editOpen.value = false;
-    editingItem.value = null;
+    createOpen.value = false
+    editOpen.value = false
+    editingItem.value = null
   },
-  { immediate: true },
-);
+  { immediate: true }
+)
 
 watch(createOpen, (open) => {
   if (!open && getQueryValue(route.query.create)) {
-    void replaceCatalogQuery({ create: null });
+    void replaceCatalogQuery({ create: null })
   }
-});
+})
 
 watch(editOpen, (open) => {
   if (!open) {
-    editingItem.value = null;
+    editingItem.value = null
   }
 
   if (!open && getQueryValue(route.query.edit)) {
-    void replaceCatalogQuery({ edit: null });
+    void replaceCatalogQuery({ edit: null })
   }
-});
+})
 </script>
 
 <template>
@@ -540,14 +708,18 @@ watch(editOpen, (open) => {
         <template #right>
           <UButton
             :icon="
-              activeView === 'services'
-                ? 'i-lucide-wrench'
-                : 'i-lucide-package-plus'
+              activeView === 'articles'
+                ? 'i-lucide-package-plus'
+                : activeView === 'repairs'
+                  ? 'i-lucide-wrench'
+                  : 'i-lucide-briefcase-business'
             "
             :label="
-              activeView === 'services'
-                ? 'Nouvelle prestation'
-                : 'Nouvel article'
+              activeView === 'articles'
+                ? 'Nouvel article'
+                : activeView === 'repairs'
+                  ? 'Nouvelle réparation'
+                  : 'Nouveau service'
             "
             variant="subtle"
             @click="openCreateSlideover(activeView)"
@@ -558,24 +730,35 @@ watch(editOpen, (open) => {
 
     <template #body>
       <div class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-3">
+        <div class="grid gap-4 md:grid-cols-4">
           <PosSummaryCard
             title="Articles"
             :value="
               String(
-                (items || []).filter((item) => item.type === 'product').length,
+                (items || []).filter((item) => item.type === 'product').length
               )
             "
             icon="i-lucide-package-search"
           />
           <PosSummaryCard
-            title="Prestations"
+            title="Réparations"
             :value="
               String(
-                (items || []).filter((item) => item.type === 'service').length,
+                (items || [])
+                  .filter((item) => item.type === 'repair').length
               )
             "
             icon="i-lucide-wrench"
+          />
+          <PosSummaryCard
+            title="Services"
+            :value="
+              String(
+                (items || [])
+                  .filter((item) => item.type === 'service').length
+              )
+            "
+            icon="i-lucide-briefcase-business"
           />
           <PosSummaryCard
             title="Actifs"
@@ -591,7 +774,7 @@ watch(editOpen, (open) => {
           :items="tabItems"
           variant="pill"
           :ui="{
-            list: 'w-full',
+            list: 'w-full'
           }"
         >
           <template #articles>
@@ -624,7 +807,7 @@ watch(editOpen, (open) => {
                 v-model:pagination="articlePagination"
                 v-model:sorting="articleSorting"
                 :pagination-options="{
-                  getPaginationRowModel: getPaginationRowModel(),
+                  getPaginationRowModel: getPaginationRowModel()
                 }"
                 :data="articleItems"
                 :columns="articleColumns"
@@ -637,7 +820,7 @@ watch(editOpen, (open) => {
                   tbody: '[&>tr]:last:[&>td]:border-b-0',
                   th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
                   td: 'border-b border-default py-2 align-middle text-sm',
-                  separator: 'h-0',
+                  separator: 'h-0'
                 }"
                 @select="(_, row) => openEditSlideover(row.original)"
               >
@@ -655,27 +838,115 @@ watch(editOpen, (open) => {
               >
                 <p class="text-sm text-toned">
                   {{
-                    articleTable?.tableApi?.getFilteredRowModel().rows.length ||
-                    articleItems.length
+                    articleTable?.tableApi?.getFilteredRowModel().rows.length
+                      || articleItems.length
                   }}
                   article(s)
                 </p>
 
                 <UPagination
                   :default-page="
-                    (articleTable?.tableApi?.getState().pagination.pageIndex ||
-                      0) + 1
+                    (articleTable?.tableApi?.getState().pagination.pageIndex
+                      || 0) + 1
                   "
                   :items-per-page="
                     articleTable?.tableApi?.getState().pagination.pageSize
                   "
                   :total="
-                    articleTable?.tableApi?.getFilteredRowModel().rows.length ||
-                    articleItems.length
+                    articleTable?.tableApi?.getFilteredRowModel().rows.length
+                      || articleItems.length
                   "
                   @update:page="
                     (page: number) =>
                       articleTable?.tableApi?.setPageIndex(page - 1)
+                  "
+                />
+              </div>
+            </div>
+          </template>
+
+          <template #repairs>
+            <div class="space-y-4">
+              <UDashboardToolbar
+                class="flex flex-wrap items-center justify-between gap-3"
+              >
+                <div class="flex flex-wrap items-center gap-3">
+                  <UInput
+                    v-model="repairSearch"
+                    icon="i-lucide-search"
+                    placeholder="Rechercher des réparations"
+                    class="max-w-md"
+                  />
+                  <USelect
+                    v-model="repairCategory"
+                    :items="repairCategoryOptions"
+                    value-key="value"
+                    class="min-w-52"
+                  />
+                  <USwitch
+                    v-model="repairActiveOnly"
+                    label="Actives seulement"
+                  />
+                </div>
+              </UDashboardToolbar>
+
+              <UTable
+                ref="repairTable"
+                v-model:pagination="repairPagination"
+                v-model:sorting="repairSorting"
+                :pagination-options="{
+                  getPaginationRowModel: getPaginationRowModel()
+                }"
+                :data="repairItems"
+                :columns="repairColumns"
+                sticky="header"
+                :loading="status === 'pending'"
+                class="shrink-0"
+                :ui="{
+                  base: 'table-fixed border-separate border-spacing-0',
+                  thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
+                  tbody: '[&>tr]:last:[&>td]:border-b-0',
+                  th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
+                  td: 'border-b border-default py-2 align-middle text-sm',
+                  separator: 'h-0'
+                }"
+                @select="(_, row) => openEditSlideover(row.original)"
+              >
+                <template #empty>
+                  <UEmpty
+                    icon="i-lucide-wrench"
+                    title="Aucune réparation trouvée"
+                    description="Créez une réparation atelier ou ajustez les filtres actuels."
+                  />
+                </template>
+              </UTable>
+
+              <div
+                class="flex items-center justify-between gap-3 border-t border-default pt-4"
+              >
+                <p class="text-sm text-toned">
+                  {{
+                    repairTable?.tableApi?.getFilteredRowModel().rows.length
+                      || repairItems.length
+                  }}
+                  réparation(s)
+                </p>
+
+                <UPagination
+                  :default-page="
+                    (repairTable?.tableApi?.getState().pagination.pageIndex
+                      || 0) + 1
+                  "
+                  :items-per-page="
+                    repairTable?.tableApi?.getState().pagination.pageSize
+                  "
+                  :total="
+                    repairTable?.tableApi?.getFilteredRowModel().rows.length
+                      || repairItems.length
+                  "
+                  @update:page="
+                    (page: number) =>
+                      repairTable?.tableApi?.setPageIndex(page - 1)
                   "
                 />
               </div>
@@ -691,7 +962,7 @@ watch(editOpen, (open) => {
                   <UInput
                     v-model="serviceSearch"
                     icon="i-lucide-search"
-                    placeholder="Rechercher des prestations"
+                    placeholder="Rechercher des services"
                     class="max-w-md"
                   />
                   <USelect
@@ -702,7 +973,7 @@ watch(editOpen, (open) => {
                   />
                   <USwitch
                     v-model="serviceActiveOnly"
-                    label="Actives seulement"
+                    label="Actifs seulement"
                   />
                 </div>
               </UDashboardToolbar>
@@ -712,7 +983,7 @@ watch(editOpen, (open) => {
                 v-model:pagination="servicePagination"
                 v-model:sorting="serviceSorting"
                 :pagination-options="{
-                  getPaginationRowModel: getPaginationRowModel(),
+                  getPaginationRowModel: getPaginationRowModel()
                 }"
                 :data="serviceItems"
                 :columns="serviceColumns"
@@ -725,15 +996,15 @@ watch(editOpen, (open) => {
                   tbody: '[&>tr]:last:[&>td]:border-b-0',
                   th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
                   td: 'border-b border-default py-2 align-middle text-sm',
-                  separator: 'h-0',
+                  separator: 'h-0'
                 }"
                 @select="(_, row) => openEditSlideover(row.original)"
               >
                 <template #empty>
                   <UEmpty
-                    icon="i-lucide-wrench"
-                    title="Aucune prestation trouvée"
-                    description="Créez une prestation atelier ou ajustez les filtres actuels."
+                    icon="i-lucide-briefcase-business"
+                    title="Aucun service trouvé"
+                    description="Créez un service ou ajustez les filtres actuels."
                   />
                 </template>
               </UTable>
@@ -743,23 +1014,23 @@ watch(editOpen, (open) => {
               >
                 <p class="text-sm text-toned">
                   {{
-                    serviceTable?.tableApi?.getFilteredRowModel().rows.length ||
-                    serviceItems.length
+                    serviceTable?.tableApi?.getFilteredRowModel().rows.length
+                      || serviceItems.length
                   }}
-                  prestation(s)
+                  service(s)
                 </p>
 
                 <UPagination
                   :default-page="
-                    (serviceTable?.tableApi?.getState().pagination.pageIndex ||
-                      0) + 1
+                    (serviceTable?.tableApi?.getState().pagination.pageIndex
+                      || 0) + 1
                   "
                   :items-per-page="
                     serviceTable?.tableApi?.getState().pagination.pageSize
                   "
                   :total="
-                    serviceTable?.tableApi?.getFilteredRowModel().rows.length ||
-                    serviceItems.length
+                    serviceTable?.tableApi?.getFilteredRowModel().rows.length
+                      || serviceItems.length
                   "
                   @update:page="
                     (page: number) =>
@@ -776,14 +1047,26 @@ watch(editOpen, (open) => {
 
   <PosCatalogItemSlideover
     v-model:open="createOpen"
-    :title="createType === 'service' ? 'Nouvelle prestation' : 'Nouvel article'"
+    :title="
+      createType === 'repair'
+        ? 'Nouvelle réparation'
+        : createType === 'service'
+          ? 'Nouveau service'
+          : 'Nouvel article'
+    "
     :description="
-      createType === 'service'
-        ? 'Ajoutez une prestation structurée pour la recherche atelier et les tickets.'
-        : 'Ajoutez un article vendu tel quel sans quitter la liste.'
+      createType === 'repair'
+        ? 'Ajoutez une réparation structurée pour la recherche atelier et les tickets.'
+        : createType === 'service'
+          ? 'Ajoutez un service structuré pour les opérations génériques.'
+          : 'Ajoutez un article vendu tel quel sans quitter la liste.'
     "
     :submit-label="
-      createType === 'service' ? 'Créer la prestation' : 'Créer l’article'
+      createType === 'repair'
+        ? 'Créer la réparation'
+        : createType === 'service'
+          ? 'Créer le service'
+          : 'Créer l’article'
     "
     :initial-value="createInitialValue"
     @save="saveItem"
@@ -792,11 +1075,19 @@ watch(editOpen, (open) => {
   <PosCatalogItemSlideover
     v-model:open="editOpen"
     :title="
-      editingItem?.type === 'service'
-        ? 'Modifier la prestation'
-        : 'Modifier l’article'
+      editingItem?.type === 'repair'
+        ? 'Modifier la réparation'
+        : editingItem?.type === 'service'
+          ? 'Modifier le service'
+          : 'Modifier l’article'
     "
-    description="Ajustez le prix TTC, la structure ou la disponibilité directement depuis le catalogue."
+    :description="
+      editingItem?.type === 'service'
+        ? 'Ajustez le prix TTC, la structure ou la disponibilité du service directement depuis le catalogue.'
+        : editingItem?.type === 'repair'
+          ? 'Ajustez le prix TTC, la structure ou la disponibilité de la réparation directement depuis le catalogue.'
+          : 'Ajustez le prix TTC, la structure ou la disponibilité directement depuis le catalogue.'
+    "
     submit-label="Enregistrer les modifications"
     :initial-value="editingItemForm"
     @save="saveItem"

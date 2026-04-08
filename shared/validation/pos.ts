@@ -75,11 +75,13 @@ export const catalogItemInputSchema = z.object({
   vatRate: z.coerce.number().min(0).max(100),
   isActive: z.coerce.boolean().default(true)
 }).superRefine((value, ctx) => {
-  if (value.type === 'service' && !value.serviceKind) {
+  if ((value.type === 'repair' || value.type === 'service') && !value.serviceKind) {
     ctx.addIssue({
       code: 'custom',
       path: ['serviceKind'],
-      message: 'Le type d’intervention est obligatoire pour une prestation'
+      message: value.type === 'repair'
+        ? 'Le type d’intervention est obligatoire pour une réparation'
+        : 'La nature du service est obligatoire'
     })
   }
 })

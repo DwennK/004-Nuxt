@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import {
   catalogArticleCategories,
+  catalogRepairCategories,
   catalogItemTypeLabels,
   catalogItemTypes,
   catalogServiceCategories,
@@ -56,11 +57,13 @@ const schema = z.object({
   vatRate: z.coerce.number().min(0).max(100),
   isActive: z.boolean().default(true)
 }).superRefine((value, ctx) => {
-  if (value.type === 'service' && !value.serviceKind.trim()) {
+  if ((value.type === 'repair' || value.type === 'service') && !value.serviceKind.trim()) {
     ctx.addIssue({
       code: 'custom',
       path: ['serviceKind'],
-      message: 'Le type d’intervention est obligatoire pour une prestation'
+      message: value.type === 'repair'
+        ? 'Le type d’intervention est obligatoire pour une réparation'
+        : 'La nature du service est obligatoire'
     })
   }
 })
@@ -90,7 +93,8 @@ watchEffect(() => {
   state.name = props.initialValue.name || ''
   state.sku = props.initialValue.sku || ''
   state.type = props.initialValue.type || 'product'
-  state.category = props.initialValue.category || 'Autre'
+  state.category = props.initialValue.category
+    || (state.type === 'repair' ? 'iPhone' : state.type === 'service' ? 'Diagnostic' : 'Autre')
   state.brand = props.initialValue.brand || ''
   state.model = props.initialValue.model || ''
   state.serviceKind = props.initialValue.serviceKind || ''
@@ -100,17 +104,51 @@ watchEffect(() => {
   state.isActive = props.initialValue.isActive ?? true
 })
 
+const isRepair = computed(() => state.type === 'repair')
 const isService = computed(() => state.type === 'service')
+const isCatalogService = computed(() => state.type === 'service' || state.type === 'repair')
 const preview = computed(() => formatCurrency(Math.round((state.defaultPrice || 0) * 100)))
 const currentTypeLabel = computed(() => catalogItemTypeLabels[state.type])
+const currentItemNameLabel = computed(() => {
+  if (state.type === 'product') {
+    return 'Nom de l’article'
+  }
+
+  return state.type === 'repair' ? 'Nom de la réparation' : 'Nom du service'
+})
 const categorySuggestions = computed(() => {
-  return isService.value ? catalogServiceCategories : catalogArticleCategories
+  if (isRepair.value) {
+    return catalogRepairCategories
+  }
+
+  if (isService.value) {
+    return catalogServiceCategories
+  }
+
+  return catalogArticleCategories
 })
 const categoryDescription = computed(() => {
-  return isService.value
-    ? 'Univers atelier visible dans les tickets et la recherche rapide.'
-    : 'Famille de produit utilisée pour structurer les articles vendus.'
+  if (isRepair.value) {
+    return 'Univers appareil utilisé pour structurer les réparations atelier.'
+  }
+
+  if (isService.value) {
+    return 'Famille de service utilisée pour structurer les prestations génériques.'
+  }
+
+  return 'Famille de produit utilisée pour structurer les articles vendus.'
 })
+
+watch(() => state.type, (type) => {
+  if (type === 'repair' && (!state.category || state.category === 'Autre')) {
+    state.category = 'iPhone'
+  }
+
+  if (type === 'service' && (!state.category || state.category === 'Autre' || state.category === 'iPhone')) {
+    state.category = 'Diagnostic'
+  }
+})
+
 function applyCategorySuggestion(value: string) {
   state.category = value
 }
@@ -129,17 +167,19 @@ function parseKeywords(value: string) {
 }
 
 function onSubmit(event: FormSubmitEvent<Schema>) {
+  const isRepairType = event.data.type === 'repair'
   const isServiceType = event.data.type === 'service'
+  const isCatalogServiceType = isRepairType || isServiceType
 
   emit('save', {
     name: event.data.name.trim(),
     sku: event.data.sku.trim() || null,
     type: event.data.type,
     category: event.data.category.trim(),
-    brand: isServiceType ? (event.data.brand.trim() || null) : null,
-    model: isServiceType ? (event.data.model.trim() || null) : null,
-    serviceKind: isServiceType ? (event.data.serviceKind.trim() || null) : null,
-    keywords: isServiceType ? parseKeywords(event.data.keywordsText) : [],
+    brand: isRepairType ? (event.data.brand.trim() || null) : null,
+    model: isRepairType ? (event.data.model.trim() || null) : null,
+    serviceKind: isCatalogServiceType ? (event.data.serviceKind.trim() || null) : null,
+    keywords: isCatalogServiceType ? parseKeywords(event.data.keywordsText) : [],
     defaultPrice: Math.round((event.data.defaultPrice || 0) * 100),
     vatRate: event.data.vatRate,
     isActive: event.data.isActive
@@ -163,7 +203,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       >
         <div class="space-y-4">
           <div class="grid gap-4 md:grid-cols-2">
-            <UFormField :label="`Nom de la ${currentTypeLabel.toLowerCase()}`" name="name" required>
+            <UFormField :label="currentItemNameLabel" name="name" required>
               <UInput v-model="state.name" class="w-full" />
             </UFormField>
 
@@ -208,13 +248,15 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       </UPageCard>
 
       <UPageCard
-        v-if="isService"
-        title="Contexte prestation"
-        description="Structurez la prestation pour alimenter la recherche atelier et préremplir les tickets."
+        v-if="isCatalogService"
+        :title="isRepair ? 'Contexte réparation' : 'Contexte service'"
+        :description="isRepair
+          ? 'Structurez la réparation pour alimenter la recherche atelier et préremplir les tickets.'
+          : 'Décrivez le service pour le retrouver vite dans le catalogue et les documents.'"
         variant="subtle"
       >
         <div class="space-y-4">
-          <div class="grid gap-4 md:grid-cols-2">
+          <div v-if="isRepair" class="grid gap-4 md:grid-cols-2">
             <UFormField label="Marque" name="brand" hint="Recommandé">
               <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
             </UFormField>
@@ -224,8 +266,12 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             </UFormField>
           </div>
 
-          <UFormField label="Type d’intervention" name="serviceKind" required>
-            <UInput v-model="state.serviceKind" class="w-full" placeholder="Remplacement écran" />
+          <UFormField :label="isRepair ? 'Type d’intervention' : 'Nature du service'" name="serviceKind" required>
+            <UInput
+              v-model="state.serviceKind"
+              class="w-full"
+              :placeholder="isRepair ? 'Remplacement écran' : 'Diagnostic, configuration, support...'"
+            />
           </UFormField>
 
           <div class="flex flex-wrap gap-2">

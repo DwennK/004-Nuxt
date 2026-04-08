@@ -139,7 +139,11 @@ watch(search, (value) => {
 })
 
 function getCategoryHint(item: CatalogItemRecord): SaleLine['categoryHint'] {
-  return item.type === 'product' ? 'accessory' : 'service'
+  if (item.type === 'product') {
+    return 'accessory'
+  }
+
+  return item.type === 'repair' ? 'repair' : 'service'
 }
 
 function createSaleLine(input: Omit<SaleLine, 'id'>): SaleLine {

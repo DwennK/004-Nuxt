@@ -42,16 +42,18 @@ function parseKeywords(value: string | null) {
 
 function normalizeCatalogItemInput(input: CatalogItemInput) {
   const type = input.type
+  const isRepair = type === 'repair'
+  const isService = type === 'service'
 
   return {
     name: normalizeRequiredText(input.name),
     sku: normalizeOptionalText(input.sku),
     type,
     category: normalizeRequiredText(input.category),
-    brand: type === 'service' ? normalizeOptionalText(input.brand) : null,
-    model: type === 'service' ? normalizeOptionalText(input.model) : null,
-    serviceKind: type === 'service' ? normalizeOptionalText(input.serviceKind) : null,
-    keywordsJson: type === 'service' ? serializeKeywords(input.keywords) : null,
+    brand: isRepair ? normalizeOptionalText(input.brand) : null,
+    model: isRepair ? normalizeOptionalText(input.model) : null,
+    serviceKind: (isRepair || isService) ? normalizeOptionalText(input.serviceKind) : null,
+    keywordsJson: (isRepair || isService) ? serializeKeywords(input.keywords) : null,
     defaultPrice: input.defaultPrice,
     vatRate: input.vatRate,
     isActive: input.isActive
