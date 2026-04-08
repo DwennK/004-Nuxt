@@ -23,7 +23,6 @@ type FormState = {
   defaultPrice: number
   vatRate: number
   isActive: boolean
-  isQuickPick: boolean
 }
 
 const props = withDefaults(defineProps<{
@@ -55,8 +54,7 @@ const schema = z.object({
   keywordsText: z.string().optional().default(''),
   defaultPrice: z.coerce.number().min(0),
   vatRate: z.coerce.number().min(0).max(100),
-  isActive: z.boolean().default(true),
-  isQuickPick: z.boolean().default(false)
+  isActive: z.boolean().default(true)
 }).superRefine((value, ctx) => {
   if (value.type === 'service' && !value.serviceKind.trim()) {
     ctx.addIssue({
@@ -85,8 +83,7 @@ const state = reactive<FormState>({
   keywordsText: '',
   defaultPrice: 0,
   vatRate: 8.1,
-  isActive: true,
-  isQuickPick: false
+  isActive: true
 })
 
 watchEffect(() => {
@@ -101,7 +98,6 @@ watchEffect(() => {
   state.defaultPrice = (props.initialValue.defaultPrice ?? 0) / 100
   state.vatRate = props.initialValue.vatRate ?? 8.1
   state.isActive = props.initialValue.isActive ?? true
-  state.isQuickPick = props.initialValue.isQuickPick ?? false
 })
 
 const isService = computed(() => state.type === 'service')
@@ -115,15 +111,6 @@ const categoryDescription = computed(() => {
     ? 'Univers atelier visible dans les tickets et la recherche rapide.'
     : 'Famille de produit utilisée pour structurer les articles vendus.'
 })
-const quickPickLabel = computed(() => {
-  return isService.value ? 'Montrer dans la saisie atelier' : 'Montrer en vente rapide'
-})
-const quickPickDescription = computed(() => {
-  return isService.value
-    ? 'Affiche la prestation dans les raccourcis de création de ticket.'
-    : 'Affiche l’article dans les raccourcis de vente comptoir.'
-})
-
 function applyCategorySuggestion(value: string) {
   state.category = value
 }
@@ -155,8 +142,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
     keywords: isServiceType ? parseKeywords(event.data.keywordsText) : [],
     defaultPrice: Math.round((event.data.defaultPrice || 0) * 100),
     vatRate: event.data.vatRate,
-    isActive: event.data.isActive,
-    isQuickPick: event.data.isQuickPick
+    isActive: event.data.isActive
   })
 }
 </script>
@@ -309,7 +295,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
       <UPageCard
         title="Disponibilité"
-        :description="`Contrôlez si la ${currentTypeLabel.toLowerCase()} reste visible et remonte dans les raccourcis opérateur.`"
+        :description="`Contrôlez si la ${currentTypeLabel.toLowerCase()} reste visible pour les opérateurs.`"
         variant="subtle"
       >
         <UFormField
@@ -320,16 +306,6 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
           <USwitch v-model="state.isActive" label="Actif et vendable" />
-        </UFormField>
-        <USeparator />
-        <UFormField
-          label="Raccourci"
-          name="isQuickPick"
-          :description="quickPickDescription"
-          orientation="horizontal"
-          class="flex max-sm:flex-col justify-between items-start gap-4"
-        >
-          <USwitch v-model="state.isQuickPick" :label="quickPickLabel" />
         </UFormField>
       </UPageCard>
     </template>
@@ -446,10 +422,6 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
       <UFormField label="Statut" name="isActive">
         <USwitch v-model="state.isActive" label="Actif et vendable" />
-      </UFormField>
-
-      <UFormField label="Raccourci" name="isQuickPick" :description="quickPickDescription">
-        <USwitch v-model="state.isQuickPick" :label="quickPickLabel" />
       </UFormField>
     </template>
 

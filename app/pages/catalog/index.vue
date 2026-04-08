@@ -180,8 +180,7 @@ const editingItemForm = computed(() => {
     keywords: editingItem.value.keywords,
     defaultPrice: editingItem.value.defaultPrice,
     vatRate: editingItem.value.vatRate,
-    isActive: editingItem.value.isActive,
-    isQuickPick: editingItem.value.isQuickPick
+    isActive: editingItem.value.isActive
   }
 })
 
@@ -244,12 +243,7 @@ const serviceColumns: TableColumn<CatalogItemRecord>[] = [
     accessorKey: 'name',
     header: 'Prestation',
     cell: ({ row }) => h('div', { class: 'min-w-0 leading-tight' }, [
-      h('div', { class: 'flex items-center gap-2' }, [
-        h('p', { class: 'truncate font-medium text-highlighted' }, row.original.name),
-        row.original.isQuickPick
-          ? h('span', { class: 'shrink-0 text-[11px] font-medium uppercase tracking-[0.12em] text-primary' }, 'Raccourci')
-          : null
-      ]),
+      h('p', { class: 'truncate font-medium text-highlighted' }, row.original.name),
       h('p', { class: 'truncate text-xs text-toned' }, row.original.serviceKind || 'Intervention non précisée')
     ])
   },

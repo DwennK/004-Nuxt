@@ -210,7 +210,6 @@ async function createPosTables() {
         default_price INTEGER NOT NULL,
         vat_rate REAL NOT NULL,
         is_active INTEGER NOT NULL DEFAULT 1,
-        is_quick_pick INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
@@ -335,7 +334,6 @@ async function createPosTables() {
     'CREATE UNIQUE INDEX IF NOT EXISTS catalog_items_sku_idx ON catalog_items(sku)',
     'CREATE INDEX IF NOT EXISTS catalog_items_type_idx ON catalog_items(type)',
     'CREATE INDEX IF NOT EXISTS catalog_items_is_active_idx ON catalog_items(is_active)',
-    'CREATE INDEX IF NOT EXISTS catalog_items_is_quick_pick_idx ON catalog_items(is_quick_pick)',
     'CREATE UNIQUE INDEX IF NOT EXISTS tickets_ticket_number_idx ON tickets(ticket_number)',
     'CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets(customer_id)',
     'CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets(status)',
@@ -458,10 +456,6 @@ async function migrateCatalogStructure() {
 
   const statements: string[] = []
 
-  if (!columns.has('is_quick_pick')) {
-    statements.push('ALTER TABLE catalog_items ADD COLUMN is_quick_pick INTEGER NOT NULL DEFAULT 0')
-  }
-
   if (!columns.has('category')) {
     statements.push('ALTER TABLE catalog_items ADD COLUMN category TEXT')
   }
@@ -483,7 +477,6 @@ async function migrateCatalogStructure() {
   }
 
   statements.push('CREATE INDEX IF NOT EXISTS catalog_items_is_active_idx ON catalog_items(is_active)')
-  statements.push('CREATE INDEX IF NOT EXISTS catalog_items_is_quick_pick_idx ON catalog_items(is_quick_pick)')
   statements.push('CREATE INDEX IF NOT EXISTS catalog_items_category_idx ON catalog_items(category)')
   statements.push('CREATE INDEX IF NOT EXISTS catalog_items_brand_idx ON catalog_items(brand)')
   statements.push('CREATE INDEX IF NOT EXISTS catalog_items_model_idx ON catalog_items(model)')
@@ -733,7 +726,6 @@ async function seedCatalogItems() {
       defaultPrice: 2990,
       vatRate: 8.1,
       isActive: true,
-      isQuickPick: true,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -749,7 +741,6 @@ async function seedCatalogItems() {
       defaultPrice: 1990,
       vatRate: 8.1,
       isActive: true,
-      isQuickPick: true,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -765,7 +756,6 @@ async function seedCatalogItems() {
       defaultPrice: 2490,
       vatRate: 8.1,
       isActive: true,
-      isQuickPick: true,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -781,7 +771,6 @@ async function seedCatalogItems() {
       defaultPrice: 1490,
       vatRate: 8.1,
       isActive: true,
-      isQuickPick: true,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -797,7 +786,6 @@ async function seedCatalogItems() {
       defaultPrice: 3900,
       vatRate: 8.1,
       isActive: true,
-      isQuickPick: false,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -813,7 +801,6 @@ async function seedCatalogItems() {
       defaultPrice: 2500,
       vatRate: 8.1,
       isActive: true,
-      isQuickPick: false,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     },
@@ -829,7 +816,6 @@ async function seedCatalogItems() {
       defaultPrice: 4500,
       vatRate: 8.1,
       isActive: true,
-      isQuickPick: false,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
     }
@@ -874,7 +860,6 @@ async function seedRepairCatalogServices() {
       defaultPrice: item.defaultPrice,
       vatRate: item.vatRate,
       isActive: item.isActive,
-      isQuickPick: item.isQuickPick,
       createdAt: now,
       updatedAt: now
     }))

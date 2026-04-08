@@ -147,8 +147,7 @@ const catalogServiceItems = computed(() => {
   return props.serviceItems.filter(item => item.type === 'service' && item.isActive)
 })
 const quickPickServices = computed(() => {
-  const explicitQuickPicks = catalogServiceItems.value.filter(item => item.isQuickPick)
-  return explicitQuickPicks.length ? explicitQuickPicks.slice(0, 6) : catalogServiceItems.value.slice(0, 6)
+  return catalogServiceItems.value.slice(0, 6)
 })
 
 function buildServiceSearchText(item: CatalogItemRecord) {
@@ -289,7 +288,7 @@ const intakeSummaryItems = computed(() => {
 })
 
 const searchPanelTitle = computed(() => {
-  return intakeQuery.value.trim() ? 'Résultats atelier' : 'Prestations rapides'
+  return intakeQuery.value.trim() ? 'Résultats atelier' : 'Prestations'
 })
 
 watch(bestSuggestedService, (suggestion) => {

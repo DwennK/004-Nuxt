@@ -73,8 +73,7 @@ export const catalogItemInputSchema = z.object({
   keywords: z.array(z.string().trim().min(1)).default([]),
   defaultPrice: z.coerce.number().int().min(0),
   vatRate: z.coerce.number().min(0).max(100),
-  isActive: z.coerce.boolean().default(true),
-  isQuickPick: z.coerce.boolean().default(false)
+  isActive: z.coerce.boolean().default(true)
 }).superRefine((value, ctx) => {
   if (value.type === 'service' && !value.serviceKind) {
     ctx.addIssue({

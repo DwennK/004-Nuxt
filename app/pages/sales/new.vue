@@ -53,13 +53,7 @@ watchEffect(() => {
 const activeItems = computed(() => (catalogItems.value || []).filter(item => item.isActive))
 
 const quickPickItems = computed(() => {
-  const explicitQuickPicks = activeItems.value.filter(item => item.isQuickPick)
-
-  if (explicitQuickPicks.length) {
-    return explicitQuickPicks.slice(0, 8)
-  }
-
-  return activeItems.value.filter(item => item.type === 'product').slice(0, 8)
+  return activeItems.value.slice(0, 8)
 })
 
 const filteredItems = computed(() => {
@@ -88,7 +82,7 @@ const searchPanelItems = computed(() => {
 })
 
 const searchPanelTitle = computed(() => {
-  return search.value.trim() ? 'Résultats' : 'Raccourcis comptoir'
+  return search.value.trim() ? 'Résultats' : 'Suggestions'
 })
 
 const totals = computed(() => {
@@ -603,7 +597,7 @@ function selectAllOnFocus(event: FocusEvent) {
                           {{ item.name }}
                         </p>
                         <p class="truncate text-xs text-toned">
-                          {{ item.sku || 'Raccourci comptoir' }}
+                          {{ item.sku || 'Sans SKU' }}
                         </p>
                       </div>
                       <span class="shrink-0 text-sm font-medium text-highlighted">

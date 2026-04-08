@@ -54,8 +54,7 @@ function normalizeCatalogItemInput(input: CatalogItemInput) {
     keywordsJson: type === 'service' ? serializeKeywords(input.keywords) : null,
     defaultPrice: input.defaultPrice,
     vatRate: input.vatRate,
-    isActive: input.isActive,
-    isQuickPick: input.isQuickPick
+    isActive: input.isActive
   }
 }
 
@@ -73,7 +72,6 @@ function mapCatalogItem(row: typeof catalogItems.$inferSelect): CatalogItemRecor
     defaultPrice: row.defaultPrice,
     vatRate: row.vatRate,
     isActive: row.isActive,
-    isQuickPick: row.isQuickPick,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   }

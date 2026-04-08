@@ -192,15 +192,6 @@ function buildServiceSku(brand: string, model: string, issueKey: RepairIssueKey)
   return `SERV-${slugifyPart(brand)}-${slugifyPart(model)}-${slugifyPart(issueKey)}`.slice(0, 80)
 }
 
-function isQuickPickService(brand: string, model: string, issueKey: RepairIssueKey) {
-  return (
-    (brand === 'Apple' && model === 'iPhone 14' && issueKey === 'screen')
-    || (brand === 'Apple' && model === 'iPhone 13' && issueKey === 'battery')
-    || (brand === 'Samsung' && model === 'Galaxy S23 Ultra 5G' && issueKey === 'screen')
-    || (brand === 'Samsung' && model === 'Galaxy S23 5G' && issueKey === 'battery')
-  )
-}
-
 function expandMatrix(brand: string, category: string, matrix: RepairMatrixEntry[]) {
   return matrix.flatMap<CatalogItemInput>((entry) => {
     const fullModel = brand === 'Apple' ? `iPhone ${entry.model}` : `Galaxy ${entry.model}`
@@ -219,8 +210,7 @@ function expandMatrix(brand: string, category: string, matrix: RepairMatrixEntry
         keywords: buildKeywords(brand, fullModel, issue.aliases),
         defaultPrice: priceCents,
         vatRate: 8.1,
-        isActive: true,
-        isQuickPick: isQuickPickService(brand, fullModel, issue.issueKey)
+        isActive: true
       }
     })
   })

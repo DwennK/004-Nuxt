@@ -81,7 +81,6 @@ export interface CatalogItemRecord {
   defaultPrice: number
   vatRate: number
   isActive: boolean
-  isQuickPick: boolean
   createdAt: string
   updatedAt: string
 }
@@ -98,7 +97,6 @@ export interface CatalogItemInput {
   defaultPrice: number
   vatRate: number
   isActive: boolean
-  isQuickPick: boolean
 }
 
 export interface TicketRecord {
