@@ -39,7 +39,12 @@ const filteredItems = computed(() => {
     return [
       item.name,
       item.sku,
-      item.type
+      item.type,
+      item.category,
+      item.brand,
+      item.model,
+      item.serviceKind,
+      item.keywords.join(' ')
     ].some(value => normalizeSearchText(value).includes(term))
   }).slice(0, 10)
 })

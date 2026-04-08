@@ -1,27 +1,17 @@
 <script setup lang="ts">
-import type { CatalogItemType } from '~~/shared/types/pos'
-
-type CatalogItemPayload = {
-  name: string
-  sku: string
-  type: CatalogItemType
-  defaultPrice: number
-  vatRate: number
-  isActive: boolean
-  isQuickPick: boolean
-}
+import type { CatalogItemInput } from '~~/shared/types/pos'
 
 defineProps<{
   title: string
   description: string
   submitLabel: string
-  initialValue?: Partial<CatalogItemPayload>
+  initialValue?: Partial<CatalogItemInput>
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
 
 const emit = defineEmits<{
-  save: [payload: CatalogItemPayload]
+  save: [payload: CatalogItemInput]
 }>()
 </script>
 

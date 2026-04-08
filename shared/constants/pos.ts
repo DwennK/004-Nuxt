@@ -1,4 +1,37 @@
-export const catalogItemTypes = ['product', 'service', 'repair_part', 'labor'] as const
+export const catalogItemTypes = ['product', 'service'] as const
+export const catalogArticleCategories = [
+  'Accessoires',
+  'Smartphones',
+  'Tablettes',
+  'Ordinateurs',
+  'Audio',
+  'Charge',
+  'Protection',
+  'Autre'
+] as const
+export const catalogServiceCategories = [
+  'iPhone',
+  'Samsung',
+  'iPad',
+  'MacBook',
+  'PC',
+  'Console',
+  'Autre'
+] as const
+export const catalogServiceKindSuggestions = [
+  'Remplacement écran',
+  'Remplacement batterie',
+  'Port de charge',
+  'Caméra arrière',
+  'Caméra avant',
+  'Face arrière',
+  'Châssis / cadre',
+  'Haut-parleur oreille',
+  'Diagnostic',
+  'Transfert de données',
+  'Configuration',
+  'Nettoyage'
+] as const
 export const ticketTypes = ['repair', 'support'] as const
 export const ticketStatuses = [
   'new',
@@ -21,17 +54,13 @@ export const lineCategoryHints = ['accessory', 'repair', 'service'] as const
 export const payableDocumentTypes = ['invoice', 'receipt'] as const
 
 export const catalogItemTypeLabels: Record<(typeof catalogItemTypes)[number], string> = {
-  product: 'Produit',
-  service: 'Service',
-  repair_part: 'Pièce de réparation',
-  labor: 'Main-d’oeuvre'
+  product: 'Article',
+  service: 'Prestation'
 }
 
-export const catalogItemTypeColors: Record<(typeof catalogItemTypes)[number], 'info' | 'success' | 'warning' | 'neutral'> = {
+export const catalogItemTypeColors: Record<(typeof catalogItemTypes)[number], 'info' | 'success'> = {
   product: 'info',
-  service: 'success',
-  repair_part: 'warning',
-  labor: 'neutral'
+  service: 'success'
 }
 
 export const ticketTypeLabels: Record<(typeof ticketTypes)[number], string> = {

@@ -73,7 +73,12 @@ const filteredItems = computed(() => {
     return [
       item.name,
       item.sku,
-      item.type
+      item.type,
+      item.category,
+      item.brand,
+      item.model,
+      item.serviceKind,
+      item.keywords.join(' ')
     ].some(value => normalizeSearchText(value).includes(term))
   }).slice(0, 10)
 })
@@ -140,15 +145,7 @@ watch(search, (value) => {
 })
 
 function getCategoryHint(item: CatalogItemRecord): SaleLine['categoryHint'] {
-  if (item.type === 'product') {
-    return 'accessory'
-  }
-
-  if (item.type === 'service') {
-    return 'service'
-  }
-
-  return 'repair'
+  return item.type === 'product' ? 'accessory' : 'service'
 }
 
 function createSaleLine(input: Omit<SaleLine, 'id'>): SaleLine {

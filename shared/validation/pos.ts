@@ -66,10 +66,23 @@ export const catalogItemInputSchema = z.object({
   name: z.string().trim().min(1, 'Le nom est obligatoire'),
   sku: optionalText,
   type: z.enum(catalogItemTypes),
+  category: z.string().trim().min(1, 'La catégorie est obligatoire'),
+  brand: optionalText,
+  model: optionalText,
+  serviceKind: optionalText,
+  keywords: z.array(z.string().trim().min(1)).default([]),
   defaultPrice: z.coerce.number().int().min(0),
   vatRate: z.coerce.number().min(0).max(100),
   isActive: z.coerce.boolean().default(true),
   isQuickPick: z.coerce.boolean().default(false)
+}).superRefine((value, ctx) => {
+  if (value.type === 'service' && !value.serviceKind) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['serviceKind'],
+      message: 'Le type d’intervention est obligatoire pour une prestation'
+    })
+  }
 })
 
 export const ticketInputSchema = z.object({

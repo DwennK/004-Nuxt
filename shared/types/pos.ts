@@ -22,16 +22,6 @@ export type PrintProfile = 'a4' | 'thermal'
 export type PaymentMethod = (typeof paymentMethods)[number]
 export type PaymentStatus = (typeof paymentStatuses)[number]
 export type LineCategoryHint = (typeof lineCategoryHints)[number]
-export type RepairSuggestionIssueKey
-  = | 'screen'
-    | 'battery'
-    | 'chassis'
-    | 'back_glass'
-    | 'rear_camera'
-    | 'front_camera'
-    | 'camera_lens'
-    | 'charge_port'
-    | 'earpiece'
 
 export interface CustomerUpsertInput {
   displayName?: string | null
@@ -83,6 +73,11 @@ export interface CatalogItemRecord {
   name: string
   sku: string | null
   type: CatalogItemType
+  category: string
+  brand: string | null
+  model: string | null
+  serviceKind: string | null
+  keywords: string[]
   defaultPrice: number
   vatRate: number
   isActive: boolean
@@ -91,14 +86,19 @@ export interface CatalogItemRecord {
   updatedAt: string
 }
 
-export interface RepairSuggestion {
-  brand: string
-  family: string
-  model: string
-  issueKey: RepairSuggestionIssueKey
-  issueLabel: string
-  priceCents: number
+export interface CatalogItemInput {
+  name: string
+  sku: string | null
+  type: CatalogItemType
+  category: string
+  brand: string | null
+  model: string | null
+  serviceKind: string | null
   keywords: string[]
+  defaultPrice: number
+  vatRate: number
+  isActive: boolean
+  isQuickPick: boolean
 }
 
 export interface TicketRecord {

@@ -1,4 +1,15 @@
-import type { RepairSuggestion, RepairSuggestionIssueKey } from '../types/pos'
+import type { CatalogItemInput } from '~~/shared/types/pos'
+
+type RepairIssueKey
+  = | 'screen'
+    | 'battery'
+    | 'chassis'
+    | 'back_glass'
+    | 'rear_camera'
+    | 'front_camera'
+    | 'camera_lens'
+    | 'charge_port'
+    | 'earpiece'
 
 type SourceIssueLabel
   = | 'Ecran'
@@ -19,7 +30,7 @@ type RepairMatrixEntry = {
 }
 
 type IssueDefinition = {
-  issueKey: RepairSuggestionIssueKey
+  issueKey: RepairIssueKey
   issueLabel: string
   aliases: string[]
 }
@@ -149,6 +160,15 @@ const galaxySRepairMatrix: RepairMatrixEntry[] = [
   { model: 'S8', prices: { 'Ecran': 24900, 'Batterie': 9900, 'Face Arrière': 9900 } }
 ]
 
+function slugifyPart(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 function buildKeywords(brand: string, model: string, issueAliases: string[]) {
   const baseKeywords = [`${brand} ${model}`, model]
 
@@ -168,34 +188,47 @@ function buildKeywords(brand: string, model: string, issueAliases: string[]) {
   ]))
 }
 
-function expandMatrix(brand: string, family: string, matrix: RepairMatrixEntry[]) {
-  return matrix.flatMap<RepairSuggestion>((entry) => {
+function buildServiceSku(brand: string, model: string, issueKey: RepairIssueKey) {
+  return `SERV-${slugifyPart(brand)}-${slugifyPart(model)}-${slugifyPart(issueKey)}`.slice(0, 80)
+}
+
+function isQuickPickService(brand: string, model: string, issueKey: RepairIssueKey) {
+  return (
+    (brand === 'Apple' && model === 'iPhone 14' && issueKey === 'screen')
+    || (brand === 'Apple' && model === 'iPhone 13' && issueKey === 'battery')
+    || (brand === 'Samsung' && model === 'Galaxy S23 Ultra 5G' && issueKey === 'screen')
+    || (brand === 'Samsung' && model === 'Galaxy S23 5G' && issueKey === 'battery')
+  )
+}
+
+function expandMatrix(brand: string, category: string, matrix: RepairMatrixEntry[]) {
+  return matrix.flatMap<CatalogItemInput>((entry) => {
     const fullModel = brand === 'Apple' ? `iPhone ${entry.model}` : `Galaxy ${entry.model}`
 
     return Object.entries(entry.prices).map(([sourceIssueLabel, priceCents]) => {
       const issue = issueDefinitions[sourceIssueLabel as SourceIssueLabel]
 
       return {
+        name: `${issue.issueLabel} ${fullModel}`,
+        sku: buildServiceSku(brand, fullModel, issue.issueKey),
+        type: 'service',
+        category,
         brand,
-        family,
         model: fullModel,
-        issueKey: issue.issueKey,
-        issueLabel: issue.issueLabel,
-        priceCents,
-        keywords: buildKeywords(brand, fullModel, issue.aliases)
+        serviceKind: issue.issueLabel,
+        keywords: buildKeywords(brand, fullModel, issue.aliases),
+        defaultPrice: priceCents,
+        vatRate: 8.1,
+        isActive: true,
+        isQuickPick: isQuickPickService(brand, fullModel, issue.issueKey)
       }
     })
   })
 }
 
-export const repairSuggestions: RepairSuggestion[] = [
-  ...expandMatrix('Apple', 'iPhone', iphoneRepairMatrix),
-  ...expandMatrix('Samsung', 'Galaxy S', galaxySRepairMatrix)
-]
-
-export const defaultRepairSearches = [
-  'iphone 14 ecran',
-  'iphone 13 batterie',
-  's23 ultra ecran',
-  's23 batterie'
-]
+export function buildRepairCatalogSeedItems() {
+  return [
+    ...expandMatrix('Apple', 'iPhone', iphoneRepairMatrix),
+    ...expandMatrix('Samsung', 'Samsung', galaxySRepairMatrix)
+  ]
+}

@@ -1,66 +1,49 @@
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
+import type { TableColumn, TabsItem } from '@nuxt/ui'
 import { getPaginationRowModel } from '@tanstack/table-core'
-import { upperFirst } from 'scule'
 import type { LocationQueryValue } from 'vue-router'
-import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
-import { catalogItemTypeColors, catalogItemTypeLabels } from '~~/shared/constants/pos'
-import type { CatalogItemRecord } from '~~/shared/types/pos'
-import { formatCurrency } from '~~/shared/utils/pos'
+import type { CatalogItemInput, CatalogItemRecord, CatalogItemType } from '~~/shared/types/pos'
+import {
+  catalogArticleCategories,
+  catalogServiceCategories
+} from '~~/shared/constants/pos'
+import { formatCurrency, normalizeSearchText } from '~~/shared/utils/pos'
+
+type CatalogView = 'articles' | 'services'
+const ALL_CATEGORIES = '__all__'
 
 const UButton = resolveComponent('UButton')
+const UBadge = resolveComponent('UBadge')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const table = useTemplateRef<DashboardTableInstance>('table')
 
-const search = ref('')
-const activeOnly = ref(false)
+const activeView = ref<CatalogView>('articles')
 const createOpen = ref(false)
 const editOpen = ref(false)
 const editingItem = ref<CatalogItemRecord | null>(null)
-const pagination = ref({
-  pageIndex: 0,
-  pageSize: 10
-})
-const sorting = ref([{ id: 'name', desc: false }])
-const columnVisibility = ref()
+const createType = ref<CatalogItemType>('product')
+
+const articleSearch = ref('')
+const serviceSearch = ref('')
+const articleCategory = ref(ALL_CATEGORIES)
+const serviceCategory = ref(ALL_CATEGORIES)
+const articleActiveOnly = ref(false)
+const serviceActiveOnly = ref(false)
+
+const articlePagination = ref({ pageIndex: 0, pageSize: 10 })
+const servicePagination = ref({ pageIndex: 0, pageSize: 10 })
+const articleSorting = ref([{ id: 'name', desc: false }])
+const serviceSorting = ref([{ id: 'name', desc: false }])
 
 const { data: items, status, refresh } = await useFetch<CatalogItemRecord[]>('/api/catalog-items')
 
-const filteredItems = computed(() => {
-  const term = search.value.trim().toLowerCase()
-
-  return (items.value || []).filter((item) => {
-    const matchesSearch = !term || [
-      item.name,
-      item.sku,
-      catalogItemTypeLabels[item.type]
-    ].some(value => value?.toLowerCase().includes(term))
-
-    const matchesActive = !activeOnly.value || item.isActive
-
-    return matchesSearch && matchesActive
-  })
-})
-
-const editingItemForm = computed(() => {
-  if (!editingItem.value) {
-    return undefined
-  }
-
-  return {
-    name: editingItem.value.name,
-    sku: editingItem.value.sku || '',
-    type: editingItem.value.type,
-    defaultPrice: editingItem.value.defaultPrice,
-    vatRate: editingItem.value.vatRate,
-    isActive: editingItem.value.isActive,
-    isQuickPick: editingItem.value.isQuickPick
-  }
-})
+const tabItems: TabsItem[] = [
+  { label: 'Articles', icon: 'i-lucide-package', value: 'articles', slot: 'articles' },
+  { label: 'Prestations', icon: 'i-lucide-wrench', value: 'services', slot: 'services' }
+]
 
 function getQueryValue(value: LocationQueryValue | LocationQueryValue[] | undefined) {
   return Array.isArray(value) ? value[0] : value
@@ -77,9 +60,19 @@ function replaceCatalogQuery(updates: Record<string, string | null>) {
   return router.replace({ query: nextQuery })
 }
 
-function openCreateSlideover(options: { syncQuery?: boolean } = {}) {
+function getViewType(view: CatalogView) {
+  return view === 'articles' ? 'product' : 'service'
+}
+
+function getViewForItemType(type: CatalogItemType): CatalogView {
+  return type === 'product' ? 'articles' : 'services'
+}
+
+function openCreateSlideover(view: CatalogView = activeView.value, options: { syncQuery?: boolean } = {}) {
   const { syncQuery = true } = options
 
+  activeView.value = view
+  createType.value = getViewType(view)
   editingItem.value = null
   editOpen.value = false
   createOpen.value = true
@@ -92,6 +85,7 @@ function openCreateSlideover(options: { syncQuery?: boolean } = {}) {
 function openEditSlideover(item: CatalogItemRecord, options: { syncQuery?: boolean } = {}) {
   const { syncQuery = true } = options
 
+  activeView.value = getViewForItemType(item.type)
   editingItem.value = item
   createOpen.value = false
   editOpen.value = true
@@ -101,158 +95,114 @@ function openEditSlideover(item: CatalogItemRecord, options: { syncQuery?: boole
   }
 }
 
-watch([search, activeOnly], () => {
-  pagination.value.pageIndex = 0
-})
+function filterItems(type: CatalogItemType, search: string, category: string, activeOnly: boolean) {
+  const term = normalizeSearchText(search)
+  const requestedCategory = category === ALL_CATEGORIES ? '' : category.trim()
 
-watch([items, () => route.query.edit, () => route.query.create], () => {
-  const createQuery = getQueryValue(route.query.create)
-  const editQuery = getQueryValue(route.query.edit)
-
-  if (createQuery) {
-    openCreateSlideover({ syncQuery: false })
-    return
-  }
-
-  if (editQuery) {
-    const item = (items.value || []).find(item => String(item.id) === editQuery)
-
-    if (item) {
-      openEditSlideover(item, { syncQuery: false })
-      return
+  return (items.value || []).filter((item) => {
+    if (item.type !== type) {
+      return false
     }
 
-    if (items.value) {
-      createOpen.value = false
-      editOpen.value = false
-      editingItem.value = null
-      void replaceCatalogQuery({ edit: null })
+    if (activeOnly && !item.isActive) {
+      return false
     }
-    return
-  }
 
-  createOpen.value = false
-  editOpen.value = false
-  editingItem.value = null
-}, { immediate: true })
+    if (requestedCategory && item.category !== requestedCategory) {
+      return false
+    }
 
-watch(createOpen, (open) => {
-  if (!open && getQueryValue(route.query.create)) {
-    void replaceCatalogQuery({ create: null })
-  }
-})
+    if (!term) {
+      return true
+    }
 
-watch(editOpen, (open) => {
-  if (!open) {
-    editingItem.value = null
-  }
-
-  if (!open && getQueryValue(route.query.edit)) {
-    void replaceCatalogQuery({ edit: null })
-  }
-})
-
-async function saveItem(payload: {
-  name: string
-  sku: string
-  type: 'product' | 'service' | 'repair_part' | 'labor'
-  defaultPrice: number
-  vatRate: number
-  isActive: boolean
-  isQuickPick: boolean
-}) {
-  if (editingItem.value) {
-    await $fetch(`/api/catalog-items/${editingItem.value.id}`, {
-      method: 'PATCH',
-      body: payload
-    })
-
-    toast.add({ title: 'Article mis à jour', color: 'success' })
-    editOpen.value = false
-    editingItem.value = null
-  } else {
-    await $fetch('/api/catalog-items', {
-      method: 'POST',
-      body: payload
-    })
-
-    toast.add({ title: 'Article créé', color: 'success' })
-    createOpen.value = false
-  }
-
-  await refresh()
+    return [
+      item.name,
+      item.sku,
+      item.category,
+      item.brand,
+      item.model,
+      item.serviceKind,
+      item.keywords.join(' ')
+    ].some(value => normalizeSearchText(value).includes(term))
+  })
 }
 
-async function removeItem(id: number) {
-  await $fetch(`/api/catalog-items/${id}`, { method: 'DELETE' })
-  toast.add({ title: 'Article supprimé', color: 'success' })
-  await refresh()
-}
+const articleItems = computed(() => filterItems('product', articleSearch.value, articleCategory.value, articleActiveOnly.value))
+const serviceItems = computed(() => filterItems('service', serviceSearch.value, serviceCategory.value, serviceActiveOnly.value))
 
-function getRowItems(item: CatalogItemRecord) {
-  return [[{
-    label: 'Modifier l’article',
-    icon: 'i-lucide-pencil',
-    onSelect() {
-      openEditSlideover(item)
-    }
-  }, {
-    label: 'Supprimer',
-    icon: 'i-lucide-trash',
-    color: 'error',
-    onSelect() {
-      removeItem(item.id)
-    }
-  }]]
-}
+const articleCategoryOptions = computed(() => {
+  const values = new Set([
+    ...catalogArticleCategories,
+    ...(items.value || []).filter(item => item.type === 'product').map(item => item.category)
+  ])
 
-const columns: TableColumn<CatalogItemRecord>[] = [
+  return [
+    { label: 'Toutes les catégories', value: ALL_CATEGORIES },
+    ...Array.from(values).filter(Boolean).sort().map(value => ({ label: value, value }))
+  ]
+})
+
+const serviceCategoryOptions = computed(() => {
+  const values = new Set([
+    ...catalogServiceCategories,
+    ...(items.value || []).filter(item => item.type === 'service').map(item => item.category)
+  ])
+
+  return [
+    { label: 'Toutes les catégories', value: ALL_CATEGORIES },
+    ...Array.from(values).filter(Boolean).sort().map(value => ({ label: value, value }))
+  ]
+})
+
+const createInitialValue = computed<Partial<CatalogItemInput>>(() => ({
+  type: createType.value,
+  category: 'Autre',
+  brand: null,
+  model: null,
+  serviceKind: null,
+  keywords: []
+}))
+
+const editingItemForm = computed(() => {
+  if (!editingItem.value) {
+    return undefined
+  }
+
+  return {
+    name: editingItem.value.name,
+    sku: editingItem.value.sku,
+    type: editingItem.value.type,
+    category: editingItem.value.category,
+    brand: editingItem.value.brand,
+    model: editingItem.value.model,
+    serviceKind: editingItem.value.serviceKind,
+    keywords: editingItem.value.keywords,
+    defaultPrice: editingItem.value.defaultPrice,
+    vatRate: editingItem.value.vatRate,
+    isActive: editingItem.value.isActive,
+    isQuickPick: editingItem.value.isQuickPick
+  }
+})
+
+const articleColumns: TableColumn<CatalogItemRecord>[] = [
   {
     accessorKey: 'name',
-    header: ({ column }) => h(UButton, {
-      color: 'neutral',
-      variant: 'ghost',
-      label: 'Article',
-      icon: column.getIsSorted() === 'asc'
-        ? 'i-lucide-arrow-up-az'
-        : column.getIsSorted() === 'desc'
-          ? 'i-lucide-arrow-down-az'
-          : 'i-lucide-arrow-up-down',
-      class: '-mx-2.5',
-      onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
-    }),
+    header: 'Article',
     cell: ({ row }) => h('div', { class: 'min-w-0 leading-tight' }, [
-      h('div', { class: 'flex items-center gap-2' }, [
-        h('p', { class: 'truncate font-medium text-highlighted' }, row.original.name),
-        row.original.isQuickPick
-          ? h('span', { class: 'shrink-0 text-[11px] font-medium uppercase tracking-[0.12em] text-primary' }, 'Raccourci')
-          : null
-      ]),
+      h('p', { class: 'truncate font-medium text-highlighted' }, row.original.name),
       h('p', { class: 'truncate text-xs text-toned' }, row.original.sku || 'Sans SKU')
     ])
   },
   {
-    accessorKey: 'type',
-    header: 'Type',
-    cell: ({ row }) => h('span', {
-      class: {
-        'text-info': catalogItemColors(row.original.type) === 'info',
-        'text-success': catalogItemColors(row.original.type) === 'success',
-        'text-warning': catalogItemColors(row.original.type) === 'warning',
-        'text-toned': catalogItemColors(row.original.type) === 'neutral',
-        'text-sm font-medium': true
-      }
-    }, catalogItemTypeLabels[row.original.type])
+    accessorKey: 'category',
+    header: 'Catégorie',
+    cell: ({ row }) => h(UBadge, { color: 'neutral', variant: 'subtle', label: row.original.category })
   },
   {
     accessorKey: 'defaultPrice',
     header: 'Prix TTC',
     cell: ({ row }) => formatCurrency(row.original.defaultPrice)
-  },
-  {
-    accessorKey: 'vatRate',
-    header: 'TVA',
-    cell: ({ row }) => `${row.original.vatRate}%`
   },
   {
     accessorKey: 'isActive',
@@ -289,9 +239,177 @@ const columns: TableColumn<CatalogItemRecord>[] = [
   }
 ]
 
-function catalogItemColors(type: CatalogItemRecord['type']) {
-  return catalogItemTypeColors[type]
+const serviceColumns: TableColumn<CatalogItemRecord>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Prestation',
+    cell: ({ row }) => h('div', { class: 'min-w-0 leading-tight' }, [
+      h('div', { class: 'flex items-center gap-2' }, [
+        h('p', { class: 'truncate font-medium text-highlighted' }, row.original.name),
+        row.original.isQuickPick
+          ? h('span', { class: 'shrink-0 text-[11px] font-medium uppercase tracking-[0.12em] text-primary' }, 'Raccourci')
+          : null
+      ]),
+      h('p', { class: 'truncate text-xs text-toned' }, row.original.serviceKind || 'Intervention non précisée')
+    ])
+  },
+  {
+    accessorKey: 'category',
+    header: 'Catégorie',
+    cell: ({ row }) => h(UBadge, { color: 'neutral', variant: 'subtle', label: row.original.category })
+  },
+  {
+    accessorKey: 'device',
+    header: 'Appareil',
+    cell: ({ row }) => row.original.model || row.original.brand || 'Prestation générique'
+  },
+  {
+    accessorKey: 'defaultPrice',
+    header: 'Prix TTC',
+    cell: ({ row }) => formatCurrency(row.original.defaultPrice)
+  },
+  {
+    accessorKey: 'isActive',
+    header: 'Statut',
+    cell: ({ row }) => h('span', {
+      class: row.original.isActive
+        ? 'text-sm font-medium text-success'
+        : 'text-sm font-medium text-toned'
+    }, row.original.isActive ? 'Actif' : 'Inactif')
+  },
+  {
+    accessorKey: 'updatedAt',
+    header: 'Mis à jour',
+    cell: ({ row }) => new Intl.DateTimeFormat('fr-CH', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(new Date(row.original.updatedAt))
+  },
+  {
+    id: 'actions',
+    cell: ({ row }) => h('div', { class: 'text-right' }, h(
+      UDropdownMenu,
+      {
+        content: { align: 'end' },
+        items: getRowItems(row.original)
+      },
+      () => h(UButton, {
+        icon: 'i-lucide-ellipsis-vertical',
+        color: 'neutral',
+        variant: 'ghost'
+      })
+    ))
+  }
+]
+
+async function saveItem(payload: CatalogItemInput) {
+  const label = payload.type === 'service' ? 'Prestation' : 'Article'
+
+  if (editingItem.value) {
+    await $fetch(`/api/catalog-items/${editingItem.value.id}`, {
+      method: 'PATCH',
+      body: payload
+    })
+
+    toast.add({ title: `${label} mise à jour`, color: 'success' })
+    editOpen.value = false
+    editingItem.value = null
+  } else {
+    await $fetch('/api/catalog-items', {
+      method: 'POST',
+      body: payload
+    })
+
+    toast.add({ title: `${label} créée`, color: 'success' })
+    createOpen.value = false
+  }
+
+  await refresh()
 }
+
+async function removeItem(item: CatalogItemRecord) {
+  await $fetch(`/api/catalog-items/${item.id}`, { method: 'DELETE' })
+  toast.add({
+    title: item.type === 'service' ? 'Prestation supprimée' : 'Article supprimé',
+    color: 'success'
+  })
+  await refresh()
+}
+
+function getRowItems(item: CatalogItemRecord) {
+  const label = item.type === 'service' ? 'la prestation' : 'l’article'
+
+  return [[{
+    label: `Modifier ${label}`,
+    icon: 'i-lucide-pencil',
+    onSelect() {
+      openEditSlideover(item)
+    }
+  }, {
+    label: 'Supprimer',
+    icon: 'i-lucide-trash',
+    color: 'error',
+    onSelect() {
+      removeItem(item)
+    }
+  }]]
+}
+
+watch([articleSearch, articleCategory, articleActiveOnly], () => {
+  articlePagination.value.pageIndex = 0
+})
+
+watch([serviceSearch, serviceCategory, serviceActiveOnly], () => {
+  servicePagination.value.pageIndex = 0
+})
+
+watch([items, () => route.query.edit, () => route.query.create], () => {
+  const createQuery = getQueryValue(route.query.create)
+  const editQuery = getQueryValue(route.query.edit)
+
+  if (createQuery) {
+    openCreateSlideover(activeView.value, { syncQuery: false })
+    return
+  }
+
+  if (editQuery) {
+    const item = (items.value || []).find(candidate => String(candidate.id) === editQuery)
+
+    if (item) {
+      openEditSlideover(item, { syncQuery: false })
+      return
+    }
+
+    if (items.value) {
+      createOpen.value = false
+      editOpen.value = false
+      editingItem.value = null
+      void replaceCatalogQuery({ edit: null })
+    }
+    return
+  }
+
+  createOpen.value = false
+  editOpen.value = false
+  editingItem.value = null
+}, { immediate: true })
+
+watch(createOpen, (open) => {
+  if (!open && getQueryValue(route.query.create)) {
+    void replaceCatalogQuery({ create: null })
+  }
+})
+
+watch(editOpen, (open) => {
+  if (!open) {
+    editingItem.value = null
+  }
+
+  if (!open && getQueryValue(route.query.edit)) {
+    void replaceCatalogQuery({ edit: null })
+  }
+})
 </script>
 
 <template>
@@ -304,128 +422,186 @@ function catalogItemColors(type: CatalogItemRecord['type']) {
 
         <template #right>
           <UButton
-            icon="i-lucide-package-plus"
-            label="Nouvel article"
+            :icon="activeView === 'services' ? 'i-lucide-wrench' : 'i-lucide-package-plus'"
+            :label="activeView === 'services' ? 'Nouvelle prestation' : 'Nouvel article'"
             variant="subtle"
-            @click="openCreateSlideover()"
+            @click="openCreateSlideover(activeView)"
           />
         </template>
       </UDashboardNavbar>
-
-      <UDashboardToolbar class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex flex-wrap items-center gap-3">
-          <UInput
-            v-model="search"
-            icon="i-lucide-search"
-            placeholder="Rechercher des produits, services ou pièces"
-            class="max-w-md"
-          />
-          <USwitch v-model="activeOnly" label="Actifs seulement" />
-        </div>
-
-        <UDropdownMenu
-          :items="
-            table?.tableApi
-              ?.getAllColumns()
-              .filter((column: DashboardTableColumn) => column.getCanHide())
-              .map((column: DashboardTableColumn) => ({
-                label: ({
-                  name: 'Article',
-                  type: 'Type',
-                  defaultPrice: 'Prix TTC',
-                  vatRate: 'TVA',
-                  isActive: 'Statut',
-                  updatedAt: 'Mis à jour',
-                  actions: 'Actions'
-                } as Record<string, string>)[column.id] || upperFirst(column.id),
-                type: 'checkbox' as const,
-                checked: column.getIsVisible(),
-                onUpdateChecked(checked: boolean) {
-                  table?.tableApi?.getColumn(column.id)?.toggleVisibility(!!checked)
-                },
-                onSelect(e?: Event) {
-                  e?.preventDefault()
-                }
-              }))
-          "
-          :content="{ align: 'end' }"
-        >
-          <UButton
-            label="Colonnes"
-            color="neutral"
-            variant="outline"
-            trailing-icon="i-lucide-settings-2"
-          />
-        </UDropdownMenu>
-      </UDashboardToolbar>
     </template>
 
     <template #body>
       <div class="space-y-4">
         <div class="grid gap-4 md:grid-cols-3">
-          <PosSummaryCard title="Articles" :value="String(items?.length || 0)" icon="i-lucide-package-search" />
-          <PosSummaryCard title="Visibles" :value="String(filteredItems.length)" icon="i-lucide-filter" />
-          <PosSummaryCard title="Actifs" :value="String((items || []).filter(item => item.isActive).length)" icon="i-lucide-badge-check" />
-        </div>
-
-        <UTable
-          ref="table"
-          v-model:pagination="pagination"
-          v-model:sorting="sorting"
-          v-model:column-visibility="columnVisibility"
-          :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-          :data="filteredItems"
-          :columns="columns"
-          sticky="header"
-          :loading="status === 'pending'"
-          class="shrink-0"
-          :ui="{
-            base: 'table-fixed border-separate border-spacing-0',
-            thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
-            tbody: '[&>tr]:last:[&>td]:border-b-0',
-            th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
-            td: 'border-b border-default py-2 align-middle text-sm',
-            separator: 'h-0'
-          }"
-          @select="(_, row) => openEditSlideover(row.original)"
-        >
-          <template #empty>
-            <UEmpty
-              icon="i-lucide-package-search"
-              title="Aucun article trouvé"
-              description="Créez un article ou ajustez les filtres actuels."
-            />
-          </template>
-        </UTable>
-
-        <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
-          <p class="text-sm text-toned">
-            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredItems.length }} article(s)
-          </p>
-
-          <UPagination
-            :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-            :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-            :total="table?.tableApi?.getFilteredRowModel().rows.length || filteredItems.length"
-            @update:page="(page: number) => table?.tableApi?.setPageIndex(page - 1)"
+          <PosSummaryCard
+            title="Articles"
+            :value="String((items || []).filter(item => item.type === 'product').length)"
+            icon="i-lucide-package-search"
+          />
+          <PosSummaryCard
+            title="Prestations"
+            :value="String((items || []).filter(item => item.type === 'service').length)"
+            icon="i-lucide-wrench"
+          />
+          <PosSummaryCard
+            title="Actifs"
+            :value="String((items || []).filter(item => item.isActive).length)"
+            icon="i-lucide-badge-check"
           />
         </div>
+
+        <UTabs
+          v-model="activeView"
+          :items="tabItems"
+          variant="link"
+          :ui="{ list: 'w-fit rounded-2xl border border-default bg-muted/30 p-1' }"
+        >
+          <template #articles>
+            <div class="space-y-4">
+              <UDashboardToolbar class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-3">
+                  <UInput
+                    v-model="articleSearch"
+                    icon="i-lucide-search"
+                    placeholder="Rechercher des articles"
+                    class="max-w-md"
+                  />
+                  <USelect
+                    v-model="articleCategory"
+                    :items="articleCategoryOptions"
+                    value-key="value"
+                    class="min-w-52"
+                  />
+                  <USwitch v-model="articleActiveOnly" label="Actifs seulement" />
+                </div>
+              </UDashboardToolbar>
+
+              <UTable
+                v-model:pagination="articlePagination"
+                v-model:sorting="articleSorting"
+                :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
+                :data="articleItems"
+                :columns="articleColumns"
+                sticky="header"
+                :loading="status === 'pending'"
+                class="shrink-0"
+                :ui="{
+                  base: 'table-fixed border-separate border-spacing-0',
+                  thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
+                  tbody: '[&>tr]:last:[&>td]:border-b-0',
+                  th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
+                  td: 'border-b border-default py-2 align-middle text-sm',
+                  separator: 'h-0'
+                }"
+                @select="(_, row) => openEditSlideover(row.original)"
+              >
+                <template #empty>
+                  <UEmpty
+                    icon="i-lucide-package-search"
+                    title="Aucun article trouvé"
+                    description="Ajoutez un article ou ajustez les filtres actuels."
+                  />
+                </template>
+              </UTable>
+
+              <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
+                <p class="text-sm text-toned">
+                  {{ articleItems.length }} article(s)
+                </p>
+
+                <UPagination
+                  :default-page="articlePagination.pageIndex + 1"
+                  :items-per-page="articlePagination.pageSize"
+                  :total="articleItems.length"
+                  @update:page="(page: number) => { articlePagination.pageIndex = page - 1 }"
+                />
+              </div>
+            </div>
+          </template>
+
+          <template #services>
+            <div class="space-y-4">
+              <UDashboardToolbar class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-3">
+                  <UInput
+                    v-model="serviceSearch"
+                    icon="i-lucide-search"
+                    placeholder="Rechercher des prestations"
+                    class="max-w-md"
+                  />
+                  <USelect
+                    v-model="serviceCategory"
+                    :items="serviceCategoryOptions"
+                    value-key="value"
+                    class="min-w-52"
+                  />
+                  <USwitch v-model="serviceActiveOnly" label="Actives seulement" />
+                </div>
+              </UDashboardToolbar>
+
+              <UTable
+                v-model:pagination="servicePagination"
+                v-model:sorting="serviceSorting"
+                :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
+                :data="serviceItems"
+                :columns="serviceColumns"
+                sticky="header"
+                :loading="status === 'pending'"
+                class="shrink-0"
+                :ui="{
+                  base: 'table-fixed border-separate border-spacing-0',
+                  thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
+                  tbody: '[&>tr]:last:[&>td]:border-b-0',
+                  th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
+                  td: 'border-b border-default py-2 align-middle text-sm',
+                  separator: 'h-0'
+                }"
+                @select="(_, row) => openEditSlideover(row.original)"
+              >
+                <template #empty>
+                  <UEmpty
+                    icon="i-lucide-wrench"
+                    title="Aucune prestation trouvée"
+                    description="Créez une prestation atelier ou ajustez les filtres actuels."
+                  />
+                </template>
+              </UTable>
+
+              <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
+                <p class="text-sm text-toned">
+                  {{ serviceItems.length }} prestation(s)
+                </p>
+
+                <UPagination
+                  :default-page="servicePagination.pageIndex + 1"
+                  :items-per-page="servicePagination.pageSize"
+                  :total="serviceItems.length"
+                  @update:page="(page: number) => { servicePagination.pageIndex = page - 1 }"
+                />
+              </div>
+            </div>
+          </template>
+        </UTabs>
       </div>
     </template>
   </UDashboardPanel>
 
   <PosCatalogItemSlideover
     v-model:open="createOpen"
-    title="Nouvel article"
-    description="Ajoutez un produit, service, pièce ou poste de main-d’œuvre sans quitter la liste."
-    submit-label="Créer l’article"
+    :title="createType === 'service' ? 'Nouvelle prestation' : 'Nouvel article'"
+    :description="createType === 'service'
+      ? 'Ajoutez une prestation structurée pour la recherche atelier et les tickets.'
+      : 'Ajoutez un article vendu tel quel sans quitter la liste.'"
+    :submit-label="createType === 'service' ? 'Créer la prestation' : 'Créer l’article'"
+    :initial-value="createInitialValue"
     @save="saveItem"
   />
 
   <PosCatalogItemSlideover
     v-model:open="editOpen"
-    title="Modifier l’article"
-    description="Ajustez le prix TTC, la TVA ou la disponibilité directement depuis la liste opérateur."
+    :title="editingItem?.type === 'service' ? 'Modifier la prestation' : 'Modifier l’article'"
+    description="Ajustez le prix TTC, la structure ou la disponibilité directement depuis le catalogue."
     submit-label="Enregistrer les modifications"
     :initial-value="editingItemForm"
     @save="saveItem"

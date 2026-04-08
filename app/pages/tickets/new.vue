@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import type { CustomerRecord } from '~~/shared/types/pos'
+import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
 
 const route = useRoute()
 const toast = useToast()
 const customerId = computed(() => Number(route.query.customerId || 0))
 
-const { data: customers } = await useFetch<CustomerRecord[]>('/api/customers')
+const [{ data: customers }, { data: serviceItems }] = await Promise.all([
+  useFetch<CustomerRecord[]>('/api/customers'),
+  useFetch<CatalogItemRecord[]>('/api/catalog-items', {
+    query: {
+      type: 'service',
+      activeOnly: true
+    }
+  })
+])
 
 async function saveTicket(payload: {
   customerId: number
@@ -55,6 +63,7 @@ async function saveTicket(payload: {
           v-if="customers"
           layout="intake"
           :customers="customers"
+          :service-items="serviceItems || []"
           :initial-value="{ customerId: customerId || undefined, type: 'repair' }"
           submit-label="Créer le ticket"
           @save="saveTicket"

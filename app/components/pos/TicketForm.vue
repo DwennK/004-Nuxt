@@ -2,13 +2,12 @@
 import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import { ticketStatusLabels, ticketStatuses, ticketTypeLabels, ticketTypes } from '~~/shared/constants/pos'
-import { defaultRepairSearches } from '~~/shared/constants/repair-suggestions'
-import type { CustomerRecord, RepairSuggestion } from '~~/shared/types/pos'
-import { formatCurrency } from '~~/shared/utils/pos'
-import { getRepairSuggestionResult } from '~~/shared/utils/repair-suggestions'
+import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
+import { formatCurrency, normalizeSearchText } from '~~/shared/utils/pos'
 
 const props = withDefaults(defineProps<{
   customers: CustomerRecord[]
+  serviceItems?: CatalogItemRecord[]
   initialValue?: Partial<{
     customerId: number | null
     type: (typeof ticketTypes)[number]
@@ -29,6 +28,7 @@ const props = withDefaults(defineProps<{
   showSubmit?: boolean
   submitLabel?: string
 }>(), {
+  serviceItems: () => [],
   initialValue: () => ({}),
   formId: undefined,
   layout: 'compact',
@@ -143,25 +143,118 @@ const currentCustomer = computed(() => {
     || (createdCustomer.value?.id === state.customerId ? createdCustomer.value : null)
 })
 
-const repairSuggestionResult = computed(() => getRepairSuggestionResult(intakeQuery.value))
-const bestRepairSuggestion = computed(() => repairSuggestionResult.value.bestMatch)
-const suggestedRepairMatches = computed(() => repairSuggestionResult.value.suggestedMatches)
-const quotedPrice = computed(() => bestRepairSuggestion.value ? formatCurrency(bestRepairSuggestion.value.priceCents) : 'À confirmer')
-const repairSearchButtons = computed(() => {
-  if (suggestedRepairMatches.value.length) {
-    return suggestedRepairMatches.value.slice(0, 6).map(suggestion => ({
-      key: `${suggestion.model}-${suggestion.issueKey}`,
-      label: `${suggestion.model} · ${suggestion.issueLabel}`,
-      action: () => applyRepairSuggestion(suggestion)
-    }))
+const catalogServiceItems = computed(() => {
+  return props.serviceItems.filter(item => item.type === 'service' && item.isActive)
+})
+const quickPickServices = computed(() => {
+  const explicitQuickPicks = catalogServiceItems.value.filter(item => item.isQuickPick)
+  return explicitQuickPicks.length ? explicitQuickPicks.slice(0, 6) : catalogServiceItems.value.slice(0, 6)
+})
+
+function buildServiceSearchText(item: CatalogItemRecord) {
+  return normalizeSearchText([
+    item.name,
+    item.category,
+    item.brand,
+    item.model,
+    item.serviceKind,
+    ...item.keywords
+  ].filter(Boolean).join(' '))
+}
+
+function scoreCatalogService(item: CatalogItemRecord, normalizedQuery: string) {
+  const tokens = normalizedQuery.split(' ').filter(Boolean)
+  const searchText = buildServiceSearchText(item)
+
+  if (!tokens.length || !tokens.every(token => searchText.includes(token))) {
+    return null
   }
 
-  return defaultRepairSearches.slice(0, 5).map(search => ({
-    key: search,
-    label: search,
-    action: () => {
-      intakeQuery.value = search
+  const nameText = normalizeSearchText(item.name)
+  const modelText = normalizeSearchText(item.model)
+  const serviceKindText = normalizeSearchText(item.serviceKind)
+  const keywordText = normalizeSearchText(item.keywords.join(' '))
+  const deviceIssueText = normalizeSearchText([item.model, item.serviceKind].filter(Boolean).join(' '))
+  const issueDeviceText = normalizeSearchText([item.serviceKind, item.model].filter(Boolean).join(' '))
+
+  let score = 0
+
+  if (nameText.includes(normalizedQuery)) {
+    score += 220
+  }
+
+  if (deviceIssueText.includes(normalizedQuery) || issueDeviceText.includes(normalizedQuery)) {
+    score += 180
+  }
+
+  if (modelText.includes(normalizedQuery)) {
+    score += 120
+  }
+
+  if (serviceKindText.includes(normalizedQuery)) {
+    score += 120
+  }
+
+  if (keywordText.includes(normalizedQuery)) {
+    score += 90
+  }
+
+  for (const token of tokens) {
+    if (nameText.includes(token)) {
+      score += 24
     }
+
+    if (modelText.includes(token)) {
+      score += 20
+    }
+
+    if (serviceKindText.includes(token)) {
+      score += 20
+    }
+
+    if (keywordText.includes(token)) {
+      score += 16
+    }
+  }
+
+  return score
+}
+
+function getCatalogServiceResult(query: string) {
+  const normalizedQuery = normalizeSearchText(query)
+
+  if (!normalizedQuery) {
+    return {
+      bestMatch: null as CatalogItemRecord | null,
+      suggestedMatches: quickPickServices.value
+    }
+  }
+
+  const matches = catalogServiceItems.value
+    .map(item => ({
+      item,
+      score: scoreCatalogService(item, normalizedQuery)
+    }))
+    .filter((match): match is { item: CatalogItemRecord, score: number } => match.score !== null)
+    .sort((left, right) => right.score - left.score || left.item.name.localeCompare(right.item.name))
+
+  return {
+    bestMatch: matches[0]?.item || null,
+    suggestedMatches: matches.slice(0, 6).map(match => match.item)
+  }
+}
+
+const serviceSearchResult = computed(() => getCatalogServiceResult(intakeQuery.value))
+const bestSuggestedService = computed(() => serviceSearchResult.value.bestMatch)
+const searchPanelItems = computed(() => {
+  return intakeQuery.value.trim() ? serviceSearchResult.value.suggestedMatches : quickPickServices.value
+})
+const quotedPrice = computed(() => bestSuggestedService.value ? formatCurrency(bestSuggestedService.value.defaultPrice) : 'À confirmer')
+const serviceQuickPickButtons = computed(() => {
+  return quickPickServices.value.map(service => ({
+    key: String(service.id),
+    label: service.name,
+    action: () => applyCatalogService(service)
   }))
 })
 
@@ -189,28 +282,28 @@ const intakeSummaryItems = computed(() => {
     },
     {
       label: 'Prix annoncé',
-      done: Boolean(bestRepairSuggestion.value),
-      value: bestRepairSuggestion.value ? quotedPrice.value : 'Aucune suggestion'
+      done: Boolean(bestSuggestedService.value),
+      value: bestSuggestedService.value ? quotedPrice.value : 'Aucune suggestion'
     }
   ]
 })
 
 const searchPanelTitle = computed(() => {
-  return intakeQuery.value.trim() ? 'Résultats atelier' : 'Raccourcis atelier'
+  return intakeQuery.value.trim() ? 'Résultats atelier' : 'Prestations rapides'
 })
 
-watch(bestRepairSuggestion, (suggestion) => {
+watch(bestSuggestedService, (suggestion) => {
   if (!suggestion || props.layout !== 'intake') {
     return
   }
 
-  state.brand = suggestion.brand
-  state.model = suggestion.model
+  state.brand = suggestion.brand || ''
+  state.model = suggestion.model || ''
   state.type = 'repair'
-  state.issueDescription = suggestion.issueLabel
+  state.issueDescription = suggestion.serviceKind || suggestion.name
 }, { immediate: true })
 
-watch(suggestedRepairMatches, (items) => {
+watch(searchPanelItems, (items) => {
   if (!items.length) {
     highlightedSuggestionIndex.value = 0
     return
@@ -257,12 +350,12 @@ function handleImeiScan(value: string) {
   state.imei = value
 }
 
-function applyRepairSuggestion(suggestion: RepairSuggestion) {
-  intakeQuery.value = `${suggestion.model} ${suggestion.issueLabel}`
-  state.brand = suggestion.brand
-  state.model = suggestion.model
+function applyCatalogService(service: CatalogItemRecord) {
+  intakeQuery.value = service.name
+  state.brand = service.brand || ''
+  state.model = service.model || ''
   state.type = 'repair'
-  state.issueDescription = suggestion.issueLabel
+  state.issueDescription = service.serviceKind || service.name
   closeSearchPanel()
 }
 
@@ -293,31 +386,31 @@ function cancelSearchClose() {
 }
 
 function highlightNextResult() {
-  if (!suggestedRepairMatches.value.length) {
+  if (!searchPanelItems.value.length) {
     return
   }
 
-  highlightedSuggestionIndex.value = (highlightedSuggestionIndex.value + 1) % suggestedRepairMatches.value.length
+  highlightedSuggestionIndex.value = (highlightedSuggestionIndex.value + 1) % searchPanelItems.value.length
 }
 
 function highlightPreviousResult() {
-  if (!suggestedRepairMatches.value.length) {
+  if (!searchPanelItems.value.length) {
     return
   }
 
   highlightedSuggestionIndex.value = highlightedSuggestionIndex.value <= 0
-    ? suggestedRepairMatches.value.length - 1
+    ? searchPanelItems.value.length - 1
     : highlightedSuggestionIndex.value - 1
 }
 
 function applyFirstSearchResult() {
-  const suggestion = suggestedRepairMatches.value[highlightedSuggestionIndex.value] || suggestedRepairMatches.value[0]
+  const suggestion = searchPanelItems.value[highlightedSuggestionIndex.value] || searchPanelItems.value[0]
 
   if (!suggestion) {
     return
   }
 
-  applyRepairSuggestion(suggestion)
+  applyCatalogService(suggestion)
 }
 
 function handleSearchKeydown(event: KeyboardEvent) {
@@ -366,13 +459,13 @@ function handleIntakeScan(value: string) {
     return
   }
 
-  const match = getRepairSuggestionResult(sanitizedValue).bestMatch
+  const match = getCatalogServiceResult(sanitizedValue).bestMatch
 
   if (match) {
-    applyRepairSuggestion(match)
+    applyCatalogService(match)
     toast.add({
-      title: 'Réparation détectée',
-      description: `${match.model} · ${match.issueLabel}`,
+      title: 'Prestation détectée',
+      description: `${match.model || match.category} · ${match.serviceKind || match.name}`,
       color: 'success'
     })
     return
@@ -402,8 +495,8 @@ function handleIntakeScan(value: string) {
           <UCard
             variant="subtle"
             :ui="{
-              root: 'rounded-[1.75rem] shadow-sm',
-              body: 'space-y-4 p-4',
+              root: `relative rounded-[1.75rem] shadow-sm overflow-visible ${searchOpen ? 'z-20' : ''}`,
+              body: 'space-y-4 p-4 overflow-visible',
               header: 'p-4 pb-0'
             }"
           >
@@ -422,6 +515,7 @@ function handleIntakeScan(value: string) {
             >
               <div
                 class="relative"
+                :class="searchOpen ? 'z-30' : ''"
                 @focusin="cancelSearchClose"
                 @focusout="scheduleSearchClose"
                 @pointerdown="openSearchPanel"
@@ -447,39 +541,39 @@ function handleIntakeScan(value: string) {
 
                 <div
                   v-if="searchOpen"
-                  class="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
+                  class="absolute inset-x-0 top-full z-50 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
                 >
                   <div class="flex items-center justify-between gap-3 px-2 pb-2">
                     <p class="text-sm font-medium text-highlighted">
                       {{ searchPanelTitle }}
                     </p>
                     <span class="text-xs text-toned">
-                      {{ suggestedRepairMatches.length }} suggestion(s)
+                      {{ searchPanelItems.length }} suggestion(s)
                     </span>
                   </div>
 
-                  <div v-if="suggestedRepairMatches.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
+                  <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
                     <button
-                      v-for="(suggestion, index) in suggestedRepairMatches"
-                      :key="`${suggestion.model}-${suggestion.issueKey}`"
+                      v-for="(suggestion, index) in searchPanelItems"
+                      :key="suggestion.id"
                       type="button"
                       class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
                       :class="index === highlightedSuggestionIndex
                         ? 'bg-primary/8 ring-1 ring-primary/20'
                         : 'hover:bg-muted/60'"
                       @mouseenter="highlightedSuggestionIndex = index"
-                      @click="applyRepairSuggestion(suggestion)"
+                      @click="applyCatalogService(suggestion)"
                     >
                       <div class="min-w-0">
                         <p class="truncate text-sm font-medium text-highlighted">
-                          {{ suggestion.model }}
+                          {{ suggestion.name }}
                         </p>
                         <p class="truncate text-xs text-toned">
-                          {{ suggestion.issueLabel }} · {{ suggestion.brand }}
+                          {{ suggestion.model || suggestion.category }} · {{ suggestion.serviceKind || 'Prestation atelier' }}
                         </p>
                       </div>
                       <span class="shrink-0 text-sm font-medium text-highlighted">
-                        {{ formatCurrency(suggestion.priceCents) }}
+                        {{ formatCurrency(suggestion.defaultPrice) }}
                       </span>
                     </button>
                   </div>
@@ -491,9 +585,9 @@ function handleIntakeScan(value: string) {
               </div>
             </UFormField>
 
-            <div class="flex flex-wrap gap-2">
+            <div v-if="!intakeQuery.trim() && serviceQuickPickButtons.length" class="flex flex-wrap gap-2">
               <UButton
-                v-for="hint in repairSearchButtons"
+                v-for="hint in serviceQuickPickButtons"
                 :key="hint.key"
                 type="button"
                 color="neutral"
@@ -656,31 +750,6 @@ function handleIntakeScan(value: string) {
         </div>
 
         <div class="space-y-4 xl:sticky xl:top-4">
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-[1.75rem] border-primary/20 shadow-sm',
-              body: 'space-y-3 p-4'
-            }"
-          >
-            <div class="space-y-1">
-              <p class="text-[11px] uppercase tracking-[0.16em] text-primary/80">
-                Prix suggéré
-              </p>
-              <p class="text-3xl font-semibold text-highlighted">
-                {{ quotedPrice }}
-              </p>
-            </div>
-
-            <p class="text-sm text-highlighted">
-              {{ bestRepairSuggestion?.issueLabel || 'Aucune suggestion fiable pour cette saisie.' }}
-            </p>
-
-            <p class="text-xs text-toned">
-              {{ bestRepairSuggestion ? `${bestRepairSuggestion.model} · ${bestRepairSuggestion.brand}` : 'Le montant reste à confirmer avant devis ou annonce client.' }}
-            </p>
-          </UCard>
-
           <UCard
             variant="subtle"
             :ui="{

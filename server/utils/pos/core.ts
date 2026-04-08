@@ -20,6 +20,7 @@ import type {
 } from '~~/shared/types/pos'
 import { buildZonedDayRange, formatCustomerName, sumMoney, toIsoDateTime } from '~~/shared/utils/pos'
 import { useDb, useTursoClient } from '../turso'
+import { buildRepairCatalogSeedItems } from './repair-service-seed'
 
 let posSchemaPromise: Promise<void> | null = null
 
@@ -201,6 +202,11 @@ async function createPosTables() {
         name TEXT NOT NULL,
         sku TEXT,
         type TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'Autre',
+        brand TEXT,
+        model TEXT,
+        service_kind TEXT,
+        keywords_json TEXT,
         default_price INTEGER NOT NULL,
         vat_rate REAL NOT NULL,
         is_active INTEGER NOT NULL DEFAULT 1,
@@ -329,6 +335,7 @@ async function createPosTables() {
     'CREATE UNIQUE INDEX IF NOT EXISTS catalog_items_sku_idx ON catalog_items(sku)',
     'CREATE INDEX IF NOT EXISTS catalog_items_type_idx ON catalog_items(type)',
     'CREATE INDEX IF NOT EXISTS catalog_items_is_active_idx ON catalog_items(is_active)',
+    'CREATE INDEX IF NOT EXISTS catalog_items_is_quick_pick_idx ON catalog_items(is_quick_pick)',
     'CREATE UNIQUE INDEX IF NOT EXISTS tickets_ticket_number_idx ON tickets(ticket_number)',
     'CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets(customer_id)',
     'CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets(status)',
@@ -440,7 +447,7 @@ async function migrateTicketAccessColumns() {
   await client.batch(statements, 'write')
 }
 
-async function migrateCatalogQuickPickColumn() {
+async function migrateCatalogStructure() {
   const client = useTursoClient()
   const tableInfo = await client.execute('PRAGMA table_info(catalog_items)')
   const columns = new Set(tableInfo.rows.map(row => String(row.name)))
@@ -455,10 +462,39 @@ async function migrateCatalogQuickPickColumn() {
     statements.push('ALTER TABLE catalog_items ADD COLUMN is_quick_pick INTEGER NOT NULL DEFAULT 0')
   }
 
+  if (!columns.has('category')) {
+    statements.push('ALTER TABLE catalog_items ADD COLUMN category TEXT')
+  }
+
+  if (!columns.has('brand')) {
+    statements.push('ALTER TABLE catalog_items ADD COLUMN brand TEXT')
+  }
+
+  if (!columns.has('model')) {
+    statements.push('ALTER TABLE catalog_items ADD COLUMN model TEXT')
+  }
+
+  if (!columns.has('service_kind')) {
+    statements.push('ALTER TABLE catalog_items ADD COLUMN service_kind TEXT')
+  }
+
+  if (!columns.has('keywords_json')) {
+    statements.push('ALTER TABLE catalog_items ADD COLUMN keywords_json TEXT')
+  }
+
   statements.push('CREATE INDEX IF NOT EXISTS catalog_items_is_active_idx ON catalog_items(is_active)')
   statements.push('CREATE INDEX IF NOT EXISTS catalog_items_is_quick_pick_idx ON catalog_items(is_quick_pick)')
+  statements.push('CREATE INDEX IF NOT EXISTS catalog_items_category_idx ON catalog_items(category)')
+  statements.push('CREATE INDEX IF NOT EXISTS catalog_items_brand_idx ON catalog_items(brand)')
+  statements.push('CREATE INDEX IF NOT EXISTS catalog_items_model_idx ON catalog_items(model)')
+  statements.push('CREATE INDEX IF NOT EXISTS catalog_items_service_kind_idx ON catalog_items(service_kind)')
 
   await client.batch(statements, 'write')
+
+  await client.batch([
+    `UPDATE catalog_items SET type = 'service' WHERE type IN ('repair_part', 'labor')`,
+    `UPDATE catalog_items SET category = 'Autre' WHERE trim(coalesce(category, '')) = ''`
+  ], 'write')
 }
 
 async function migrateCompanySettingsColumns() {
@@ -689,6 +725,11 @@ async function seedCatalogItems() {
       name: 'iPhone 15 Case',
       sku: 'CASE-IP15-BLK',
       type: 'product',
+      category: 'Accessoires',
+      brand: null,
+      model: null,
+      serviceKind: null,
+      keywordsJson: null,
       defaultPrice: 2990,
       vatRate: 8.1,
       isActive: true,
@@ -700,6 +741,11 @@ async function seedCatalogItems() {
       name: 'Tempered Glass Samsung A54',
       sku: 'GLASS-A54',
       type: 'product',
+      category: 'Protection',
+      brand: null,
+      model: null,
+      serviceKind: null,
+      keywordsJson: null,
       defaultPrice: 1990,
       vatRate: 8.1,
       isActive: true,
@@ -711,6 +757,11 @@ async function seedCatalogItems() {
       name: 'Chargeur rapide USB-C 20W',
       sku: 'CHG-USBC-20W',
       type: 'product',
+      category: 'Charge',
+      brand: null,
+      model: null,
+      serviceKind: null,
+      keywordsJson: null,
       defaultPrice: 2490,
       vatRate: 8.1,
       isActive: true,
@@ -722,6 +773,11 @@ async function seedCatalogItems() {
       name: 'Cable USB-C vers USB-C',
       sku: 'CBL-USBC-USBC',
       type: 'product',
+      category: 'Charge',
+      brand: null,
+      model: null,
+      serviceKind: null,
+      keywordsJson: null,
       defaultPrice: 1490,
       vatRate: 8.1,
       isActive: true,
@@ -730,31 +786,14 @@ async function seedCatalogItems() {
       updatedAt: toIsoDateTime()
     },
     {
-      name: 'Screen Replacement iPhone 13',
-      sku: 'REPAIR-IP13-SCR',
-      type: 'repair_part',
-      defaultPrice: 16900,
-      vatRate: 8.1,
-      isActive: true,
-      isQuickPick: false,
-      createdAt: toIsoDateTime(),
-      updatedAt: toIsoDateTime()
-    },
-    {
-      name: 'Battery Replacement',
-      sku: 'LAB-BATT',
-      type: 'labor',
-      defaultPrice: 4900,
-      vatRate: 8.1,
-      isActive: true,
-      isQuickPick: false,
-      createdAt: toIsoDateTime(),
-      updatedAt: toIsoDateTime()
-    },
-    {
       name: 'Diagnostic',
       sku: 'SERV-DIAG',
       type: 'service',
+      category: 'Autre',
+      brand: null,
+      model: null,
+      serviceKind: 'Diagnostic',
+      keywordsJson: JSON.stringify(['diagnostic', 'controle', 'checkup']),
       defaultPrice: 3900,
       vatRate: 8.1,
       isActive: true,
@@ -766,6 +805,11 @@ async function seedCatalogItems() {
       name: 'WhatsApp Support 20 min',
       sku: 'SERV-WA-20',
       type: 'service',
+      category: 'Autre',
+      brand: null,
+      model: null,
+      serviceKind: 'Support WhatsApp',
+      keywordsJson: JSON.stringify(['whatsapp', 'support', 'assistance']),
       defaultPrice: 2500,
       vatRate: 8.1,
       isActive: true,
@@ -777,6 +821,11 @@ async function seedCatalogItems() {
       name: 'Data Transfer',
       sku: 'SERV-DATA',
       type: 'service',
+      category: 'Autre',
+      brand: null,
+      model: null,
+      serviceKind: 'Transfert de données',
+      keywordsJson: JSON.stringify(['data transfer', 'transfert donnees', 'migration']),
       defaultPrice: 4500,
       vatRate: 8.1,
       isActive: true,
@@ -785,6 +834,56 @@ async function seedCatalogItems() {
       updatedAt: toIsoDateTime()
     }
   ])
+}
+
+async function seedRepairCatalogServices() {
+  const db = useDb()
+  const seedItems = buildRepairCatalogSeedItems()
+
+  if (!seedItems.length) {
+    return
+  }
+
+  const existingRows = await db.select({
+    id: catalogItems.id,
+    sku: catalogItems.sku,
+    brand: catalogItems.brand,
+    model: catalogItems.model,
+    serviceKind: catalogItems.serviceKind
+  }).from(catalogItems)
+    .where(eq(catalogItems.type, 'service'))
+
+  const existingSkus = new Set(existingRows.map(row => row.sku).filter((sku): sku is string => Boolean(sku)))
+  const existingServiceKeys = new Set(existingRows.map(row => `${row.brand || ''}::${row.model || ''}::${row.serviceKind || ''}`))
+  const now = toIsoDateTime()
+
+  const values = seedItems
+    .filter((item) => {
+      const serviceKey = `${item.brand || ''}::${item.model || ''}::${item.serviceKind || ''}`
+      return !existingSkus.has(item.sku || '') && !existingServiceKeys.has(serviceKey)
+    })
+    .map(item => ({
+      name: item.name,
+      sku: item.sku,
+      type: item.type,
+      category: item.category,
+      brand: item.brand,
+      model: item.model,
+      serviceKind: item.serviceKind,
+      keywordsJson: item.keywords.length ? JSON.stringify(item.keywords) : null,
+      defaultPrice: item.defaultPrice,
+      vatRate: item.vatRate,
+      isActive: item.isActive,
+      isQuickPick: item.isQuickPick,
+      createdAt: now,
+      updatedAt: now
+    }))
+
+  if (!values.length) {
+    return
+  }
+
+  await db.insert(catalogItems).values(values)
 }
 
 async function seedOperations() {
@@ -825,21 +924,21 @@ async function seedOperations() {
 
   const ticket = repairTicket[0]
 
-  const repairPart = seededItems.find(item => item.name === 'Screen Replacement iPhone 13')
+  const repairService = seededItems.find(item => item.sku === 'SERV-APPLE-IPHONE-13-SCREEN')
   const diagnostic = seededItems.find(item => item.name === 'Diagnostic')
   const caseItem = seededItems.find(item => item.name === 'iPhone 15 Case')
   const glassItem = seededItems.find(item => item.name === 'Tempered Glass Samsung A54')
   const whatsappSupport = seededItems.find(item => item.name === 'WhatsApp Support 20 min')
 
-  if (!ticket || !repairPart || !diagnostic || !caseItem || !glassItem || !whatsappSupport) {
+  if (!ticket || !repairService || !diagnostic || !caseItem || !glassItem || !whatsappSupport) {
     return
   }
 
   const quoteTotals = calculateDocumentTotals([
     {
       quantity: 1,
-      unitPrice: repairPart.defaultPrice,
-      vatRate: repairPart.vatRate
+      unitPrice: repairService.defaultPrice,
+      vatRate: repairService.vatRate
     },
     {
       quantity: 1,
@@ -923,11 +1022,11 @@ async function seedOperations() {
   await db.insert(documentLines).values([
     {
       documentId: quoteDocument.id,
-      catalogItemId: repairPart.id,
-      label: repairPart.name,
+      catalogItemId: repairService.id,
+      label: repairService.name,
       quantity: 1,
-      unitPrice: repairPart.defaultPrice,
-      vatRate: repairPart.vatRate,
+      unitPrice: repairService.defaultPrice,
+      vatRate: repairService.vatRate,
       lineTotal: quoteTotals.lines[0]!.lineTotal,
       categoryHint: 'repair'
     },
@@ -1004,6 +1103,7 @@ async function seedOperations() {
 async function seedPosData() {
   await seedCustomers()
   await seedCatalogItems()
+  await seedRepairCatalogServices()
   await seedOperations()
 }
 
@@ -1053,7 +1153,7 @@ export async function ensurePosSchema() {
     posSchemaPromise = (async () => {
       await migrateLegacyCustomersTable()
       await createPosTables()
-      await migrateCatalogQuickPickColumn()
+      await migrateCatalogStructure()
       await migrateTicketAccessColumns()
       await migrateCompanySettingsColumns()
       await migrateDocumentLinesQuantityToInteger()

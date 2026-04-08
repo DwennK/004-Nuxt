@@ -111,15 +111,7 @@ function toDateTimeLocal(value?: string | null) {
 }
 
 function getLineCategoryFromItem(item: CatalogItemRecord): LineCategoryHint {
-  if (item.type === 'product') {
-    return 'accessory'
-  }
-
-  if (item.type === 'service') {
-    return 'service'
-  }
-
-  return 'repair'
+  return item.type === 'product' ? 'accessory' : 'service'
 }
 
 export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraftController {
