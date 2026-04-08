@@ -2,6 +2,7 @@
 import type { TableColumn, TabsItem } from '@nuxt/ui'
 import { getPaginationRowModel } from '@tanstack/table-core'
 import type { LocationQueryValue } from 'vue-router'
+import type { DashboardTableInstance } from '~/types/table'
 import type { CatalogItemInput, CatalogItemRecord, CatalogItemType } from '~~/shared/types/pos'
 import {
   catalogArticleCategories,
@@ -19,6 +20,8 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const articleTable = useTemplateRef<DashboardTableInstance>('articleTable')
+const serviceTable = useTemplateRef<DashboardTableInstance>('serviceTable')
 
 const activeView = ref<CatalogView>('articles')
 const createOpen = ref(false)
@@ -472,6 +475,7 @@ watch(editOpen, (open) => {
               </UDashboardToolbar>
 
               <UTable
+                ref="articleTable"
                 v-model:pagination="articlePagination"
                 v-model:sorting="articleSorting"
                 :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
@@ -501,14 +505,14 @@ watch(editOpen, (open) => {
 
               <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
                 <p class="text-sm text-toned">
-                  {{ articleItems.length }} article(s)
+                  {{ articleTable?.tableApi?.getFilteredRowModel().rows.length || articleItems.length }} article(s)
                 </p>
 
                 <UPagination
-                  :default-page="articlePagination.pageIndex + 1"
-                  :items-per-page="articlePagination.pageSize"
-                  :total="articleItems.length"
-                  @update:page="(page: number) => { articlePagination.pageIndex = page - 1 }"
+                  :default-page="(articleTable?.tableApi?.getState().pagination.pageIndex || 0) + 1"
+                  :items-per-page="articleTable?.tableApi?.getState().pagination.pageSize"
+                  :total="articleTable?.tableApi?.getFilteredRowModel().rows.length || articleItems.length"
+                  @update:page="(page: number) => articleTable?.tableApi?.setPageIndex(page - 1)"
                 />
               </div>
             </div>
@@ -535,6 +539,7 @@ watch(editOpen, (open) => {
               </UDashboardToolbar>
 
               <UTable
+                ref="serviceTable"
                 v-model:pagination="servicePagination"
                 v-model:sorting="serviceSorting"
                 :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
@@ -564,14 +569,14 @@ watch(editOpen, (open) => {
 
               <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
                 <p class="text-sm text-toned">
-                  {{ serviceItems.length }} prestation(s)
+                  {{ serviceTable?.tableApi?.getFilteredRowModel().rows.length || serviceItems.length }} prestation(s)
                 </p>
 
                 <UPagination
-                  :default-page="servicePagination.pageIndex + 1"
-                  :items-per-page="servicePagination.pageSize"
-                  :total="serviceItems.length"
-                  @update:page="(page: number) => { servicePagination.pageIndex = page - 1 }"
+                  :default-page="(serviceTable?.tableApi?.getState().pagination.pageIndex || 0) + 1"
+                  :items-per-page="serviceTable?.tableApi?.getState().pagination.pageSize"
+                  :total="serviceTable?.tableApi?.getFilteredRowModel().rows.length || serviceItems.length"
+                  @update:page="(page: number) => serviceTable?.tableApi?.setPageIndex(page - 1)"
                 />
               </div>
             </div>
