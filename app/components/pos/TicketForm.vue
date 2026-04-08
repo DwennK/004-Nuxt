@@ -7,7 +7,7 @@ import { formatCurrency, normalizeSearchText } from '~~/shared/utils/pos'
 
 const props = withDefaults(defineProps<{
   customers: CustomerRecord[]
-  repairItems?: CatalogItemRecord[]
+  catalogItems?: CatalogItemRecord[]
   initialValue?: Partial<{
     customerId: number | null
     type: (typeof ticketTypes)[number]
@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<{
   showSubmit?: boolean
   submitLabel?: string
 }>(), {
-  repairItems: () => [],
+  catalogItems: () => [],
   initialValue: () => ({}),
   formId: undefined,
   layout: 'compact',
@@ -143,11 +143,19 @@ const currentCustomer = computed(() => {
     || (createdCustomer.value?.id === state.customerId ? createdCustomer.value : null)
 })
 
-const catalogRepairItems = computed(() => {
-  return props.repairItems.filter(item => item.type === 'repair' && item.isActive)
+const searchableCatalogItems = computed(() => {
+  return props.catalogItems
+    .filter(item => (item.type === 'repair' || item.type === 'service') && item.isActive)
+    .sort((left, right) => {
+      if (left.type !== right.type) {
+        return left.type === 'repair' ? -1 : 1
+      }
+
+      return left.name.localeCompare(right.name)
+    })
 })
 const quickPickServices = computed(() => {
-  return catalogRepairItems.value.slice(0, 6)
+  return searchableCatalogItems.value.slice(0, 6)
 })
 
 function buildServiceSearchText(item: CatalogItemRecord) {
@@ -229,7 +237,7 @@ function getCatalogServiceResult(query: string) {
     }
   }
 
-  const matches = catalogRepairItems.value
+  const matches = searchableCatalogItems.value
     .map(item => ({
       item,
       score: scoreCatalogService(item, normalizedQuery)
@@ -281,7 +289,7 @@ const intakeSummaryItems = computed(() => {
 })
 
 const searchPanelTitle = computed(() => {
-  return intakeQuery.value.trim() ? 'Résultats atelier' : 'Prestations'
+  return intakeQuery.value.trim() ? 'Résultats atelier' : 'Réparations & services'
 })
 
 watch(bestSuggestedService, (suggestion) => {
@@ -342,12 +350,12 @@ function handleImeiScan(value: string) {
   state.imei = value
 }
 
-function applyCatalogService(service: CatalogItemRecord) {
-  intakeQuery.value = service.name
-  state.brand = service.brand || ''
-  state.model = service.model || ''
+function applyCatalogSuggestion(item: CatalogItemRecord) {
+  intakeQuery.value = item.name
+  state.brand = item.brand || ''
+  state.model = item.model || ''
   state.type = 'repair'
-  state.issueDescription = service.serviceKind || service.name
+  state.issueDescription = item.serviceKind || item.name
   closeSearchPanel()
 }
 
@@ -402,7 +410,7 @@ function applyFirstSearchResult() {
     return
   }
 
-  applyCatalogService(suggestion)
+  applyCatalogSuggestion(suggestion)
 }
 
 function handleSearchKeydown(event: KeyboardEvent) {
@@ -454,9 +462,9 @@ function handleIntakeScan(value: string) {
   const match = getCatalogServiceResult(sanitizedValue).bestMatch
 
   if (match) {
-    applyCatalogService(match)
+    applyCatalogSuggestion(match)
     toast.add({
-      title: 'Prestation détectée',
+      title: 'Suggestion détectée',
       description: `${match.model || match.category} · ${match.serviceKind || match.name}`,
       color: 'success'
     })
@@ -549,7 +557,7 @@ function handleIntakeScan(value: string) {
                       ? 'bg-primary/8 ring-1 ring-primary/20'
                       : 'hover:bg-muted/60'"
                     @mouseenter="highlightedSuggestionIndex = index"
-                    @click="applyCatalogService(suggestion)"
+                    @click="applyCatalogSuggestion(suggestion)"
                   >
                     <div class="min-w-0">
                       <p class="truncate text-sm font-medium text-highlighted">
