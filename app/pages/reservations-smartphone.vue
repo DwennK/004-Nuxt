@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
+import type { TableColumn, TabsItem } from '@nuxt/ui'
 import type { Row } from '@tanstack/table-core'
 import { getPaginationRowModel } from '@tanstack/table-core'
 import { format, isValid, parseISO } from 'date-fns'
@@ -63,6 +63,24 @@ const statusColors: Record<SmartphoneReservationStatus, 'warning' | 'info' | 'su
   contacted: 'info',
   sold: 'success'
 }
+
+const statusTabItems: TabsItem[] = [
+  {
+    label: 'En attente',
+    value: 'pending',
+    icon: 'i-lucide-clock-3'
+  },
+  {
+    label: 'Contacté',
+    value: 'contacted',
+    icon: 'i-lucide-phone-call'
+  },
+  {
+    label: 'Vendu',
+    value: 'sold',
+    icon: 'i-lucide-badge-check'
+  }
+]
 
 async function exportCsv() {
   try {
@@ -299,20 +317,16 @@ const columns: TableColumn<SmartphoneReservationRequest>[] = [
   }
 ]
 
-const requestStatusFilter = ref('all')
+const requestStatusFilter = ref<SmartphoneReservationStatus>('pending')
 
-watch(() => requestStatusFilter.value, (newVal) => {
-  if (!table.value?.tableApi) return
+watch([() => requestStatusFilter.value, () => table.value?.tableApi], ([newVal, tableApi]) => {
+  if (!tableApi) return
 
-  const statusColumn = table.value.tableApi.getColumn('status')
+  const statusColumn = tableApi.getColumn('status')
   if (!statusColumn) return
 
-  if (newVal === 'all') {
-    statusColumn.setFilterValue(undefined)
-  } else {
-    statusColumn.setFilterValue(newVal)
-  }
-})
+  statusColumn.setFilterValue(newVal)
+}, { immediate: true })
 
 const name = computed({
   get: (): string => {
@@ -358,81 +372,77 @@ const pagination = ref({
     </template>
 
     <template #body>
-      <div class="flex flex-wrap items-center justify-between gap-1.5">
-        <UInput
-          v-model="name"
-          class="max-w-sm"
-          icon="i-lucide-search"
-          placeholder="Filtrer par nom..."
+      <div class="space-y-4">
+        <UTabs
+          v-model="requestStatusFilter"
+          :items="statusTabItems"
+          :content="false"
+          class="w-full"
         />
 
-        <div class="flex flex-wrap items-center gap-1.5">
-          <ReservationsDeleteModal
-            :count="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
-            :ids="selectedReservationIds"
-          >
-            <UButton
-              v-if="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
-              label="Supprimer"
-              color="error"
-              variant="subtle"
-              icon="i-lucide-trash"
-            >
-              <template #trailing>
-                <UKbd>
-                  {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length }}
-                </UKbd>
-              </template>
-            </UButton>
-          </ReservationsDeleteModal>
-
-          <USelect
-            v-model="requestStatusFilter"
-            :items="[
-              { label: 'Tous', value: 'all' },
-              { label: 'En attente', value: 'pending' },
-              { label: 'Contacté', value: 'contacted' },
-              { label: 'Vendu', value: 'sold' }
-            ]"
-            :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
-            placeholder="Filtrer l’état"
-            class="min-w-36"
+        <div class="flex flex-wrap items-center justify-between gap-1.5">
+          <UInput
+            v-model="name"
+            class="max-w-sm"
+            icon="i-lucide-search"
+            placeholder="Filtrer par nom..."
           />
 
-          <UDropdownMenu
-            :items="
-              table?.tableApi
-                ?.getAllColumns()
-                .filter((column: any) => column.getCanHide())
-                .map((column: any) => ({
-                  label: ({
-                    name: 'Nom',
-                    phone: 'Téléphone',
-                    model: 'Modèle',
-                    storage: 'Stockage',
-                    requestedAt: 'Date de demande',
-                    status: 'État',
-                    notes: 'Remarques'
-                  } as Record<string, string>)[column.id] || upperFirst(column.id),
-                  type: 'checkbox' as const,
-                  checked: column.getIsVisible(),
-                  onUpdateChecked(checked: boolean) {
-                    table?.tableApi?.getColumn(column.id)?.toggleVisibility(!!checked)
-                  },
-                  onSelect(e?: Event) {
-                    e?.preventDefault()
-                  }
-                }))
-            "
-            :content="{ align: 'end' }"
-          >
-            <UButton
-              label="Colonnes"
-              color="neutral"
-              variant="outline"
-              trailing-icon="i-lucide-settings-2"
-            />
-          </UDropdownMenu>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <ReservationsDeleteModal
+              :count="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
+              :ids="selectedReservationIds"
+            >
+              <UButton
+                v-if="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
+                label="Supprimer"
+                color="error"
+                variant="subtle"
+                icon="i-lucide-trash"
+              >
+                <template #trailing>
+                  <UKbd>
+                    {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length }}
+                  </UKbd>
+                </template>
+              </UButton>
+            </ReservationsDeleteModal>
+
+            <UDropdownMenu
+              :items="
+                table?.tableApi
+                  ?.getAllColumns()
+                  .filter((column: any) => column.getCanHide())
+                  .map((column: any) => ({
+                    label: ({
+                      name: 'Nom',
+                      phone: 'Téléphone',
+                      model: 'Modèle',
+                      storage: 'Stockage',
+                      requestedAt: 'Date de demande',
+                      status: 'État',
+                      notes: 'Remarques'
+                    } as Record<string, string>)[column.id] || upperFirst(column.id),
+                    type: 'checkbox' as const,
+                    checked: column.getIsVisible(),
+                    onUpdateChecked(checked: boolean) {
+                      table?.tableApi?.getColumn(column.id)?.toggleVisibility(!!checked)
+                    },
+                    onSelect(e?: Event) {
+                      e?.preventDefault()
+                    }
+                  }))
+              "
+              :content="{ align: 'end' }"
+            >
+              <UButton
+                label="Colonnes"
+                color="neutral"
+                variant="outline"
+                trailing-icon="i-lucide-settings-2"
+              />
+            </UDropdownMenu>
+          </div>
         </div>
       </div>
 
