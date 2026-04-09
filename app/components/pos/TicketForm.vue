@@ -260,7 +260,6 @@ const bestSuggestedService = computed(() => serviceSearchResult.value.bestMatch)
 const searchPanelItems = computed(() => {
   return intakeQuery.value.trim() ? serviceSearchResult.value.suggestedMatches : quickPickServices.value
 })
-const quotedPrice = computed(() => bestSuggestedService.value ? formatCurrency(bestSuggestedService.value.defaultPrice) : 'À confirmer')
 
 const imeiWarning = computed(() => getImeiWarning(state.imei))
 
@@ -655,65 +654,33 @@ function handleIntakeScan(value: string) {
                   </div>
                 </UFormField>
               </div>
-            </div>
-          </div>
-        </UCard>
-
-        <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
-          <div class="grid gap-4 xl:grid-rows-[auto_minmax(0,1fr)]">
-            <UCard
-              variant="subtle"
-              :ui="{
-                root: 'rounded-[1.75rem] shadow-sm',
-                body: 'space-y-4 p-4',
-                header: 'p-4 pb-0'
-              }"
-            >
-              <template #header>
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 class="text-base font-semibold text-highlighted">
-                      Problème
-                    </h2>
-                    <p class="text-sm text-toned">
-                      Décrivez la panne ou ajustez la suggestion atelier.
-                    </p>
-                  </div>
-
-                  <div class="text-right">
-                    <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                      Prix annoncé
-                    </p>
-                    <p class="text-lg font-semibold text-highlighted">
-                      {{ bestSuggestedService ? quotedPrice : 'À confirmer' }}
-                    </p>
-                  </div>
-                </div>
-              </template>
 
               <UFormField
                 label="Problème constaté"
                 name="issueDescription"
                 required
+                class="mt-3 border-t border-default/70 pt-3"
               >
                 <UTextarea
                   v-model="state.issueDescription"
                   class="w-full"
-                  :rows="4"
+                  :rows="1"
                   autoresize
                   placeholder="Ex. écran fissuré, batterie faible, port de charge endommagé..."
                 />
               </UFormField>
-            </UCard>
-
-            <div class="min-h-0">
-              <PosDocumentLinesEditor
-                :editor="lineEditor"
-                :catalog-items="catalogItems || []"
-                mode="ticket"
-                :show-search-card="false"
-              />
             </div>
+          </div>
+        </UCard>
+
+        <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
+          <div class="min-h-0">
+            <PosDocumentLinesEditor
+              :editor="lineEditor"
+              :catalog-items="catalogItems || []"
+              mode="ticket"
+              :show-search-card="false"
+            />
           </div>
 
           <div class="space-y-4">
