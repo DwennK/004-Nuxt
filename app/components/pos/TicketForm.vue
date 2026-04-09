@@ -103,7 +103,6 @@ const statusItems = ticketStatuses.map(status => ({
 
 const toast = useToast()
 const patternOpen = ref(false)
-const technicalDetailsOpen = ref(true)
 const intakeQuery = ref('')
 const createdCustomer = ref<CustomerRecord | null>(null)
 const searchOpen = ref(false)
@@ -146,11 +145,6 @@ watchEffect(() => {
   state.internalNotes = props.initialValue.internalNotes || ''
   state.openedAt = toDateTimeLocal(props.initialValue.openedAt)
   state.closedAt = props.initialValue.closedAt ? toDateTimeLocal(props.initialValue.closedAt) : ''
-})
-
-const currentCustomer = computed(() => {
-  return props.customers.find(customer => customer.id === state.customerId)
-    || (createdCustomer.value?.id === state.customerId ? createdCustomer.value : null)
 })
 
 const searchableCatalogItems = computed(() => {
@@ -268,10 +262,6 @@ const searchPanelItems = computed(() => {
 })
 const quotedPrice = computed(() => bestSuggestedService.value ? formatCurrency(bestSuggestedService.value.defaultPrice) : 'À confirmer')
 
-const deviceSummary = computed(() => {
-  const value = [state.brand.trim(), state.model.trim()].filter(Boolean).join(' ')
-  return value || 'Appareil à préciser'
-})
 const imeiWarning = computed(() => getImeiWarning(state.imei))
 
 const searchPanelTitle = computed(() => {
@@ -614,109 +604,58 @@ function handleIntakeScan(value: string) {
             </div>
           </div>
 
-          <div class="space-y-3 border-t border-default/70 pt-3">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div class="flex flex-wrap items-center gap-2">
-                <UBadge
-                  :color="currentCustomer ? 'success' : 'neutral'"
-                  variant="soft"
-                  size="sm"
-                >
-                  {{ currentCustomer?.displayName || 'Client à sélectionner' }}
-                </UBadge>
-                <UBadge
-                  :color="deviceSummary !== 'Appareil à préciser' ? 'success' : 'neutral'"
-                  variant="soft"
-                  size="sm"
-                >
-                  {{ deviceSummary }}
-                </UBadge>
-                <UBadge
-                  :color="state.issueDescription.trim().length >= 3 ? 'success' : 'neutral'"
-                  variant="soft"
-                  size="sm"
-                >
-                  {{ state.issueDescription.trim().length >= 3 ? 'Problème saisi' : 'Problème à décrire' }}
-                </UBadge>
-                <UBadge
-                  v-if="bestSuggestedService"
-                  color="primary"
-                  variant="soft"
-                  size="sm"
-                >
-                  Prix annoncé {{ quotedPrice }}
-                </UBadge>
-              </div>
-
-              <UButton
-                type="button"
-                color="neutral"
-                variant="soft"
-                class="justify-between rounded-xl"
-                :label="technicalDetailsOpen ? 'Masquer les détails techniques' : 'Afficher les détails techniques'"
-                :trailing-icon="technicalDetailsOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-                @click="technicalDetailsOpen = !technicalDetailsOpen"
-              />
-            </div>
-
-            <UCollapsible
-              v-model:open="technicalDetailsOpen"
-              class="space-y-3"
-            >
-              <template #content>
-                <div class="rounded-[1.25rem] border border-default/70 bg-default/70 p-3">
-                  <div class="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_13rem_minmax(0,1fr)] xl:items-start">
-                    <UFormField label="Code / accès appareil" name="accessCode">
-                      <div class="space-y-2">
-                        <UInput
-                          v-model="state.accessCode"
-                          class="w-full"
-                          placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
-                        />
-                        <UButton
-                          type="button"
-                          label="Dessiner un pattern Android"
-                          icon="i-lucide-grid-3x3"
-                          color="neutral"
-                          variant="soft"
-                          size="sm"
-                          tabindex="-1"
-                          class="justify-start"
-                          @click="patternOpen = true"
-                        />
-                      </div>
-                    </UFormField>
-
-                    <UFormField label="Code SIM" name="simCode">
-                      <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
-                    </UFormField>
-
-                    <UFormField label="IMEI" name="imei">
-                      <div class="space-y-1">
-                        <div class="flex gap-2">
-                          <UInput
-                            :model-value="state.imei"
-                            class="flex-1"
-                            placeholder="356 789 123 456 789"
-                            inputmode="numeric"
-                            @update:model-value="handleImeiInput"
-                          />
-                          <PosBarcodeScanner
-                            title="Scanner IMEI"
-                            description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
-                            trigger-aria-label="Scanner IMEI"
-                            @scanned="handleImeiScan"
-                          />
-                        </div>
-                        <p v-if="imeiWarning" class="text-xs text-warning">
-                          {{ imeiWarning }}
-                        </p>
-                      </div>
-                    </UFormField>
+          <div class="border-t border-default/70 pt-3">
+            <div class="rounded-[1.25rem] border border-default/70 bg-default/70 p-3">
+              <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_12rem_20rem] xl:items-start">
+                <UFormField label="Code / accès appareil" name="accessCode">
+                  <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <UInput
+                      v-model="state.accessCode"
+                      class="w-full"
+                      placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
+                    />
+                    <UButton
+                      type="button"
+                      label="Dessiner un pattern Android"
+                      icon="i-lucide-grid-3x3"
+                      color="neutral"
+                      variant="soft"
+                      size="sm"
+                      tabindex="-1"
+                      class="shrink-0 justify-center"
+                      @click="patternOpen = true"
+                    />
                   </div>
-                </div>
-              </template>
-            </UCollapsible>
+                </UFormField>
+
+                <UFormField label="Code SIM" name="simCode">
+                  <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
+                </UFormField>
+
+                <UFormField label="IMEI" name="imei">
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                      <UInput
+                        :model-value="state.imei"
+                        class="w-64 min-w-64 tabular-nums"
+                        placeholder="356 789 123 456 789"
+                        inputmode="numeric"
+                        @update:model-value="handleImeiInput"
+                      />
+                      <PosBarcodeScanner
+                        title="Scanner IMEI"
+                        description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
+                        trigger-aria-label="Scanner IMEI"
+                        @scanned="handleImeiScan"
+                      />
+                    </div>
+                    <p v-if="imeiWarning" class="text-xs text-warning">
+                      {{ imeiWarning }}
+                    </p>
+                  </div>
+                </UFormField>
+              </div>
+            </div>
           </div>
         </UCard>
 
