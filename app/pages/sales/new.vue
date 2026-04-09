@@ -31,6 +31,8 @@ const selectedCustomerId = ref<number | null>(null)
 const lines = ref<SaleLine[]>([])
 const isSaving = ref<PaymentMethod | null>(null)
 const lastCreatedDocument = ref<DocumentDetail | null>(null)
+const lastCompletedPaymentMethod = ref<PaymentMethod | null>(null)
+const saleCompletionOpen = ref(false)
 const customerPool = ref<CustomerRecord[]>([])
 const searchOpen = ref(false)
 const highlightedItemIndex = ref(0)
@@ -114,6 +116,10 @@ const canCharge = computed(() => {
   }
 
   return !attachCustomer.value || Boolean(selectedCustomerId.value)
+})
+
+const lastPaymentMethodLabel = computed(() => {
+  return lastCompletedPaymentMethod.value ? paymentMethodLabels[lastCompletedPaymentMethod.value] : ''
 })
 
 watch(searchPanelItems, (items) => {
@@ -392,6 +398,31 @@ function resetSaleState() {
   selectedCustomerId.value = saleType.value === 'invoice' ? selectedCustomerId.value : null
 }
 
+function focusSearchInput() {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  requestAnimationFrame(() => {
+    document.querySelector<HTMLInputElement>('input[name="sale-search"]')?.focus()
+  })
+}
+
+function closeSaleCompletionModal() {
+  saleCompletionOpen.value = false
+}
+
+function handleSaleCompletionClosed() {
+  lastCreatedDocument.value = null
+  lastCompletedPaymentMethod.value = null
+  focusSearchInput()
+}
+
+async function navigateToCompletedDocument(path: string) {
+  closeSaleCompletionModal()
+  await navigateTo(path)
+}
+
 async function completeSale(method: PaymentMethod) {
   if (!lines.value.length) {
     return
@@ -435,13 +466,9 @@ async function completeSale(method: PaymentMethod) {
     })
 
     lastCreatedDocument.value = paidDocument
+    lastCompletedPaymentMethod.value = method
+    saleCompletionOpen.value = true
     resetSaleState()
-
-    toast.add({
-      title: `${documentTypeLabels[saleType.value]} encaissé`,
-      description: `${paymentMethodLabels[method]} · ${formatCurrency(paidDocument.total)}`,
-      color: 'success'
-    })
   } finally {
     isSaving.value = null
   }
@@ -482,39 +509,113 @@ function selectAllOnFocus(event: FocusEvent) {
 
     <template #body>
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-4">
-        <UAlert
+        <UModal
           v-if="lastCreatedDocument"
-          color="success"
-          variant="soft"
-          icon="i-lucide-check-circle-2"
-          :title="`${documentTypeLabels[lastCreatedDocument.type]} ${lastCreatedDocument.documentNumber} créé`"
-          :description="`${formatCurrency(lastCreatedDocument.total)} encaissé pour ${lastCreatedDocument.customer.displayName}`"
+          v-model:open="saleCompletionOpen"
+          :dismissible="false"
+          :close="false"
+          :ui="{
+            content: 'max-w-2xl overflow-hidden rounded-[2rem] border border-success/20 shadow-2xl',
+            body: 'p-0',
+            footer: 'border-t border-default/70 p-4 sm:px-6'
+          }"
+          @after:leave="handleSaleCompletionClosed"
         >
-          <template #actions>
-            <div class="flex flex-wrap gap-2">
-              <UButton
-                :to="`/documents/${lastCreatedDocument.id}/print?profile=a4`"
-                label="Imprimer A4"
-                size="sm"
-              />
-              <UButton
-                v-if="supportsDocumentPrintProfile(lastCreatedDocument.type, 'thermal')"
-                :to="`/documents/${lastCreatedDocument.id}/print?profile=thermal`"
-                label="Imprimer thermique"
-                color="neutral"
-                variant="soft"
-                size="sm"
-              />
-              <UButton
-                :to="`/documents/${lastCreatedDocument.id}`"
-                label="Voir le document"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-              />
+          <template #body>
+            <div class="bg-[linear-gradient(180deg,rgba(34,197,94,0.12),rgba(34,197,94,0.03))] px-6 py-6 sm:px-7 sm:py-7">
+              <div class="flex items-start gap-4">
+                <div class="mt-1 flex size-12 shrink-0 items-center justify-center rounded-full bg-success/12 text-success ring-1 ring-success/15">
+                  <UIcon name="i-lucide-badge-check" class="size-6" />
+                </div>
+
+                <div class="min-w-0 flex-1 space-y-5">
+                  <div class="space-y-2">
+                    <p class="text-sm font-medium uppercase tracking-[0.18em] text-success">
+                      Encaissement terminé
+                    </p>
+                    <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
+                      <h2 class="text-4xl font-semibold tracking-tight text-highlighted sm:text-5xl">
+                        {{ formatCurrency(lastCreatedDocument.total) }}
+                      </h2>
+                      <p class="pb-1 text-base text-toned">
+                        encaissé
+                      </p>
+                    </div>
+                    <p class="text-lg font-medium text-highlighted">
+                      {{ documentTypeLabels[lastCreatedDocument.type] }} {{ lastCreatedDocument.documentNumber }}
+                    </p>
+                  </div>
+
+                  <div class="grid gap-3 rounded-[1.5rem] border border-default/70 bg-default/85 p-4 sm:grid-cols-3">
+                    <div>
+                      <p class="text-[11px] uppercase tracking-[0.16em] text-toned">
+                        Paiement
+                      </p>
+                      <p class="mt-1 text-sm font-medium text-highlighted">
+                        {{ lastPaymentMethodLabel }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-[11px] uppercase tracking-[0.16em] text-toned">
+                        Client
+                      </p>
+                      <p class="mt-1 text-sm font-medium text-highlighted">
+                        {{ lastCreatedDocument.customer.displayName }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-[11px] uppercase tracking-[0.16em] text-toned">
+                        Type
+                      </p>
+                      <p class="mt-1 text-sm font-medium text-highlighted">
+                        {{ documentTypeLabels[lastCreatedDocument.type] }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </template>
-        </UAlert>
+
+          <template #footer>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p class="text-sm text-toned">
+                Vente enregistrée. Passez directement à la suivante ou ouvrez le document.
+              </p>
+
+              <div class="flex flex-wrap justify-end gap-2">
+                <UButton
+                  v-if="supportsDocumentPrintProfile(lastCreatedDocument.type, 'thermal')"
+                  :label="'Imprimer thermique'"
+                  color="neutral"
+                  variant="soft"
+                  icon="i-lucide-printer"
+                  @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}/print?profile=thermal`)"
+                />
+                <UButton
+                  :label="'Imprimer A4'"
+                  color="neutral"
+                  variant="soft"
+                  icon="i-lucide-file-text"
+                  @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}/print?profile=a4`)"
+                />
+                <UButton
+                  :label="'Voir le document'"
+                  color="neutral"
+                  variant="ghost"
+                  @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}`)"
+                />
+                <UButton
+                  label="Nouvelle vente"
+                  color="primary"
+                  icon="i-lucide-arrow-right"
+                  autofocus
+                  @click="closeSaleCompletionModal"
+                />
+              </div>
+            </div>
+          </template>
+        </UModal>
 
         <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div class="space-y-4">
@@ -555,6 +656,7 @@ function selectAllOnFocus(event: FocusEvent) {
                 <div class="flex gap-2">
                   <UInput
                     v-model="search"
+                    name="sale-search"
                     icon="i-lucide-search"
                     size="xl"
                     class="flex-1"
