@@ -357,7 +357,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
     </template>
 
     <template v-else>
-      <UFormField :label="`Nom de la ${currentTypeLabel.toLowerCase()}`" name="name" required>
+      <UFormField :label="currentItemNameLabel" name="name" required>
         <UInput v-model="state.name" class="w-full" />
       </UFormField>
 
@@ -444,7 +444,6 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         <UFormField
           label="Prix par défaut (CHF, TTC)"
           name="defaultPrice"
-          :description="preview"
           required
         >
           <UInputNumber
