@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
+import type { CatalogItemRecord, CustomerRecord, TicketDetail } from '~~/shared/types/pos'
 
 const route = useRoute()
 const toast = useToast()
-const customerId = computed(() => Number(route.query.customerId || 0))
+const id = computed(() => Number(route.params.id))
 const formId = 'ticket-editor-form'
 
-const [{ data: customers }, { data: catalogItems }] = await Promise.all([
+const [{ data: ticket }, { data: customers }, { data: catalogItems }] = await Promise.all([
+  useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
   useFetch<CustomerRecord[]>('/api/customers'),
   useFetch<CatalogItemRecord[]>('/api/catalog-items', {
     query: {
@@ -18,7 +19,7 @@ const [{ data: customers }, { data: catalogItems }] = await Promise.all([
 async function saveTicket(payload: {
   customerId: number
   type: 'repair' | 'support'
-  status: 'new' | 'diagnosis' | 'awaiting_customer_approval' | 'approved' | 'in_progress' | 'waiting_parts' | 'ready_for_pickup' | 'delivered' | 'closed' | 'cancelled'
+  status: TicketDetail['status']
   brand: string
   model: string
   serialNumber: string
@@ -38,27 +39,24 @@ async function saveTicket(payload: {
     categoryHint: 'accessory' | 'repair' | 'service' | null
   }>
 }) {
-  const ticket = await $fetch('/api/tickets', {
-    method: 'POST',
-    body: {
-      ...payload,
-      customerId: payload.customerId || customerId.value
-    }
+  await $fetch(`/api/tickets/${id.value}`, {
+    method: 'PATCH',
+    body: payload
   })
 
   toast.add({
-    title: 'Ticket créé',
+    title: 'Ticket mis à jour',
     color: 'success'
   })
 
-  await navigateTo(`/tickets/${ticket.id}`)
+  await navigateTo(`/tickets/${id.value}`)
 }
 </script>
 
 <template>
-  <UDashboardPanel id="ticket-create">
+  <UDashboardPanel id="ticket-edit">
     <template #header>
-      <UDashboardNavbar title="Nouveau ticket">
+      <UDashboardNavbar :title="ticket?.ticketNumber ? `Modifier ${ticket.ticketNumber}` : 'Modifier le ticket'">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -66,14 +64,15 @@ async function saveTicket(payload: {
         <template #right>
           <div class="flex items-center gap-2">
             <UButton
+              v-if="ticket"
+              :to="`/tickets/${id}/print`"
               label="Imprimer"
               icon="i-lucide-printer"
               color="neutral"
               variant="subtle"
-              disabled
             />
             <UButton
-              to="/tickets"
+              :to="`/tickets/${id}`"
               label="Annuler"
               color="neutral"
               variant="ghost"
@@ -92,13 +91,13 @@ async function saveTicket(payload: {
     <template #body>
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
         <PosTicketForm
-          v-if="customers"
+          v-if="ticket && customers"
           :form-id="formId"
           layout="intake"
           :show-submit="false"
           :customers="customers"
           :catalog-items="catalogItems || []"
-          :initial-value="{ customerId: customerId || undefined, type: 'repair' }"
+          :initial-value="ticket"
           @save="saveTicket"
         />
       </div>
