@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
+import { formatImei, getImeiWarning, normalizeImei } from '~~/shared/utils/pos'
 import type { SmartphoneStock } from '~/types'
 
 const optionalText = (minLength: number, message: string) => z.preprocess((value) => {
@@ -27,7 +28,7 @@ const toast = useToast()
 
 const schema = z.object({
   model: z.string().min(2, 'Trop court'),
-  imei: optionalText(8, 'IMEI invalide'),
+  imei: z.string().optional().default(''),
   sku: optionalText(3, 'SKU invalide'),
   capacity: z.string().min(2, 'Capacité invalide'),
   stockedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide'),
@@ -46,6 +47,7 @@ const state = reactive<Schema>({
 })
 
 const isEditing = computed(() => props.mode === 'edit')
+const imeiWarning = computed(() => getImeiWarning(state.imei))
 
 watch(() => open.value, (value) => {
   if (!value) {
@@ -53,38 +55,47 @@ watch(() => open.value, (value) => {
   }
 
   state.model = props.item?.model || ''
-  state.imei = props.item?.imei || ''
+  state.imei = formatImei(props.item?.imei)
   state.sku = props.item?.sku || ''
   state.capacity = props.item?.capacity || ''
   state.stockedAt = props.item?.stockedAt || new Date().toISOString().slice(0, 10)
   state.sold = props.item?.sold || false
 })
 
+function handleImeiInput(value: string | number) {
+  state.imei = formatImei(String(value || ''))
+}
+
 async function onSubmit(event: FormSubmitEvent<Schema>) {
   try {
+    const payload = {
+      ...event.data,
+      imei: normalizeImei(event.data.imei) || ''
+    }
+
     if (isEditing.value && props.item) {
       await $fetch('/api/smartphone-stocks', {
         method: 'PATCH',
         body: {
           id: props.item.id,
-          ...event.data
+          ...payload
         }
       })
 
       toast.add({
         title: 'Smartphone mis à jour',
-        description: `${event.data.model} a été modifié.`,
+        description: `${payload.model} a été modifié.`,
         color: 'success'
       })
     } else {
       await $fetch('/api/smartphone-stocks', {
         method: 'POST',
-        body: event.data
+        body: payload
       })
 
       toast.add({
         title: 'Smartphone ajouté',
-        description: `${event.data.model} a été ajouté au stock.`,
+        description: `${payload.model} a été ajouté au stock.`,
         color: 'success'
       })
     }
@@ -136,7 +147,18 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         </UFormField>
 
         <UFormField label="IMEI" name="imei">
-          <UInput v-model="state.imei" class="w-full" placeholder="Optionnel" />
+          <div class="space-y-1">
+            <UInput
+              :model-value="state.imei"
+              class="w-full"
+              placeholder="356 789 123 456 789"
+              inputmode="numeric"
+              @update:model-value="handleImeiInput"
+            />
+            <p v-if="imeiWarning" class="text-xs text-warning">
+              {{ imeiWarning }}
+            </p>
+          </div>
         </UFormField>
 
         <UFormField label="SKU" name="sku">

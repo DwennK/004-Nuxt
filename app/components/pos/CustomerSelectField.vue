@@ -274,10 +274,6 @@ onBeforeUnmount(() => {
       </template>
     </USelectMenu>
 
-    <p v-if="!disabled" class="text-xs text-toned">
-      Recherche d’abord, création rapide si le client n’existe pas encore.
-    </p>
-
     <USlideover
       v-model:open="createOpen"
       title="Créer un client"

@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { normalizeImei } from '../../shared/utils/pos'
 import {
   createSmartphoneStock,
   deleteSmartphoneStocks,
@@ -15,9 +16,18 @@ const optionalText = (minLength: number) => z.preprocess((value) => {
   return normalized === '' ? undefined : normalized
 }, z.string().min(minLength).optional().default(''))
 
+const optionalImei = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value
+  }
+
+  const normalized = normalizeImei(value)
+  return normalized || undefined
+}, z.string().optional().default(''))
+
 const smartphoneStockSchema = z.object({
   model: z.string().min(2),
-  imei: optionalText(8),
+  imei: optionalImei,
   sku: optionalText(3),
   capacity: z.string().min(2),
   stockedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

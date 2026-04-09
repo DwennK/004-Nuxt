@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeImei } from '../utils/pos'
 import {
   catalogItemTypes,
   documentStatuses,
@@ -31,6 +32,10 @@ const optionalEmail = z.union([
   }
 
   return value.trim() || null
+})
+
+const optionalImei = optionalText.transform((value) => {
+  return normalizeImei(value)
 })
 
 export const customerInputSchema = z.object({
@@ -103,7 +108,7 @@ export const ticketInputSchema = z.object({
   brand: optionalText,
   model: optionalText,
   serialNumber: optionalText,
-  imei: optionalText,
+  imei: optionalImei,
   accessCode: optionalText,
   simCode: optionalText,
   issueDescription: z.string().trim().min(3, 'La description du problème est obligatoire'),

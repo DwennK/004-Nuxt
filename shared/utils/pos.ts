@@ -116,6 +116,64 @@ export function parseCurrencyInput(value: string | number) {
   return Math.round(parsed * 100)
 }
 
+export const imeiLength = 15
+
+export function normalizeImei(value: string | null | undefined) {
+  const digits = (value || '').replace(/\D+/g, '')
+  return digits || null
+}
+
+export function formatImei(value: string | null | undefined) {
+  const digits = normalizeImei(value)
+
+  if (!digits) {
+    return ''
+  }
+
+  return digits.match(/.{1,3}/g)?.join(' ') || digits
+}
+
+export function isValidImei(value: string | null | undefined) {
+  const digits = normalizeImei(value)
+
+  if (!digits || digits.length !== imeiLength) {
+    return false
+  }
+
+  let sum = 0
+
+  for (let index = 0; index < digits.length; index += 1) {
+    const digit = Number(digits[index] || 0)
+    const shouldDouble = index % 2 === 1
+    const doubled = shouldDouble ? digit * 2 : digit
+    sum += doubled > 9 ? doubled - 9 : doubled
+  }
+
+  return sum % 10 === 0
+}
+
+export function getImeiWarning(value: string | null | undefined) {
+  const digits = normalizeImei(value)
+
+  if (!digits) {
+    return null
+  }
+
+  if (digits.length < imeiLength) {
+    return 'IMEI incomplet. 15 chiffres attendus.'
+  }
+
+  if (digits.length > imeiLength) {
+    return 'IMEI trop long. 15 chiffres attendus.'
+  }
+
+  if (!isValidImei(digits)) {
+    return 'IMEI invalide. Vérifiez le chiffre de contrôle.'
+  }
+
+  return null
+}
+
 export function normalizeSearchText(value: string | null | undefined) {
   return (value || '')
     .normalize('NFD')

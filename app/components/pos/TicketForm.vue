@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import { ticketStatusLabels, ticketStatuses, ticketTypeLabels, ticketTypes } from '~~/shared/constants/pos'
 import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
-import { formatCurrency, normalizeSearchText } from '~~/shared/utils/pos'
+import { formatCurrency, formatImei, getImeiWarning, normalizeImei, normalizeSearchText } from '~~/shared/utils/pos'
 import { useCommercialLinesDraft, type EditableCommercialLinePayload } from '~~/app/composables/useCommercialLinesDraft'
 
 const props = withDefaults(defineProps<{
@@ -139,7 +139,7 @@ watchEffect(() => {
   state.brand = props.initialValue.brand || ''
   state.model = props.initialValue.model || ''
   state.serialNumber = props.initialValue.serialNumber || ''
-  state.imei = props.initialValue.imei || ''
+  state.imei = formatImei(props.initialValue.imei)
   state.accessCode = props.initialValue.accessCode || ''
   state.simCode = props.initialValue.simCode || ''
   state.issueDescription = props.initialValue.issueDescription || ''
@@ -272,6 +272,7 @@ const deviceSummary = computed(() => {
   const value = [state.brand.trim(), state.model.trim()].filter(Boolean).join(' ')
   return value || 'Appareil à préciser'
 })
+const imeiWarning = computed(() => getImeiWarning(state.imei))
 
 const searchPanelTitle = computed(() => {
   return intakeQuery.value.trim() ? 'Résultats atelier' : 'Réparations & services'
@@ -303,6 +304,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
   emit('save', {
     ...event.data,
     type: event.data.type,
+    imei: normalizeImei(event.data.imei) || '',
     openedAt: new Date(event.data.openedAt).toISOString(),
     closedAt: event.data.closedAt ? new Date(event.data.closedAt).toISOString() : '',
     lines: lineEditor.serializeLines()
@@ -321,8 +323,12 @@ function handleCustomerCreated(customer: CustomerRecord) {
   createdCustomer.value = customer
 }
 
+function handleImeiInput(value: string | number) {
+  state.imei = formatImei(String(value || ''))
+}
+
 function handleImeiScan(value: string) {
-  state.imei = value
+  state.imei = formatImei(value)
 }
 
 function applyCatalogSuggestion(item: CatalogItemRecord) {
@@ -434,7 +440,7 @@ function handleIntakeScan(value: string) {
     return
   }
 
-  const normalizedNumericValue = sanitizedValue.replace(/\s+/g, '')
+  const normalizedNumericValue = normalizeImei(sanitizedValue) || ''
 
   if (/^\d{8,}$/.test(normalizedNumericValue)) {
     handleImeiScan(normalizedNumericValue)
@@ -488,14 +494,9 @@ function handleIntakeScan(value: string) {
         >
           <template #header>
             <div class="flex flex-wrap items-center justify-between gap-3">
-              <div class="space-y-1">
-                <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-toned">
-                  Réception express
-                </p>
-                <h2 class="text-lg font-semibold text-highlighted">
-                  Créer un ticket sans quitter l’écran
-                </h2>
-              </div>
+              <h2 class="text-lg font-semibold text-highlighted">
+                Nouveau ticket
+              </h2>
 
               <div class="flex flex-wrap items-center gap-2 text-xs text-toned">
                 <span>{{ ticketTypeLabels[state.type] }}</span>
@@ -515,7 +516,6 @@ function handleIntakeScan(value: string) {
             >
               <UFormField
                 label="Saisie rapide"
-                description="Recherche atelier, scanner ou saisie manuelle."
               >
                 <div class="flex gap-2">
                   <UInput
@@ -680,6 +680,7 @@ function handleIntakeScan(value: string) {
                           color="neutral"
                           variant="soft"
                           size="sm"
+                          tabindex="-1"
                           class="justify-start"
                           @click="patternOpen = true"
                         />
@@ -691,14 +692,25 @@ function handleIntakeScan(value: string) {
                     </UFormField>
 
                     <UFormField label="IMEI" name="imei">
-                      <div class="flex gap-2">
-                        <UInput v-model="state.imei" class="flex-1" placeholder="356..." />
-                        <PosBarcodeScanner
-                          title="Scanner IMEI"
-                          description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
-                          trigger-aria-label="Scanner IMEI"
-                          @scanned="handleImeiScan"
-                        />
+                      <div class="space-y-1">
+                        <div class="flex gap-2">
+                          <UInput
+                            :model-value="state.imei"
+                            class="flex-1"
+                            placeholder="356 789 123 456 789"
+                            inputmode="numeric"
+                            @update:model-value="handleImeiInput"
+                          />
+                          <PosBarcodeScanner
+                            title="Scanner IMEI"
+                            description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
+                            trigger-aria-label="Scanner IMEI"
+                            @scanned="handleImeiScan"
+                          />
+                        </div>
+                        <p v-if="imeiWarning" class="text-xs text-warning">
+                          {{ imeiWarning }}
+                        </p>
                       </div>
                     </UFormField>
                   </div>
@@ -888,14 +900,25 @@ function handleIntakeScan(value: string) {
           </UFormField>
 
           <UFormField label="IMEI" name="imei" hint="Optionnel">
-            <div class="flex gap-2">
-              <UInput v-model="state.imei" class="flex-1" />
-              <PosBarcodeScanner
-                title="Scanner IMEI / N° de série"
-                description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
-                trigger-aria-label="Scanner IMEI"
-                @scanned="handleImeiScan"
-              />
+            <div class="space-y-1">
+              <div class="flex gap-2">
+                <UInput
+                  :model-value="state.imei"
+                  class="flex-1"
+                  placeholder="356 789 123 456 789"
+                  inputmode="numeric"
+                  @update:model-value="handleImeiInput"
+                />
+                <PosBarcodeScanner
+                  title="Scanner IMEI / N° de série"
+                  description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
+                  trigger-aria-label="Scanner IMEI"
+                  @scanned="handleImeiScan"
+                />
+              </div>
+              <p v-if="imeiWarning" class="text-xs text-warning">
+                {{ imeiWarning }}
+              </p>
             </div>
           </UFormField>
 
@@ -921,6 +944,7 @@ function handleIntakeScan(value: string) {
                 icon="i-lucide-grid-3x3"
                 color="neutral"
                 variant="soft"
+                tabindex="-1"
                 @click="patternOpen = true"
               />
             </div>
@@ -1003,14 +1027,25 @@ function handleIntakeScan(value: string) {
         </UFormField>
 
         <UFormField label="IMEI" name="imei" hint="Optionnel">
-          <div class="flex gap-2">
-            <UInput v-model="state.imei" class="flex-1" />
-            <PosBarcodeScanner
-              title="Scanner IMEI / N° de série"
-              description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
-              trigger-aria-label="Scanner IMEI"
-              @scanned="handleImeiScan"
-            />
+          <div class="space-y-1">
+            <div class="flex gap-2">
+              <UInput
+                :model-value="state.imei"
+                class="flex-1"
+                placeholder="356 789 123 456 789"
+                inputmode="numeric"
+                @update:model-value="handleImeiInput"
+              />
+              <PosBarcodeScanner
+                title="Scanner IMEI / N° de série"
+                description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
+                trigger-aria-label="Scanner IMEI"
+                @scanned="handleImeiScan"
+              />
+            </div>
+            <p v-if="imeiWarning" class="text-xs text-warning">
+              {{ imeiWarning }}
+            </p>
           </div>
         </UFormField>
       </div>
@@ -1033,6 +1068,7 @@ function handleIntakeScan(value: string) {
               icon="i-lucide-grid-3x3"
               color="neutral"
               variant="soft"
+              tabindex="-1"
               @click="patternOpen = true"
             />
           </div>

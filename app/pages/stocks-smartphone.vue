@@ -4,6 +4,7 @@ import type { Row } from '@tanstack/table-core'
 import { getPaginationRowModel } from '@tanstack/table-core'
 import { format, isValid, parseISO } from 'date-fns'
 import { upperFirst } from 'scule'
+import { formatImei } from '~~/shared/utils/pos'
 import type { SmartphoneStock } from '~/types'
 
 type SmartphoneTableInstance = {
@@ -59,16 +60,6 @@ function formatSwissDate(value: string) {
 
   const date = parseISO(value)
   return isValid(date) ? format(date, 'dd.MM.yyyy') : value
-}
-
-function formatImei(value: string) {
-  const digits = value.replace(/\s+/g, '')
-
-  if (!digits) {
-    return '-'
-  }
-
-  return digits.match(/.{1,3}/g)?.join(' ') || value
 }
 
 async function updateSoldState(row: SmartphoneStock, sold: boolean) {
@@ -212,7 +203,7 @@ const columns: TableColumn<SmartphoneStock>[] = [
   {
     accessorKey: 'imei',
     header: 'IMEI',
-    cell: ({ row }) => formatImei(row.original.imei)
+    cell: ({ row }) => formatImei(row.original.imei) || '-'
   },
   {
     accessorKey: 'sku',
