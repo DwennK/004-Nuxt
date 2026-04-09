@@ -49,7 +49,7 @@ async function saveTicket(payload: {
 <template>
   <UDashboardPanel id="ticket-create">
     <template #header>
-      <UDashboardNavbar title="Nouvelle réparation">
+      <UDashboardNavbar title="Nouveau ticket">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
