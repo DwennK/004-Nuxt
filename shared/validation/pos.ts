@@ -86,6 +86,16 @@ export const catalogItemInputSchema = z.object({
   }
 })
 
+export const commercialLineInputSchema = z.object({
+  catalogItemId: z.coerce.number().int().positive().optional().nullable(),
+  label: z.string().trim().min(1, 'Le libellé est obligatoire'),
+  quantity: z.coerce.number().int().positive(),
+  unitPrice: z.coerce.number().int().min(0),
+  vatRate: z.coerce.number().min(0).max(100),
+  lineTotal: z.coerce.number().int().min(0).optional(),
+  categoryHint: z.enum(lineCategoryHints).optional().nullable()
+})
+
 export const ticketInputSchema = z.object({
   customerId: z.coerce.number().int().positive(),
   type: z.enum(ticketTypes),
@@ -99,18 +109,11 @@ export const ticketInputSchema = z.object({
   issueDescription: z.string().trim().min(3, 'La description du problème est obligatoire'),
   internalNotes: optionalText,
   openedAt: z.string().trim().min(1).default(() => new Date().toISOString()),
-  closedAt: optionalText
+  closedAt: optionalText,
+  lines: z.array(commercialLineInputSchema).default([])
 })
 
-export const documentLineInputSchema = z.object({
-  catalogItemId: z.coerce.number().int().positive().optional().nullable(),
-  label: z.string().trim().min(1, 'Le libellé est obligatoire'),
-  quantity: z.coerce.number().int().positive(),
-  unitPrice: z.coerce.number().int().min(0),
-  vatRate: z.coerce.number().min(0).max(100),
-  lineTotal: z.coerce.number().int().min(0).optional(),
-  categoryHint: z.enum(lineCategoryHints).optional().nullable()
-})
+export const documentLineInputSchema = commercialLineInputSchema
 
 export const documentInputSchema = z.object({
   type: z.enum(documentTypes),
@@ -119,7 +122,7 @@ export const documentInputSchema = z.object({
   ticketId: z.coerce.number().int().positive().optional().nullable(),
   issuedAt: z.string().trim().min(1).default(() => new Date().toISOString()),
   notes: optionalText,
-  lines: z.array(documentLineInputSchema).min(1, 'Au moins une ligne est obligatoire')
+  lines: z.array(commercialLineInputSchema).min(1, 'Au moins une ligne est obligatoire')
 })
 
 export const paymentInputSchema = z.object({

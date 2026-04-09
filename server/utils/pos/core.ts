@@ -311,6 +311,21 @@ async function createPosTables() {
       )
     `,
     `
+      CREATE TABLE IF NOT EXISTS ticket_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_id INTEGER NOT NULL,
+        catalog_item_id INTEGER,
+        label TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        unit_price INTEGER NOT NULL,
+        vat_rate REAL NOT NULL,
+        line_total INTEGER NOT NULL,
+        category_hint TEXT,
+        FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE,
+        FOREIGN KEY (catalog_item_id) REFERENCES catalog_items(id) ON DELETE SET NULL
+      )
+    `,
+    `
       CREATE TABLE IF NOT EXISTS payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_id INTEGER,
@@ -352,7 +367,10 @@ async function createPosTables() {
     'CREATE INDEX IF NOT EXISTS payments_method_idx ON payments(method)',
     'CREATE INDEX IF NOT EXISTS payments_status_idx ON payments(status)',
     'CREATE INDEX IF NOT EXISTS document_lines_document_id_idx ON document_lines(document_id)',
-    'CREATE INDEX IF NOT EXISTS document_lines_category_hint_idx ON document_lines(category_hint)'
+    'CREATE INDEX IF NOT EXISTS document_lines_category_hint_idx ON document_lines(category_hint)',
+    'CREATE INDEX IF NOT EXISTS ticket_lines_ticket_id_idx ON ticket_lines(ticket_id)',
+    'CREATE INDEX IF NOT EXISTS ticket_lines_catalog_item_id_idx ON ticket_lines(catalog_item_id)',
+    'CREATE INDEX IF NOT EXISTS ticket_lines_category_hint_idx ON ticket_lines(category_hint)'
   ], 'write')
 }
 
@@ -416,6 +434,69 @@ async function migrateDocumentLinesQuantityToInteger() {
     'CREATE INDEX IF NOT EXISTS document_lines_document_id_idx ON document_lines(document_id)',
     'CREATE INDEX IF NOT EXISTS document_lines_catalog_item_id_idx ON document_lines(catalog_item_id)',
     'CREATE INDEX IF NOT EXISTS document_lines_category_hint_idx ON document_lines(category_hint)'
+  ], 'write')
+}
+
+async function migrateTicketLinesQuantityToInteger() {
+  const client = useTursoClient()
+  const tableInfo = await client.execute('PRAGMA table_info(ticket_lines)')
+
+  if (!tableInfo.rows.length) {
+    return
+  }
+
+  const quantityColumn = tableInfo.rows.find(row => String(row.name) === 'quantity')
+  const quantityType = String(quantityColumn?.type || '').toUpperCase()
+
+  if (quantityType.includes('INT')) {
+    return
+  }
+
+  await client.batch([
+    'ALTER TABLE ticket_lines RENAME TO ticket_lines_legacy_quantity',
+    `
+      CREATE TABLE ticket_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_id INTEGER NOT NULL,
+        catalog_item_id INTEGER,
+        label TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        unit_price INTEGER NOT NULL,
+        vat_rate REAL NOT NULL,
+        line_total INTEGER NOT NULL,
+        category_hint TEXT,
+        FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE,
+        FOREIGN KEY (catalog_item_id) REFERENCES catalog_items(id) ON DELETE SET NULL
+      )
+    `,
+    `
+      INSERT INTO ticket_lines (
+        id,
+        ticket_id,
+        catalog_item_id,
+        label,
+        quantity,
+        unit_price,
+        vat_rate,
+        line_total,
+        category_hint
+      )
+      SELECT
+        id,
+        ticket_id,
+        catalog_item_id,
+        label,
+        CAST(ROUND(quantity, 0) AS INTEGER),
+        unit_price,
+        vat_rate,
+        line_total,
+        category_hint
+      FROM ticket_lines_legacy_quantity
+    `,
+    'DROP TABLE ticket_lines_legacy_quantity',
+    'CREATE INDEX IF NOT EXISTS ticket_lines_ticket_id_idx ON ticket_lines(ticket_id)',
+    'CREATE INDEX IF NOT EXISTS ticket_lines_catalog_item_id_idx ON ticket_lines(catalog_item_id)',
+    'CREATE INDEX IF NOT EXISTS ticket_lines_category_hint_idx ON ticket_lines(category_hint)'
   ], 'write')
 }
 
@@ -1193,6 +1274,7 @@ export async function ensurePosSchema() {
       await migrateTicketAccessColumns()
       await migrateCompanySettingsColumns()
       await migrateDocumentLinesQuantityToInteger()
+      await migrateTicketLinesQuantityToInteger()
       await ensureUniqueNumberIndexes()
       await ensureCompanySettingsRow()
       await refreshStoredDocumentTotals()

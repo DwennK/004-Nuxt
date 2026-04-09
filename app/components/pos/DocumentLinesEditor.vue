@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { CatalogItemRecord } from '~~/shared/types/pos'
-import type { DocumentDraftController } from '~~/app/composables/useDocumentDraft'
+import type { CommercialLinesDraftController } from '~~/app/composables/useCommercialLinesDraft'
 import { formatCurrency, getCatalogItemTypeLabel, normalizeSearchText } from '~~/shared/utils/pos'
 
 const props = defineProps<{
-  editor: DocumentDraftController
+  editor: CommercialLinesDraftController
   catalogItems: CatalogItemRecord[]
+  mode?: 'document' | 'ticket'
+  showSearchCard?: boolean
 }>()
 
 const state = props.editor.state
@@ -17,6 +19,7 @@ const highlightedItemIndex = ref(0)
 let searchCloseTimeout: ReturnType<typeof setTimeout> | null = null
 
 const activeItems = computed(() => props.catalogItems.filter(item => item.isActive))
+const resolvedMode = computed(() => props.mode || 'document')
 
 const quickPickItems = computed(() => {
   return activeItems.value.slice(0, 8)
@@ -49,6 +52,50 @@ const searchPanelItems = computed(() => {
 
 const searchPanelTitle = computed(() => {
   return search.value.trim() ? 'Résultats' : 'Suggestions'
+})
+
+const searchCardTitle = computed(() => {
+  return resolvedMode.value === 'ticket' ? 'Ajout rapide' : 'Recherche article'
+})
+
+const searchHintLabel = computed(() => {
+  return resolvedMode.value === 'ticket' ? 'Entrée ajoute la première correspondance' : 'Entrée ajoute le premier résultat'
+})
+
+const searchPlaceholder = computed(() => {
+  return resolvedMode.value === 'ticket'
+    ? 'batterie iphone 13, diagnostic, coque...'
+    : 'cable, coque, chargeur, verre...'
+})
+
+const searchScannerTitle = computed(() => {
+  return resolvedMode.value === 'ticket' ? 'Scanner un article ou une prestation' : 'Scanner un article'
+})
+
+const searchScannerDescription = computed(() => {
+  return resolvedMode.value === 'ticket'
+    ? 'Scannez un code-barres ou QR code pour ajouter rapidement une ligne prévue au ticket.'
+    : 'Scannez le code-barres ou QR code d\'un article pour l\'ajouter au document.'
+})
+
+const cardTitle = computed(() => {
+  return resolvedMode.value === 'ticket' ? 'Lignes prévues' : 'Lignes du document'
+})
+
+const cardDescription = computed(() => {
+  return resolvedMode.value === 'ticket'
+    ? 'Préparez ce qui devra être facturé plus tard sans ressaisir lors du document.'
+    : 'Modifiez directement les lignes et le contexte sans changer d’écran.'
+})
+
+const emptyTitle = computed(() => {
+  return resolvedMode.value === 'ticket' ? 'Aucune ligne prévue' : 'Aucune ligne'
+})
+
+const emptyDescription = computed(() => {
+  return resolvedMode.value === 'ticket'
+    ? 'Ajoutez une réparation, un service, un article ou créez une ligne libre.'
+    : 'Ajoutez un article ou créez une ligne libre.'
 })
 
 const catalogItemsList = computed(() => props.catalogItems.map(item => ({
@@ -185,6 +232,7 @@ function handleBarcodeScan(value: string) {
 <template>
   <div class="space-y-4">
     <UCard
+      v-if="showSearchCard !== false"
       variant="subtle"
       :ui="{
         root: 'overflow-visible rounded-[2rem] shadow-sm',
@@ -197,10 +245,10 @@ function handleBarcodeScan(value: string) {
           <div class="space-y-1">
             <div class="flex flex-wrap items-center gap-2">
               <h2 class="text-base font-semibold text-highlighted">
-                Recherche article
+                {{ searchCardTitle }}
               </h2>
               <UBadge color="neutral" variant="soft" size="sm">
-                Entrée ajoute le premier résultat
+                {{ searchHintLabel }}
               </UBadge>
             </div>
           </div>
@@ -224,13 +272,13 @@ function handleBarcodeScan(value: string) {
             icon="i-lucide-search"
             size="xl"
             class="flex-1"
-            placeholder="cable, coque, chargeur, verre..."
-            autofocus
+            :placeholder="searchPlaceholder"
+            :autofocus="resolvedMode === 'document'"
             @keydown="handleSearchKeydown"
           />
           <PosBarcodeScanner
-            title="Scanner un article"
-            description="Scannez le code-barres ou QR code d'un article pour l'ajouter au document."
+            :title="searchScannerTitle"
+            :description="searchScannerDescription"
             trigger-size="lg"
             trigger-aria-label="Scanner un code-barres"
             @scanned="handleBarcodeScan"
@@ -302,10 +350,10 @@ function handleBarcodeScan(value: string) {
         <div class="flex items-center justify-between gap-3">
           <div>
             <h2 class="text-base font-semibold text-highlighted">
-              Lignes du document
+              {{ cardTitle }}
             </h2>
             <p class="text-sm text-toned">
-              Modifiez directement les lignes et le contexte sans changer d’écran.
+              {{ cardDescription }}
             </p>
           </div>
           <div class="text-right">
@@ -322,8 +370,8 @@ function handleBarcodeScan(value: string) {
       <UEmpty
         v-if="!state.lines.length"
         icon="i-lucide-list"
-        title="Aucune ligne"
-        description="Ajoutez un article ou créez une ligne libre."
+        :title="emptyTitle"
+        :description="emptyDescription"
         class="py-8"
       />
 

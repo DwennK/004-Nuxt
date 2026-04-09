@@ -1,15 +1,17 @@
 import { and, desc, eq, sql } from 'drizzle-orm'
-import { customers, documents, ticketEvents, tickets } from '~~/server/db/schema'
+import { customers, documents, ticketEvents, ticketLines, tickets } from '~~/server/db/schema'
 import {
   ticketStatusLabels,
   ticketWorkflowStepLabels
 } from '~~/shared/constants/pos'
 import type {
   DocumentRecord,
+  LineCategoryHint,
   PaymentRecord,
   TicketCommercialSummary,
   TicketDetail,
   TicketEvent,
+  TicketLineRecord,
   TicketListItem,
   TicketRecord,
   TicketStatus,
@@ -18,6 +20,7 @@ import type {
 } from '~~/shared/types/pos'
 import { useDb } from '../turso'
 import {
+  calculateDocumentTotals,
   createTicketEvent,
   closeTicketRecord,
   ensurePosSchema,
@@ -50,6 +53,78 @@ export function mapTicket(row: typeof tickets.$inferSelect): TicketRecord {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   }
+}
+
+function mapTicketLine(row: typeof ticketLines.$inferSelect): TicketLineRecord {
+  return {
+    id: row.id,
+    ticketId: row.ticketId,
+    catalogItemId: row.catalogItemId,
+    label: row.label,
+    quantity: row.quantity,
+    unitPrice: row.unitPrice,
+    vatRate: row.vatRate,
+    lineTotal: row.lineTotal,
+    categoryHint: row.categoryHint
+  }
+}
+
+type TicketLineInput = {
+  catalogItemId?: number | null
+  label: string
+  quantity: number
+  unitPrice: number
+  vatRate: number
+  lineTotal?: number | null
+  categoryHint?: LineCategoryHint | null
+}
+
+async function getTicketLines(ticketId: number) {
+  const db = useDb()
+  const rows = await db.select()
+    .from(ticketLines)
+    .where(eq(ticketLines.ticketId, ticketId))
+    .orderBy(ticketLines.id)
+
+  return rows.map(mapTicketLine)
+}
+
+async function replaceTicketLines(ticketId: number, lines: TicketLineInput[]) {
+  const db = useDb()
+  const totals = calculateDocumentTotals(lines)
+
+  await db.delete(ticketLines).where(eq(ticketLines.ticketId, ticketId))
+
+  if (!totals.lines.length) {
+    return []
+  }
+
+  await db.insert(ticketLines).values(totals.lines.map((line, index) => ({
+    ticketId,
+    catalogItemId: lines[index]?.catalogItemId ?? null,
+    label: lines[index]!.label,
+    quantity: lines[index]!.quantity,
+    unitPrice: lines[index]!.unitPrice,
+    vatRate: lines[index]!.vatRate,
+    lineTotal: line.lineTotal,
+    categoryHint: lines[index]!.categoryHint ?? null
+  })))
+
+  return getTicketLines(ticketId)
+}
+
+export async function cloneTicketLines(ticketId: number) {
+  const rows = await getTicketLines(ticketId)
+
+  return rows.map(line => ({
+    catalogItemId: line.catalogItemId,
+    label: line.label,
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    vatRate: line.vatRate,
+    lineTotal: line.lineTotal,
+    categoryHint: line.categoryHint
+  }))
 }
 
 function parseEventMetadata(value: string | null) {
@@ -519,7 +594,8 @@ export async function getTicketById(id: number): Promise<TicketDetail> {
     })
   }
 
-  const [documentRows, paymentRows, eventRows] = await Promise.all([
+  const [lineRows, documentRows, paymentRows, eventRows] = await Promise.all([
+    getTicketLines(id),
     db.select().from(documents).where(eq(documents.ticketId, id)).orderBy(desc(documents.issuedAt), desc(documents.id)),
     getTicketPayments(id),
     db.select().from(ticketEvents).where(eq(ticketEvents.ticketId, id)).orderBy(desc(ticketEvents.occurredAt), desc(ticketEvents.id))
@@ -533,6 +609,7 @@ export async function getTicketById(id: number): Promise<TicketDetail> {
   return {
     ...mappedTicket,
     customer: mapCustomer(header.customer),
+    lines: lineRows,
     documents: mappedDocuments,
     payments: mappedPayments,
     events: eventRows.length ? eventRows.map(mapTicketEvent) : buildSyntheticEvents(mappedTicket, mappedDocuments, mappedPayments),
@@ -541,7 +618,9 @@ export async function getTicketById(id: number): Promise<TicketDetail> {
   }
 }
 
-export async function createTicket(input: Omit<TicketRecord, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'>) {
+export async function createTicket(input: Omit<TicketRecord, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'> & {
+  lines?: TicketLineInput[]
+}) {
   await ensurePosSchema()
 
   const db = useDb()
@@ -568,6 +647,8 @@ export async function createTicket(input: Omit<TicketRecord, 'id' | 'ticketNumbe
 
   const ticket = mapTicket(rows[0]!)
 
+  await replaceTicketLines(ticket.id, input.lines || [])
+
   await createTicketEvent({
     ticketId: ticket.id,
     kind: 'ticket_created',
@@ -583,7 +664,9 @@ export async function createTicket(input: Omit<TicketRecord, 'id' | 'ticketNumbe
   return ticket
 }
 
-export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'>) {
+export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'> & {
+  lines?: TicketLineInput[]
+}) {
   await ensurePosSchema()
 
   const db = useDb()
@@ -616,6 +699,8 @@ export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 
     })
   }
 
+  await replaceTicketLines(id, input.lines || [])
+
   return mapTicket(row)
 }
 
@@ -646,7 +731,8 @@ function buildFallbackLines(ticket: TicketRecord): Array<{
 
 export async function createQuoteFromTicket(ticketId: number) {
   const ticket = await getTicketById(ticketId)
-  const existingLines = await cloneDocumentLinesFromLatest(ticketId, 'quote')
+  const ticketLines = await cloneTicketLines(ticketId)
+  const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
 
   return createDocumentRecord({
     type: 'quote',
@@ -655,13 +741,14 @@ export async function createQuoteFromTicket(ticketId: number) {
     ticketId,
     issuedAt: new Date().toISOString(),
     notes: `Quote created from ${ticket.ticketNumber}.`,
-    lines: existingLines.length ? existingLines : buildFallbackLines(ticket)
+    lines: ticketLines.length ? ticketLines : existingLines.length ? existingLines : buildFallbackLines(ticket)
   })
 }
 
 export async function createCustomerOrderFromTicket(ticketId: number) {
   const ticket = await getTicketById(ticketId)
-  const existingLines = await cloneDocumentLinesFromLatest(ticketId, 'quote')
+  const ticketLines = await cloneTicketLines(ticketId)
+  const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
 
   return createDocumentRecord({
     type: 'customer_order',
@@ -670,13 +757,14 @@ export async function createCustomerOrderFromTicket(ticketId: number) {
     ticketId,
     issuedAt: new Date().toISOString(),
     notes: `Commande créée depuis ${ticket.ticketNumber}.`,
-    lines: existingLines.length ? existingLines : buildFallbackLines(ticket)
+    lines: ticketLines.length ? ticketLines : existingLines.length ? existingLines : buildFallbackLines(ticket)
   })
 }
 
 export async function createInvoiceFromTicket(ticketId: number) {
   const ticket = await getTicketById(ticketId)
-  const existingLines = await cloneDocumentLinesFromLatest(ticketId, 'quote')
+  const ticketLines = await cloneTicketLines(ticketId)
+  const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
   const invoice = await createDocumentRecord({
     type: 'invoice',
     status: 'issued',
@@ -684,7 +772,7 @@ export async function createInvoiceFromTicket(ticketId: number) {
     ticketId,
     issuedAt: new Date().toISOString(),
     notes: `Invoice created from ${ticket.ticketNumber}.`,
-    lines: existingLines.length ? existingLines : buildFallbackLines(ticket)
+    lines: ticketLines.length ? ticketLines : existingLines.length ? existingLines : buildFallbackLines(ticket)
   })
 
   await syncDocumentStatus(invoice.id)

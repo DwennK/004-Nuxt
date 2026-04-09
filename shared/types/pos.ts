@@ -168,9 +168,7 @@ export interface TicketCommercialSummary {
   paymentStateLabel: string
 }
 
-export interface DocumentLineRecord {
-  id: number
-  documentId: number
+export interface CommercialLineRecord {
   catalogItemId: number | null
   label: string
   quantity: number
@@ -178,6 +176,16 @@ export interface DocumentLineRecord {
   vatRate: number
   lineTotal: number
   categoryHint: LineCategoryHint | null
+}
+
+export interface TicketLineRecord extends CommercialLineRecord {
+  id: number
+  ticketId: number
+}
+
+export interface DocumentLineRecord extends CommercialLineRecord {
+  id: number
+  documentId: number
 }
 
 export interface PaymentRecord {
@@ -219,6 +227,7 @@ export interface DocumentDetail extends DocumentRecord {
 
 export interface TicketDetail extends TicketRecord {
   customer: CustomerRecord
+  lines: TicketLineRecord[]
   documents: DocumentRecord[]
   payments: PaymentRecord[]
   events: TicketEvent[]

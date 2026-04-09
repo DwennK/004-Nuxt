@@ -28,6 +28,14 @@ async function saveTicket(payload: {
   internalNotes: string
   openedAt: string
   closedAt: string
+  lines: Array<{
+    catalogItemId: number | null
+    label: string
+    quantity: number
+    unitPrice: number
+    vatRate: number
+    categoryHint: 'accessory' | 'repair' | 'service' | null
+  }>
 }) {
   const ticket = await $fetch('/api/tickets', {
     method: 'POST',

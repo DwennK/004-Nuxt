@@ -4,6 +4,7 @@ import type { FormSubmitEvent } from '@nuxt/ui'
 import { ticketStatusLabels, ticketStatuses, ticketTypeLabels, ticketTypes } from '~~/shared/constants/pos'
 import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
 import { formatCurrency, normalizeSearchText } from '~~/shared/utils/pos'
+import { useCommercialLinesDraft, type EditableCommercialLinePayload } from '~~/app/composables/useCommercialLinesDraft'
 
 const props = withDefaults(defineProps<{
   customers: CustomerRecord[]
@@ -22,6 +23,7 @@ const props = withDefaults(defineProps<{
     internalNotes: string | null
     openedAt: string | null
     closedAt: string | null
+    lines: EditableCommercialLinePayload[]
   }>
   formId?: string
   layout?: 'compact' | 'page' | 'intake'
@@ -51,6 +53,7 @@ const emit = defineEmits<{
     internalNotes: string
     openedAt: string
     closedAt: string
+    lines: EditableCommercialLinePayload[]
   }]
 }>()
 
@@ -122,9 +125,15 @@ const state = reactive<Schema>({
   closedAt: ''
 })
 
+const lineEditor = useCommercialLinesDraft({
+  initialLines: computed(() => props.initialValue.lines),
+  catalogItems: computed(() => props.catalogItems || []),
+  lineIdPrefix: 'ticket-line'
+})
+
 watchEffect(() => {
   state.customerId = props.initialValue.customerId ?? 0
-  state.type = props.layout === 'intake' ? 'repair' : (props.initialValue.type || 'repair')
+  state.type = props.initialValue.type || 'repair'
   state.status = props.initialValue.status || 'new'
   state.brand = props.initialValue.brand || ''
   state.model = props.initialValue.model || ''
@@ -299,7 +308,7 @@ watch(bestSuggestedService, (suggestion) => {
 
   state.brand = suggestion.brand || ''
   state.model = suggestion.model || ''
-  state.type = 'repair'
+  state.type = suggestion.type === 'service' ? 'support' : 'repair'
   state.issueDescription = suggestion.serviceKind || suggestion.name
 }, { immediate: true })
 
@@ -314,23 +323,13 @@ watch(searchPanelItems, (items) => {
   }
 })
 
-watch(intakeQuery, (value) => {
-  highlightedSuggestionIndex.value = 0
-
-  if (value.trim()) {
-    openSearchPanel()
-    return
-  }
-
-  cancelSearchClose()
-})
-
 function onSubmit(event: FormSubmitEvent<Schema>) {
   emit('save', {
     ...event.data,
-    type: props.layout === 'intake' ? 'repair' : event.data.type,
+    type: event.data.type,
     openedAt: new Date(event.data.openedAt).toISOString(),
-    closedAt: event.data.closedAt ? new Date(event.data.closedAt).toISOString() : ''
+    closedAt: event.data.closedAt ? new Date(event.data.closedAt).toISOString() : '',
+    lines: lineEditor.serializeLines()
   })
 }
 
@@ -354,9 +353,21 @@ function applyCatalogSuggestion(item: CatalogItemRecord) {
   intakeQuery.value = item.name
   state.brand = item.brand || ''
   state.model = item.model || ''
-  state.type = 'repair'
+  state.type = item.type === 'service' ? 'support' : 'repair'
   state.issueDescription = item.serviceKind || item.name
+  lineEditor.addCatalogItem(item)
   closeSearchPanel()
+}
+
+function handleIntakeQueryInput(value: string) {
+  highlightedSuggestionIndex.value = 0
+
+  if (value.trim()) {
+    openSearchPanel()
+    return
+  }
+
+  cancelSearchClose()
 }
 
 function openSearchPanel() {
@@ -523,6 +534,7 @@ function handleIntakeScan(value: string) {
                   class="flex-1"
                   placeholder="iphone 14 ecran"
                   autofocus
+                  @update:model-value="handleIntakeQueryInput"
                   @keydown="handleSearchKeydown"
                 />
                 <PosBarcodeScanner
@@ -621,6 +633,12 @@ function handleIntakeScan(value: string) {
               </UFormField>
             </div>
           </UCard>
+
+          <PosDocumentLinesEditor
+            :editor="lineEditor"
+            :catalog-items="catalogItems || []"
+            mode="ticket"
+          />
 
           <UCard
             variant="subtle"
@@ -1060,6 +1078,12 @@ function handleIntakeScan(value: string) {
       <UFormField label="Notes internes" name="internalNotes" hint="Optionnel">
         <UTextarea v-model="state.internalNotes" class="w-full" :rows="5" />
       </UFormField>
+
+      <PosDocumentLinesEditor
+        :editor="lineEditor"
+        :catalog-items="catalogItems || []"
+        mode="ticket"
+      />
     </template>
 
     <div v-if="props.showSubmit && props.layout !== 'intake'" class="flex justify-end">

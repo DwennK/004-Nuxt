@@ -15,6 +15,7 @@ import {
   ticketWorkflowSteps
 } from '~~/shared/constants/pos'
 import type {
+  CatalogItemRecord,
   CustomerRecord,
   DocumentDetail,
   PaymentMethod,
@@ -46,9 +47,14 @@ const paymentOpen = ref(false)
 const editOpen = ref(false)
 const selectedWorkflowAction = ref<TicketWorkflowAction | null>(null)
 
-const [{ data: ticket, refresh: refreshTicket }, { data: customers }] = await Promise.all([
+const [{ data: ticket, refresh: refreshTicket }, { data: customers }, { data: catalogItems }] = await Promise.all([
   useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
-  useFetch<CustomerRecord[]>('/api/customers')
+  useFetch<CustomerRecord[]>('/api/customers'),
+  useFetch<CatalogItemRecord[]>('/api/catalog-items', {
+    query: {
+      activeOnly: true
+    }
+  })
 ])
 
 const activeTab = ref('suivi')
@@ -427,6 +433,14 @@ async function saveTicket(payload: {
   internalNotes: string
   openedAt: string
   closedAt: string
+  lines: Array<{
+    catalogItemId: number | null
+    label: string
+    quantity: number
+    unitPrice: number
+    vatRate: number
+    categoryHint: 'accessory' | 'repair' | 'service' | null
+  }>
 }) {
   await $fetch(`/api/tickets/${id.value}`, {
     method: 'PATCH',
@@ -841,12 +855,13 @@ async function saveTicket(payload: {
     v-model:open="editOpen"
     title="Modifier le ticket"
     description="Modifier les informations du ticket."
-    :ui="{ content: 'max-w-xl' }"
+    :ui="{ content: 'max-w-5xl' }"
   >
     <template #body>
       <PosTicketForm
         v-if="ticket"
         :customers="customers || []"
+        :catalog-items="catalogItems || []"
         :initial-value="ticket"
         submit-label="Enregistrer les modifications"
         @save="saveTicket"

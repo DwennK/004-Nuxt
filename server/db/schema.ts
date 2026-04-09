@@ -161,6 +161,22 @@ export const documentLines = sqliteTable('document_lines', {
   categoryIdx: index('document_lines_category_hint_idx').on(table.categoryHint)
 }))
 
+export const ticketLines = sqliteTable('ticket_lines', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ticketId: integer('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
+  catalogItemId: integer('catalog_item_id').references(() => catalogItems.id, { onDelete: 'set null' }),
+  label: text('label').notNull(),
+  quantity: integer('quantity').notNull(),
+  unitPrice: integer('unit_price').notNull(),
+  vatRate: real('vat_rate').notNull(),
+  lineTotal: integer('line_total').notNull(),
+  categoryHint: text('category_hint', { enum: ['accessory', 'repair', 'service'] })
+}, table => ({
+  ticketIdx: index('ticket_lines_ticket_id_idx').on(table.ticketId),
+  catalogItemIdx: index('ticket_lines_catalog_item_id_idx').on(table.catalogItemId),
+  categoryIdx: index('ticket_lines_category_hint_idx').on(table.categoryHint)
+}))
+
 export const payments = sqliteTable('payments', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
