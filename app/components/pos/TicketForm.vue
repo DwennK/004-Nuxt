@@ -103,6 +103,7 @@ const statusItems = ticketStatuses.map(status => ({
 
 const toast = useToast()
 const patternOpen = ref(false)
+const technicalDetailsOpen = ref(true)
 const intakeQuery = ref('')
 const createdCustomer = ref<CustomerRecord | null>(null)
 const searchOpen = ref(false)
@@ -270,31 +271,6 @@ const quotedPrice = computed(() => bestSuggestedService.value ? formatCurrency(b
 const deviceSummary = computed(() => {
   const value = [state.brand.trim(), state.model.trim()].filter(Boolean).join(' ')
   return value || 'Appareil à préciser'
-})
-
-const intakeSummaryItems = computed(() => {
-  return [
-    {
-      label: 'Client',
-      done: Boolean(state.customerId),
-      value: currentCustomer.value?.displayName || 'À sélectionner'
-    },
-    {
-      label: 'Appareil',
-      done: Boolean(state.brand.trim() || state.model.trim() || state.imei.trim() || state.serialNumber.trim()),
-      value: deviceSummary.value
-    },
-    {
-      label: 'Problème',
-      done: state.issueDescription.trim().length >= 3,
-      value: state.issueDescription.trim() || 'Description à saisir'
-    },
-    {
-      label: 'Prix annoncé',
-      done: Boolean(bestSuggestedService.value),
-      value: bestSuggestedService.value ? quotedPrice.value : 'Aucune suggestion'
-    }
-  ]
 })
 
 const searchPanelTitle = computed(() => {
@@ -501,24 +477,35 @@ function handleIntakeScan(value: string) {
     @submit="onSubmit"
   >
     <template v-if="props.layout === 'intake'">
-      <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div class="space-y-4">
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: `relative rounded-[1.75rem] shadow-sm overflow-visible ${searchOpen ? 'z-20' : ''}`,
-              body: 'space-y-4 p-4 overflow-visible',
-              header: 'p-4 pb-0'
-            }"
-          >
-            <template #header>
-              <div>
-                <h2 class="text-base font-semibold text-highlighted">
-                  Saisie rapide
+      <div class="space-y-4">
+        <UCard
+          variant="subtle"
+          :ui="{
+            root: `relative overflow-visible rounded-[1.75rem] border border-default/70 shadow-sm ${searchOpen ? 'z-20' : 'z-10'}`,
+            body: 'space-y-4 p-4',
+            header: 'p-4 pb-0'
+          }"
+        >
+          <template #header>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="space-y-1">
+                <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-toned">
+                  Réception express
+                </p>
+                <h2 class="text-lg font-semibold text-highlighted">
+                  Créer un ticket sans quitter l’écran
                 </h2>
               </div>
-            </template>
 
+              <div class="flex flex-wrap items-center gap-2 text-xs text-toned">
+                <span>{{ ticketTypeLabels[state.type] }}</span>
+                <span class="hidden sm:inline">·</span>
+                <span>{{ formatCurrency(lineEditor.totals.value.total) }}</span>
+              </div>
+            </div>
+          </template>
+
+          <div class="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,22rem)_12rem_auto] xl:items-start">
             <div
               class="relative"
               :class="searchOpen ? 'z-30' : ''"
@@ -526,25 +513,30 @@ function handleIntakeScan(value: string) {
               @focusout="scheduleSearchClose"
               @pointerdown="openSearchPanel"
             >
-              <div class="flex gap-2">
-                <UInput
-                  v-model="intakeQuery"
-                  icon="i-lucide-scan-search"
-                  size="xl"
-                  class="flex-1"
-                  placeholder="iphone 14 ecran"
-                  autofocus
-                  @update:model-value="handleIntakeQueryInput"
-                  @keydown="handleSearchKeydown"
-                />
-                <PosBarcodeScanner
-                  title="Scanner une référence ou un IMEI"
-                  description="Scannez un code-barres ou QR code pour préremplir la saisie rapide ou l’IMEI."
-                  trigger-size="lg"
-                  trigger-aria-label="Scanner une référence"
-                  @scanned="handleIntakeScan"
-                />
-              </div>
+              <UFormField
+                label="Saisie rapide"
+                description="Recherche atelier, scanner ou saisie manuelle."
+              >
+                <div class="flex gap-2">
+                  <UInput
+                    v-model="intakeQuery"
+                    icon="i-lucide-scan-search"
+                    size="xl"
+                    class="flex-1"
+                    placeholder="iphone 14 ecran"
+                    autofocus
+                    @update:model-value="handleIntakeQueryInput"
+                    @keydown="handleSearchKeydown"
+                  />
+                  <PosBarcodeScanner
+                    title="Scanner une référence ou un IMEI"
+                    description="Scannez un code-barres ou QR code pour préremplir la saisie rapide ou l’IMEI."
+                    trigger-size="lg"
+                    trigger-aria-label="Scanner une référence"
+                    @scanned="handleIntakeScan"
+                  />
+                </div>
+              </UFormField>
 
               <div
                 v-if="searchOpen"
@@ -590,71 +582,6 @@ function handleIntakeScan(value: string) {
                 </div>
               </div>
             </div>
-          </UCard>
-
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-[1.75rem] shadow-sm',
-              body: 'space-y-4 p-4',
-              header: 'p-4 pb-0'
-            }"
-          >
-            <template #header>
-              <div>
-                <h2 class="text-base font-semibold text-highlighted">
-                  Réparation
-                </h2>
-              </div>
-            </template>
-
-            <div class="grid gap-3 md:grid-cols-2">
-              <UFormField label="Marque" name="brand" hint="Auto ou manuel">
-                <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
-              </UFormField>
-
-              <UFormField label="Modèle" name="model" hint="Auto ou manuel">
-                <UInput v-model="state.model" class="w-full" placeholder="iPhone 14, Galaxy S23..." />
-              </UFormField>
-
-              <UFormField
-                label="Problème constaté"
-                name="issueDescription"
-                required
-                class="md:col-span-2"
-              >
-                <UTextarea
-                  v-model="state.issueDescription"
-                  class="w-full"
-                  :rows="3"
-                  autoresize
-                  placeholder="Ex. écran fissuré, batterie faible, port de charge endommagé..."
-                />
-              </UFormField>
-            </div>
-          </UCard>
-
-          <PosDocumentLinesEditor
-            :editor="lineEditor"
-            :catalog-items="catalogItems || []"
-            mode="ticket"
-          />
-
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-[1.75rem] shadow-sm',
-              body: 'space-y-4 p-4',
-              header: 'p-4 pb-0'
-            }"
-          >
-            <template #header>
-              <div>
-                <h2 class="text-base font-semibold text-highlighted">
-                  Client
-                </h2>
-              </div>
-            </template>
 
             <UFormField label="Client" name="customerId" required>
               <PosCustomerSelectField
@@ -665,108 +592,6 @@ function handleIntakeScan(value: string) {
                 @created="handleCustomerCreated"
               />
             </UFormField>
-          </UCard>
-
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-[1.75rem] shadow-sm',
-              body: 'space-y-4 p-4',
-              header: 'p-4 pb-0'
-            }"
-          >
-            <template #header>
-              <div>
-                <h2 class="text-base font-semibold text-highlighted">
-                  Données appareil
-                </h2>
-              </div>
-            </template>
-
-            <div class="space-y-3">
-              <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_15rem]">
-                <UFormField
-                  label="Code / accès appareil"
-                  name="accessCode"
-                  hint="Optionnel"
-                >
-                  <div class="space-y-2">
-                    <UInput
-                      v-model="state.accessCode"
-                      class="w-full"
-                      placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
-                    />
-                    <UButton
-                      type="button"
-                      label="Dessiner un pattern Android"
-                      icon="i-lucide-grid-3x3"
-                      color="neutral"
-                      variant="soft"
-                      class="justify-start"
-                      @click="patternOpen = true"
-                    />
-                  </div>
-                </UFormField>
-
-                <UFormField label="Code SIM" name="simCode" hint="Optionnel">
-                  <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
-                </UFormField>
-              </div>
-
-              <div class="grid gap-3 md:grid-cols-2">
-                <UFormField label="IMEI" name="imei" hint="Optionnel">
-                  <div class="flex gap-2">
-                    <UInput v-model="state.imei" class="flex-1" placeholder="356..." />
-                    <PosBarcodeScanner
-                      title="Scanner IMEI / N° de série"
-                      description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
-                      trigger-aria-label="Scanner IMEI"
-                      @scanned="handleImeiScan"
-                    />
-                  </div>
-                </UFormField>
-
-                <UFormField label="N° de série" name="serialNumber" hint="Optionnel">
-                  <UInput v-model="state.serialNumber" class="w-full" placeholder="Numéro de série" />
-                </UFormField>
-              </div>
-            </div>
-
-            <UFormField
-              label="Notes internes"
-              name="internalNotes"
-              hint="Optionnel"
-            >
-              <UTextarea
-                v-model="state.internalNotes"
-                class="w-full"
-                :rows="3"
-                autoresize
-                placeholder="Diagnostic initial, accessoires laissés, pièces à commander..."
-              />
-            </UFormField>
-          </UCard>
-        </div>
-
-        <div class="space-y-4 xl:sticky xl:top-4">
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-[1.75rem] shadow-sm',
-              body: 'space-y-4 p-4',
-              header: 'p-4 pb-0'
-            }"
-          >
-            <template #header>
-              <div class="space-y-1">
-                <h2 class="text-base font-semibold text-highlighted">
-                  Suivi
-                </h2>
-                <p class="text-sm text-toned">
-                  Ce qui pilote le ticket pendant la saisie.
-                </p>
-              </div>
-            </template>
 
             <UFormField label="Statut" name="status" required>
               <USelect
@@ -777,61 +602,212 @@ function handleIntakeScan(value: string) {
               />
             </UFormField>
 
-            <UFormField label="Ouvert le" name="openedAt" required>
-              <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
-            </UFormField>
-          </UCard>
-
-          <UCard
-            variant="subtle"
-            :ui="{
-              root: 'rounded-[1.75rem] shadow-sm',
-              body: 'space-y-3 p-4',
-              header: 'p-4 pb-0'
-            }"
-          >
-            <template #header>
-              <div class="space-y-1">
-                <h2 class="text-base font-semibold text-highlighted">
-                  Résumé
-                </h2>
-                <p class="text-sm text-toned">
-                  Vérification rapide avant création.
-                </p>
-              </div>
-            </template>
-
-            <div
-              v-for="item in intakeSummaryItems"
-              :key="item.label"
-              class="flex items-start gap-3 rounded-xl border border-default/70 bg-default/70 px-3 py-2.5"
-            >
-              <div
-                class="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full"
-                :class="item.done ? 'bg-success/12 text-success' : 'bg-neutral/12 text-toned'"
-              >
-                <UIcon :name="item.done ? 'i-lucide-check' : 'i-lucide-dot'" class="size-3" />
-              </div>
-              <div class="min-w-0">
-                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                  {{ item.label }}
-                </p>
-                <p class="mt-1 text-sm font-medium text-highlighted">
-                  {{ item.value }}
-                </p>
-              </div>
+            <div v-if="props.showSubmit" class="xl:pt-[1.72rem]">
+              <UButton
+                type="submit"
+                :label="props.submitLabel"
+                icon="i-lucide-save"
+                size="xl"
+                block
+                class="justify-center rounded-2xl"
+              />
             </div>
-          </UCard>
+          </div>
 
-          <UButton
-            v-if="props.showSubmit"
-            type="submit"
-            :label="props.submitLabel"
-            icon="i-lucide-save"
-            size="xl"
-            block
-            class="justify-center rounded-2xl"
-          />
+          <div class="space-y-3 border-t border-default/70 pt-3">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <UBadge
+                  :color="currentCustomer ? 'success' : 'neutral'"
+                  variant="soft"
+                  size="sm"
+                >
+                  {{ currentCustomer?.displayName || 'Client à sélectionner' }}
+                </UBadge>
+                <UBadge
+                  :color="deviceSummary !== 'Appareil à préciser' ? 'success' : 'neutral'"
+                  variant="soft"
+                  size="sm"
+                >
+                  {{ deviceSummary }}
+                </UBadge>
+                <UBadge
+                  :color="state.issueDescription.trim().length >= 3 ? 'success' : 'neutral'"
+                  variant="soft"
+                  size="sm"
+                >
+                  {{ state.issueDescription.trim().length >= 3 ? 'Problème saisi' : 'Problème à décrire' }}
+                </UBadge>
+                <UBadge
+                  v-if="bestSuggestedService"
+                  color="primary"
+                  variant="soft"
+                  size="sm"
+                >
+                  Prix annoncé {{ quotedPrice }}
+                </UBadge>
+              </div>
+
+              <UButton
+                type="button"
+                color="neutral"
+                variant="soft"
+                class="justify-between rounded-xl"
+                :label="technicalDetailsOpen ? 'Masquer les détails techniques' : 'Afficher les détails techniques'"
+                :trailing-icon="technicalDetailsOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                @click="technicalDetailsOpen = !technicalDetailsOpen"
+              />
+            </div>
+
+            <UCollapsible
+              v-model:open="technicalDetailsOpen"
+              class="space-y-3"
+            >
+              <template #content>
+                <div class="rounded-[1.25rem] border border-default/70 bg-default/70 p-3">
+                  <div class="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_13rem_minmax(0,1fr)] xl:items-start">
+                    <UFormField label="Code / accès appareil" name="accessCode">
+                      <div class="space-y-2">
+                        <UInput
+                          v-model="state.accessCode"
+                          class="w-full"
+                          placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
+                        />
+                        <UButton
+                          type="button"
+                          label="Dessiner un pattern Android"
+                          icon="i-lucide-grid-3x3"
+                          color="neutral"
+                          variant="soft"
+                          size="sm"
+                          class="justify-start"
+                          @click="patternOpen = true"
+                        />
+                      </div>
+                    </UFormField>
+
+                    <UFormField label="Code SIM" name="simCode">
+                      <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
+                    </UFormField>
+
+                    <UFormField label="IMEI" name="imei">
+                      <div class="flex gap-2">
+                        <UInput v-model="state.imei" class="flex-1" placeholder="356..." />
+                        <PosBarcodeScanner
+                          title="Scanner IMEI"
+                          description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
+                          trigger-aria-label="Scanner IMEI"
+                          @scanned="handleImeiScan"
+                        />
+                      </div>
+                    </UFormField>
+                  </div>
+                </div>
+              </template>
+            </UCollapsible>
+          </div>
+        </UCard>
+
+        <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
+          <div class="grid gap-4 xl:grid-rows-[auto_minmax(0,1fr)]">
+            <UCard
+              variant="subtle"
+              :ui="{
+                root: 'rounded-[1.75rem] shadow-sm',
+                body: 'space-y-4 p-4',
+                header: 'p-4 pb-0'
+              }"
+            >
+              <template #header>
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 class="text-base font-semibold text-highlighted">
+                      Problème
+                    </h2>
+                    <p class="text-sm text-toned">
+                      Décrivez la panne ou ajustez la suggestion atelier.
+                    </p>
+                  </div>
+
+                  <div class="text-right">
+                    <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+                      Prix annoncé
+                    </p>
+                    <p class="text-lg font-semibold text-highlighted">
+                      {{ bestSuggestedService ? quotedPrice : 'À confirmer' }}
+                    </p>
+                  </div>
+                </div>
+              </template>
+
+              <UFormField
+                label="Problème constaté"
+                name="issueDescription"
+                required
+              >
+                <UTextarea
+                  v-model="state.issueDescription"
+                  class="w-full"
+                  :rows="4"
+                  autoresize
+                  placeholder="Ex. écran fissuré, batterie faible, port de charge endommagé..."
+                />
+              </UFormField>
+            </UCard>
+
+            <div class="min-h-0">
+              <PosDocumentLinesEditor
+                :editor="lineEditor"
+                :catalog-items="catalogItems || []"
+                mode="ticket"
+                :show-search-card="false"
+              />
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <UCard
+              variant="subtle"
+              :ui="{
+                root: 'rounded-[1.75rem] shadow-sm',
+                body: 'space-y-4 p-4',
+                header: 'p-4 pb-0'
+              }"
+            >
+              <template #header>
+                <div>
+                  <h2 class="text-base font-semibold text-highlighted">
+                    Contexte ticket
+                  </h2>
+                </div>
+              </template>
+
+              <div class="grid gap-3">
+                <UFormField label="Type de ticket" name="type" required>
+                  <USelect
+                    v-model="state.type"
+                    :items="ticketTypeItems"
+                    value-key="value"
+                    class="w-full"
+                  />
+                </UFormField>
+
+                <UFormField label="Ouvert le" name="openedAt" required>
+                  <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
+                </UFormField>
+
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <UFormField label="Marque" name="brand">
+                    <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
+                  </UFormField>
+
+                  <UFormField label="Modèle" name="model">
+                    <UInput v-model="state.model" class="w-full" placeholder="iPhone 14, Galaxy S23..." />
+                  </UFormField>
+                </div>
+              </div>
+            </UCard>
+          </div>
         </div>
       </div>
     </template>
