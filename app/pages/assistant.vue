@@ -29,14 +29,23 @@ const suggestionPrompts = [
   'Quel est l’état des demandes de réservation smartphone ?'
 ]
 
-const messages = ref<AssistantUiMessage[]>([{
-  id: 'assistant-welcome',
-  role: 'assistant',
-  content: 'Posez une question métier libre. Je réponds uniquement à partir des tables exposées et en lecture seule.',
-  includeInRequest: false
-}])
+const messages = ref<AssistantUiMessage[]>([])
 
 const pending = computed(() => status.value === 'submitted')
+const hasConversation = computed(() => messages.value.length > 0)
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+
+  if (hour < 12) {
+    return 'Bonjour'
+  }
+
+  if (hour < 18) {
+    return 'Bon après-midi'
+  }
+
+  return 'Bonsoir'
+})
 
 function createParts(content: string) {
   return [{
@@ -165,7 +174,7 @@ async function submitPrompt() {
         </template>
       </UDashboardNavbar>
 
-      <UDashboardToolbar>
+      <UDashboardToolbar v-if="hasConversation">
         <p class="text-sm text-toned">
           Questions ad hoc sur ventes, tickets, documents, paiements, stock, réservations et RH. Les colonnes sensibles restent exclues.
         </p>
@@ -173,159 +182,208 @@ async function submitPrompt() {
     </template>
 
     <template #body>
-      <div class="flex h-full min-h-0 flex-col">
-        <UAlert
-          v-if="requestError"
-          color="error"
-          variant="subtle"
-          icon="i-lucide-triangle-alert"
-          class="mb-3"
-          :title="status === 'error' ? 'Dernière tentative en erreur' : 'Information'"
-          :description="requestError"
-        />
-
-        <div v-if="messages.length === 1" class="mb-4 flex flex-wrap gap-2">
-          <UButton
-            v-for="suggestion in suggestionPrompts"
-            :key="suggestion"
-            variant="outline"
-            color="neutral"
-            size="xs"
-            @click="usePromptSuggestion(suggestion)"
-          >
-            {{ suggestion }}
-          </UButton>
-        </div>
-
-        <UChatMessages
-          :status="status"
-          should-auto-scroll
-          class="min-h-0 flex-1"
-          :ui="{
-            viewport: 'min-h-0 px-0 pb-4',
-            root: 'min-h-0 flex-1'
-          }"
-        >
-          <UChatMessage
-            v-for="message in messages"
-            :id="message.id"
-            :key="message.id"
-            :role="message.role"
-            :parts="createParts(message.content)"
-            :side="message.role === 'user' ? 'right' : 'left'"
-            :variant="message.role === 'user' ? 'soft' : 'naked'"
-            :avatar="message.role === 'assistant' ? { icon: 'i-lucide-sparkles' } : undefined"
-            :icon="message.role === 'user' ? 'i-lucide-user-round' : undefined"
-          >
-            <template #content>
-              <div class="space-y-3">
-                <p class="whitespace-pre-wrap text-sm leading-6 text-default">
-                  {{ message.content }}
-                </p>
-
-                <UAlert
-                  v-if="message.error"
-                  color="error"
-                  variant="subtle"
-                  icon="i-lucide-shield-alert"
-                  title="Réponse contrainte par les garde-fous"
-                  :description="message.error.message"
-                />
-
-                <UChatTool
-                  v-if="message.query"
-                  variant="card"
-                  icon="i-lucide-database"
-                  text="Base interrogée"
-                  :suffix="`${message.query.rowCount} ligne(s)`"
-                  :default-open="debug"
-                >
-                  <div class="space-y-3">
-                    <p class="text-sm text-toned">
-                      {{ message.query.summary }}
-                    </p>
-
-                    <UBadge
-                      v-if="message.query.truncated"
-                      color="warning"
-                      variant="subtle"
-                    >
-                      Résultat tronqué à 50 lignes
-                    </UBadge>
-
-                    <div
-                      v-if="message.query.sql"
-                      class="overflow-x-auto rounded-xl border border-default bg-elevated/60 p-3"
-                    >
-                      <pre class="text-xs leading-5 text-toned">{{ message.query.sql }}</pre>
-                    </div>
-
-                    <div
-                      v-if="message.query.table.rows.length"
-                      class="overflow-hidden rounded-2xl border border-default"
-                    >
-                      <UTable
-                        :data="message.query.table.rows"
-                        :columns="buildTableColumns(message.query.table.columns)"
-                        :ui="{
-                          base: 'table-fixed border-separate border-spacing-0',
-                          th: 'py-2 border-b border-default bg-elevated/60 text-[11px] uppercase tracking-[0.14em] text-toned',
-                          td: 'align-top border-b border-default last:border-b-0',
-                          tbody: '[&>tr]:last:[&>td]:border-b-0'
-                        }"
-                      />
-                    </div>
-
-                    <p v-else class="text-sm text-toned">
-                      Aucun enregistrement n’a été renvoyé pour cette question.
-                    </p>
-                  </div>
-                </UChatTool>
-              </div>
-            </template>
-          </UChatMessage>
-
-          <UChatMessage
-            v-if="pending"
-            id="assistant-loading"
-            role="assistant"
-            :parts="createParts('Interrogation en cours')"
-            :avatar="{ icon: 'i-lucide-sparkles' }"
-          >
-            <template #content>
-              <UChatTool
-                icon="i-lucide-database-zap"
-                text="Interrogation de la base"
-                loading
-                streaming
+      <div class="flex h-full min-h-0 flex-col bg-default">
+        <template v-if="!hasConversation">
+          <div class="flex flex-1 min-h-0 overflow-auto">
+            <UContainer class="flex flex-1 flex-col justify-center gap-4 py-8 sm:gap-6">
+              <UAlert
+                v-if="requestError"
+                color="error"
+                variant="subtle"
+                icon="i-lucide-triangle-alert"
+                title="Dernière tentative en erreur"
+                :description="requestError"
               />
-            </template>
-          </UChatMessage>
-        </UChatMessages>
 
-        <div class="sticky bottom-0 mt-3 border-t border-default bg-default/95 pt-3 backdrop-blur">
-          <UChatPrompt
-            v-model="prompt"
-            placeholder="Ex. Quel total encaissé par mode de paiement cette semaine ?"
-            :disabled="pending"
-            @submit.prevent="submitPrompt"
-          >
-            <template #footer>
-              <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-2 sm:hidden">
-                  <span class="text-xs text-toned">SQL debug</span>
-                  <USwitch v-model="debug" size="sm" />
-                </div>
+              <div class="mx-auto w-full max-w-3xl">
+                <h2 class="text-3xl font-bold text-highlighted sm:text-4xl">
+                  {{ greeting }}
+                </h2>
 
-                <span class="ml-auto text-xs text-toned">
-                  1 capacité: SQL lecture seule sous garde-fous
-                </span>
+                <p class="mt-3 max-w-2xl text-base leading-7 text-toned">
+                  Posez votre question.
+                </p>
               </div>
-            </template>
 
-            <UChatPromptSubmit color="primary" :loading="pending" />
-          </UChatPrompt>
-        </div>
+              <div class="mx-auto w-full max-w-3xl">
+                <UChatPrompt
+                  v-model="prompt"
+                  class="[view-transition-name:chat-prompt]"
+                  variant="subtle"
+                  :disabled="pending"
+                  :ui="{
+                    root: 'rounded-3xl border border-default/70 bg-default shadow-sm',
+                    body: 'px-4 pt-4 pb-3',
+                    base: 'min-h-[4.25rem] px-1.5 text-base placeholder:text-muted',
+                    footer: 'border-t border-default/60 px-4 py-3'
+                  }"
+                  @submit.prevent="submitPrompt"
+                >
+                  <template #footer>
+                    <div class="flex items-center gap-2 text-sm text-toned">
+                      <UIcon name="i-lucide-sparkles" class="size-4" />
+                      <span>Lecture seule SQL</span>
+                    </div>
+
+                    <UChatPromptSubmit color="neutral" size="sm" :loading="pending" />
+                  </template>
+                </UChatPrompt>
+              </div>
+
+              <div class="mx-auto flex w-full max-w-3xl flex-wrap gap-2">
+                <UButton
+                  v-for="suggestion in suggestionPrompts"
+                  :key="suggestion"
+                  variant="outline"
+                  color="neutral"
+                  size="sm"
+                  class="rounded-full"
+                  @click="usePromptSuggestion(suggestion)"
+                >
+                  {{ suggestion }}
+                </UButton>
+              </div>
+            </UContainer>
+          </div>
+        </template>
+
+        <template v-else>
+          <UAlert
+            v-if="requestError"
+            color="error"
+            variant="subtle"
+            icon="i-lucide-triangle-alert"
+            class="mb-3"
+            :title="status === 'error' ? 'Dernière tentative en erreur' : 'Information'"
+            :description="requestError"
+          />
+
+          <UChatMessages
+            :status="status"
+            should-auto-scroll
+            class="min-h-0 flex-1"
+            :ui="{
+              viewport: 'min-h-0 px-0 pb-4',
+              root: 'min-h-0 flex-1'
+            }"
+          >
+            <UChatMessage
+              v-for="message in messages"
+              :id="message.id"
+              :key="message.id"
+              :role="message.role"
+              :parts="createParts(message.content)"
+              :side="message.role === 'user' ? 'right' : 'left'"
+              :variant="message.role === 'user' ? 'soft' : 'naked'"
+              :avatar="message.role === 'assistant' ? { icon: 'i-lucide-sparkles' } : undefined"
+              :icon="message.role === 'user' ? 'i-lucide-user-round' : undefined"
+            >
+              <template #content>
+                <div class="space-y-3">
+                  <p class="whitespace-pre-wrap text-sm leading-6 text-default">
+                    {{ message.content }}
+                  </p>
+
+                  <UAlert
+                    v-if="message.error"
+                    color="error"
+                    variant="subtle"
+                    icon="i-lucide-shield-alert"
+                    title="Réponse contrainte par les garde-fous"
+                    :description="message.error.message"
+                  />
+
+                  <UChatTool
+                    v-if="message.query"
+                    variant="card"
+                    icon="i-lucide-database"
+                    text="Base interrogée"
+                    :suffix="`${message.query.rowCount} ligne(s)`"
+                    :default-open="debug"
+                  >
+                    <div class="space-y-3">
+                      <p class="text-sm text-toned">
+                        {{ message.query.summary }}
+                      </p>
+
+                      <UBadge
+                        v-if="message.query.truncated"
+                        color="warning"
+                        variant="subtle"
+                      >
+                        Résultat tronqué à 50 lignes
+                      </UBadge>
+
+                      <div
+                        v-if="message.query.sql"
+                        class="overflow-x-auto rounded-xl border border-default bg-elevated/60 p-3"
+                      >
+                        <pre class="text-xs leading-5 text-toned">{{ message.query.sql }}</pre>
+                      </div>
+
+                      <div
+                        v-if="message.query.table.rows.length"
+                        class="overflow-hidden rounded-2xl border border-default"
+                      >
+                        <UTable
+                          :data="message.query.table.rows"
+                          :columns="buildTableColumns(message.query.table.columns)"
+                          :ui="{
+                            base: 'table-fixed border-separate border-spacing-0',
+                            th: 'py-2 border-b border-default bg-elevated/60 text-[11px] uppercase tracking-[0.14em] text-toned',
+                            td: 'align-top border-b border-default last:border-b-0',
+                            tbody: '[&>tr]:last:[&>td]:border-b-0'
+                          }"
+                        />
+                      </div>
+
+                      <p v-else class="text-sm text-toned">
+                        Aucun enregistrement n’a été renvoyé pour cette question.
+                      </p>
+                    </div>
+                  </UChatTool>
+                </div>
+              </template>
+            </UChatMessage>
+
+            <UChatMessage
+              v-if="pending"
+              id="assistant-loading"
+              role="assistant"
+              :parts="createParts('Interrogation en cours')"
+              :avatar="{ icon: 'i-lucide-sparkles' }"
+            >
+              <template #content>
+                <UChatTool
+                  icon="i-lucide-database-zap"
+                  text="Interrogation de la base"
+                  loading
+                  streaming
+                />
+              </template>
+            </UChatMessage>
+          </UChatMessages>
+
+          <div class="sticky bottom-0 mt-3 border-t border-default bg-default/95 pt-3 backdrop-blur">
+            <UChatPrompt
+              v-model="prompt"
+              placeholder="Ex. Quel total encaissé par mode de paiement cette semaine ?"
+              :disabled="pending"
+              @submit.prevent="submitPrompt"
+            >
+              <template #footer>
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2 sm:hidden">
+                    <span class="text-xs text-toned">SQL debug</span>
+                    <USwitch v-model="debug" size="sm" />
+                  </div>
+                </div>
+              </template>
+
+              <UChatPromptSubmit color="primary" :loading="pending" />
+            </UChatPrompt>
+          </div>
+        </template>
       </div>
     </template>
   </UDashboardPanel>

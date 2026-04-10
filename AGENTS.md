@@ -25,8 +25,22 @@ Favor small, production-friendly changes that preserve the current business mode
 - Build: `npm run build`
 - Preview worker output: `npm run preview`
 - DB push: `npm run db:push`
+- DB studio: `npm run db:studio`
+- Deploy worker: `npm run deploy`
+- Refresh Cloudflare worker types: `npm run cf-typegen`
 
 Run `npm run lint` and `npm run typecheck` after meaningful code changes. Run `npm run build` when the change affects app wiring, server routes, or deployment behavior.
+
+Use `npm run preview` when the change may behave differently on Cloudflare Workers than in local Nuxt dev.
+
+## Environment
+
+Before local work, check `.env.example` and confirm the relevant variables exist.
+
+- required for most POS flows: `TURSO_URL`, `TURSO_TOKEN`
+- used for public app metadata and OG generation: `NUXT_PUBLIC_SITE_URL`
+- required only for internal assistant work: `OPENAI_API_KEY`
+- optional for internal assistant provider selection: `OPENAI_MODEL`, `OPENAI_BASE_URL`
 
 ## Repo Shape
 
@@ -34,14 +48,28 @@ Run `npm run lint` and `npm run typecheck` after meaningful code changes. Run `n
 - `app/components`: reusable UI and domain components
 - `app/layouts`: shell and navigation
 - `app/composables`: client composables
+- `app/assets`: global styles and assets
 - `server/api`: Nuxt server routes
 - `server/utils`: server-side domain logic
+- `server/utils/assistant`: internal assistant guardrails and orchestration
 - `server/db`: database schema
 - `shared/types`: shared TypeScript types
 - `shared/validation`: shared Zod validation
 - `shared/constants`: shared domain constants
+- `shared/utils`: shared business and formatting utilities
+- `docs`: internal implementation notes
 
 Do not edit generated output in `.nuxt/` or `.output/`.
+
+## Runtime Constraints
+
+This app is deployed through Nitro to Cloudflare Workers.
+
+- prefer Worker-compatible server code
+- avoid introducing Node-only runtime assumptions unless explicitly requested
+- keep deployment-sensitive changes small and easy to verify
+- run `npm run build` for server, route, runtime config, or deployment-sensitive changes
+- run `npm run preview` when checking Worker-specific behavior locally
 
 ## UI Guidance
 
@@ -101,11 +129,81 @@ Respect the POS model described in `README.md`:
 
 Do not collapse these concepts together in UI, API, or database changes unless explicitly requested.
 
+Preserve the current business split:
+
+- tracked repairs and service flows
+- direct sales
+- commercial documents
+- payments and cashflow
+- end-of-day reporting
+
+Treat these implementation rules as defaults unless the task explicitly changes them:
+
+- money is stored as integer cents
+- catalog and document pricing is TTC / VAT-inclusive
+- VAT can matter at both line and document level
+- document line quantity is stored as an integer
+- ticket numbers and document numbers are generated server-side
+
+## Feature Scope
+
+Core POS scope:
+
+- customers
+- catalog items
+- direct sales
+- repair / service tickets
+- commercial documents
+- document lines
+- payments
+- end-of-day reporting
+- company settings
+
+Secondary modules that still matter:
+
+- smartphone stock management
+- smartphone reservation flows
+- vacation tracking
+
+Demo or scaffold areas still present:
+
+- members
+- notifications
+- generic profile settings
+- inbox shell
+
+Do not expand demo or scaffold areas as if they were core POS flows unless explicitly requested.
+
 ## Data And Validation
 
 When data shapes are shared between client and server, keep types in `shared/types` and validation in `shared/validation`.
 
 Prefer narrow, explicit server utilities in `server/utils/pos` over putting business rules directly into page components or route handlers.
+
+Keep API handlers thin. Prefer parsing, validation, persistence, and business rules to live in shared or server utility layers rather than page components.
+
+Use `shared/utils` for shared domain formatting or calculation helpers instead of duplicating logic across client and server.
+
+## Internal Assistant
+
+The `/assistant` route is an internal tool with intentionally narrow capabilities.
+
+- keep assistant SQL access read-only
+- preserve the allowlist and validation guardrails in `server/utils/assistant`
+- do not broaden database access, tool access, or model behavior without an explicit request
+
+## Verification
+
+Default verification after meaningful changes:
+
+- run `npm run lint`
+- run `npm run typecheck`
+
+Additionally:
+
+- run `npm run build` when changing app wiring, server routes, runtime config, or deployment behavior
+- run `npm run preview` when debugging Worker-specific behavior
+- manually check the affected screens for layout, density, and workflow regressions when changing UI
 
 ## Change Style
 
@@ -114,5 +212,7 @@ Prefer focused changes over broad refactors.
 When changes span multiple concerns, split them into separate commits by logical unit. Prefer one coherent commit per fix, feature, refactor, or documentation change rather than mixing unrelated work together.
 
 Before creating a new component, composable, or utility, check whether a nearby existing one can be extended.
+
+Before adding a new abstraction, inspect the closest POS page, editor, slideover, or shared utility and extend that first if it keeps the code understandable.
 
 Preserve French user-facing copy unless the task asks for a rewrite.
