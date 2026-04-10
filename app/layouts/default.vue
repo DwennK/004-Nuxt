@@ -54,6 +54,13 @@ const links = [[{
     open.value = false
   }
 }, {
+  label: 'Assistant IA',
+  icon: 'i-lucide-sparkles',
+  to: '/assistant',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
   label: 'Stock téléphones',
   icon: 'i-lucide-smartphone',
   to: '/stocks-smartphone',

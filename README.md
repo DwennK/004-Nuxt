@@ -125,11 +125,17 @@ Defined in [`.env.example`](./.env.example):
 NUXT_PUBLIC_SITE_URL=
 TURSO_URL=
 TURSO_TOKEN=
+OPENAI_API_KEY=
+OPENAI_MODEL=
+OPENAI_BASE_URL=
 ```
 
 - `NUXT_PUBLIC_SITE_URL`: public site URL, mainly used for OG image generation
 - `TURSO_URL`: Turso database URL
 - `TURSO_TOKEN`: Turso auth token
+- `OPENAI_API_KEY`: server-side OpenAI API key for the internal assistant
+- `OPENAI_MODEL`: model id used by the internal assistant
+- `OPENAI_BASE_URL`: optional OpenAI-compatible base URL
 
 ## Local Workflow
 
@@ -155,6 +161,15 @@ Recommended local workflow:
 4. `npm run lint`
 5. `npm run typecheck`
 6. `npm run build` when changing app wiring, server routes, or deployment-sensitive behavior
+
+## Internal AI Assistant
+
+The dashboard now includes an internal `/assistant` route backed by one guarded database capability: read-only SQL under a strict allowlist and validation layer.
+
+- UI route: [`app/pages/assistant.vue`](./app/pages/assistant.vue)
+- API route: [`server/api/assistant/chat.post.ts`](./server/api/assistant/chat.post.ts)
+- server logic: [`server/utils/assistant/`](./server/utils/assistant/)
+- internal documentation: [`docs/ai-assistant.md`](./docs/ai-assistant.md)
 
 ## Data Model And Bootstrap
 

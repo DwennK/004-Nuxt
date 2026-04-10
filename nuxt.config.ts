@@ -15,7 +15,10 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     tursoUrl: process.env.TURSO_URL,
-    tursoToken: process.env.TURSO_TOKEN
+    tursoToken: process.env.TURSO_TOKEN,
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    openaiModel: process.env.OPENAI_MODEL,
+    openaiBaseUrl: process.env.OPENAI_BASE_URL
   },
 
   routeRules: {
