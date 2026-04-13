@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
+import DailyBreakdownCharts from '~/components/reports/DailyBreakdownCharts.client.vue'
 import { documentTypeColors, documentTypeLabels, lineCategoryLabels, paymentMethodLabels } from '~~/shared/constants/pos'
 import type { DailySummary } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime, toDateInputValue } from '~~/shared/utils/pos'
@@ -238,6 +239,8 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
                 </div>
               </template>
 
+              <DailyBreakdownCharts kind="payments" :summary="summary" />
+
               <UTable
                 :data="summary.totalsByMethod"
                 :columns="paymentMethodColumns"
@@ -263,6 +266,8 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
                   </h2>
                 </div>
               </template>
+
+              <DailyBreakdownCharts kind="turnover" :summary="summary" />
 
               <UTable
                 :data="summary.turnoverByCategory"

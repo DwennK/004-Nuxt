@@ -4,6 +4,7 @@ export default defineNuxtConfig({
   modules: [
     '@nuxt/eslint',
     '@nuxt/ui',
+    'nuxt-charts',
     '@vueuse/nuxt',
     'nitro-cloudflare-dev'
   ],
