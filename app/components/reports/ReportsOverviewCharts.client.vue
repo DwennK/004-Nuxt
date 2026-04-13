@@ -45,6 +45,16 @@ const dayLabel = (tick: number | Date) => {
 
 const currencyLabel = (tick: number | Date) => formatCurrency(Number(tick))
 
+function formatTooltipDate(date: string) {
+  const [year, month, day] = date.split('-').map(Number)
+
+  return new Intl.DateTimeFormat('fr-CH', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  }).format(new Date(Date.UTC(year!, month! - 1, day!, 12, 0, 0)))
+}
+
 const turnoverChartData = computed(() => props.overview.turnoverByCategory)
 
 const turnoverCategories = computed(() => {
@@ -64,6 +74,8 @@ const turnoverTotal = computed(() => {
 })
 
 const hasTurnoverActivity = computed(() => turnoverTotal.value > 0)
+
+const turnoverTooltipTitle = (item: { label?: string }) => item.label || ''
 
 const ticketChartData = computed(() => props.overview.ticketFlowByDay)
 
@@ -120,6 +132,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
           :y-tick-line="false"
           :x-formatter="dayLabel"
           :y-formatter="currencyLabel"
+          :tooltip-title-formatter="(item) => formatTooltipDate(item.date)"
         />
       </div>
 
@@ -155,6 +168,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
             :radius="78"
             :arc-width="20"
             :pad-angle="0.018"
+            :tooltip-title-formatter="turnoverTooltipTitle"
           >
             <div class="space-y-1 text-center">
               <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
@@ -207,6 +221,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
             :y-tick-line="false"
             :x-formatter="dayLabel"
             :y-formatter="integerLabel"
+            :tooltip-title-formatter="(item) => formatTooltipDate(item.date)"
           />
         </div>
 
@@ -226,11 +241,22 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
   --vis-axis-grid-color: color-mix(in srgb, var(--ui-border) 86%, transparent);
   --vis-axis-tick-color: var(--ui-border);
   --vis-axis-tick-label-color: var(--ui-text-dimmed);
-  --vis-tooltip-background-color: var(--ui-bg);
-  --vis-tooltip-border-color: var(--ui-border);
-  --vis-tooltip-text-color: var(--ui-text-highlighted);
-  --vis-tooltip-label-color: var(--ui-text-toned);
-  --vis-tooltip-shadow-color: color-mix(in srgb, black 10%, transparent);
+  --vis-tooltip-background-color: light-dark(#ffffff, #18181b);
+  --vis-tooltip-border-color: light-dark(rgba(24, 24, 27, 0.12), rgba(255, 255, 255, 0.12));
+  --vis-tooltip-text-color: light-dark(#18181b, #fafafa);
+  --vis-tooltip-label-color: light-dark(#52525b, #d4d4d8);
+  --vis-tooltip-value-color: light-dark(#111827, #fafafa);
+  --vis-tooltip-shadow-color: light-dark(rgba(24, 24, 27, 0.12), rgba(0, 0, 0, 0.35));
+  --vis-tooltip-title-color: light-dark(#111827, #fafafa);
+  --vis-tooltip-title-border-bottom: 1px solid light-dark(rgba(24, 24, 27, 0.08), rgba(255, 255, 255, 0.1));
+  --vis-tooltip-title-text-transform: none;
+  --vis-tooltip-title-font-size: 0.9rem;
+  --vis-tooltip-title-font-weight: 700;
+  --vis-tooltip-title-padding: 0.75rem 0.75rem 0.5rem 0.75rem;
+  --vis-tooltip-content-padding: 0 0.75rem 0.65rem 0.75rem;
+  --vis-tooltip-label-font-size: 0.85rem;
+  --vis-tooltip-value-font-size: 0.85rem;
+  --vis-tooltip-value-font-weight: 700;
   --vis-donut-segment-stroke-color: var(--ui-bg);
   --vis-legend-spacing: 0.75rem;
 }

@@ -6,7 +6,7 @@
     "build": "nuxt build",
     "dev": "nuxt dev",
     "preview": "npm run build && wrangler --cwd .output dev",
-    "postinstall": "nuxt prepare",
+    "postinstall": "patch-package && nuxt prepare",
     "lint": "eslint .",
     "typecheck": "nuxt typecheck",
     "db:push": "drizzle-kit push",
@@ -44,6 +44,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
     "nitro-cloudflare-dev": "^0.2.2",
+    "patch-package": "^8.0.1",
     "typescript": "^5.9.3",
     "vue-tsc": "^3.2.6",
     "wrangler": "^4.81.0"
