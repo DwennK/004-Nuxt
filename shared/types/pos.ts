@@ -349,8 +349,7 @@ export interface ReportsOverview {
     label: string
     total: number
     cash: number
-    card: number
-    twint: number
+    cardTwint: number
     bankTransfer: number
   }>
   turnoverByCategory: Array<{

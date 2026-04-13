@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import DailyBreakdownCharts from '~/components/reports/DailyBreakdownCharts.client.vue'
-import { documentTypeColors, documentTypeLabels, lineCategoryLabels, paymentMethodLabels } from '~~/shared/constants/pos'
+import { documentTypeColors, documentTypeLabels, lineCategoryLabels } from '~~/shared/constants/pos'
 import type { DailySummary } from '~~/shared/types/pos'
-import { formatCurrency, formatDateTime, toDateInputValue } from '~~/shared/utils/pos'
+import { formatCurrency, formatDateTime, getPaymentMethodLabel, toDateInputValue } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
 const NuxtLink = resolveComponent('NuxtLink')
@@ -57,7 +57,7 @@ const paymentMethodColumns: TableColumn<DailySummary['totalsByMethod'][number]>[
   {
     accessorKey: 'method',
     header: 'Mode de paiement',
-    cell: ({ row }) => paymentMethodLabels[row.original.method]
+    cell: ({ row }) => getPaymentMethodLabel(row.original.method)
   },
   {
     accessorKey: 'total',

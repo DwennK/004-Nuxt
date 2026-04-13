@@ -2,7 +2,7 @@
 import { Orientation } from 'vue-chrts'
 import { lineCategoryColors, lineCategoryLabels, paymentMethodLabels } from '~~/shared/constants/pos'
 import type { DailySummary } from '~~/shared/types/pos'
-import { formatCurrency } from '~~/shared/utils/pos'
+import { formatCurrency, getPaymentMethodLabel } from '~~/shared/utils/pos'
 
 type BreakdownKind = 'payments' | 'turnover'
 type ChartColorToken = 'primary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
@@ -42,7 +42,7 @@ const paymentValueLabel = (tick: number | Date) => {
   return formatCurrency(Number(tick))
 }
 
-const paymentTooltipTitle = (item: { label: string }) => item.label
+const paymentTooltipTitle = (item: { method: DailySummary['totalsByMethod'][number]['method'] }) => getPaymentMethodLabel(item.method)
 
 const turnoverChartData = computed(() => {
   return props.summary.turnoverByCategory.map(item => ({

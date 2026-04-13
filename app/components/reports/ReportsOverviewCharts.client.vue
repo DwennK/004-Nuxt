@@ -20,13 +20,9 @@ const paymentsCategories = {
     name: paymentMethodLabels.cash,
     color: toChartColor(paymentMethodColors.cash)
   },
-  card: {
-    name: paymentMethodLabels.card,
-    color: toChartColor(paymentMethodColors.card)
-  },
-  twint: {
-    name: paymentMethodLabels.twint,
-    color: toChartColor(paymentMethodColors.twint)
+  cardTwint: {
+    name: paymentMethodLabels.card_twint,
+    color: toChartColor(paymentMethodColors.card_twint)
   },
   bankTransfer: {
     name: paymentMethodLabels.bank_transfer,
@@ -120,7 +116,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
           :categories="paymentsCategories"
           :height="320"
           :stacked="true"
-          :y-axis="['cash', 'card', 'twint', 'bankTransfer']"
+          :y-axis="['cash', 'cardTwint', 'bankTransfer']"
           :padding="{ top: 12, right: 12, bottom: 0, left: 0 }"
           :radius="10"
           :group-padding="18"

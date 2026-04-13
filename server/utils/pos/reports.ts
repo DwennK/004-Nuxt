@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, lte, sql, sum } from 'drizzle-orm'
 import { customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
-import { lineCategoryLabels } from '~~/shared/constants/pos'
+import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
 import type { DailySummary, ReportsOverview } from '~~/shared/types/pos'
 import { businessTimeZone, toDateInputValue } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
@@ -93,6 +93,12 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
         .groupBy(documentLines.categoryHint)
     : []
 
+  const totalsByMethod = new Map(paymentMethods.map(method => [method, 0]))
+
+  for (const row of totalsByMethodRows) {
+    totalsByMethod.set(row.method, (totalsByMethod.get(row.method) || 0) + Number(row.total || 0))
+  }
+
   return {
     date,
     totalPaid: Number(paymentTotalRows[0]?.total || 0),
@@ -106,10 +112,12 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       paidAmountToday: Number(row.paidAmountToday || 0),
       paidAt: row.paidAt
     })),
-    totalsByMethod: totalsByMethodRows.map(row => ({
-      method: row.method,
-      total: Number(row.total || 0)
-    })),
+    totalsByMethod: paymentMethods
+      .map(method => ({
+        method,
+        total: totalsByMethod.get(method) || 0
+      }))
+      .filter(item => item.total > 0),
     ticketStats: {
       openCount: Number(openTicketRows[0]?.count || 0),
       openedToday: Number(openedTodayRows[0]?.count || 0),
@@ -171,8 +179,7 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
     label: formatDayLabel(day),
     total: 0,
     cash: 0,
-    card: 0,
-    twint: 0,
+    cardTwint: 0,
     bankTransfer: 0
   }))
 
@@ -189,20 +196,15 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
     const amount = Number(payment.amount || 0)
     bucket.total += amount
 
-    if (payment.method === 'bank_transfer') {
-      bucket.bankTransfer += amount
-      continue
-    }
-
     switch (payment.method) {
       case 'cash':
         bucket.cash += amount
         break
-      case 'card':
-        bucket.card += amount
+      case 'card_twint':
+        bucket.cardTwint += amount
         break
-      case 'twint':
-        bucket.twint += amount
+      case 'bank_transfer':
+        bucket.bankTransfer += amount
         break
     }
   }

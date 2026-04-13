@@ -147,7 +147,7 @@ export const assistantTableAllowlist = {
       id: 'Identifiant paiement.',
       customer_id: 'Client lié si présent.',
       document_id: 'Document payé.',
-      method: 'cash|card|twint|bank_transfer.',
+      method: 'cash|card_twint|bank_transfer.',
       status: 'Statut du paiement.',
       amount: 'Montant en centimes.',
       paid_at: 'Date du paiement.',

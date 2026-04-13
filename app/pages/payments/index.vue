@@ -6,6 +6,7 @@ import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table
 import {
   paymentMethodColors,
   paymentMethodLabels,
+  paymentMethods,
   paymentStatusColors,
   paymentStatusLabels
 } from '~~/shared/constants/pos'
@@ -33,7 +34,10 @@ const columnVisibility = ref()
 
 const methodItems = [
   { label: 'Tous les modes', value: 'all' },
-  ...Object.entries(paymentMethodLabels).map(([value, label]) => ({ label, value }))
+  ...paymentMethods.map(method => ({
+    label: paymentMethodLabels[method],
+    value: method
+  }))
 ]
 
 const statusItems = [

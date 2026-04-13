@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { documentTypeLabels, paymentMethodLabels } from '~~/shared/constants/pos'
+import { documentTypeLabels, paymentMethodLabels, paymentMethods } from '~~/shared/constants/pos'
 import type { CatalogItemRecord, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, normalizeSearchText, parseCurrencyInput } from '~~/shared/utils/pos'
@@ -956,10 +956,10 @@ function selectAllOnFocus(event: FocusEvent) {
 
                 <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                   <UButton
-                    v-for="method in ['cash', 'card', 'twint', 'bank_transfer']"
+                    v-for="method in paymentMethods"
                     :key="method"
                     type="button"
-                    :label="`Encaisser · ${paymentMethodLabels[method as PaymentMethod]}`"
+                    :label="`Encaisser · ${paymentMethodLabels[method]}`"
                     :icon="isSaving === method ? 'i-lucide-loader-circle' : 'i-lucide-badge-check'"
                     :loading="isSaving === method"
                     :disabled="!canCharge || Boolean(isSaving)"

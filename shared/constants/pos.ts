@@ -56,7 +56,7 @@ export const ticketStatuses = [
 export const ticketWorkflowSteps = ['reception', 'diagnostic', 'workshop', 'pickup', 'closure'] as const
 export const documentTypes = ['quote', 'customer_order', 'invoice', 'receipt'] as const
 export const documentStatuses = ['draft', 'issued', 'paid', 'cancelled'] as const
-export const paymentMethods = ['cash', 'card', 'twint', 'bank_transfer'] as const
+export const paymentMethods = ['cash', 'card_twint', 'bank_transfer'] as const
 export const paymentStatuses = ['pending', 'paid', 'refunded', 'cancelled'] as const
 export const lineCategoryHints = ['accessory', 'repair', 'service'] as const
 export const payableDocumentTypes = ['invoice', 'receipt'] as const
@@ -147,15 +147,13 @@ export const documentStatusColors: Record<(typeof documentStatuses)[number], 'ne
 
 export const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
   cash: 'Espèces',
-  card: 'Carte',
-  twint: 'TWINT',
+  card_twint: 'Carte Bancaire / TWINT',
   bank_transfer: 'Virement bancaire'
 }
 
-export const paymentMethodColors: Record<(typeof paymentMethods)[number], 'success' | 'info' | 'warning' | 'neutral'> = {
+export const paymentMethodColors: Record<(typeof paymentMethods)[number], 'success' | 'info' | 'neutral'> = {
   cash: 'success',
-  card: 'info',
-  twint: 'warning',
+  card_twint: 'info',
   bank_transfer: 'neutral'
 }
 

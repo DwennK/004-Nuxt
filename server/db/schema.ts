@@ -145,6 +145,11 @@ export const documents = sqliteTable('documents', {
   issuedAtIdx: index('documents_issued_at_idx').on(table.issuedAt)
 }))
 
+export const numberSequences = sqliteTable('number_sequences', {
+  scope: text('scope').primaryKey(),
+  lastValue: integer('last_value').notNull()
+})
+
 export const documentLines = sqliteTable('document_lines', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   documentId: integer('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
@@ -181,7 +186,7 @@ export const payments = sqliteTable('payments', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   documentId: integer('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
-  method: text('method', { enum: ['cash', 'card', 'twint', 'bank_transfer'] }).notNull(),
+  method: text('method', { enum: ['cash', 'card_twint', 'bank_transfer'] }).notNull(),
   status: text('status', { enum: ['pending', 'paid', 'refunded', 'cancelled'] }).notNull().default('pending'),
   amount: integer('amount').notNull(),
   paidAt: text('paid_at').notNull(),

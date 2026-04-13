@@ -1193,7 +1193,7 @@ async function seedOperations() {
     {
       customerId: accessoryCustomer.id,
       documentId: receiptDocument.id,
-      method: 'card',
+      method: 'card_twint',
       status: 'paid',
       amount: receiptDocument.total,
       paidAt: toIsoDateTime(new Date('2026-03-25T08:42:00.000Z')),

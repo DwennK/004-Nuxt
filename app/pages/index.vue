@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
-import { documentTypeColors, documentTypeLabels, paymentMethodColors, paymentMethodLabels } from '~~/shared/constants/pos'
+import { documentTypeColors, documentTypeLabels, paymentMethodColors } from '~~/shared/constants/pos'
 import type { DailySummary, DocumentListItem } from '~~/shared/types/pos'
-import { formatCurrency, formatDateTime, toDateInputValue } from '~~/shared/utils/pos'
+import { formatCurrency, formatDateTime, getPaymentMethodLabel, toDateInputValue } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
 const NuxtLink = resolveComponent('NuxtLink')
@@ -394,7 +394,7 @@ const activityColumns = computed<TableColumn<ActivityRow>[]>(() => {
                       variant="subtle"
                       size="sm"
                     >
-                      {{ paymentMethodLabels[method.method] }}
+                      {{ getPaymentMethodLabel(method.method) }}
                     </UBadge>
                   </div>
 
