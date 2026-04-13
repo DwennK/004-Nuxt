@@ -118,6 +118,14 @@ When debugging or checking the UI with Playwright:
 - When changing flow on the same app, prefer `goto`, refresh, clearing local UI state, or reusing the existing tab before creating a new session.
 - Only open a new Playwright window when the current session is broken, unrecoverable, or must be isolated on purpose.
 - Minimize window churn: assume the user should not need to close extra browser windows created during routine UI work.
+- If Playwright reports that the browser, page, or profile is already in use, first treat it as a session-recovery problem rather than a reason to abandon browser testing.
+- Before falling back to CLI-only checks, always try this recovery order:
+  - inspect the existing Playwright tab or page state
+  - reuse the current page if it is still healthy
+  - wait briefly and retry once if the session appears temporarily busy
+  - close only the broken tab or page if needed, then reopen a single full-width page
+- Do not switch to CLI as a silent fallback for UI validation when Playwright is expected to work. If browser recovery fails, state clearly that Playwright is blocked and why.
+- When Playwright is blocked by stale session state, prefer resetting the current browser context or tab before creating an additional browser window.
 
 ## Domain Rules
 
@@ -191,6 +199,25 @@ The `/assistant` route is an internal tool with intentionally narrow capabilitie
 - keep assistant SQL access read-only
 - preserve the allowlist and validation guardrails in `server/utils/assistant`
 - do not broaden database access, tool access, or model behavior without an explicit request
+
+## Git Workflow
+
+When working in this repository:
+
+- Assume the user may work in multiple Codex chats on the same worktree.
+- Do not infer commit boundaries from the current chat session alone.
+- Determine commit boundaries from the actual diff and the purpose of the changes.
+- Treat each logical change as its own commit.
+- Do not create a single combined commit for unrelated fixes, refactors, or features handled in parallel.
+- Before committing, review the diff carefully and separate changes by task.
+- Use partial staging when needed so unrelated changes do not end up in the same commit.
+- Do not commit code that appears to belong to another parallel task unless the separation is clearly intentional or the user explicitly asked for it.
+- If changes from different tasks are mixed together and cannot be cleanly separated, stop and say so instead of creating a misleading commit.
+- Prefer multiple small, coherent commits over one large mixed commit.
+- Keep the existing commit title style unless the user asks otherwise.
+- Add a commit body whenever useful to explain what changed, why it changed, and any important impact, constraint, or follow-up.
+- Do not push automatically after each commit.
+- Push only after the logical commits for the current work are complete and clearly separated, or when the user explicitly asks for a push.
 
 ## Verification
 
