@@ -157,6 +157,12 @@ export const markDocumentPaidSchema = z.object({
   notes: optionalText
 })
 
+export const documentEmailSchema = z.object({
+  to: z.string().trim().email('Un e-mail valide est obligatoire'),
+  subject: z.string().trim().min(1, 'L’objet est obligatoire'),
+  message: z.string().trim().min(1, 'Le message est obligatoire')
+})
+
 export const ticketStatusUpdateSchema = z.object({
   status: z.enum(ticketStatuses),
   internalNotes: optionalText

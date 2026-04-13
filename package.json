@@ -29,6 +29,7 @@
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.2",
     "nuxt": "^4.4.2",
+    "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "scule": "^1.3.0",
     "tailwindcss": "^4.2.2",

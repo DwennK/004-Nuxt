@@ -18,7 +18,10 @@ export default defineNuxtConfig({
     tursoToken: process.env.TURSO_TOKEN,
     openaiApiKey: process.env.OPENAI_API_KEY,
     openaiModel: process.env.OPENAI_MODEL,
-    openaiBaseUrl: process.env.OPENAI_BASE_URL
+    openaiBaseUrl: process.env.OPENAI_BASE_URL,
+    resendApiKey: process.env.RESEND_API_KEY,
+    mailFrom: process.env.MAIL_FROM,
+    mailReplyTo: process.env.MAIL_REPLY_TO
   },
 
   routeRules: {

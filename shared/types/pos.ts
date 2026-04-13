@@ -253,6 +253,12 @@ export interface PaymentListItem extends PaymentRecord {
   documentType: DocumentType
 }
 
+export interface DocumentEmailInput {
+  to: string
+  subject: string
+  message: string
+}
+
 export type VacationEntryType = (typeof vacationEntryTypes)[number]
 export type VacationEntryStatus = (typeof vacationEntryStatuses)[number]
 

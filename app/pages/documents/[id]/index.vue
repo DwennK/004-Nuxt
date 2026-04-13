@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { FormSubmitEvent } from '@nuxt/ui'
+import type { z } from 'zod'
 import type { DocumentSavePayload } from '~~/app/composables/useDocumentDraft'
 import {
   documentStatusColors,
@@ -6,7 +8,10 @@ import {
   documentTypeColors,
   documentTypeLabels
 } from '~~/shared/constants/pos'
-import type { CatalogItemRecord, CustomerRecord, DocumentDetail } from '~~/shared/types/pos'
+import type { CatalogItemRecord, CustomerRecord, DocumentDetail, DocumentEmailInput } from '~~/shared/types/pos'
+import type { CompanySettingsRecord } from '~~/shared/types/settings'
+import { documentEmailSchema } from '~~/shared/validation/pos'
+import { getDocumentEmailMessage, getDocumentEmailSubject } from '~~/shared/utils/document-email'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, isPayableDocumentType } from '~~/shared/utils/pos'
 
@@ -15,16 +20,27 @@ const route = useRoute()
 const toast = useToast()
 const id = computed(() => Number(route.params.id))
 const activeTab = ref('lines')
+const isEmailModalOpen = ref(false)
+const isSendingEmail = ref(false)
 
 const tabItems = [
   { label: 'Lignes', value: 'lines', icon: 'i-lucide-list' },
   { label: 'Paiements', value: 'payments', icon: 'i-lucide-wallet' }
 ]
 
-const [{ data: document, refresh }, { data: customers }, { data: catalogItems }] = await Promise.all([
+type DocumentEmailForm = z.output<typeof documentEmailSchema>
+
+const emailState = reactive<DocumentEmailInput>({
+  to: '',
+  subject: '',
+  message: ''
+})
+
+const [{ data: document, refresh }, { data: customers }, { data: catalogItems }, { data: company }] = await Promise.all([
   useFetch<DocumentDetail>(() => `/api/documents/${id.value}`),
   useFetch<CustomerRecord[]>('/api/customers'),
-  useFetch<CatalogItemRecord[]>('/api/catalog-items', { query: { activeOnly: true } })
+  useFetch<CatalogItemRecord[]>('/api/catalog-items', { query: { activeOnly: true } }),
+  useFetch<CompanySettingsRecord>('/api/settings/company')
 ])
 
 const paidAmount = computed(() => document.value?.payments
@@ -35,6 +51,7 @@ const isPayableDocument = computed(() => document.value ? isPayableDocumentType(
 const balanceDue = computed(() => isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0)
 const supportsA4Print = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'a4') : false)
 const supportsThermalPrint = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'thermal') : false)
+
 async function saveDocument(payload: DocumentSavePayload) {
   await $fetch(`/api/documents/${id.value}`, {
     method: 'PATCH',
@@ -48,6 +65,66 @@ async function saveDocument(payload: DocumentSavePayload) {
 
   await refresh()
 }
+
+function fillEmailState() {
+  if (!document.value) {
+    return
+  }
+
+  emailState.to = document.value.customer.email || ''
+  emailState.subject = getDocumentEmailSubject(document.value)
+  emailState.message = getDocumentEmailMessage(document.value, company.value || { name: 'Votre boutique' })
+}
+
+function openEmailModal() {
+  fillEmailState()
+  isEmailModalOpen.value = true
+}
+
+function getErrorMessage(error: unknown) {
+  if (error && typeof error === 'object') {
+    const fetchError = error as {
+      data?: { statusMessage?: string, message?: string }
+      statusMessage?: string
+      message?: string
+    }
+
+    return fetchError.data?.statusMessage
+      || fetchError.data?.message
+      || fetchError.statusMessage
+      || fetchError.message
+      || 'Envoi impossible'
+  }
+
+  return 'Envoi impossible'
+}
+
+async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
+  isSendingEmail.value = true
+
+  try {
+    await $fetch(`/api/documents/${id.value}/email`, {
+      method: 'POST',
+      body: event.data
+    })
+
+    isEmailModalOpen.value = false
+
+    toast.add({
+      title: 'E-mail envoyé',
+      description: `Le document ${document.value?.documentNumber || ''} a été envoyé à ${event.data.to}.`,
+      color: 'success'
+    })
+  } catch (error) {
+    toast.add({
+      title: 'Erreur',
+      description: getErrorMessage(error),
+      color: 'error'
+    })
+  } finally {
+    isSendingEmail.value = false
+  }
+}
 </script>
 
 <template>
@@ -59,6 +136,14 @@ async function saveDocument(payload: DocumentSavePayload) {
         </template>
 
         <template #right>
+          <UButton
+            v-if="supportsA4Print"
+            icon="i-lucide-mail"
+            label="Envoyer par mail"
+            color="neutral"
+            variant="subtle"
+            @click="openEmailModal"
+          />
           <UButton
             v-if="supportsA4Print"
             :to="`/documents/${id}/print?profile=a4`"
@@ -170,4 +255,62 @@ async function saveDocument(payload: DocumentSavePayload) {
       </div>
     </template>
   </UDashboardPanel>
+
+  <UModal
+    v-model:open="isEmailModalOpen"
+    title="Envoyer le document par e-mail"
+    description="Le document sera joint en PDF A4 pour l’envoi au client."
+    :ui="{ content: 'sm:max-w-2xl' }"
+  >
+    <template #body>
+      <UForm
+        :schema="documentEmailSchema"
+        :state="emailState"
+        class="space-y-4"
+        @submit="submitDocumentEmail"
+      >
+        <UFormField label="Destinataire" name="to" required>
+          <UInput
+            v-model="emailState.to"
+            type="email"
+            class="w-full"
+            placeholder="client@example.com"
+          />
+        </UFormField>
+
+        <UFormField label="Objet" name="subject" required>
+          <UInput
+            v-model="emailState.subject"
+            class="w-full"
+            placeholder="Votre facture FA-123"
+          />
+        </UFormField>
+
+        <UFormField label="Message" name="message" required>
+          <UTextarea
+            v-model="emailState.message"
+            :rows="8"
+            class="w-full"
+            autoresize
+          />
+        </UFormField>
+
+        <div class="flex items-center justify-end gap-2">
+          <UButton
+            color="neutral"
+            variant="soft"
+            label="Annuler"
+            :disabled="isSendingEmail"
+            @click="isEmailModalOpen = false"
+          />
+          <UButton
+            type="submit"
+            icon="i-lucide-send"
+            label="Envoyer"
+            :loading="isSendingEmail"
+          />
+        </div>
+      </UForm>
+    </template>
+  </UModal>
 </template>
