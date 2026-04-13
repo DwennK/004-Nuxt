@@ -331,3 +331,37 @@ export interface DailySummary {
     total: number
   }>
 }
+
+export interface ReportsOverview {
+  range: {
+    startDate: string
+    endDate: string
+    labels: string[]
+  }
+  kpis: {
+    totalPaid: number
+    paidToday: number
+    averagePerDay: number
+    openTickets: number
+  }
+  paymentsByDay: Array<{
+    date: string
+    label: string
+    total: number
+    cash: number
+    card: number
+    twint: number
+    bankTransfer: number
+  }>
+  turnoverByCategory: Array<{
+    category: LineCategoryHint
+    label: string
+    total: number
+  }>
+  ticketFlowByDay: Array<{
+    date: string
+    label: string
+    opened: number
+    closed: number
+  }>
+}

@@ -47,9 +47,9 @@ const links = [[{
     open.value = false
   }
 }, {
-  label: 'Fin de journée',
+  label: 'Reports',
   icon: 'i-lucide-chart-column',
-  to: '/reports/daily',
+  to: '/reports',
   onSelect: () => {
     open.value = false
   }

@@ -97,10 +97,10 @@ const queueItems = computed(() => [{
   icon: 'i-lucide-wallet',
   badge: 'Voir les paiements'
 }, {
-  title: 'Fin de journée',
+  title: 'Reports',
   value: String(summary.value?.ticketStats.closedToday || 0),
   description: 'Préparer le rapport et vérifier la caisse',
-  to: '/reports/daily',
+  to: '/reports',
   icon: 'i-lucide-chart-column',
   badge: 'Ouvrir le rapport'
 }])
@@ -120,9 +120,9 @@ const quickActionItems = [[{
   icon: 'i-lucide-file-plus-2',
   to: '/documents/new'
 }, {
-  label: 'Rapport de fin de journée',
+  label: 'Reports',
   icon: 'i-lucide-chart-column',
-  to: '/reports/daily'
+  to: '/reports'
 }]] satisfies DropdownMenuItem[][]
 
 const activityTabItems = [{
@@ -353,8 +353,8 @@ const activityColumns = computed<TableColumn<ActivityRow>[]>(() => {
                   </UDropdownMenu>
 
                   <UButton
-                    to="/reports/daily"
-                    label="Fin de journée"
+                    to="/reports"
+                    label="Reports"
                     color="neutral"
                     variant="subtle"
                     icon="i-lucide-chart-column"
