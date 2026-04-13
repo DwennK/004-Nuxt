@@ -85,6 +85,7 @@ Before running the app locally, make sure you have:
 - `npm` 10+ (the repo declares `npm@10.9.0`)
 - a Turso / libSQL database
 - valid `TURSO_URL` and `TURSO_TOKEN` values
+- a Resend account plus a verified sender domain if you want to send documents by e-mail
 
 ## Quick Start
 
@@ -128,6 +129,9 @@ TURSO_TOKEN=
 OPENAI_API_KEY=
 OPENAI_MODEL=
 OPENAI_BASE_URL=
+RESEND_API_KEY=
+MAIL_FROM=
+MAIL_REPLY_TO=
 ```
 
 - `NUXT_PUBLIC_SITE_URL`: public site URL, mainly used for OG image generation
@@ -136,6 +140,11 @@ OPENAI_BASE_URL=
 - `OPENAI_API_KEY`: server-side OpenAI API key for the internal assistant
 - `OPENAI_MODEL`: model id used by the internal assistant
 - `OPENAI_BASE_URL`: optional OpenAI-compatible base URL
+- `RESEND_API_KEY`: Resend API key used to send commercial documents by e-mail
+- `MAIL_FROM`: authenticated sender used for outgoing document e-mails, for example `Atelier Pixel <facturation@shop.example.ch>`
+- `MAIL_REPLY_TO`: optional reply-to address for outgoing document e-mails
+
+For document e-mail sending, `MAIL_FROM` must use an address on a domain verified in Resend.
 
 ## Local Workflow
 
@@ -308,6 +317,7 @@ Main operator flows:
 - document creation: [`app/pages/documents/new.vue`](./app/pages/documents/new.vue)
 - document detail / inline editing: [`app/pages/documents/[id]/index.vue`](./app/pages/documents/[id]/index.vue)
 - document printing: [`app/pages/documents/[id]/print.vue`](./app/pages/documents/[id]/print.vue)
+- document e-mail sending with PDF attachment: [`app/pages/documents/[id]/index.vue`](./app/pages/documents/[id]/index.vue) via [`server/api/documents/[id]/email.post.ts`](./server/api/documents/[id]/email.post.ts)
 
 Important POS UI components:
 

@@ -7,33 +7,54 @@ import {
   type PDFImage,
   type PDFPage
 } from 'pdf-lib'
-import { documentStatusLabels, documentTypeLabels, paymentMethodLabels } from '~~/shared/constants/pos'
+import { documentStatusLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
-import { formatCurrency, formatDate, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
-import { buildSwissQrBill } from '~~/shared/utils/qr-bill'
+import { buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
+import { formatCurrency, formatDate } from '~~/shared/utils/pos'
+import type { SwissQrAddress } from '~~/shared/utils/qr-bill'
 
-const PAGE_WIDTH = 595.28
-const PAGE_HEIGHT = 841.89
-const PAGE_MARGIN = 40
-const CONTENT_WIDTH = PAGE_WIDTH - (PAGE_MARGIN * 2)
-const FONT_SIZE = 10
-const SMALL_FONT_SIZE = 9
-const LINE_HEIGHT = 14
+const MM = 72 / 25.4
+
+const PAGE_WIDTH = 210 * MM
+const PAGE_HEIGHT = 297 * MM
+const OUTER_MARGIN = 7 * MM
+const SECTION_PADDING_X = 5.8 * MM
+const SECTION_LEFT = OUTER_MARGIN + SECTION_PADDING_X
+const SECTION_RIGHT = PAGE_WIDTH - OUTER_MARGIN - SECTION_PADDING_X
+const SECTION_WIDTH = SECTION_RIGHT - SECTION_LEFT
+const SHEET_LEFT = OUTER_MARGIN
+const SHEET_RIGHT = PAGE_WIDTH - OUTER_MARGIN
+const TOP_START = PAGE_HEIGHT - OUTER_MARGIN
+const BOTTOM_LIMIT = OUTER_MARGIN
+
+const FONT_BODY = 8
+const FONT_SMALL = 7
+const FONT_LABEL = 6.2
+const FONT_KICKER = 6
+const FONT_COMPANY = 14
+const FONT_NUMBER = 11.5
+const FONT_TOTAL = 10
 
 const COLORS = {
-  text: rgb(0.15, 0.17, 0.21),
-  muted: rgb(0.4, 0.45, 0.53),
-  border: rgb(0.84, 0.87, 0.91),
-  surface: rgb(0.96, 0.97, 0.98),
-  strongSurface: rgb(0.93, 0.95, 0.97)
+  text: hexToRgb('#334155'),
+  strong: hexToRgb('#0f172a'),
+  muted: hexToRgb('#607393'),
+  border: hexToRgb('#dbe4f0'),
+  dark: hexToRgb('#111827'),
+  tableHead: hexToRgb('#18233b'),
+  tableHeadText: rgb(1, 1, 1),
+  primary: hexToRgb('#0f9f6e'),
+  totalsBg: hexToRgb('#f8fafc'),
+  logoBorder: hexToRgb('#d9e1ed'),
+  white: rgb(1, 1, 1)
 }
 
 type PdfContext = {
   pdfDoc: PDFDocument
+  page: PDFPage
   regularFont: PDFFont
   boldFont: PDFFont
-  page: PDFPage
   cursorY: number
 }
 
@@ -44,88 +65,93 @@ type TextStyle = {
   lineHeight?: number
 }
 
+function hexToRgb(hex: string) {
+  const normalized = hex.replace('#', '')
+  const value = Number.parseInt(normalized, 16)
+
+  return rgb(
+    ((value >> 16) & 255) / 255,
+    ((value >> 8) & 255) / 255,
+    (value & 255) / 255
+  )
+}
+
 function createPage(pdfDoc: PDFDocument) {
   return pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
 }
 
 function addPage(context: PdfContext) {
   context.page = createPage(context.pdfDoc)
-  context.cursorY = PAGE_HEIGHT - PAGE_MARGIN
+  context.cursorY = TOP_START
 }
 
-function ensureSpace(context: PdfContext, requiredHeight: number) {
-  if (context.cursorY - requiredHeight < PAGE_MARGIN) {
+function ensureSpace(context: PdfContext, height: number) {
+  if (context.cursorY - height < BOTTOM_LIMIT) {
     addPage(context)
   }
 }
 
-function drawRule(context: PdfContext) {
-  context.page.drawLine({
-    start: { x: PAGE_MARGIN, y: context.cursorY },
-    end: { x: PAGE_WIDTH - PAGE_MARGIN, y: context.cursorY },
-    thickness: 1,
-    color: COLORS.border
-  })
-  context.cursorY -= 12
+function getLineHeight(size: number, override?: number) {
+  return override || Math.max(size + 2.5, size * 1.24)
 }
 
-function toWrappedLines(
-  font: PDFFont,
-  text: string,
-  fontSize: number,
-  maxWidth: number
-) {
+function wrapText(font: PDFFont, text: string, size: number, maxWidth: number) {
   const paragraphs = text.split(/\r?\n/)
-  const wrapped: string[] = []
+  const lines: string[] = []
 
   for (const paragraph of paragraphs) {
-    const normalizedParagraph = paragraph.trim()
+    const normalized = paragraph.trim()
 
-    if (!normalizedParagraph) {
-      wrapped.push('')
+    if (!normalized) {
+      lines.push('')
       continue
     }
 
-    const words = normalizedParagraph.split(/\s+/)
-    let currentLine = ''
+    const words = normalized.split(/\s+/)
+    let current = ''
 
     for (const word of words) {
-      const candidate = currentLine ? `${currentLine} ${word}` : word
+      const candidate = current ? `${current} ${word}` : word
 
-      if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
-        currentLine = candidate
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+        current = candidate
         continue
       }
 
-      if (currentLine) {
-        wrapped.push(currentLine)
-        currentLine = word
+      if (current) {
+        lines.push(current)
+        current = word
         continue
       }
 
       let segment = ''
 
       for (const character of word) {
-        const nextSegment = `${segment}${character}`
+        const next = `${segment}${character}`
 
-        if (font.widthOfTextAtSize(nextSegment, fontSize) <= maxWidth || !segment) {
-          segment = nextSegment
+        if (font.widthOfTextAtSize(next, size) <= maxWidth || !segment) {
+          segment = next
           continue
         }
 
-        wrapped.push(segment)
+        lines.push(segment)
         segment = character
       }
 
-      currentLine = segment
+      current = segment
     }
 
-    if (currentLine) {
-      wrapped.push(currentLine)
+    if (current) {
+      lines.push(current)
     }
   }
 
-  return wrapped.length ? wrapped : ['']
+  return lines.length ? lines : ['']
+}
+
+function measureTextBlock(font: PDFFont, text: string, size: number, maxWidth: number, lineHeight?: number) {
+  const resolvedLineHeight = getLineHeight(size, lineHeight)
+  return wrapText(font, text, size, maxWidth).length * resolvedLineHeight
 }
 
 function drawTextBlock(
@@ -137,10 +163,10 @@ function drawTextBlock(
   style: TextStyle = {}
 ) {
   const font = style.font || context.regularFont
-  const size = style.size || FONT_SIZE
+  const size = style.size || FONT_BODY
   const color = style.color || COLORS.text
-  const lineHeight = style.lineHeight || Math.max(size + 3, LINE_HEIGHT)
-  const lines = toWrappedLines(font, text, size, maxWidth)
+  const lineHeight = getLineHeight(size, style.lineHeight)
+  const lines = wrapText(font, text, size, maxWidth)
 
   lines.forEach((line, index) => {
     context.page.drawText(line, {
@@ -159,19 +185,28 @@ function drawRightAlignedText(
   context: PdfContext,
   text: string,
   rightX: number,
-  y: number,
+  baselineY: number,
   style: TextStyle = {}
 ) {
   const font = style.font || context.regularFont
-  const size = style.size || FONT_SIZE
+  const size = style.size || FONT_BODY
   const color = style.color || COLORS.text
   const width = font.widthOfTextAtSize(text, size)
 
   context.page.drawText(text, {
     x: rightX - width,
-    y,
+    y: baselineY,
     font,
     size,
+    color
+  })
+}
+
+function drawHorizontalRule(context: PdfContext, y: number, color = COLORS.border, thickness = 0.6) {
+  context.page.drawLine({
+    start: { x: SHEET_LEFT, y },
+    end: { x: SHEET_RIGHT, y },
+    thickness,
     color
   })
 }
@@ -188,454 +223,604 @@ async function embedDataUrlImage(pdfDoc: PDFDocument, dataUrl: string | null | u
   }
 
   const mimeType = match[1]
-  const data = match[2]
+  const encoded = match[2]
 
-  if (!mimeType || !data) {
+  if (!mimeType || !encoded) {
     return null
   }
 
-  const bytes = Uint8Array.from(atob(data), character => character.charCodeAt(0))
+  const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0))
 
   if (mimeType === 'image/png') {
-    return pdfDoc.embedPng(bytes)
+    return contextSafeEmbedPng(pdfDoc, bytes)
   }
 
   return pdfDoc.embedJpg(bytes)
 }
 
-function drawImageWithinBox(
-  page: PDFPage,
-  image: PDFImage,
-  left: number,
-  bottom: number,
-  maxWidth: number,
-  maxHeight: number
-) {
-  const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1)
+async function contextSafeEmbedPng(pdfDoc: PDFDocument, bytes: Uint8Array) {
+  return pdfDoc.embedPng(bytes)
+}
+
+function drawImageCentered(page: PDFPage, image: PDFImage, boxX: number, boxY: number, boxWidth: number, boxHeight: number) {
+  const scale = Math.min(boxWidth / image.width, boxHeight / image.height, 1)
+  const width = image.width * scale
+  const height = image.height * scale
 
   page.drawImage(image, {
-    x: left,
-    y: bottom,
-    width: image.width * scale,
-    height: image.height * scale
+    x: boxX + ((boxWidth - width) / 2),
+    y: boxY + ((boxHeight - height) / 2),
+    width,
+    height
   })
-
-  return {
-    width: image.width * scale,
-    height: image.height * scale
-  }
 }
 
-function getCompanyLines(company: CompanySettingsRecord) {
-  return [
-    company.name,
-    company.address,
-    [company.postalCode, company.city].filter(Boolean).join(' ').trim() || null,
-    company.phone,
-    company.email,
-    company.website
-  ].filter(Boolean) as string[]
+function formatQrStreet(address: SwissQrAddress) {
+  return [address.street, address.buildingNumber].filter(Boolean).join(' ')
 }
 
-function getCustomerLines(document: DocumentDetail) {
-  return [
-    document.customer.displayName,
-    document.customer.addressLine1,
-    document.customer.addressLine2,
-    [document.customer.postalCode, document.customer.city].filter(Boolean).join(' ').trim() || null,
-    document.customer.phone,
-    document.customer.email
-  ].filter(Boolean) as string[]
-}
-
-function getLatestPaidSummary(document: DocumentDetail) {
-  const latestPaid = [...document.payments]
-    .filter(payment => payment.status === 'paid')
-    .sort((left, right) => new Date(right.paidAt).getTime() - new Date(left.paidAt).getTime())[0]
-
-  if (!latestPaid) {
-    return null
-  }
-
-  return {
-    method: paymentMethodLabels[latestPaid.method],
-    paidAt: formatDateTime(latestPaid.paidAt),
-    reference: latestPaid.reference
-  }
-}
-
-function drawSectionLabel(context: PdfContext, label: string, x: number, topY: number, width: number) {
-  return drawTextBlock(context, label, x, topY, width, {
-    font: context.boldFont,
-    size: SMALL_FONT_SIZE,
-    color: COLORS.muted,
-    lineHeight: 11
-  })
+function formatQrLocation(address: SwissQrAddress) {
+  return [address.postalCode, address.city].filter(Boolean).join(' ')
 }
 
 function drawHeader(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord, logoImage: PDFImage | null) {
-  const headerHeight = 110
-  ensureSpace(context, headerHeight)
+  const model = buildDocumentA4PrintModel(document, company)
+  const topY = context.cursorY - (4.8 * MM)
+  const rightColumnWidth = 49 * MM
+  const headGap = 6 * MM
+  const leftColumnWidth = SECTION_WIDTH - headGap - rightColumnWidth
+  const logoBoxSize = 11.5 * MM
+  const logoGap = 3 * MM
+  const brandTextX = SECTION_LEFT + (logoImage ? logoBoxSize + logoGap : 0)
+  const brandTextWidth = leftColumnWidth - (logoImage ? logoBoxSize + logoGap : 0)
 
-  const topY = context.cursorY
-  const leftX = PAGE_MARGIN
-  const rightX = PAGE_MARGIN + (CONTENT_WIDTH / 2)
-
-  let leftStartY = topY
+  ensureSpace(context, 75 * MM)
 
   if (logoImage) {
-    const { height } = drawImageWithinBox(context.page, logoImage, leftX, topY - 56, 120, 42)
-    leftStartY = Math.max(topY - height - 6, topY - 46)
+    const logoBoxY = topY - logoBoxSize
+
+    context.page.drawRectangle({
+      x: SECTION_LEFT,
+      y: logoBoxY,
+      width: logoBoxSize,
+      height: logoBoxSize,
+      borderColor: COLORS.logoBorder,
+      borderWidth: 0.6
+    })
+
+    drawImageCentered(context.page, logoImage, SECTION_LEFT, logoBoxY, logoBoxSize, logoBoxSize)
   }
 
-  let companyBottomY = drawTextBlock(context, company.name, leftX, leftStartY, 240, {
+  drawTextBlock(context, 'Document commercial', brandTextX, topY, brandTextWidth, {
     font: context.boldFont,
-    size: 18,
-    lineHeight: 21
+    size: FONT_KICKER,
+    color: COLORS.muted,
+    lineHeight: 8
   })
 
-  const companyMeta = getCompanyLines(company).slice(1).join('\n')
+  let brandBottom = drawTextBlock(context, company.name, brandTextX, topY - 10, brandTextWidth, {
+    font: context.boldFont,
+    size: FONT_COMPANY,
+    color: COLORS.strong,
+    lineHeight: 15
+  })
+
+  const companyMeta = [...model.companyAddress, company.phone, company.email, company.website].filter(Boolean).join('\n')
 
   if (companyMeta) {
-    companyBottomY = drawTextBlock(context, companyMeta, leftX, companyBottomY - 4, 240, {
-      size: SMALL_FONT_SIZE,
-      color: COLORS.muted,
-      lineHeight: 12
+    brandBottom = drawTextBlock(context, companyMeta, brandTextX, brandBottom - 3, brandTextWidth, {
+      size: FONT_SMALL,
+      color: COLORS.text,
+      lineHeight: 9
     })
   }
 
-  drawTextBlock(context, documentTypeLabels[document.type], rightX, topY, CONTENT_WIDTH / 2, {
+  drawRightAlignedText(context, model.documentTitle.toUpperCase(), SECTION_RIGHT, topY - FONT_KICKER, {
     font: context.boldFont,
-    size: 18,
-    lineHeight: 20
+    size: FONT_KICKER,
+    color: COLORS.primary
   })
-  drawTextBlock(context, document.documentNumber, rightX, topY - 24, CONTENT_WIDTH / 2, {
+  drawRightAlignedText(context, document.documentNumber, SECTION_RIGHT, topY - 20, {
     font: context.boldFont,
-    size: 14,
-    lineHeight: 16
+    size: FONT_NUMBER,
+    color: COLORS.strong
   })
 
-  drawTextBlock(context, [
+  const metaLines = [
     `Émis le ${formatDate(document.issuedAt)}`,
-    `Statut ${documentStatusLabels[document.status]}`,
-    document.ticket ? `Ticket ${document.ticket.ticketNumber}` : null
-  ].filter(Boolean).join('\n'), rightX, topY - 48, CONTENT_WIDTH / 2, {
-    size: SMALL_FONT_SIZE,
-    color: COLORS.muted,
-    lineHeight: 12
+    document.ticket ? `Réf. ticket ${document.ticket.ticketNumber}` : null,
+    `Statut ${documentStatusLabels[document.status]}`
+  ].filter(Boolean) as string[]
+
+  let metaY = topY - 34
+  metaLines.forEach((line) => {
+    drawRightAlignedText(context, line, SECTION_RIGHT, metaY, {
+      size: FONT_SMALL,
+      color: COLORS.text
+    })
+    metaY -= 10
   })
 
-  context.cursorY = Math.min(companyBottomY, topY - 84) - 12
-  drawRule(context)
-}
+  const headBottom = Math.min(brandBottom, metaY + 10)
+  const rowTop = headBottom - (15.8 * MM)
+  const windowWidth = 100 * MM
+  const windowInsetRight = 14.2 * MM
+  const referencesGap = 6 * MM
+  const windowX = SECTION_RIGHT - windowInsetRight - windowWidth
+  const referencesWidth = Math.max(windowX - referencesGap - SECTION_LEFT, 36 * MM)
 
-function drawParties(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord) {
-  const blockHeight = 88
-  ensureSpace(context, blockHeight)
-
-  const leftX = PAGE_MARGIN
-  const rightX = PAGE_MARGIN + (CONTENT_WIDTH / 2) + 12
-  const blockWidth = (CONTENT_WIDTH / 2) - 12
-  const topY = context.cursorY
-
-  context.page.drawRectangle({
-    x: leftX,
-    y: topY - 76,
-    width: blockWidth,
-    height: 76,
-    color: COLORS.surface,
-    borderColor: COLORS.border,
-    borderWidth: 1
-  })
-  context.page.drawRectangle({
-    x: rightX,
-    y: topY - 76,
-    width: blockWidth,
-    height: 76,
-    color: COLORS.surface,
-    borderColor: COLORS.border,
-    borderWidth: 1
-  })
-
-  drawSectionLabel(context, 'Société', leftX + 12, topY - 10, blockWidth - 24)
-  drawTextBlock(context, getCompanyLines(company).join('\n'), leftX + 12, topY - 26, blockWidth - 24, {
-    size: SMALL_FONT_SIZE,
-    lineHeight: 12
-  })
-
-  drawSectionLabel(context, 'Client', rightX + 12, topY - 10, blockWidth - 24)
-  drawTextBlock(context, getCustomerLines(document).join('\n'), rightX + 12, topY - 26, blockWidth - 24, {
-    size: SMALL_FONT_SIZE,
-    lineHeight: 12
-  })
-
-  context.cursorY -= 92
-}
-
-function drawPaymentSummary(context: PdfContext, document: DocumentDetail) {
-  const summary = getLatestPaidSummary(document)
-
-  if (!summary) {
-    return
-  }
-
-  ensureSpace(context, 44)
-
-  const topY = context.cursorY
-  context.page.drawRectangle({
-    x: PAGE_MARGIN,
-    y: topY - 34,
-    width: CONTENT_WIDTH,
-    height: 34,
-    color: COLORS.strongSurface,
-    borderColor: COLORS.border,
-    borderWidth: 1
-  })
-
-  drawTextBlock(context, `Dernier paiement · ${summary.method} · ${summary.paidAt}`, PAGE_MARGIN + 12, topY - 7, CONTENT_WIDTH - 24, {
+  drawTextBlock(context, 'Références', SECTION_LEFT, rowTop, referencesWidth, {
     font: context.boldFont,
-    size: SMALL_FONT_SIZE,
-    lineHeight: 12
+    size: FONT_LABEL,
+    color: COLORS.muted,
+    lineHeight: 7.5
+  })
+  const referencesBottom = drawTextBlock(context, model.referenceLines.join('\n'), SECTION_LEFT, rowTop - 9, referencesWidth, {
+    size: FONT_SMALL,
+    color: COLORS.text,
+    lineHeight: 8.8
   })
 
-  if (summary.reference) {
-    drawTextBlock(context, `Référence ${summary.reference}`, PAGE_MARGIN + 12, topY - 21, CONTENT_WIDTH - 24, {
-      size: SMALL_FONT_SIZE,
-      color: COLORS.muted,
-      lineHeight: 12
+  drawTextBlock(context, 'Adresse destinataire', windowX, rowTop, windowWidth, {
+    font: context.boldFont,
+    size: FONT_LABEL,
+    color: COLORS.muted,
+    lineHeight: 7.5
+  })
+
+  const windowContentTop = rowTop - (9.5 * MM)
+  let windowBottom = drawTextBlock(context, model.windowLines[0] || document.customer.displayName, windowX + (8 * MM), windowContentTop, windowWidth - (14 * MM), {
+    font: context.boldFont,
+    size: FONT_BODY,
+    color: COLORS.strong,
+    lineHeight: 10
+  })
+
+  if (model.windowLines.length > 1) {
+    windowBottom = drawTextBlock(context, model.windowLines.slice(1).join('\n'), windowX + (8 * MM), windowBottom - 2, windowWidth - (14 * MM), {
+      size: FONT_BODY,
+      color: COLORS.text,
+      lineHeight: 9.8
     })
   }
 
-  context.cursorY -= 46
+  const headerBottom = Math.min(referencesBottom, windowBottom, rowTop - (50 * MM))
+  const ruleY = headerBottom - (3.2 * MM)
+  drawHorizontalRule(context, ruleY)
+  context.cursorY = ruleY - (3 * MM)
 }
 
 function drawTableHeader(context: PdfContext) {
-  ensureSpace(context, 26)
-
   const topY = context.cursorY
-  const xDesc = PAGE_MARGIN
-  const xQty = PAGE_MARGIN + 290
-  const xVat = PAGE_MARGIN + 340
-  const xUnit = PAGE_MARGIN + 395
-  const xTotal = PAGE_WIDTH - PAGE_MARGIN
+  const headerHeight = 7 * MM
+  const columns = getTableColumns()
 
   context.page.drawRectangle({
-    x: PAGE_MARGIN,
-    y: topY - 18,
-    width: CONTENT_WIDTH,
-    height: 18,
-    color: COLORS.surface,
-    borderColor: COLORS.border,
-    borderWidth: 1
+    x: SECTION_LEFT,
+    y: topY - headerHeight,
+    width: SECTION_WIDTH,
+    height: headerHeight,
+    color: COLORS.tableHead
   })
 
-  drawTextBlock(context, 'Description', xDesc + 8, topY - 4, 220, {
+  const textY = topY - (headerHeight / 2) - (FONT_LABEL / 2)
+  drawTextBlock(context, 'Désignation', columns.description.left + (2 * MM), topY - 4, columns.description.width - (4 * MM), {
     font: context.boldFont,
-    size: SMALL_FONT_SIZE,
-    lineHeight: 10
+    size: FONT_LABEL,
+    color: COLORS.tableHeadText,
+    lineHeight: 7
   })
-  drawRightAlignedText(context, 'Qté', xQty + 30, topY - 13, {
+  drawRightAlignedText(context, 'Qté', columns.quantity.right - (2 * MM), textY, {
     font: context.boldFont,
-    size: SMALL_FONT_SIZE
+    size: FONT_LABEL,
+    color: COLORS.tableHeadText
   })
-  drawRightAlignedText(context, 'TVA', xVat + 30, topY - 13, {
+  drawRightAlignedText(context, 'Prix TTC', columns.unitPrice.right - (2 * MM), textY, {
     font: context.boldFont,
-    size: SMALL_FONT_SIZE
+    size: FONT_LABEL,
+    color: COLORS.tableHeadText
   })
-  drawRightAlignedText(context, 'PU', xUnit + 65, topY - 13, {
+  drawRightAlignedText(context, 'TVA', columns.vat.right - (2 * MM), textY, {
     font: context.boldFont,
-    size: SMALL_FONT_SIZE
+    size: FONT_LABEL,
+    color: COLORS.tableHeadText
   })
-  drawRightAlignedText(context, 'Total', xTotal - 8, topY - 13, {
+  drawRightAlignedText(context, 'Total TTC', columns.total.right - (2 * MM), textY, {
     font: context.boldFont,
-    size: SMALL_FONT_SIZE
+    size: FONT_LABEL,
+    color: COLORS.tableHeadText
   })
 
-  context.cursorY -= 24
+  context.cursorY -= headerHeight
+}
+
+function getTableColumns() {
+  const descriptionWidth = SECTION_WIDTH * 0.5
+  const quantityWidth = SECTION_WIDTH * 0.07
+  const unitPriceWidth = SECTION_WIDTH * 0.15
+  const vatWidth = SECTION_WIDTH * 0.08
+  const totalWidth = SECTION_WIDTH - descriptionWidth - quantityWidth - unitPriceWidth - vatWidth
+
+  const descriptionLeft = SECTION_LEFT
+  const quantityLeft = descriptionLeft + descriptionWidth
+  const unitPriceLeft = quantityLeft + quantityWidth
+  const vatLeft = unitPriceLeft + unitPriceWidth
+  const totalLeft = vatLeft + vatWidth
+
+  return {
+    description: { left: descriptionLeft, width: descriptionWidth, right: descriptionLeft + descriptionWidth },
+    quantity: { left: quantityLeft, width: quantityWidth, right: quantityLeft + quantityWidth },
+    unitPrice: { left: unitPriceLeft, width: unitPriceWidth, right: unitPriceLeft + unitPriceWidth },
+    vat: { left: vatLeft, width: vatWidth, right: vatLeft + vatWidth },
+    total: { left: totalLeft, width: totalWidth, right: totalLeft + totalWidth }
+  }
 }
 
 function drawDocumentLines(context: PdfContext, document: DocumentDetail) {
+  const columns = getTableColumns()
+
   drawTableHeader(context)
 
-  const xDesc = PAGE_MARGIN + 8
-  const xQty = PAGE_MARGIN + 320
-  const xVat = PAGE_MARGIN + 370
-  const xUnit = PAGE_MARGIN + 460
-  const xTotal = PAGE_WIDTH - PAGE_MARGIN - 8
-
   for (const line of document.lines) {
-    const descriptionLines = toWrappedLines(context.regularFont, line.label, FONT_SIZE, 265)
-    const rowHeight = Math.max(22, (descriptionLines.length * 12) + 10)
-    ensureSpace(context, rowHeight + 12)
+    const descriptionWidth = columns.description.width - (4 * MM)
+    const descriptionHeight = measureTextBlock(context.boldFont, line.label, FONT_BODY, descriptionWidth, 10)
+    const rowHeight = Math.max((5.4 * MM), descriptionHeight + (3.4 * MM))
 
-    if (context.cursorY < PAGE_MARGIN + rowHeight + 20) {
+    if (context.cursorY - rowHeight < BOTTOM_LIMIT) {
       addPage(context)
       drawTableHeader(context)
     }
 
-    const topY = context.cursorY
+    const rowTop = context.cursorY
+    const textTop = rowTop - (1.7 * MM)
+    const numberBaseline = textTop - FONT_BODY
 
+    drawTextBlock(context, line.label, columns.description.left + (2 * MM), textTop, descriptionWidth, {
+      font: context.boldFont,
+      size: FONT_BODY,
+      color: COLORS.strong,
+      lineHeight: 10
+    })
+    drawRightAlignedText(context, String(line.quantity), columns.quantity.right - (2 * MM), numberBaseline, {
+      size: FONT_BODY,
+      color: COLORS.text
+    })
+    drawRightAlignedText(context, formatCurrency(line.unitPrice), columns.unitPrice.right - (2 * MM), numberBaseline, {
+      size: FONT_BODY,
+      color: COLORS.text
+    })
+    drawRightAlignedText(context, `${line.vatRate}%`, columns.vat.right - (2 * MM), numberBaseline, {
+      size: FONT_BODY,
+      color: COLORS.text
+    })
+    drawRightAlignedText(context, formatCurrency(line.lineTotal), columns.total.right - (2 * MM), numberBaseline, {
+      font: context.boldFont,
+      size: FONT_BODY,
+      color: COLORS.strong
+    })
+
+    const rowBottom = rowTop - rowHeight
     context.page.drawLine({
-      start: { x: PAGE_MARGIN, y: topY },
-      end: { x: PAGE_WIDTH - PAGE_MARGIN, y: topY },
-      thickness: 1,
+      start: { x: SECTION_LEFT, y: rowBottom },
+      end: { x: SECTION_RIGHT, y: rowBottom },
+      thickness: 0.6,
       color: COLORS.border
     })
 
-    drawTextBlock(context, descriptionLines.join('\n'), xDesc, topY - 6, 265, {
-      size: FONT_SIZE,
-      lineHeight: 12
-    })
-
-    drawRightAlignedText(context, String(line.quantity), xQty, topY - 16, { size: FONT_SIZE })
-    drawRightAlignedText(context, `${line.vatRate.toFixed(1)}%`, xVat, topY - 16, { size: FONT_SIZE })
-    drawRightAlignedText(context, formatCurrency(line.unitPrice), xUnit, topY - 16, { size: FONT_SIZE })
-    drawRightAlignedText(context, formatCurrency(line.lineTotal), xTotal, topY - 16, {
-      font: context.boldFont,
-      size: FONT_SIZE
-    })
-
-    context.cursorY -= rowHeight
+    context.cursorY = rowBottom
   }
 
-  context.page.drawLine({
-    start: { x: PAGE_MARGIN, y: context.cursorY },
-    end: { x: PAGE_WIDTH - PAGE_MARGIN, y: context.cursorY },
-    thickness: 1,
-    color: COLORS.border
-  })
-  context.cursorY -= 14
+  context.cursorY -= (3 * MM)
+}
+
+function measureSummaryHeight(context: PdfContext, model: ReturnType<typeof buildDocumentA4PrintModel>) {
+  const notesWidth = SECTION_WIDTH - (4 * MM) - (54 * MM)
+  const noteHeight = model.noteBlocks.reduce((total, block, index) => {
+    const labelHeight = measureTextBlock(context.boldFont, block.label, FONT_LABEL, notesWidth, 7.5)
+    const contentHeight = measureTextBlock(context.regularFont, block.content, FONT_SMALL, notesWidth, 9.5)
+    return total + labelHeight + contentHeight + (index ? (2.2 * MM) : 0) + (1.2 * MM)
+  }, 0)
+  const totalRows = 3 + ((model.isPayableDocument && model.paidAmount > 0) ? 2 : 0)
+  const totalsHeight = (2.2 * MM) + (totalRows * 11) + 16
+
+  return Math.max(noteHeight, totalsHeight) + (3 * MM)
 }
 
 function drawSummary(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord) {
-  const hasNotes = Boolean(document.notes || company.paymentTerms)
-  const blockHeight = hasNotes ? 118 : 82
-  ensureSpace(context, blockHeight)
-
-  const leftX = PAGE_MARGIN
-  const leftWidth = 280
-  const rightX = PAGE_WIDTH - PAGE_MARGIN - 160
+  const model = buildDocumentA4PrintModel(document, company)
+  const totalsWidth = 54 * MM
+  const gap = 4 * MM
+  const notesWidth = SECTION_WIDTH - gap - totalsWidth
   const topY = context.cursorY
+  const requiredHeight = measureSummaryHeight(context, model)
 
-  if (hasNotes) {
-    drawSectionLabel(context, 'Notes', leftX, topY, leftWidth)
-    drawTextBlock(
-      context,
-      [document.notes, company.paymentTerms].filter(Boolean).join('\n\n'),
-      leftX,
-      topY - 14,
-      leftWidth,
-      {
-        size: SMALL_FONT_SIZE,
+  ensureSpace(context, requiredHeight)
+
+  let notesBottom = topY
+
+  if (model.noteBlocks.length) {
+    for (const [index, block] of model.noteBlocks.entries()) {
+      const blockTop = index === 0 ? topY : notesBottom - (2.2 * MM)
+      drawTextBlock(context, block.label, SECTION_LEFT, blockTop, notesWidth, {
+        font: context.boldFont,
+        size: FONT_LABEL,
         color: COLORS.muted,
-        lineHeight: 12
-      }
-    )
+        lineHeight: 7.5
+      })
+      notesBottom = drawTextBlock(context, block.content, SECTION_LEFT, blockTop - 9, notesWidth, {
+        size: FONT_SMALL,
+        color: COLORS.text,
+        lineHeight: 9.5
+      })
+    }
   }
 
   const totalRows = [
-    ['Sous-total', formatCurrency(document.subtotal)],
-    ['TVA', formatCurrency(document.taxAmount)],
-    ['Total TTC', formatCurrency(document.total)]
-  ] as const
+    { label: 'Total HT', value: formatCurrency(document.subtotal), emphasized: false },
+    { label: 'TVA', value: formatCurrency(document.taxAmount), emphasized: false },
+    { label: 'Total TTC', value: formatCurrency(document.total), emphasized: true }
+  ]
 
-  let offset = 0
-
-  for (const [label, value] of totalRows) {
-    const y = topY - 16 - offset
-    drawTextBlock(context, label, rightX, y + 6, 80, { size: SMALL_FONT_SIZE, color: COLORS.muted })
-    drawRightAlignedText(context, value, PAGE_WIDTH - PAGE_MARGIN, y - 3, {
-      font: label === 'Total TTC' ? context.boldFont : context.regularFont,
-      size: label === 'Total TTC' ? 13 : FONT_SIZE
-    })
-    offset += label === 'Total TTC' ? 26 : 18
+  if (model.isPayableDocument && model.paidAmount > 0) {
+    totalRows.push(
+      { label: 'Encaissé', value: formatCurrency(model.paidAmount), emphasized: false },
+      { label: 'Reste', value: formatCurrency(model.balanceDue), emphasized: false }
+    )
   }
 
-  if (isPayableDocumentType(document.type)) {
-    const paidAmount = document.payments
-      .filter(payment => payment.status === 'paid')
-      .reduce((total, payment) => total + payment.amount, 0)
-    const balanceDue = Math.max(document.total - paidAmount, 0)
+  const boxX = SECTION_RIGHT - totalsWidth
+  const boxY = topY - requiredHeight + (3 * MM)
+  const boxHeight = requiredHeight - (3 * MM)
 
-    drawTextBlock(context, 'Encaissé', rightX, topY - 72, 80, { size: SMALL_FONT_SIZE, color: COLORS.muted })
-    drawRightAlignedText(context, formatCurrency(paidAmount), PAGE_WIDTH - PAGE_MARGIN, topY - 81, { size: FONT_SIZE })
-    drawTextBlock(context, 'Restant', rightX, topY - 90, 80, { size: SMALL_FONT_SIZE, color: COLORS.muted })
-    drawRightAlignedText(context, formatCurrency(balanceDue), PAGE_WIDTH - PAGE_MARGIN, topY - 99, {
-      font: context.boldFont,
-      size: FONT_SIZE
+  context.page.drawRectangle({
+    x: boxX,
+    y: boxY,
+    width: totalsWidth,
+    height: boxHeight,
+    borderColor: COLORS.dark,
+    borderWidth: 0.6,
+    color: COLORS.totalsBg
+  })
+
+  let rowY = topY - (2.8 * MM)
+
+  totalRows.forEach((row, index) => {
+    if (row.emphasized) {
+      context.page.drawLine({
+        start: { x: boxX + (2.6 * MM), y: rowY + 3 },
+        end: { x: boxX + totalsWidth - (2.6 * MM), y: rowY + 3 },
+        thickness: 0.5,
+        color: COLORS.border
+      })
+      rowY -= 4
+    }
+
+    drawTextBlock(context, row.label, boxX + (2.6 * MM), rowY, totalsWidth / 2, {
+      size: FONT_SMALL,
+      color: COLORS.strong
     })
-  }
+    drawRightAlignedText(context, row.value, boxX + totalsWidth - (2.6 * MM), rowY - FONT_SMALL, {
+      font: row.emphasized ? context.boldFont : context.regularFont,
+      size: row.emphasized ? FONT_TOTAL : FONT_BODY,
+      color: COLORS.strong
+    })
 
-  context.cursorY -= blockHeight
+    rowY -= index === totalRows.length - 1 ? 10 : 12
+  })
+
+  const summaryBottom = Math.min(notesBottom || topY, boxY)
+  context.cursorY = summaryBottom - (3 * MM)
 }
 
 async function drawQrSection(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord) {
-  const qrBill = buildSwissQrBill(document, company)
+  const model = buildDocumentA4PrintModel(document, company)
 
-  if (!qrBill) {
-    return
+  if (!model.qrBill) {
+    return false
   }
 
-  const qrDataUrl = await QRCode.toDataURL(qrBill.payload, {
+  ensureSpace(context, 110 * MM)
+
+  const qrDataUrl = await QRCode.toDataURL(model.qrBill.payload, {
     errorCorrectionLevel: 'M',
     margin: 0,
-    width: 180
+    width: 220
   })
   const qrImage = await embedDataUrlImage(context.pdfDoc, qrDataUrl)
 
   if (!qrImage) {
-    return
+    return false
   }
 
-  ensureSpace(context, 170)
+  const sectionTopLine = context.cursorY
+  const topY = sectionTopLine - (3.2 * MM)
+  const minHeight = 105 * MM
+  const sectionBottom = topY - minHeight
+  const receiptWidth = 62 * MM
+  const paymentX = SECTION_LEFT + receiptWidth + (3.2 * MM)
 
-  const topY = context.cursorY
+  drawHorizontalRule(context, sectionTopLine, COLORS.dark, 0.6)
+  context.page.drawLine({
+    start: { x: SECTION_LEFT + receiptWidth, y: topY },
+    end: { x: SECTION_LEFT + receiptWidth, y: sectionBottom },
+    thickness: 0.6,
+    color: COLORS.dark
+  })
+
+  drawTextBlock(context, 'Récépissé', SECTION_LEFT, topY, receiptWidth - (3.2 * MM), {
+    font: context.boldFont,
+    size: FONT_SMALL,
+    color: COLORS.dark,
+    lineHeight: 9
+  })
+
+  let receiptBottom = drawTextBlock(context, `Compte / Payable à\n${company.iban || ''}\n${model.qrBill.creditor.name}\n${formatQrStreet(model.qrBill.creditor)}\n${formatQrLocation(model.qrBill.creditor)}`, SECTION_LEFT, topY - 11, receiptWidth - (3.2 * MM), {
+    size: FONT_SMALL,
+    color: COLORS.text,
+    lineHeight: 9
+  })
+
+  if (model.qrBill.debtor) {
+    receiptBottom = drawTextBlock(context, `Payable par\n${model.qrBill.debtor.name}\n${formatQrStreet(model.qrBill.debtor)}\n${formatQrLocation(model.qrBill.debtor)}`, SECTION_LEFT, receiptBottom - 10, receiptWidth - (3.2 * MM), {
+      size: FONT_SMALL,
+      color: COLORS.text,
+      lineHeight: 9
+    })
+  }
+
+  drawTextBlock(context, 'Monnaie', SECTION_LEFT, receiptBottom - 12, 24 * MM, {
+    font: context.boldFont,
+    size: FONT_LABEL,
+    color: COLORS.muted
+  })
+  drawTextBlock(context, 'Montant', SECTION_LEFT + (28 * MM), receiptBottom - 12, 24 * MM, {
+    font: context.boldFont,
+    size: FONT_LABEL,
+    color: COLORS.muted
+  })
+  drawTextBlock(context, 'CHF', SECTION_LEFT, receiptBottom - 20, 24 * MM, {
+    size: FONT_SMALL,
+    color: COLORS.text
+  })
+  drawTextBlock(context, model.qrBill.amount, SECTION_LEFT + (28 * MM), receiptBottom - 20, 24 * MM, {
+    size: FONT_SMALL,
+    color: COLORS.text
+  })
+
+  drawTextBlock(context, 'Section paiement', paymentX, topY, SECTION_RIGHT - paymentX, {
+    font: context.boldFont,
+    size: FONT_SMALL,
+    color: COLORS.dark,
+    lineHeight: 9
+  })
+
+  const paymentHeadColumnWidth = ((SECTION_RIGHT - paymentX) - (3 * MM)) / 2
+  drawTextBlock(context, `Compte / Payable à\n${company.iban || ''}\n${model.qrBill.creditor.name}\n${formatQrStreet(model.qrBill.creditor)}\n${formatQrLocation(model.qrBill.creditor)}`, paymentX + paymentHeadColumnWidth + (3 * MM), topY - 11, paymentHeadColumnWidth, {
+    size: FONT_SMALL,
+    color: COLORS.text,
+    lineHeight: 9
+  })
+
+  const qrBoxSize = 46 * MM
+  const qrY = topY - (30 * MM) - qrBoxSize
+  context.page.drawImage(qrImage, {
+    x: paymentX,
+    y: qrY,
+    width: qrBoxSize,
+    height: qrBoxSize
+  })
+
+  const markSize = 7 * MM
+  const markX = paymentX + (qrBoxSize / 2) - (markSize / 2)
+  const markY = qrY + (qrBoxSize / 2) - (markSize / 2)
+
   context.page.drawRectangle({
-    x: PAGE_MARGIN,
-    y: topY - 158,
-    width: CONTENT_WIDTH,
-    height: 158,
-    color: COLORS.surface,
-    borderColor: COLORS.border,
-    borderWidth: 1
+    x: markX,
+    y: markY,
+    width: markSize,
+    height: markSize,
+    color: COLORS.white,
+    borderColor: COLORS.dark,
+    borderWidth: 0.6
+  })
+  context.page.drawRectangle({
+    x: markX + (1.2 * MM),
+    y: markY + (3 * MM),
+    width: 4.6 * MM,
+    height: 1 * MM,
+    color: COLORS.dark
+  })
+  context.page.drawRectangle({
+    x: markX + (3 * MM),
+    y: markY + (1.2 * MM),
+    width: 1 * MM,
+    height: 4.6 * MM,
+    color: COLORS.dark
   })
 
-  drawSectionLabel(context, 'Paiement QR', PAGE_MARGIN + 14, topY - 12, CONTENT_WIDTH - 28)
-  drawImageWithinBox(context.page, qrImage, PAGE_MARGIN + 14, topY - 142, 132, 132)
-
-  const infoX = PAGE_MARGIN + 164
-  const infoWidth = CONTENT_WIDTH - 178
-  drawTextBlock(context, [
-    `Compte ${qrBill.account}`,
-    `Montant ${qrBill.amount ? `${qrBill.amount} ${qrBill.currency}` : formatCurrency(document.total)}`,
-    `Référence ${qrBill.displayReference}`,
-    `Créancier ${company.name}`,
-    qrBill.debtor ? `Débiteur ${document.customer.displayName}` : null
-  ].filter(Boolean).join('\n'), infoX, topY - 22, infoWidth, {
-    size: SMALL_FONT_SIZE,
-    lineHeight: 13
+  const detailsX = paymentX + qrBoxSize + (4 * MM)
+  const detailsWidth = SECTION_RIGHT - detailsX
+  let detailsBottom = drawTextBlock(context, `Référence\n${model.qrBill.displayReference}`, detailsX, topY - 30, detailsWidth, {
+    size: FONT_SMALL,
+    color: COLORS.text,
+    lineHeight: 9
+  })
+  detailsBottom = drawTextBlock(context, `Informations supplémentaires\n${model.qrBill.message}`, detailsX, detailsBottom - 10, detailsWidth, {
+    size: FONT_SMALL,
+    color: COLORS.text,
+    lineHeight: 9
   })
 
-  context.cursorY -= 172
+  if (model.qrBill.debtor) {
+    detailsBottom = drawTextBlock(context, `Payable par\n${model.qrBill.debtor.name}\n${formatQrStreet(model.qrBill.debtor)}\n${formatQrLocation(model.qrBill.debtor)}`, detailsX, detailsBottom - 10, detailsWidth, {
+      size: FONT_SMALL,
+      color: COLORS.text,
+      lineHeight: 9
+    })
+  }
+
+  drawTextBlock(context, 'Monnaie', detailsX, detailsBottom - 12, 24 * MM, {
+    font: context.boldFont,
+    size: FONT_LABEL,
+    color: COLORS.muted
+  })
+  drawTextBlock(context, 'Montant', detailsX + (28 * MM), detailsBottom - 12, 24 * MM, {
+    font: context.boldFont,
+    size: FONT_LABEL,
+    color: COLORS.muted
+  })
+  drawTextBlock(context, 'CHF', detailsX, detailsBottom - 20, 24 * MM, {
+    size: FONT_SMALL,
+    color: COLORS.text
+  })
+  drawTextBlock(context, model.qrBill.amount, detailsX + (28 * MM), detailsBottom - 20, 24 * MM, {
+    size: FONT_SMALL,
+    color: COLORS.text
+  })
+
+  context.cursorY = sectionBottom - (3 * MM)
+
+  return true
 }
 
-function drawFooter(context: PdfContext, company: CompanySettingsRecord) {
-  const footerLines = [
-    company.footerNotes,
-    [company.phone, company.email, company.website].filter(Boolean).join(' · ') || null
-  ].filter(Boolean) as string[]
+function drawFooter(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord) {
+  const model = buildDocumentA4PrintModel(document, company)
 
-  if (!footerLines.length) {
+  if (!model.footerNote && !model.footerMeta.length) {
     return
   }
 
-  ensureSpace(context, 48)
-  drawRule(context)
-  drawTextBlock(context, footerLines.join('\n'), PAGE_MARGIN, context.cursorY, CONTENT_WIDTH, {
-    size: SMALL_FONT_SIZE,
-    color: COLORS.muted,
-    lineHeight: 12
-  })
+  const noteHeight = model.footerNote
+    ? measureTextBlock(context.regularFont, model.footerNote, FONT_SMALL, SECTION_WIDTH, 9)
+    : 0
+  const metaHeight = model.footerMeta.length
+    ? measureTextBlock(context.regularFont, model.footerMeta.join('   '), FONT_SMALL, SECTION_WIDTH, 9)
+    : 0
+
+  ensureSpace(context, noteHeight + metaHeight + (10 * MM))
+
+  const topLine = context.cursorY
+  drawHorizontalRule(context, topLine)
+
+  let footerBottom = topLine - (2.4 * MM)
+
+  if (model.footerNote) {
+    footerBottom = drawTextBlock(context, model.footerNote, SECTION_LEFT, footerBottom, SECTION_WIDTH, {
+      size: FONT_SMALL,
+      color: COLORS.text,
+      lineHeight: 9
+    })
+  }
+
+  if (model.footerMeta.length) {
+    footerBottom = drawTextBlock(context, model.footerMeta.join('   ·   '), SECTION_LEFT, footerBottom - 4, SECTION_WIDTH, {
+      size: FONT_SMALL,
+      color: COLORS.text,
+      lineHeight: 9
+    })
+  }
+
+  context.cursorY = footerBottom - (3 * MM)
 }
 
 export async function generateDocumentPdf(document: DocumentDetail, company: CompanySettingsRecord) {
@@ -645,19 +830,21 @@ export async function generateDocumentPdf(document: DocumentDetail, company: Com
   const logoImage = await embedDataUrlImage(pdfDoc, company.logoDataUrl)
   const context: PdfContext = {
     pdfDoc,
+    page: createPage(pdfDoc),
     regularFont,
     boldFont,
-    page: createPage(pdfDoc),
-    cursorY: PAGE_HEIGHT - PAGE_MARGIN
+    cursorY: TOP_START
   }
 
   drawHeader(context, document, company, logoImage)
-  drawParties(context, document, company)
-  drawPaymentSummary(context, document)
   drawDocumentLines(context, document)
   drawSummary(context, document, company)
-  await drawQrSection(context, document, company)
-  drawFooter(context, company)
+
+  const renderedQr = await drawQrSection(context, document, company)
+
+  if (!renderedQr) {
+    drawFooter(context, document, company)
+  }
 
   return pdfDoc.save()
 }

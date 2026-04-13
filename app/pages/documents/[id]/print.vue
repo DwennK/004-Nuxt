@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import QRCode from 'qrcode'
-import { documentStatusLabels, documentTypeLabels, paymentMethodLabels } from '~~/shared/constants/pos'
+import { documentStatusLabels, documentTypeLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail, PrintProfile } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
+import { buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
 import { getDocumentPrintProfiles, printProfileLabels, supportsDocumentPrintProfile } from '~~/shared/utils/print'
-import { buildSwissQrBill } from '~~/shared/utils/qr-bill'
 import type { SwissQrAddress } from '~~/shared/utils/qr-bill'
-import { isValidSwissQrBillAccount } from '~~/shared/utils/iban'
 import { formatCurrency, formatDate, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
 
 definePageMeta({
@@ -28,59 +27,24 @@ function normalizePrintProfile(value: unknown): PrintProfile {
 }
 
 const profile = computed<PrintProfile>(() => normalizePrintProfile(route.query.profile))
-const documentTitle = computed(() => document.value ? documentTypeLabels[document.value.type] : 'Document')
 const profileLabel = computed(() => printProfileLabels[profile.value])
 const availableProfiles = computed(() => document.value ? getDocumentPrintProfiles(document.value.type) : [])
 const canRenderSelectedProfile = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, profile.value) : false)
 const isThermalProfile = computed(() => profile.value === 'thermal')
-const paidAmount = computed(() => document.value?.payments
-  .filter(payment => payment.status === 'paid')
-  .reduce((total, payment) => total + payment.amount, 0) || 0)
-const isPayableDocument = computed(() => document.value ? isPayableDocumentType(document.value.type) : false)
-const balanceDue = computed(() => isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0)
-
-const paymentSummary = computed(() => {
-  if (!document.value?.payments.length) {
+const a4PrintModel = computed(() => {
+  if (!document.value || !company.value) {
     return null
   }
 
-  const latestPaid = [...document.value.payments]
-    .filter(payment => payment.status === 'paid')
-    .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime())[0]
-
-  if (!latestPaid) {
-    return null
-  }
-
-  return {
-    label: paymentMethodLabels[latestPaid.method],
-    reference: latestPaid.reference,
-    paidAt: formatDateTime(latestPaid.paidAt)
-  }
+  return buildDocumentA4PrintModel(document.value, company.value)
 })
-
-const companyAddress = computed(() => {
-  if (!company.value) {
-    return []
-  }
-
-  return [
-    company.value.address,
-    [company.value.postalCode, company.value.city].filter(Boolean).join(' ').trim() || null
-  ].filter(Boolean)
-})
-
-const customerAddress = computed(() => {
-  if (!document.value) {
-    return []
-  }
-
-  return [
-    document.value.customer.addressLine1,
-    document.value.customer.addressLine2,
-    [document.value.customer.postalCode, document.value.customer.city].filter(Boolean).join(' ').trim() || null
-  ].filter(Boolean)
-})
+const documentTitle = computed(() => a4PrintModel.value?.documentTitle || (document.value ? documentTypeLabels[document.value.type] : 'Document'))
+const paymentSummary = computed(() => a4PrintModel.value?.paymentSummary || null)
+const companyAddress = computed(() => a4PrintModel.value?.companyAddress || [])
+const customerAddress = computed(() => a4PrintModel.value?.customerAddress || [])
+const paidAmount = computed(() => a4PrintModel.value?.paidAmount || 0)
+const isPayableDocument = computed(() => a4PrintModel.value?.isPayableDocument || (document.value ? isPayableDocumentType(document.value.type) : false))
+const balanceDue = computed(() => a4PrintModel.value?.balanceDue || 0)
 
 const showThermalCustomer = computed(() => {
   if (!document.value) {
@@ -101,31 +65,11 @@ const showThermalCustomer = computed(() => {
 })
 
 const qrBill = computed(() => {
-  if (!document.value || !company.value || isThermalProfile.value) {
+  if (isThermalProfile.value) {
     return null
   }
 
-  return buildSwissQrBill(document.value, company.value)
-})
-
-const qrBillNotice = computed(() => {
-  if (!document.value || !company.value || document.value.type !== 'invoice' || isThermalProfile.value) {
-    return null
-  }
-
-  if (!company.value.iban) {
-    return 'QR-facture indisponible: ajoutez un IBAN dans les paramètres société.'
-  }
-
-  if (!isValidSwissQrBillAccount(company.value.iban)) {
-    return 'QR-facture indisponible: utilisez un IBAN CH ou LI valide dans les paramètres société.'
-  }
-
-  if (!company.value.address || !company.value.postalCode || !company.value.city) {
-    return 'QR-facture indisponible: complétez l’adresse société pour générer le paiement QR.'
-  }
-
-  return null
+  return a4PrintModel.value?.qrBill || null
 })
 
 const { data: qrCodeDataUrl } = await useAsyncData(
@@ -267,20 +211,8 @@ function formatQrLocation(address: SwissQrAddress) {
               <p class="invoice-label">
                 Références
               </p>
-              <p v-if="company.vatNumber">
-                TVA / IDE {{ company.vatNumber }}
-              </p>
-              <p v-if="company.bankName">
-                Banque {{ company.bankName }}
-              </p>
-              <p v-if="company.iban">
-                IBAN {{ company.iban }}
-              </p>
-              <p v-if="paymentSummary">
-                Dernier paiement {{ paymentSummary.label }}
-              </p>
-              <p v-if="paymentSummary">
-                {{ paymentSummary.paidAt }}
+              <p v-for="line in a4PrintModel?.referenceLines || []" :key="line">
+                {{ line }}
               </p>
             </section>
 
@@ -290,19 +222,11 @@ function formatQrLocation(address: SwissQrAddress) {
               </p>
               <div class="invoice-window">
                 <p class="invoice-strong">
-                  {{ document.customer.displayName }}
+                  {{ a4PrintModel?.windowLines[0] || document.customer.displayName }}
                 </p>
-                <p v-for="line in customerAddress" :key="`customer-${line}`">
+                <p v-for="line in (a4PrintModel?.windowLines || []).slice(1)" :key="`customer-${line}`">
                   {{ line }}
                 </p>
-                <template v-if="!customerAddress.length">
-                  <p v-if="document.customer.phone">
-                    {{ document.customer.phone }}
-                  </p>
-                  <p v-if="document.customer.email">
-                    {{ document.customer.email }}
-                  </p>
-                </template>
               </div>
             </section>
           </div>
@@ -339,30 +263,12 @@ function formatQrLocation(address: SwissQrAddress) {
 
         <section class="invoice-summary">
           <div class="invoice-notes">
-            <div v-if="document.notes" class="invoice-note-block">
+            <div v-for="block in a4PrintModel?.noteBlocks || []" :key="block.label" class="invoice-note-block">
               <p class="invoice-label">
-                Notes
+                {{ block.label }}
               </p>
               <p class="whitespace-pre-line">
-                {{ document.notes }}
-              </p>
-            </div>
-
-            <div v-if="company.paymentTerms" class="invoice-note-block">
-              <p class="invoice-label">
-                Conditions de paiement
-              </p>
-              <p class="whitespace-pre-line">
-                {{ company.paymentTerms }}
-              </p>
-            </div>
-
-            <div v-if="qrBillNotice" class="invoice-note-block">
-              <p class="invoice-label">
-                Paiement QR
-              </p>
-              <p>
-                {{ qrBillNotice }}
+                {{ block.content }}
               </p>
             </div>
           </div>
@@ -499,14 +405,12 @@ function formatQrLocation(address: SwissQrAddress) {
           </div>
         </section>
 
-        <footer v-else-if="company.footerNotes || company.phone || company.email || company.website" class="invoice-footer">
-          <p v-if="company.footerNotes" class="invoice-footer-note">
-            {{ company.footerNotes }}
+        <footer v-else-if="a4PrintModel && (a4PrintModel.footerNote || a4PrintModel.footerMeta.length)" class="invoice-footer">
+          <p v-if="a4PrintModel.footerNote" class="invoice-footer-note">
+            {{ a4PrintModel.footerNote }}
           </p>
           <div class="invoice-footer-meta">
-            <span v-if="company.phone">{{ company.phone }}</span>
-            <span v-if="company.email">{{ company.email }}</span>
-            <span v-if="company.website">{{ company.website }}</span>
+            <span v-for="entry in a4PrintModel.footerMeta" :key="entry">{{ entry }}</span>
           </div>
         </footer>
       </article>
