@@ -17,6 +17,14 @@ const [{ data: ticket }, { data: company }] = await Promise.all([
   useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
   useFetch<CompanySettingsRecord>('/api/settings/company')
 ])
+useHead({
+  style: [
+    {
+      key: 'ticket-print-page-rule',
+      textContent: '@page { margin: 4mm; }'
+    }
+  ]
+})
 
 const companyAddress = computed(() => {
   if (!company.value) {
@@ -179,17 +187,12 @@ function printTicket() {
 </template>
 
 <style>
-@page thermal {
-  margin: 4mm;
-}
-
 body {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
 
 .ticket-sheet {
-  page: thermal;
   width: 72mm;
   max-width: 72mm;
   padding: 4mm 3mm;
@@ -286,6 +289,13 @@ body {
 
   .print-preview {
     background: #fff !important;
+    min-height: 0 !important;
+  }
+
+  .print-preview > main {
+    display: block !important;
+    max-width: none !important;
+    padding: 0 !important;
   }
 
   .ticket-sheet {
