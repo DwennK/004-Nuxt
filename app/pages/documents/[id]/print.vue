@@ -31,6 +31,11 @@ const profileLabel = computed(() => printProfileLabels[profile.value])
 const availableProfiles = computed(() => document.value ? getDocumentPrintProfiles(document.value.type) : [])
 const canRenderSelectedProfile = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, profile.value) : false)
 const isThermalProfile = computed(() => profile.value === 'thermal')
+const printPageRule = computed(() => (
+  profile.value === 'thermal'
+    ? '@page { margin: 4mm; }'
+    : '@page { size: A4; margin: 7mm; }'
+))
 const a4PrintModel = computed(() => {
   if (!document.value || !company.value) {
     return null
@@ -101,6 +106,15 @@ function formatQrStreet(address: SwissQrAddress) {
 function formatQrLocation(address: SwissQrAddress) {
   return [address.postalCode, address.city].filter(Boolean).join(' ')
 }
+
+useHead(() => ({
+  style: [
+    {
+      key: 'document-print-page-rule',
+      textContent: printPageRule.value
+    }
+  ]
+}))
 </script>
 
 <template>
@@ -578,15 +592,6 @@ function formatQrLocation(address: SwissQrAddress) {
 </template>
 
 <style>
-@page a4 {
-  size: A4;
-  margin: 7mm;
-}
-
-@page thermal {
-  margin: 4mm;
-}
-
 body {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
@@ -597,14 +602,12 @@ body {
 }
 
 .sheet--a4 {
-  page: a4;
   min-height: calc(297mm - 14mm);
   font-size: 10.5px;
   line-height: 1.25;
 }
 
 .sheet--thermal {
-  page: thermal;
   width: 72mm;
   max-width: 72mm;
   font-size: 11px;
@@ -1108,6 +1111,13 @@ body {
 
   .print-preview {
     background: #fff !important;
+    min-height: 0 !important;
+  }
+
+  .print-preview > main {
+    display: block !important;
+    max-width: none !important;
+    padding: 0 !important;
   }
 
   .sheet {
