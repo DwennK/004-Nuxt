@@ -34,3 +34,17 @@ export interface CompanySettingsInput {
   footerNotes: string | null
   logoDataUrl: string | null
 }
+
+export interface SmsTemplateRecord {
+  id: string
+  label: string
+  body: string
+}
+
+export interface CustomerSmsSettingsRecord {
+  templates: SmsTemplateRecord[]
+}
+
+export interface CustomerSmsSettingsInput {
+  templates: SmsTemplateRecord[]
+}

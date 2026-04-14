@@ -36,6 +36,7 @@ export const companySettings = sqliteTable('company_settings', {
   iban: text('iban'),
   paymentTerms: text('payment_terms'),
   footerNotes: text('footer_notes'),
+  customerSmsTemplatesJson: text('customer_sms_templates_json'),
   logoDataUrl: text('logo_data_url'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
@@ -109,7 +110,7 @@ export const ticketEvents = sqliteTable('ticket_events', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   ticketId: integer('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
   kind: text('kind', {
-    enum: ['ticket_created', 'ticket_status_changed', 'ticket_closed', 'document_created', 'payment_recorded']
+    enum: ['ticket_created', 'ticket_status_changed', 'ticket_closed', 'document_created', 'payment_recorded', 'ticket_sms_qr_opened']
   }).notNull(),
   label: text('label').notNull(),
   note: text('note'),

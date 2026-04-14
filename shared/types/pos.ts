@@ -125,6 +125,7 @@ export type TicketEventKind
     | 'ticket_closed'
     | 'document_created'
     | 'payment_recorded'
+    | 'ticket_sms_qr_opened'
 
 export interface TicketEvent {
   id: number | string

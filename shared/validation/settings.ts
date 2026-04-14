@@ -74,3 +74,13 @@ export const companySettingsInputSchema = z.object({
   footerNotes: optionalText,
   logoDataUrl: optionalLogo
 })
+
+export const smsTemplateSchema = z.object({
+  id: z.string().trim().min(1, 'L’identifiant est obligatoire'),
+  label: z.string().trim().min(1, 'Le libelle est obligatoire'),
+  body: z.string().trim().min(1, 'Le message est obligatoire')
+})
+
+export const customerSmsSettingsInputSchema = z.object({
+  templates: z.array(smsTemplateSchema)
+})

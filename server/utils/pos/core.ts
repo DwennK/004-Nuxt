@@ -230,6 +230,7 @@ async function createPosTables() {
         iban TEXT,
         payment_terms TEXT,
         footer_notes TEXT,
+        customer_sms_templates_json TEXT,
         logo_data_url TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -655,6 +656,10 @@ async function migrateCompanySettingsColumns() {
 
   if (!columns.has('footer_notes')) {
     statements.push('ALTER TABLE company_settings ADD COLUMN footer_notes TEXT')
+  }
+
+  if (!columns.has('customer_sms_templates_json')) {
+    statements.push('ALTER TABLE company_settings ADD COLUMN customer_sms_templates_json TEXT')
   }
 
   if (!statements.length) {
