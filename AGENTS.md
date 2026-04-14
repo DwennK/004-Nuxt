@@ -215,7 +215,10 @@ When working in this repository:
 - If changes from different tasks are mixed together and cannot be cleanly separated, stop and say so instead of creating a misleading commit.
 - Prefer multiple small, coherent commits over one large mixed commit.
 - Keep the existing commit title style unless the user asks otherwise.
-- Add a commit body whenever useful to explain what changed, why it changed, and any important impact, constraint, or follow-up.
+- Do not create title-only commit messages.
+- Always write a multi-line commit message with the existing title style on the first line and a body after a blank line.
+- The commit body should explain what changed, why it changed, and any important impact, constraint, or follow-up.
+- Prefer 2 to 5 short body lines rather than a single long paragraph.
 - Do not push automatically after each commit.
 - Push only after the logical commits for the current work are complete and clearly separated, or when the user explicitly asks for a push.
 
