@@ -7,6 +7,7 @@ import { formatCurrency } from '~~/shared/utils/pos'
 
 const props = defineProps<{
   balanceDue: number
+  loading?: boolean
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -107,7 +108,13 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         </UFormField>
 
         <div class="flex justify-end">
-          <UButton type="submit" label="Enregistrer le paiement" icon="i-lucide-wallet" />
+          <UButton
+            type="submit"
+            label="Enregistrer le paiement"
+            icon="i-lucide-wallet"
+            :loading="props.loading"
+            :disabled="props.loading"
+          />
         </div>
       </UForm>
     </template>

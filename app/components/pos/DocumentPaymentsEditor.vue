@@ -21,7 +21,6 @@ type PaymentDraft = {
 
 const props = defineProps<{
   documentId: number
-  customerId: number
   payments: PaymentRecord[]
   documentTotal: number
   balanceDue: number
@@ -33,6 +32,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const paymentOpen = ref(false)
 
 const methodItems = paymentMethods.map(method => ({
   label: paymentMethodLabels[method],
@@ -71,11 +71,14 @@ function createPaymentDraft(payment?: PaymentRecord): PaymentDraft {
   }
 }
 
-const createState = reactive<PaymentDraft>(createPaymentDraft())
 const paymentDrafts = ref<Record<number, PaymentDraft>>({})
 const deletingId = ref<number | null>(null)
 const savingId = ref<number | null>(null)
-const creating = ref(false)
+const creatingMethod = ref<PaymentMethod | 'details' | null>(null)
+const paidTotal = computed(() => props.payments
+  .filter(payment => payment.status === 'paid')
+  .reduce((sum, payment) => sum + payment.amount, 0))
+const canCreatePayment = computed(() => props.isPayableDocument && props.balanceDue > 0)
 
 watchEffect(() => {
   const nextDrafts: Record<number, PaymentDraft> = {}
@@ -85,27 +88,22 @@ watchEffect(() => {
   }
 
   paymentDrafts.value = nextDrafts
-
-  if (!creating.value) {
-    Object.assign(createState, createPaymentDraft())
-  }
 })
 
-async function createPayment() {
-  creating.value = true
+async function addPayment(input: {
+  method: PaymentMethod
+  amount?: number
+  reference?: string
+  notes?: string
+}, source: PaymentMethod | 'details') {
+  creatingMethod.value = source
 
   try {
-    await $fetch('/api/payments', {
+    await $fetch(`/api/documents/${props.documentId}/mark-paid`, {
       method: 'POST',
       body: {
-        customerId: props.customerId,
-        documentId: props.documentId,
-        method: createState.method,
-        status: createState.status,
-        amount: Math.round((createState.amount || 0) * 100),
-        paidAt: new Date(createState.paidAt).toISOString(),
-        reference: createState.reference,
-        notes: createState.notes
+        ...input,
+        paidAt: new Date().toISOString()
       }
     })
 
@@ -113,11 +111,15 @@ async function createPayment() {
       title: 'Paiement ajouté',
       color: 'success'
     })
-    Object.assign(createState, createPaymentDraft())
+    paymentOpen.value = false
     emit('refresh')
   } finally {
-    creating.value = false
+    creatingMethod.value = null
   }
+}
+
+function createQuickPayment(method: PaymentMethod) {
+  return addPayment({ method }, method)
 }
 
 function resetDraft(payment: PaymentRecord) {
@@ -337,113 +339,130 @@ async function removePayment(payment: PaymentRecord) {
         }"
       >
         <template #header>
-          <div>
-            <h2 class="text-base font-semibold text-highlighted">
-              Nouveau paiement
-            </h2>
-            <p class="text-sm text-toned">
-              Ajoutez un encaissement directement depuis la page du document.
-            </p>
+          <div class="flex items-start justify-between gap-3">
+            <div class="space-y-1">
+              <h2 class="text-base font-semibold text-highlighted">
+                Encaissement
+              </h2>
+              <p class="text-sm text-toned">
+                Raccourcis opérateur pour solder rapidement le document.
+              </p>
+            </div>
+            <UBadge :color="canCreatePayment ? 'primary' : 'neutral'" variant="soft" size="sm">
+              {{ !isPayableDocument ? 'Non payable' : canCreatePayment ? 'Prêt à encaisser' : 'Soldé' }}
+            </UBadge>
           </div>
         </template>
 
-        <div class="rounded-2xl border border-default bg-muted/20 px-4 py-3">
-          <p class="text-xs uppercase tracking-wide text-toned">
-            {{ isPayableDocument ? 'Restant' : 'Document non payable' }}
-          </p>
-          <p class="mt-2 text-lg font-semibold text-highlighted">
-            {{ isPayableDocument ? formatCurrency(balanceDue) : 'Non applicable' }}
-          </p>
+        <div class="space-y-2 rounded-2xl border border-default bg-default/70 px-4 py-3">
+          <div class="flex items-center justify-between gap-3 text-sm">
+            <span class="text-toned">Total document</span>
+            <span class="font-medium text-highlighted">{{ formatCurrency(documentTotal) }}</span>
+          </div>
+          <div class="flex items-center justify-between gap-3 text-sm">
+            <span class="text-toned">Déjà encaissé</span>
+            <span class="font-medium text-highlighted">{{ formatCurrency(paidTotal) }}</span>
+          </div>
+          <div class="flex items-center justify-between gap-3 border-t border-default pt-3">
+            <span class="text-sm font-medium text-highlighted">
+              {{ isPayableDocument ? 'Restant' : 'Statut' }}
+            </span>
+            <span class="text-xl font-semibold text-highlighted">
+              {{ isPayableDocument ? formatCurrency(balanceDue) : 'Non payable' }}
+            </span>
+          </div>
         </div>
 
         <template v-if="isPayableDocument">
-          <UFormField label="Mode de paiement">
-            <USelect
-              v-model="createState.method"
-              :items="methodItems"
-              value-key="value"
-              class="w-full"
-            />
-          </UFormField>
+          <div class="space-y-2">
+            <h3 class="text-sm font-medium text-highlighted">
+              Paiement direct
+            </h3>
 
-          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-            <UFormField label="Montant">
-              <UInputNumber
-                v-model="createState.amount"
-                :min="0"
-                :step="0.05"
-                class="w-full"
-                :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
+            <div class="grid gap-2">
+              <UButton
+                v-for="method in paymentMethods"
+                :key="method"
+                type="button"
+                :label="`Encaisser · ${paymentMethodLabels[method]}`"
+                :icon="creatingMethod === method ? 'i-lucide-loader-circle' : 'i-lucide-badge-check'"
+                :loading="creatingMethod === method"
+                :disabled="!canCreatePayment || Boolean(creatingMethod)"
+                size="lg"
+                class="justify-center"
+                @click="createQuickPayment(method)"
               />
-            </UFormField>
-
-            <UFormField label="Encaissé à">
-              <UInput
-                v-model="createState.paidAt"
-                type="datetime-local"
-                class="w-full"
-              />
-            </UFormField>
+            </div>
           </div>
-
-          <UFormField label="Référence">
-            <UInput
-              v-model="createState.reference"
-              class="w-full"
-              placeholder="Référence terminal, TWINT, virement"
-            />
-          </UFormField>
-
-          <UFormField label="Notes">
-            <UTextarea
-              v-model="createState.notes"
-              :rows="3"
-              autoresize
-              class="w-full"
-              placeholder="Note de paiement optionnelle"
-            />
-          </UFormField>
 
           <UButton
             type="button"
-            label="Ajouter le paiement"
-            icon="i-lucide-wallet"
+            label="Paiement détaillé"
+            icon="i-lucide-sliders-horizontal"
+            color="neutral"
+            variant="soft"
             block
-            :loading="creating"
-            :disabled="createState.amount <= 0 || !createState.paidAt"
-            @click="createPayment"
+            :loading="creatingMethod === 'details'"
+            :disabled="!canCreatePayment || Boolean(creatingMethod)"
+            @click="paymentOpen = true"
+          />
+
+          <p class="text-xs text-toned">
+            Utilisez le paiement détaillé pour un montant partiel, une référence terminal ou une note.
+          </p>
+        </template>
+
+        <template v-else>
+          <UAlert
+            icon="i-lucide-info"
+            color="neutral"
+            variant="subtle"
+            title="Document non payable"
+            description="Cette section reste disponible uniquement pour les reçus et factures."
           />
         </template>
       </UCard>
 
-      <UCard :ui="{ body: 'space-y-3 p-4', header: 'p-4 pb-0' }">
+      <UCard
+        v-if="payments.length"
+        :ui="{ body: 'space-y-3 p-4', header: 'p-4 pb-0' }"
+      >
         <template #header>
           <div>
             <h2 class="text-base font-semibold text-highlighted">
-              Solde
+              Dernier paiement
             </h2>
           </div>
         </template>
 
-        <div class="grid gap-3">
-          <div class="rounded-2xl border border-default px-4 py-3">
-            <p class="text-xs uppercase tracking-wide text-toned">
-              Total document
-            </p>
-            <p class="mt-1 font-semibold text-highlighted">
-              {{ formatCurrency(documentTotal) }}
-            </p>
+        <div class="rounded-2xl border border-default px-4 py-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <UBadge :color="paymentMethodColors[payments[0]!.method]" variant="subtle" size="sm">
+              {{ paymentMethodLabels[payments[0]!.method] }}
+            </UBadge>
+            <UBadge :color="paymentStatusColors[payments[0]!.status]" variant="subtle" size="sm">
+              {{ paymentStatusLabels[payments[0]!.status] }}
+            </UBadge>
           </div>
-          <div class="rounded-2xl border border-default px-4 py-3">
-            <p class="text-xs uppercase tracking-wide text-toned">
-              Déjà encaissé
-            </p>
-            <p class="mt-1 font-semibold text-highlighted">
-              {{ formatCurrency(payments.filter(payment => payment.status === 'paid').reduce((sum, payment) => sum + payment.amount, 0)) }}
-            </p>
-          </div>
+          <p class="mt-3 text-lg font-semibold text-highlighted">
+            {{ formatCurrency(payments[0]!.amount) }}
+          </p>
+          <p class="mt-1 text-sm text-toned">
+            {{ payments[0]!.reference || 'Sans référence' }}
+          </p>
+          <p v-if="payments[0]!.notes" class="mt-2 text-sm text-toned">
+            {{ payments[0]!.notes }}
+          </p>
         </div>
       </UCard>
+
+      <PosDocumentPaymentSlideover
+        v-if="isPayableDocument"
+        v-model:open="paymentOpen"
+        :balance-due="balanceDue"
+        :loading="creatingMethod === 'details'"
+        @save="addPayment($event, 'details')"
+      />
     </div>
   </div>
 </template>

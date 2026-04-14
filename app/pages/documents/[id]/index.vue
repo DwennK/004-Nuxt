@@ -243,7 +243,6 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
         <div v-else-if="activeTab === 'payments'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)] xl:grid-cols-[minmax(0,1fr)_18rem]">
           <PosDocumentPaymentsEditor
             :document-id="document.id"
-            :customer-id="document.customerId"
             :payments="document.payments"
             :document-total="document.total"
             :balance-due="balanceDue"
