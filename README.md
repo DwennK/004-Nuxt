@@ -5,6 +5,7 @@
 [![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-typed_SQL-C5F74F?logo=drizzle&logoColor=111111)](https://orm.drizzle.team/)
 [![Turso](https://img.shields.io/badge/Turso-libSQL-4FF8D2?logo=turso&logoColor=111111)](https://turso.tech/)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
+[![Lines of Code](https://img.shields.io/endpoint?url=https://ghloc.vercel.app/api/dwennk/004-nuxt/badge)](https://ghloc.vercel.app/github/dwennk/004-nuxt)
 
 Nuxt 4 POS and shop-management app for a physical tech store.
 
