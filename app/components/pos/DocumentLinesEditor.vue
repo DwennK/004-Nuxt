@@ -369,21 +369,21 @@ function handleBarcodeScan(value: string) {
       <div v-else class="pb-0 pt-4">
         <div class="overflow-x-auto">
           <div class="min-w-[54rem]">
-            <div class="grid grid-cols-[minmax(0,1.9fr)_9rem_5.5rem_6rem_5rem_8rem_auto] gap-2 px-6 pb-2 text-[11px] uppercase tracking-[0.14em] text-toned">
+            <div class="grid grid-cols-[minmax(0,1.9fr)_10rem_6rem_5rem_5rem_8.5rem_6rem] gap-2 px-4 pb-2 text-[11px] uppercase tracking-[0.14em] text-toned">
               <span>Libellé</span>
               <span>Catégorie</span>
-              <span>PU TTC</span>
-              <span>Qté</span>
+              <span class="text-right">PU TTC</span>
+              <span class="text-center">Qté</span>
               <span class="text-center">TVA</span>
               <span class="text-right">Total</span>
-              <span class="text-right">Actions</span>
+              <span class="text-center">Actions</span>
             </div>
 
             <div class="max-h-[calc(100vh-23rem)] overflow-y-auto border-y border-default/70">
               <div
                 v-for="(line, index) in state.lines"
                 :key="line.id"
-                class="grid grid-cols-[minmax(0,1.9fr)_9rem_5.5rem_6rem_5rem_8rem_auto] items-center gap-2 border-t border-default/70 bg-default px-6 py-3 first:border-t-0"
+                class="grid grid-cols-[minmax(0,1.9fr)_10rem_6rem_5rem_5rem_8.5rem_6rem] items-center gap-2 border-t border-default/70 bg-default px-4 py-3 first:border-t-0"
               >
                 <div class="min-w-0">
                   <UFormField :name="`lines.${index}.label`" class="min-w-0">
@@ -415,7 +415,7 @@ function handleBarcodeScan(value: string) {
                   />
                 </UFormField>
 
-                <UFormField :name="`lines.${index}.unitPrice`">
+                <UFormField :name="`lines.${index}.unitPrice`" class="justify-self-end">
                   <UInputNumber
                     :id="`document-line-price-${line.id}`"
                     :model-value="line.unitPrice"
@@ -426,13 +426,13 @@ function handleBarcodeScan(value: string) {
                     size="sm"
                     variant="subtle"
                     :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
-                    class="w-full"
+                    class="w-full max-w-[6rem]"
                     @update:model-value="editor.updateLineUnitPrice(index, $event)"
                     @focus="editor.selectAllOnFocus"
                   />
                 </UFormField>
 
-                <div>
+                <div class="flex justify-center">
                   <UFormField :name="`lines.${index}.quantity`">
                     <UInputNumber
                       v-model="line.quantity"
@@ -442,22 +442,22 @@ function handleBarcodeScan(value: string) {
                       variant="subtle"
                       :increment="false"
                       :decrement="false"
-                      class="w-16"
+                      class="w-14"
                     />
                   </UFormField>
                 </div>
 
-                <div class="text-center text-sm font-medium text-highlighted">
+                <div class="text-center text-sm font-medium text-highlighted tabular-nums">
                   {{ line.vatRate }}%
                 </div>
 
-                <div class="text-right">
+                <div class="text-right tabular-nums">
                   <p class="text-base font-semibold text-highlighted">
                     {{ formatCurrency(Math.round(line.quantity * line.unitPrice * 100)) }}
                   </p>
                 </div>
 
-                <div class="flex items-center justify-end gap-1">
+                <div class="flex items-center justify-center gap-1 border-l border-default/60 pl-2">
                   <UButton
                     type="button"
                     icon="i-lucide-arrow-up"
