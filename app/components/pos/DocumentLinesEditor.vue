@@ -3,12 +3,14 @@ import type { CatalogItemRecord } from '~~/shared/types/pos'
 import type { CommercialLinesDraftController } from '~~/app/composables/useCommercialLinesDraft'
 import { formatCurrency, getCatalogItemTypeLabel, normalizeSearchText } from '~~/shared/utils/pos'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   editor: CommercialLinesDraftController
   catalogItems: CatalogItemRecord[]
   mode?: 'document' | 'ticket'
   showSearchCard?: boolean
-}>()
+}>(), {
+  showSearchCard: true
+})
 
 const state = props.editor.state
 const totals = props.editor.totals
@@ -54,10 +56,6 @@ const searchPanelTitle = computed(() => {
   return search.value.trim() ? 'Résultats' : 'Suggestions'
 })
 
-const searchCardTitle = computed(() => {
-  return resolvedMode.value === 'ticket' ? 'Ajout rapide' : 'Recherche article'
-})
-
 const searchHintLabel = computed(() => {
   return resolvedMode.value === 'ticket' ? 'Entrée ajoute la première correspondance' : 'Entrée ajoute le premier résultat'
 })
@@ -85,7 +83,7 @@ const cardTitle = computed(() => {
 const cardDescription = computed(() => {
   return resolvedMode.value === 'ticket'
     ? 'Préparez ce qui devra être facturé plus tard sans ressaisir lors du document.'
-    : 'Modifiez directement les lignes et le contexte sans changer d’écran.'
+    : 'Gardez les lignes au centre et ajustez le contexte seulement si nécessaire.'
 })
 
 const emptyTitle = computed(() => {
@@ -98,10 +96,7 @@ const emptyDescription = computed(() => {
     : 'Ajoutez un article ou créez une ligne libre.'
 })
 
-const catalogItemsList = computed(() => props.catalogItems.map(item => ({
-  label: `${item.name} (${getCatalogItemTypeLabel(item.type)})`,
-  value: item.id
-})))
+const catalogItemById = computed(() => new Map(props.catalogItems.map(item => [item.id, item])))
 
 watch(searchPanelItems, (items) => {
   if (!items.length) {
@@ -134,6 +129,12 @@ function closeSearchPanel() {
   cancelSearchClose()
   searchOpen.value = false
   highlightedItemIndex.value = 0
+}
+
+function createNewLine() {
+  closeSearchPanel()
+  search.value = ''
+  props.editor.addEmptyLine()
 }
 
 function scheduleSearchClose() {
@@ -232,137 +233,127 @@ function handleBarcodeScan(value: string) {
 <template>
   <div class="space-y-4">
     <UCard
-      v-if="showSearchCard !== false"
       variant="subtle"
       :ui="{
         root: 'overflow-visible rounded-[2rem] shadow-sm',
-        body: 'space-y-4 p-4 sm:p-4',
-        header: 'p-4 pb-0 sm:p-4 sm:pb-0'
+        body: 'space-y-0 p-0',
+        header: 'p-4 pb-0 sm:p-4 sm:pb-0',
+        footer: 'border-t border-default/70 px-4 py-3 sm:px-4'
       }"
     >
       <template #header>
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div class="space-y-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <h2 class="text-base font-semibold text-highlighted">
-                {{ searchCardTitle }}
-              </h2>
-              <UBadge color="neutral" variant="soft" size="sm">
-                {{ searchHintLabel }}
-              </UBadge>
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="text-base font-semibold text-highlighted">
+                  {{ cardTitle }}
+                </h2>
+                <UBadge color="neutral" variant="soft" size="sm">
+                  {{ state.lines.length ? `${state.lines.length} ligne(s)` : 'Document vide' }}
+                </UBadge>
+              </div>
+              <p class="text-sm text-toned">
+                {{ cardDescription }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-start justify-end gap-2">
+              <div class="text-right">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+                  Total document
+                </p>
+                <p class="text-2xl font-semibold text-highlighted">
+                  {{ formatCurrency(totals.total) }}
+                </p>
+              </div>
+              <slot name="header-actions" />
             </div>
           </div>
 
-          <div class="flex flex-wrap items-center gap-2 text-xs text-toned">
-            <span>{{ state.lines.length ? `${state.lines.length} ligne(s)` : 'Document vide' }}</span>
-            <span>{{ formatCurrency(totals.total) }}</span>
-          </div>
-        </div>
-      </template>
+          <div
+            v-if="showSearchCard !== false"
+            class="relative"
+            @focusin="cancelSearchClose"
+            @focusout="scheduleSearchClose"
+            @pointerdown="openSearchPanel"
+          >
+            <div class="flex flex-col gap-2 lg:flex-row">
+              <UInput
+                v-model="search"
+                icon="i-lucide-search"
+                size="xl"
+                class="flex-1"
+                :placeholder="searchPlaceholder"
+                :autofocus="resolvedMode === 'document'"
+                @keydown="handleSearchKeydown"
+              />
+              <PosBarcodeScanner
+                :title="searchScannerTitle"
+                :description="searchScannerDescription"
+                trigger-size="lg"
+                trigger-aria-label="Scanner un code-barres"
+                @scanned="handleBarcodeScan"
+              />
+              <UButton
+                icon="i-lucide-plus"
+                label="Nouvelle ligne"
+                color="neutral"
+                variant="soft"
+                size="lg"
+                @pointerdown.stop
+                @click.stop="createNewLine"
+              />
+            </div>
 
-      <div
-        class="relative"
-        @focusin="cancelSearchClose"
-        @focusout="scheduleSearchClose"
-        @pointerdown="openSearchPanel"
-      >
-        <div class="flex gap-2">
-          <UInput
-            v-model="search"
-            icon="i-lucide-search"
-            size="xl"
-            class="flex-1"
-            :placeholder="searchPlaceholder"
-            :autofocus="resolvedMode === 'document'"
-            @keydown="handleSearchKeydown"
-          />
-          <PosBarcodeScanner
-            :title="searchScannerTitle"
-            :description="searchScannerDescription"
-            trigger-size="lg"
-            trigger-aria-label="Scanner un code-barres"
-            @scanned="handleBarcodeScan"
-          />
-          <UButton
-            icon="i-lucide-plus"
-            label="Ligne libre"
-            color="neutral"
-            variant="soft"
-            @click="editor.addEmptyLine()"
-          />
-        </div>
+            <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-toned">
+              <span>{{ searchHintLabel }}</span>
+              <span>·</span>
+              <span>{{ formatCurrency(totals.total) }}</span>
+            </div>
 
-        <div
-          v-if="searchOpen"
-          class="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
-        >
-          <div class="flex items-center justify-between gap-3 px-2 pb-2">
-            <p class="text-sm font-medium text-highlighted">
-              {{ searchPanelTitle }}
-            </p>
-            <span class="text-xs text-toned">
-              {{ searchPanelItems.length }} article(s)
-            </span>
-          </div>
-
-          <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
-            <button
-              v-for="(item, index) in searchPanelItems"
-              :key="item.id"
-              type="button"
-              class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
-              :class="index === highlightedItemIndex
-                ? 'bg-primary/8 ring-1 ring-primary/20'
-                : 'hover:bg-muted/60'"
-              @mouseenter="highlightedItemIndex = index"
-              @click="addCatalogItem(item)"
+            <div
+              v-if="searchOpen"
+              class="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
             >
-              <div class="min-w-0">
-                <p class="truncate text-sm font-medium text-highlighted">
-                  {{ item.name }}
+              <div class="flex items-center justify-between gap-3 px-2 pb-2">
+                <p class="text-sm font-medium text-highlighted">
+                  {{ searchPanelTitle }}
                 </p>
-                <p class="truncate text-xs text-toned">
-                  {{ item.sku || getCatalogItemTypeLabel(item.type) }}
-                </p>
+                <span class="text-xs text-toned">
+                  {{ searchPanelItems.length }} article(s)
+                </span>
               </div>
-              <span class="shrink-0 text-sm font-medium text-highlighted">
-                {{ formatCurrency(item.defaultPrice) }}
-              </span>
-            </button>
-          </div>
 
-          <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
-            Aucun article trouvé pour cette recherche.
-          </div>
-        </div>
-      </div>
-    </UCard>
+              <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
+                <button
+                  v-for="(item, index) in searchPanelItems"
+                  :key="item.id"
+                  type="button"
+                  class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
+                  :class="index === highlightedItemIndex
+                    ? 'bg-primary/8 ring-1 ring-primary/20'
+                    : 'hover:bg-muted/60'"
+                  @mouseenter="highlightedItemIndex = index"
+                  @click="addCatalogItem(item)"
+                >
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-medium text-highlighted">
+                      {{ item.name }}
+                    </p>
+                    <p class="truncate text-xs text-toned">
+                      {{ item.sku || getCatalogItemTypeLabel(item.type) }}
+                    </p>
+                  </div>
+                  <span class="shrink-0 text-sm font-medium text-highlighted">
+                    {{ formatCurrency(item.defaultPrice) }}
+                  </span>
+                </button>
+              </div>
 
-    <UCard
-      variant="subtle"
-      :ui="{
-        root: 'rounded-[2rem] shadow-sm',
-        body: 'space-y-4 p-4 sm:p-4',
-        header: 'p-4 pb-0 sm:p-4 sm:pb-0'
-      }"
-    >
-      <template #header>
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <h2 class="text-base font-semibold text-highlighted">
-              {{ cardTitle }}
-            </h2>
-            <p class="text-sm text-toned">
-              {{ cardDescription }}
-            </p>
-          </div>
-          <div class="text-right">
-            <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-              Total
-            </p>
-            <p class="text-2xl font-semibold text-highlighted">
-              {{ formatCurrency(totals.total) }}
-            </p>
+              <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                Aucun article trouvé pour cette recherche.
+              </div>
+            </div>
           </div>
         </div>
       </template>
@@ -375,155 +366,160 @@ function handleBarcodeScan(value: string) {
         class="py-8"
       />
 
-      <div v-else class="max-h-[calc(100vh-22rem)] space-y-2 overflow-y-auto pr-1">
-        <div
-          v-for="(line, index) in state.lines"
-          :key="line.id"
-          class="space-y-3 rounded-2xl border border-default bg-default px-3 py-3"
-        >
-          <div class="grid gap-2 xl:grid-cols-[minmax(0,1fr)_12rem]">
-            <UFormField :name="`lines.${index}.catalogItemId`">
-              <USelectMenu
-                :model-value="line.catalogItemId ?? undefined"
-                :items="catalogItemsList"
-                value-key="value"
-                placeholder="Rechercher dans le catalogue"
-                :search-input="{ placeholder: 'Produit ou service', size: 'sm' }"
-                clear
-                size="sm"
-                class="w-full"
-                @update:model-value="editor.updateLineCatalogItem(index, $event ?? null)"
-              />
-            </UFormField>
-
-            <UFormField :name="`lines.${index}.categoryHint`">
-              <USelectMenu
-                v-model="line.categoryHint"
-                :items="categoryItems"
-                value-key="value"
-                placeholder="Catégorie"
-                clear
-                size="sm"
-                variant="subtle"
-                :search-input="false"
-                class="w-full"
-              />
-            </UFormField>
-          </div>
-
-          <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_5rem_auto_9rem_auto] md:items-center">
-            <UFormField :name="`lines.${index}.label`" class="min-w-0">
-              <UInput
-                :id="`document-line-label-${line.id}`"
-                :model-value="line.label"
-                size="sm"
-                class="w-full"
-                placeholder="Libellé de la ligne"
-                @update:model-value="editor.updateLineLabel(index, String($event || ''))"
-              />
-            </UFormField>
-
-            <UFormField :name="`lines.${index}.unitPrice`" class="md:min-w-0 md:justify-self-start">
-              <UInputNumber
-                :id="`document-line-price-${line.id}`"
-                :model-value="line.unitPrice"
-                :min="0"
-                :step="0.05"
-                :increment="false"
-                :decrement="false"
-                size="sm"
-                variant="subtle"
-                :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
-                class="w-[5rem]"
-                @update:model-value="editor.updateLineUnitPrice(index, $event)"
-                @focus="editor.selectAllOnFocus"
-              />
-            </UFormField>
-
-            <div class="flex items-center gap-1 justify-self-start md:justify-self-center">
-              <UButton
-                type="button"
-                icon="i-lucide-minus"
-                color="neutral"
-                variant="soft"
-                size="xs"
-                :disabled="line.quantity <= 1"
-                @click="editor.decrementLine(index)"
-              />
-              <UFormField :name="`lines.${index}.quantity`">
-                <UInputNumber
-                  v-model="line.quantity"
-                  :min="1"
-                  :step="1"
-                  size="sm"
-                  variant="subtle"
-                  :increment="false"
-                  :decrement="false"
-                  class="w-14"
-                />
-              </UFormField>
-              <UButton
-                type="button"
-                icon="i-lucide-plus"
-                color="neutral"
-                variant="soft"
-                size="xs"
-                @click="editor.incrementLine(index)"
-              />
+      <div v-else class="pb-0 pt-4">
+        <div class="overflow-x-auto">
+          <div class="min-w-[54rem]">
+            <div class="grid grid-cols-[minmax(0,1.9fr)_9rem_5.5rem_6rem_5rem_8rem_auto] gap-2 px-6 pb-2 text-[11px] uppercase tracking-[0.14em] text-toned">
+              <span>Libellé</span>
+              <span>Catégorie</span>
+              <span>PU TTC</span>
+              <span>Qté</span>
+              <span class="text-center">TVA</span>
+              <span class="text-right">Total</span>
+              <span class="text-right">Actions</span>
             </div>
 
-            <div class="text-left md:text-right">
-              <p class="text-lg font-semibold text-highlighted">
-                {{ formatCurrency(Math.round(line.quantity * line.unitPrice * 100)) }}
-              </p>
-              <p class="text-xs text-toned">
-                TVA incl. {{ line.vatRate }}%
-              </p>
-            </div>
+            <div class="max-h-[calc(100vh-23rem)] overflow-y-auto border-y border-default/70">
+              <div
+                v-for="(line, index) in state.lines"
+                :key="line.id"
+                class="grid grid-cols-[minmax(0,1.9fr)_9rem_5.5rem_6rem_5rem_8rem_auto] items-center gap-2 border-t border-default/70 bg-default px-6 py-3 first:border-t-0"
+              >
+                <div class="min-w-0">
+                  <UFormField :name="`lines.${index}.label`" class="min-w-0">
+                    <UInput
+                      :id="`document-line-label-${line.id}`"
+                      :model-value="line.label"
+                      size="sm"
+                      class="w-full"
+                      placeholder="Libellé de la ligne"
+                      @update:model-value="editor.updateLineLabel(index, String($event || ''))"
+                    />
+                  </UFormField>
+                  <p class="mt-1 truncate text-xs text-toned">
+                    {{ line.catalogItemId ? (catalogItemById.get(line.catalogItemId)?.sku || catalogItemById.get(line.catalogItemId)?.name || 'Catalogue lié') : 'Ligne libre' }}
+                  </p>
+                </div>
 
-            <div class="flex items-center justify-end gap-1">
-              <UButton
-                type="button"
-                icon="i-lucide-arrow-up"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                :disabled="index === 0"
-                :aria-label="`Monter ${line.label || `la ligne ${index + 1}`}`"
-                @click="editor.moveLine(index, 'up')"
-              />
-              <UButton
-                type="button"
-                icon="i-lucide-arrow-down"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                :disabled="index === state.lines.length - 1"
-                :aria-label="`Descendre ${line.label || `la ligne ${index + 1}`}`"
-                @click="editor.moveLine(index, 'down')"
-              />
-              <UButton
-                type="button"
-                icon="i-lucide-copy"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                :aria-label="`Cloner ${line.label || `la ligne ${index + 1}`}`"
-                @click="editor.cloneLine(index)"
-              />
-              <UButton
-                type="button"
-                icon="i-lucide-trash-2"
-                color="error"
-                variant="ghost"
-                size="xs"
-                :aria-label="`Supprimer ${line.label || `la ligne ${index + 1}`}`"
-                @click="editor.removeLine(index)"
-              />
+                <UFormField :name="`lines.${index}.categoryHint`">
+                  <USelectMenu
+                    v-model="line.categoryHint"
+                    :items="categoryItems"
+                    value-key="value"
+                    placeholder="Catégorie"
+                    clear
+                    size="sm"
+                    variant="subtle"
+                    :search-input="false"
+                    class="w-full"
+                  />
+                </UFormField>
+
+                <UFormField :name="`lines.${index}.unitPrice`">
+                  <UInputNumber
+                    :id="`document-line-price-${line.id}`"
+                    :model-value="line.unitPrice"
+                    :min="0"
+                    :step="0.05"
+                    :increment="false"
+                    :decrement="false"
+                    size="sm"
+                    variant="subtle"
+                    :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
+                    class="w-full"
+                    @update:model-value="editor.updateLineUnitPrice(index, $event)"
+                    @focus="editor.selectAllOnFocus"
+                  />
+                </UFormField>
+
+                <div>
+                  <UFormField :name="`lines.${index}.quantity`">
+                    <UInputNumber
+                      v-model="line.quantity"
+                      :min="1"
+                      :step="1"
+                      size="sm"
+                      variant="subtle"
+                      :increment="false"
+                      :decrement="false"
+                      class="w-16"
+                    />
+                  </UFormField>
+                </div>
+
+                <div class="text-center text-sm font-medium text-highlighted">
+                  {{ line.vatRate }}%
+                </div>
+
+                <div class="text-right">
+                  <p class="text-base font-semibold text-highlighted">
+                    {{ formatCurrency(Math.round(line.quantity * line.unitPrice * 100)) }}
+                  </p>
+                </div>
+
+                <div class="flex items-center justify-end gap-1">
+                  <UButton
+                    type="button"
+                    icon="i-lucide-arrow-up"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :disabled="index === 0"
+                    :aria-label="`Monter ${line.label || `la ligne ${index + 1}`}`"
+                    @click="editor.moveLine(index, 'up')"
+                  />
+                  <UButton
+                    type="button"
+                    icon="i-lucide-arrow-down"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :disabled="index === state.lines.length - 1"
+                    :aria-label="`Descendre ${line.label || `la ligne ${index + 1}`}`"
+                    @click="editor.moveLine(index, 'down')"
+                  />
+                  <UButton
+                    type="button"
+                    icon="i-lucide-copy"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :aria-label="`Cloner ${line.label || `la ligne ${index + 1}`}`"
+                    @click="editor.cloneLine(index)"
+                  />
+                  <UButton
+                    type="button"
+                    icon="i-lucide-trash-2"
+                    color="error"
+                    variant="ghost"
+                    size="xs"
+                    :aria-label="`Supprimer ${line.label || `la ligne ${index + 1}`}`"
+                    @click="editor.removeLine(index)"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <template #footer>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-toned">
+            <span>{{ state.lines.length }} ligne(s)</span>
+            <span>Sous-total HT {{ formatCurrency(totals.subtotal) }}</span>
+            <span>TVA {{ formatCurrency(totals.taxAmount) }}</span>
+          </div>
+          <div class="text-right">
+            <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
+              Total TTC
+            </p>
+            <p class="text-xl font-semibold text-highlighted">
+              {{ formatCurrency(totals.total) }}
+            </p>
+          </div>
+        </div>
+      </template>
     </UCard>
   </div>
 </template>

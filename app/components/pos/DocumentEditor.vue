@@ -31,6 +31,7 @@ const editor = useDocumentDraft({
 })
 const schema = editor.schema
 const state = editor.state
+const contextOpen = defineModel<boolean>('contextOpen', { default: false })
 
 function onSubmit() {
   emit('save', editor.serialize())
@@ -41,18 +42,27 @@ function onSubmit() {
   <UForm
     :schema="schema"
     :state="state"
-    class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]"
+    class="space-y-4"
     @submit="onSubmit"
   >
     <PosDocumentLinesEditor
       :editor="editor"
       :catalog-items="catalogItems"
-    />
+    >
+      <template #header-actions>
+        <UButton
+          type="submit"
+          icon="i-lucide-save"
+          :label="submitLabel"
+          size="lg"
+        />
+      </template>
+    </PosDocumentLinesEditor>
 
     <PosDocumentContextFields
+      v-model:open="contextOpen"
       :editor="editor"
       :customers="customers"
-      :submit-label="submitLabel"
       :fixed-customer-id="fixedCustomerId"
     />
   </UForm>

@@ -1,27 +1,23 @@
 <script setup lang="ts">
 import type { FormSubmitEvent } from '@nuxt/ui'
 import type { z } from 'zod'
+import { nextTick } from 'vue'
+
 import type { DocumentSavePayload } from '~~/app/composables/useDocumentDraft'
-import {
-  documentStatusColors,
-  documentStatusLabels,
-  documentTypeColors,
-  documentTypeLabels
-} from '~~/shared/constants/pos'
 import type { CatalogItemRecord, CustomerRecord, DocumentDetail, DocumentEmailInput } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { documentEmailSchema } from '~~/shared/validation/pos'
 import { getDocumentEmailMessage, getDocumentEmailSubject } from '~~/shared/utils/document-email'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
-import { formatCurrency, isPayableDocumentType } from '~~/shared/utils/pos'
+import { isPayableDocumentType } from '~~/shared/utils/pos'
 
-const UBadge = resolveComponent('UBadge')
 const route = useRoute()
 const toast = useToast()
 const id = computed(() => Number(route.params.id))
 const activeTab = ref('lines')
 const isEmailModalOpen = ref(false)
 const isSendingEmail = ref(false)
+const isContextOpen = ref(false)
 
 const tabItems = [
   { label: 'Lignes', value: 'lines', icon: 'i-lucide-list' },
@@ -64,6 +60,15 @@ async function saveDocument(payload: DocumentSavePayload) {
   })
 
   await refresh()
+}
+
+async function openContextEditor() {
+  if (activeTab.value !== 'lines') {
+    activeTab.value = 'lines'
+    await nextTick()
+  }
+
+  isContextOpen.value = true
 }
 
 function fillEmailState() {
@@ -164,59 +169,13 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
 
     <template #body>
       <div v-if="document && customers && catalogItems" class="space-y-3">
-        <div class="rounded-2xl border border-default/80 bg-muted/20 px-4 py-3">
-          <div class="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-            <div class="flex flex-wrap items-center gap-2">
-              <UBadge :color="documentTypeColors[document.type]" variant="subtle" size="sm">
-                {{ documentTypeLabels[document.type] }}
-              </UBadge>
-              <UBadge :color="documentStatusColors[document.status]" variant="subtle" size="sm">
-                {{ documentStatusLabels[document.status] }}
-              </UBadge>
-              <span class="text-sm text-toned">
-                {{ document.customer.displayName }}
-              </span>
-              <span v-if="document.ticket" class="text-sm text-toned">
-                · Ticket {{ document.ticket.ticketNumber }}
-              </span>
-            </div>
-
-            <div class="grid gap-2 sm:grid-cols-4">
-              <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
-                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                  Total
-                </p>
-                <p class="text-sm font-semibold text-highlighted">
-                  {{ formatCurrency(document.total) }}
-                </p>
-              </div>
-              <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
-                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                  Encaissé
-                </p>
-                <p class="text-sm font-semibold text-highlighted">
-                  {{ formatCurrency(paidAmount) }}
-                </p>
-              </div>
-              <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
-                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                  {{ isPayableDocument ? 'Restant' : 'Type' }}
-                </p>
-                <p class="text-sm font-semibold text-highlighted">
-                  {{ isPayableDocument ? formatCurrency(balanceDue) : documentTypeLabels[document.type] }}
-                </p>
-              </div>
-              <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
-                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                  Lignes
-                </p>
-                <p class="text-sm font-semibold text-highlighted">
-                  {{ document.lines.length }}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PosDocumentDetailHeader
+          :document="document"
+          :paid-amount="paidAmount"
+          :balance-due="balanceDue"
+          :is-payable-document="isPayableDocument"
+          @edit-context="openContextEditor"
+        />
 
         <UTabs
           v-model="activeTab"
@@ -227,15 +186,15 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
           class="w-full"
         />
 
-        <div v-if="activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)] xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <div v-if="activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)]">
           <PosDocumentEditor
             v-if="customers && catalogItems"
+            v-model:context-open="isContextOpen"
             :customers="customers"
             :catalog-items="catalogItems"
             :initial-value="document"
             :fixed-ticket-id="document.ticketId"
             submit-label="Enregistrer le document"
-            class="xl:col-span-2"
             @save="saveDocument"
           />
         </div>
