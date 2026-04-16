@@ -108,17 +108,19 @@ const [{ data: customers }, { data: tickets }, { data: documents }] = await Prom
   })
 ])
 
-const quickActions = [{
-  id: 'new-ticket',
-  label: 'Nouvelle réparation',
-  icon: 'i-lucide-wrench',
-  to: '/tickets/new'
-}, {
+const counterActions = [{
   id: 'new-sale',
   label: 'Vente rapide',
   icon: 'i-lucide-receipt',
   to: '/sales/new'
 }, {
+  id: 'new-ticket',
+  label: 'Nouveau ticket',
+  icon: 'i-lucide-wrench',
+  to: '/tickets/new'
+}]
+
+const quickActions = [...counterActions, {
   id: 'new-customer',
   label: 'Nouveau client',
   icon: 'i-lucide-user-plus',
@@ -196,11 +198,37 @@ const groups = computed(() => {
       <template #default="{ collapsed }">
         <UDashboardSearchButton :collapsed="collapsed" class="bg-transparent ring-default" />
 
+        <div
+          :class="collapsed
+            ? 'mt-4 flex flex-col items-center gap-2'
+            : 'mt-4 space-y-3 rounded-2xl border border-default bg-elevated/35 p-3'"
+        >
+          <div :class="collapsed ? 'flex flex-col gap-2' : 'space-y-2'">
+            <UTooltip
+              v-for="action in counterActions"
+              :key="action.id"
+              :text="action.label"
+            >
+              <UButton
+                :to="action.to"
+                :icon="action.icon"
+                color="primary"
+                :variant="collapsed ? 'soft' : 'solid'"
+                :square="collapsed"
+                :block="!collapsed"
+                :label="collapsed ? undefined : action.label"
+                :ui="collapsed ? undefined : { base: 'justify-start' }"
+              />
+            </UTooltip>
+          </div>
+        </div>
+
         <UNavigationMenu
           :collapsed="collapsed"
           :items="links[0]"
           orientation="vertical"
           tooltip
+          class="mt-4"
           popover
         />
 

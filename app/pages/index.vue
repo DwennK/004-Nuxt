@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
+import type { TableColumn } from '@nuxt/ui'
 import { documentTypeColors, documentTypeLabels, paymentMethodColors } from '~~/shared/constants/pos'
 import type { DailySummary, DocumentListItem, DocumentListResponse } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime, getPaymentMethodLabel, toDateInputValue } from '~~/shared/utils/pos'
@@ -115,20 +115,6 @@ const paymentMethodSummary = computed(() => {
     .filter(item => item.total > 0)
     .sort((left, right) => right.total - left.total)
 })
-
-const quickActionItems = [[{
-  label: 'Nouveau client',
-  icon: 'i-lucide-user-plus',
-  to: '/customers/new'
-}, {
-  label: 'Nouveau document',
-  icon: 'i-lucide-file-plus-2',
-  to: '/documents/new'
-}, {
-  label: 'Reports',
-  icon: 'i-lucide-chart-column',
-  to: '/reports'
-}]] satisfies DropdownMenuItem[][]
 
 const activityTabItems = [{
   label: 'Encaissements',
@@ -306,69 +292,6 @@ const activityColumns = computed<TableColumn<ActivityRow>[]>(() => {
           </UCard>
 
           <div class="space-y-4">
-            <UCard>
-              <template #header>
-                <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
-                    Actions
-                  </h2>
-                  <p class="text-sm text-toned">
-                    Les deux flux principaux du comptoir restent au premier plan.
-                  </p>
-                </div>
-              </template>
-
-              <div class="space-y-3">
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <UButton
-                    to="/tickets/new"
-                    label="Nouvelle réparation"
-                    icon="i-lucide-wrench"
-                    size="xl"
-                    block
-                    class="justify-start"
-                  />
-                  <UButton
-                    to="/sales/new"
-                    label="Vente rapide"
-                    icon="i-lucide-receipt"
-                    size="xl"
-                    block
-                    class="justify-start"
-                  />
-                </div>
-
-                <div class="flex flex-col gap-3 sm:flex-row">
-                  <UDropdownMenu
-                    v-slot="{ open }"
-                    :items="quickActionItems"
-                    :content="{ align: 'start' }"
-                    class="flex-1"
-                  >
-                    <UButton
-                      label="Autres actions"
-                      color="neutral"
-                      variant="outline"
-                      class="w-full justify-between"
-                      trailing-icon="i-lucide-chevron-down"
-                      :ui="{
-                        trailingIcon: ['transition-transform duration-200', open ? 'rotate-180' : undefined].filter(Boolean).join(' ')
-                      }"
-                    />
-                  </UDropdownMenu>
-
-                  <UButton
-                    to="/reports"
-                    label="Reports"
-                    color="neutral"
-                    variant="subtle"
-                    icon="i-lucide-chart-column"
-                    class="justify-start"
-                  />
-                </div>
-              </div>
-            </UCard>
-
             <UCard>
               <template #header>
                 <div class="flex items-center justify-between gap-3">
