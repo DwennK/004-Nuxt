@@ -4,7 +4,23 @@ import type { CustomerRecord, DocumentListResponse, TicketListItem } from '~~/sh
 
 const open = ref(false)
 
-const links = [[{
+const primaryLinks = [{
+  label: 'Documents',
+  icon: 'i-lucide-files',
+  to: '/documents',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
+  label: 'Tickets',
+  icon: 'i-lucide-wrench',
+  to: '/tickets',
+  onSelect: () => {
+    open.value = false
+  }
+}] satisfies NavigationMenuItem[]
+
+const secondaryLinks = [{
   label: 'Vue d’ensemble',
   icon: 'i-lucide-house',
   to: '/',
@@ -22,20 +38,6 @@ const links = [[{
   label: 'Catalogue',
   icon: 'i-lucide-package-search',
   to: '/catalog',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
-  label: 'Tickets',
-  icon: 'i-lucide-wrench',
-  to: '/tickets',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
-  label: 'Documents',
-  icon: 'i-lucide-files',
-  to: '/documents',
   onSelect: () => {
     open.value = false
   }
@@ -81,7 +83,9 @@ const links = [[{
   onSelect: () => {
     open.value = false
   }
-}], [{
+}] satisfies NavigationMenuItem[]
+
+const footerLinks = [{
   label: 'Paramètres',
   icon: 'i-lucide-settings',
   to: '/settings',
@@ -95,7 +99,7 @@ const links = [[{
   onSelect: () => {
     open.value = false
   }
-}]] satisfies NavigationMenuItem[][]
+}] satisfies NavigationMenuItem[]
 
 const [{ data: customers }, { data: tickets }, { data: documents }] = await Promise.all([
   useFetch<CustomerRecord[]>('/api/customers'),
@@ -160,7 +164,7 @@ const groups = computed(() => {
   return [{
     id: 'navigate',
     label: 'Navigation',
-    items: links.flat()
+    items: [...primaryLinks, ...secondaryLinks, ...footerLinks]
   }, {
     id: 'create',
     label: 'Actions rapides',
@@ -225,16 +229,26 @@ const groups = computed(() => {
 
         <UNavigationMenu
           :collapsed="collapsed"
-          :items="links[0]"
+          :items="primaryLinks"
           orientation="vertical"
           tooltip
           class="mt-4"
           popover
         />
 
+        <USeparator class="my-3" />
+
         <UNavigationMenu
           :collapsed="collapsed"
-          :items="links[1]"
+          :items="secondaryLinks"
+          orientation="vertical"
+          tooltip
+          popover
+        />
+
+        <UNavigationMenu
+          :collapsed="collapsed"
+          :items="footerLinks"
           orientation="vertical"
           tooltip
           class="mt-auto"
