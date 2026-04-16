@@ -263,7 +263,7 @@ async function submitPrompt() {
             should-auto-scroll
             class="min-h-0 flex-1"
             :ui="{
-              viewport: 'min-h-0 px-0 pb-4',
+              viewport: 'min-h-0 px-0 pb-6',
               root: 'min-h-0 flex-1'
             }"
           >
@@ -363,27 +363,29 @@ async function submitPrompt() {
               </template>
             </UChatMessage>
           </UChatMessages>
-
-          <div class="sticky bottom-0 mt-3 border-t border-default bg-default/95 pt-3 backdrop-blur">
-            <UChatPrompt
-              v-model="prompt"
-              placeholder="Ex. Quel total encaissé par mode de paiement cette semaine ?"
-              :disabled="pending"
-              @submit.prevent="submitPrompt"
-            >
-              <template #footer>
-                <div class="flex items-center justify-between gap-3">
-                  <div class="flex items-center gap-2 sm:hidden">
-                    <span class="text-xs text-toned">SQL debug</span>
-                    <USwitch v-model="debug" size="sm" />
-                  </div>
-                </div>
-              </template>
-
-              <UChatPromptSubmit color="primary" :loading="pending" />
-            </UChatPrompt>
-          </div>
         </template>
+      </div>
+    </template>
+
+    <template v-if="hasConversation" #footer>
+      <div class="shrink-0 border-t border-default bg-default px-4 pt-3 pb-4 sm:px-6">
+        <UChatPrompt
+          v-model="prompt"
+          placeholder="Ex. Quel total encaissé par mode de paiement cette semaine ?"
+          :disabled="pending"
+          @submit.prevent="submitPrompt"
+        >
+          <template #footer>
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2 sm:hidden">
+                <span class="text-xs text-toned">SQL debug</span>
+                <USwitch v-model="debug" size="sm" />
+              </div>
+            </div>
+          </template>
+
+          <UChatPromptSubmit color="primary" :loading="pending" />
+        </UChatPrompt>
       </div>
     </template>
   </UDashboardPanel>

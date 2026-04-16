@@ -30,7 +30,7 @@ export const assistantChatResponseSchema = z.object({
     sql: z.string().optional()
   }).optional(),
   error: z.object({
-    code: z.enum(['model_refused', 'sql_rejected', 'sql_timeout', 'sql_execution_failed']),
+    code: z.enum(['sql_rejected', 'sql_timeout', 'sql_execution_failed']),
     message: z.string(),
     retryable: z.boolean()
   }).optional()

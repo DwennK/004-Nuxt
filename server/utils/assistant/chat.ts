@@ -8,35 +8,30 @@ import {
 } from './sql'
 
 type AssistantPlanningResult = {
-  action: 'query' | 'reject'
   sql: string
   querySummary: string
   answerPlan: string
-  rejectionReason: string
 }
 
 const planningSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    action: {
-      type: 'string',
-      enum: ['query', 'reject']
-    },
     sql: {
-      type: 'string'
+      type: 'string',
+      minLength: 10,
+      description: 'Requête SQLite SELECT complète, jamais vide.'
     },
     querySummary: {
-      type: 'string'
+      type: 'string',
+      minLength: 1
     },
     answerPlan: {
-      type: 'string'
-    },
-    rejectionReason: {
-      type: 'string'
+      type: 'string',
+      minLength: 1
     }
   },
-  required: ['action', 'sql', 'querySummary', 'answerPlan', 'rejectionReason']
+  required: ['sql', 'querySummary', 'answerPlan']
 } as const
 
 function buildConversationTranscript(messages: AssistantChatMessageInput[]) {
@@ -61,17 +56,22 @@ function buildPlanningPrompt(messages: AssistantChatMessageInput[]) {
 function buildPlanningSystemPrompt() {
   return [
     'Tu es un assistant analytique interne pour un tableau de bord POS/CRM.',
-    'Tu dois soit préparer une requête SQL SQLite en lecture seule, soit refuser si la question ne peut pas être résolue de façon sûre avec les tables exposées.',
-    'Réponds strictement avec le schéma JSON demandé.',
+    'Ta seule tâche: traduire la question en UNE requête SQL SQLite SELECT en lecture seule. Tu ne dois JAMAIS renvoyer une sql vide.',
+    'Les garde-fous de sécurité (lecture seule, allowlist tables/colonnes, colonnes sensibles bloquées) sont déjà appliqués en aval. Ta réponse n’est PAS ce qui protège la base — contente-toi de produire la meilleure requête possible.',
+    'Réponds strictement avec le schéma JSON demandé. Les trois champs sql, querySummary, answerPlan doivent être non vides.',
     'Contraintes SQL:',
     '- SQLite/Turso uniquement.',
     '- Lecture seule: SELECT ou WITH ... SELECT.',
-    '- Pas de commentaire SQL.',
-    '- Pas de SELECT *.',
-    '- Toujours qualifier les colonnes avec un alias.',
-    '- Utiliser uniquement les tables et colonnes exposées.',
+    '- Pas de commentaire SQL, pas de point-virgule final.',
+    '- Pas de SELECT *. Liste les colonnes explicitement.',
+    '- Toujours qualifier les colonnes avec le nom de table ou un alias.',
+    '- Utiliser uniquement les tables et colonnes exposées ci-dessous.',
     '- Préférer des agrégations courtes et lisibles pour répondre à une question métier.',
-    '- Si la question demande des données privées, hors périmètre, ou ambiguës sans hypothèse sûre, retourne action="reject".',
+    '- Si la question est ambiguë, pose l’hypothèse la plus raisonnable et produis la requête. Explique l’hypothèse dans querySummary.',
+    '- Si la question semble hors périmètre, produis quand même un SELECT plausible sur les tables exposées (ex: SELECT c.id, c.first_name, c.last_name FROM customers c LIMIT 5) et signale le désalignement dans querySummary.',
+    '',
+    'Exemple pour "Quels sont les 10 derniers paiements encaissés ?":',
+    '{"sql":"SELECT p.id, p.customer_id, p.document_id, p.method, p.amount, p.paid_at FROM payments p WHERE p.status = \'paid\' ORDER BY p.paid_at DESC LIMIT 10","querySummary":"10 derniers paiements avec statut paid, triés par date de paiement.","answerPlan":"Lister la date, le mode, le montant et le document associé."}',
     '',
     buildAssistantSchemaContext()
   ].join('\n')
@@ -113,11 +113,9 @@ function buildAssistantMessage(content: string): AssistantChatResponse['message'
 
 function normalizePlanningResult(planning: Partial<AssistantPlanningResult>) {
   return {
-    action: planning.action === 'query' ? 'query' : 'reject',
     sql: typeof planning.sql === 'string' ? planning.sql.trim() : '',
     querySummary: typeof planning.querySummary === 'string' ? planning.querySummary.trim() : '',
-    answerPlan: typeof planning.answerPlan === 'string' ? planning.answerPlan.trim() : '',
-    rejectionReason: typeof planning.rejectionReason === 'string' ? planning.rejectionReason.trim() : ''
+    answerPlan: typeof planning.answerPlan === 'string' ? planning.answerPlan.trim() : ''
   } satisfies AssistantPlanningResult
 }
 
@@ -134,17 +132,22 @@ export async function runAssistantChat(messages: AssistantChatMessageInput[], de
   })
   const planning = normalizePlanningResult(rawPlanning)
 
-  if (planning.action === 'reject' || !planning.sql) {
+  if (!planning.sql) {
+    console.warn(JSON.stringify({
+      scope: 'assistant-planning',
+      requestId,
+      reason: 'empty-sql',
+      rawPlanning
+    }))
+
     return {
       message: buildAssistantMessage(
-        planning.rejectionReason
-          ? planning.rejectionReason
-          : 'Je ne peux pas répondre de façon sûre avec les données exposées actuellement.'
+        'La couche de planification n’a pas produit de requête SQL. Reformulez la question.'
       ),
       error: {
-        code: 'model_refused',
-        message: 'La question a été refusée par la couche de planification.',
-        retryable: false
+        code: 'sql_rejected',
+        message: 'Aucune requête SQL générée.',
+        retryable: true
       }
     }
   }

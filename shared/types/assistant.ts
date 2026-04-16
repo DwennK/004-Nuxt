@@ -23,7 +23,7 @@ export interface AssistantQueryResult {
 }
 
 export interface AssistantChatError {
-  code: 'model_refused' | 'sql_rejected' | 'sql_timeout' | 'sql_execution_failed'
+  code: 'sql_rejected' | 'sql_timeout' | 'sql_execution_failed'
   message: string
   retryable: boolean
 }
