@@ -473,114 +473,247 @@ function handleIntakeScan(value: string) {
   >
     <template v-if="props.layout === 'intake'">
       <div class="space-y-4">
-        <UCard
-          variant="subtle"
-          :ui="{
-            root: `relative overflow-visible rounded-[1.75rem] border border-default/70 shadow-sm ${searchOpen ? 'z-20' : 'z-10'}`,
-            body: 'space-y-4 p-4',
-            header: 'p-4 pb-0'
-          }"
-        >
-          <template #header>
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <h2 class="text-lg font-semibold text-highlighted">
-                Nouveau ticket
-              </h2>
-
-              <div class="flex flex-wrap items-center gap-2 text-xs text-toned">
-                <span>{{ ticketTypeLabels[state.type] }}</span>
-                <span class="hidden sm:inline">·</span>
-                <span>{{ formatCurrency(lineEditor.totals.value.total) }}</span>
-              </div>
-            </div>
-          </template>
-
-          <div class="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,22rem)_12rem_auto] xl:items-start">
-            <div
-              class="relative"
-              :class="searchOpen ? 'z-30' : ''"
-              @focusin="cancelSearchClose"
-              @focusout="scheduleSearchClose"
-              @pointerdown="openSearchPanel"
-            >
-              <UFormField
-                label="Saisie rapide"
-              >
-                <div class="flex gap-2">
-                  <UInput
-                    v-model="intakeQuery"
-                    icon="i-lucide-scan-search"
-                    size="xl"
-                    class="flex-1"
-                    placeholder="iphone 14 ecran"
-                    autofocus
-                    @update:model-value="handleIntakeQueryInput"
-                    @keydown="handleSearchKeydown"
-                  />
-                  <PosBarcodeScanner
-                    title="Scanner une référence ou un IMEI"
-                    description="Scannez un code-barres ou QR code pour préremplir la saisie rapide ou l’IMEI."
-                    trigger-size="lg"
-                    trigger-aria-label="Scanner une référence"
-                    @scanned="handleIntakeScan"
-                  />
-                </div>
-              </UFormField>
-
-              <div
-                v-if="searchOpen"
-                class="absolute inset-x-0 top-full z-50 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
-              >
-                <div class="flex items-center justify-between gap-3 px-2 pb-2">
-                  <p class="text-sm font-medium text-highlighted">
-                    {{ searchPanelTitle }}
+        <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <UCard
+            variant="subtle"
+            :ui="{
+              root: `relative overflow-visible rounded-[1.75rem] border border-default/70 shadow-sm ${searchOpen ? 'z-20' : 'z-10'}`,
+              body: 'space-y-5 p-4',
+              header: 'p-4 pb-0'
+            }"
+          >
+            <template #header>
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="space-y-1">
+                  <h2 class="text-lg font-semibold text-highlighted">
+                    Prise en charge
+                  </h2>
+                  <p class="text-sm text-toned">
+                    Identifiez le client, décrivez la panne, puis préparez les lignes à facturer.
                   </p>
-                  <span class="text-xs text-toned">
-                    {{ searchPanelItems.length }} suggestion(s)
-                  </span>
                 </div>
 
-                <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
-                  <button
-                    v-for="(suggestion, index) in searchPanelItems"
-                    :key="suggestion.id"
-                    type="button"
-                    class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
-                    :class="index === highlightedSuggestionIndex
-                      ? 'bg-primary/8 ring-1 ring-primary/20'
-                      : 'hover:bg-muted/60'"
-                    @mouseenter="highlightedSuggestionIndex = index"
-                    @click="applyCatalogSuggestion(suggestion)"
+                <div class="flex flex-wrap items-center gap-2 text-xs text-toned">
+                  <span>{{ ticketTypeLabels[state.type] }}</span>
+                  <span class="hidden sm:inline">·</span>
+                  <span>{{ formatCurrency(lineEditor.totals.value.total) }}</span>
+                </div>
+              </div>
+            </template>
+
+            <div class="grid gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(21rem,24rem)]">
+              <div class="space-y-4">
+                <UFormField label="Client" name="customerId" required>
+                  <PosCustomerSelectField
+                    :model-value="state.customerId || null"
+                    :customers="props.customers"
+                    placeholder="Rechercher ou créer un client"
+                    @update:model-value="setCustomer"
+                    @created="handleCustomerCreated"
+                  />
+                </UFormField>
+
+                <div
+                  class="relative"
+                  :class="searchOpen ? 'z-30' : ''"
+                  @focusin="cancelSearchClose"
+                  @focusout="scheduleSearchClose"
+                  @pointerdown="openSearchPanel"
+                >
+                  <UFormField
+                    label="Diagnostic rapide"
+                    description="Recherche atelier pour préremplir le ticket et proposer une prestation."
                   >
-                    <div class="min-w-0">
-                      <p class="truncate text-sm font-medium text-highlighted">
-                        {{ suggestion.name }}
+                    <div class="flex gap-2">
+                      <UInput
+                        v-model="intakeQuery"
+                        icon="i-lucide-scan-search"
+                        size="xl"
+                        class="flex-1"
+                        placeholder="iphone 14 ecran"
+                        autofocus
+                        @update:model-value="handleIntakeQueryInput"
+                        @keydown="handleSearchKeydown"
+                      />
+                      <PosBarcodeScanner
+                        title="Scanner une référence ou un IMEI"
+                        description="Scannez un code-barres ou QR code pour préremplir la saisie rapide ou l’IMEI."
+                        trigger-size="lg"
+                        trigger-aria-label="Scanner une référence"
+                        @scanned="handleIntakeScan"
+                      />
+                    </div>
+                  </UFormField>
+
+                  <div
+                    v-if="searchOpen"
+                    class="absolute inset-x-0 top-full z-50 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
+                  >
+                    <div class="flex items-center justify-between gap-3 px-2 pb-2">
+                      <p class="text-sm font-medium text-highlighted">
+                        {{ searchPanelTitle }}
                       </p>
-                      <p class="truncate text-xs text-toned">
-                        {{ suggestion.model || suggestion.category }} · {{ suggestion.serviceKind || 'Prestation atelier' }}
+                      <span class="text-xs text-toned">
+                        {{ searchPanelItems.length }} suggestion(s)
+                      </span>
+                    </div>
+
+                    <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
+                      <button
+                        v-for="(suggestion, index) in searchPanelItems"
+                        :key="suggestion.id"
+                        type="button"
+                        class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
+                        :class="index === highlightedSuggestionIndex
+                          ? 'bg-primary/8 ring-1 ring-primary/20'
+                          : 'hover:bg-muted/60'"
+                        @mouseenter="highlightedSuggestionIndex = index"
+                        @click="applyCatalogSuggestion(suggestion)"
+                      >
+                        <div class="min-w-0">
+                          <p class="truncate text-sm font-medium text-highlighted">
+                            {{ suggestion.name }}
+                          </p>
+                          <p class="truncate text-xs text-toned">
+                            {{ suggestion.model || suggestion.category }} · {{ suggestion.serviceKind || 'Prestation atelier' }}
+                          </p>
+                        </div>
+                        <span class="shrink-0 text-sm font-medium text-highlighted">
+                          {{ formatCurrency(suggestion.defaultPrice) }}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                      Aucune suggestion trouvée pour cette saisie.
+                    </div>
+                  </div>
+                </div>
+
+                <UFormField
+                  label="Problème constaté"
+                  name="issueDescription"
+                  required
+                >
+                  <UTextarea
+                    v-model="state.issueDescription"
+                    class="w-full"
+                    :rows="3"
+                    autoresize
+                    placeholder="Ex. écran fissuré, batterie faible, port de charge endommagé..."
+                  />
+                </UFormField>
+              </div>
+
+              <div class="rounded-[1.5rem] border border-default/70 bg-default/70 p-4">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 class="text-sm font-semibold text-highlighted">
+                      Informations appareil
+                    </h3>
+                    <p class="text-xs text-toned">
+                      Gardez les accès et identifiants visibles pendant la prise en charge.
+                    </p>
+                  </div>
+                  <UBadge color="neutral" variant="soft" size="sm">
+                    Atelier
+                  </UBadge>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-2">
+                  <UFormField label="Marque" name="brand">
+                    <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
+                  </UFormField>
+
+                  <UFormField label="Modèle" name="model">
+                    <UInput v-model="state.model" class="w-full" placeholder="iPhone 14, Galaxy S23..." />
+                  </UFormField>
+
+                  <UFormField label="Numéro de série" name="serialNumber">
+                    <UInput v-model="state.serialNumber" class="w-full" placeholder="N° de série" />
+                  </UFormField>
+
+                  <UFormField label="Code SIM" name="simCode">
+                    <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
+                  </UFormField>
+
+                  <UFormField label="IMEI" name="imei" class="md:col-span-2">
+                    <div class="space-y-1">
+                      <div class="flex items-center gap-2">
+                        <UInput
+                          :model-value="state.imei"
+                          class="w-full tabular-nums"
+                          placeholder="356 789 123 456 789"
+                          inputmode="numeric"
+                          @update:model-value="handleImeiInput"
+                        />
+                        <PosBarcodeScanner
+                          title="Scanner IMEI"
+                          description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
+                          trigger-aria-label="Scanner IMEI"
+                          @scanned="handleImeiScan"
+                        />
+                      </div>
+                      <p v-if="imeiWarning" class="text-xs text-warning">
+                        {{ imeiWarning }}
                       </p>
                     </div>
-                    <span class="shrink-0 text-sm font-medium text-highlighted">
-                      {{ formatCurrency(suggestion.defaultPrice) }}
-                    </span>
-                  </button>
-                </div>
+                  </UFormField>
 
-                <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
-                  Aucune suggestion trouvée pour cette saisie.
+                  <UFormField label="Code / accès appareil" name="accessCode" class="md:col-span-2">
+                    <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <UInput
+                        v-model="state.accessCode"
+                        class="w-full"
+                        placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
+                      />
+                      <UButton
+                        type="button"
+                        label="Dessiner un pattern Android"
+                        icon="i-lucide-grid-3x3"
+                        color="neutral"
+                        variant="soft"
+                        size="sm"
+                        tabindex="-1"
+                        class="shrink-0 justify-center"
+                        @click="patternOpen = true"
+                      />
+                    </div>
+                  </UFormField>
                 </div>
               </div>
             </div>
+          </UCard>
 
-            <UFormField label="Client" name="customerId" required>
-              <PosCustomerSelectField
-                :model-value="state.customerId || null"
-                :customers="props.customers"
-                placeholder="Rechercher ou créer un client"
-                @update:model-value="setCustomer"
-                @created="handleCustomerCreated"
-              />
-            </UFormField>
+          <UCard
+            variant="subtle"
+            :ui="{
+              root: 'rounded-[1.75rem] shadow-sm xl:sticky xl:top-3',
+              body: 'space-y-4 p-4',
+              header: 'p-4 pb-0'
+            }"
+          >
+            <template #header>
+              <div>
+                <h2 class="text-base font-semibold text-highlighted">
+                  Réglages ticket
+                </h2>
+                <p class="text-sm text-toned">
+                  Cadre opérationnel et validation.
+                </p>
+              </div>
+            </template>
+
+            <div class="rounded-2xl border border-default/70 bg-default/70 px-4 py-3">
+              <div class="flex items-center justify-between gap-3 text-sm">
+                <span class="text-toned">Lignes prévues</span>
+                <span class="font-medium text-highlighted">{{ lineEditor.state.lines.length }}</span>
+              </div>
+              <div class="mt-2 flex items-center justify-between gap-3 border-t border-default/70 pt-2">
+                <span class="text-sm font-medium text-highlighted">Total prévisionnel</span>
+                <span class="text-lg font-semibold text-highlighted">{{ formatCurrency(lineEditor.totals.value.total) }}</span>
+              </div>
+            </div>
 
             <UFormField label="Statut" name="status" required>
               <USelect
@@ -591,7 +724,30 @@ function handleIntakeScan(value: string) {
               />
             </UFormField>
 
-            <div v-if="props.showSubmit" class="xl:pt-[1.72rem]">
+            <UFormField label="Type de ticket" name="type" required>
+              <USelect
+                v-model="state.type"
+                :items="ticketTypeItems"
+                value-key="value"
+                class="w-full"
+              />
+            </UFormField>
+
+            <UFormField label="Ouvert le" name="openedAt" required>
+              <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
+            </UFormField>
+
+            <UFormField label="Notes internes" name="internalNotes">
+              <UTextarea
+                v-model="state.internalNotes"
+                class="w-full"
+                :rows="4"
+                autoresize
+                placeholder="Notes atelier, points de vigilance, pièces à prévoir..."
+              />
+            </UFormField>
+
+            <div v-if="props.showSubmit">
               <UButton
                 type="submit"
                 :label="props.submitLabel"
@@ -601,132 +757,14 @@ function handleIntakeScan(value: string) {
                 class="justify-center rounded-2xl"
               />
             </div>
-          </div>
-
-          <div class="border-t border-default/70 pt-3">
-            <div class="rounded-[1.25rem] border border-default/70 bg-default/70 p-3">
-              <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_12rem_20rem] xl:items-start">
-                <UFormField label="Code / accès appareil" name="accessCode">
-                  <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                    <UInput
-                      v-model="state.accessCode"
-                      class="w-full"
-                      placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
-                    />
-                    <UButton
-                      type="button"
-                      label="Dessiner un pattern Android"
-                      icon="i-lucide-grid-3x3"
-                      color="neutral"
-                      variant="soft"
-                      size="sm"
-                      tabindex="-1"
-                      class="shrink-0 justify-center"
-                      @click="patternOpen = true"
-                    />
-                  </div>
-                </UFormField>
-
-                <UFormField label="Code SIM" name="simCode">
-                  <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
-                </UFormField>
-
-                <UFormField label="IMEI" name="imei">
-                  <div class="space-y-1">
-                    <div class="flex items-center gap-2">
-                      <UInput
-                        :model-value="state.imei"
-                        class="w-64 min-w-64 tabular-nums"
-                        placeholder="356 789 123 456 789"
-                        inputmode="numeric"
-                        @update:model-value="handleImeiInput"
-                      />
-                      <PosBarcodeScanner
-                        title="Scanner IMEI"
-                        description="Scannez le code-barres IMEI situé sur l'appareil ou son emballage."
-                        trigger-aria-label="Scanner IMEI"
-                        @scanned="handleImeiScan"
-                      />
-                    </div>
-                    <p v-if="imeiWarning" class="text-xs text-warning">
-                      {{ imeiWarning }}
-                    </p>
-                  </div>
-                </UFormField>
-              </div>
-
-              <UFormField
-                label="Problème constaté"
-                name="issueDescription"
-                required
-                class="mt-3 border-t border-default/70 pt-3"
-              >
-                <UTextarea
-                  v-model="state.issueDescription"
-                  class="w-full"
-                  :rows="1"
-                  autoresize
-                  placeholder="Ex. écran fissuré, batterie faible, port de charge endommagé..."
-                />
-              </UFormField>
-            </div>
-          </div>
-        </UCard>
-
-        <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
-          <div class="min-h-0">
-            <PosDocumentLinesEditor
-              :editor="lineEditor"
-              :catalog-items="catalogItems || []"
-              mode="ticket"
-              :show-search-card="false"
-            />
-          </div>
-
-          <div class="space-y-4">
-            <UCard
-              variant="subtle"
-              :ui="{
-                root: 'rounded-[1.75rem] shadow-sm',
-                body: 'space-y-4 p-4',
-                header: 'p-4 pb-0'
-              }"
-            >
-              <template #header>
-                <div>
-                  <h2 class="text-base font-semibold text-highlighted">
-                    Contexte ticket
-                  </h2>
-                </div>
-              </template>
-
-              <div class="grid gap-3">
-                <UFormField label="Type de ticket" name="type" required>
-                  <USelect
-                    v-model="state.type"
-                    :items="ticketTypeItems"
-                    value-key="value"
-                    class="w-full"
-                  />
-                </UFormField>
-
-                <UFormField label="Ouvert le" name="openedAt" required>
-                  <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
-                </UFormField>
-
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <UFormField label="Marque" name="brand">
-                    <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
-                  </UFormField>
-
-                  <UFormField label="Modèle" name="model">
-                    <UInput v-model="state.model" class="w-full" placeholder="iPhone 14, Galaxy S23..." />
-                  </UFormField>
-                </div>
-              </div>
-            </UCard>
-          </div>
+          </UCard>
         </div>
+
+        <PosDocumentLinesEditor
+          :editor="lineEditor"
+          :catalog-items="catalogItems || []"
+          mode="ticket"
+        />
       </div>
     </template>
 
