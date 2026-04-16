@@ -103,7 +103,8 @@ export const tickets = sqliteTable('tickets', {
   numberIdx: uniqueIndex('tickets_ticket_number_idx').on(table.ticketNumber),
   customerIdx: index('tickets_customer_id_idx').on(table.customerId),
   statusIdx: index('tickets_status_idx').on(table.status),
-  openedAtIdx: index('tickets_opened_at_idx').on(table.openedAt)
+  openedAtIdx: index('tickets_opened_at_idx').on(table.openedAt),
+  statusOpenedAtIdIdx: index('tickets_status_opened_at_id_idx').on(table.status, table.openedAt, table.id)
 }))
 
 export const ticketEvents = sqliteTable('ticket_events', {
@@ -143,7 +144,8 @@ export const documents = sqliteTable('documents', {
   ticketIdx: index('documents_ticket_id_idx').on(table.ticketId),
   typeIdx: index('documents_type_idx').on(table.type),
   statusIdx: index('documents_status_idx').on(table.status),
-  issuedAtIdx: index('documents_issued_at_idx').on(table.issuedAt)
+  issuedAtIdx: index('documents_issued_at_idx').on(table.issuedAt),
+  issuedAtIdIdx: index('documents_issued_at_id_idx').on(table.issuedAt, table.id)
 }))
 
 export const numberSequences = sqliteTable('number_sequences', {
@@ -200,7 +202,8 @@ export const payments = sqliteTable('payments', {
   paidAtIdx: index('payments_paid_at_idx').on(table.paidAt),
   methodIdx: index('payments_method_idx').on(table.method),
   statusIdx: index('payments_status_idx').on(table.status),
-  customerIdx: index('payments_customer_id_idx').on(table.customerId)
+  customerIdx: index('payments_customer_id_idx').on(table.customerId),
+  documentPaidAtIdIdx: index('payments_document_id_paid_at_id_idx').on(table.documentId, table.paidAt, table.id)
 }))
 
 export const smartphoneStocks = sqliteTable('smartphone_stocks', {

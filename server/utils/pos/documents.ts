@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lte, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm'
 import {
   customers,
   documentLines,
@@ -88,6 +88,46 @@ function getDocumentCreatedLabel(type: DocumentRecord['type']) {
   }
 }
 
+function mapDocumentListItem(row: {
+  id: number
+  documentNumber: string
+  type: DocumentRecord['type']
+  status: DocumentRecord['status']
+  customerId: number
+  ticketId: number | null
+  issuedAt: string
+  subtotal: number
+  taxAmount: number
+  total: number
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+  customerName: string
+  ticketNumber: string | null
+  paidAmount: number | null
+  balanceDue: number | null
+}): DocumentListItem {
+  return {
+    id: row.id,
+    documentNumber: row.documentNumber,
+    type: row.type,
+    status: row.status,
+    customerId: row.customerId,
+    ticketId: row.ticketId,
+    issuedAt: row.issuedAt,
+    subtotal: row.subtotal,
+    taxAmount: row.taxAmount,
+    total: row.total,
+    notes: row.notes,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    customerName: row.customerName,
+    ticketNumber: row.ticketNumber,
+    paidAmount: Number(row.paidAmount || 0),
+    balanceDue: isPayableDocumentType(row.type) ? Number(row.balanceDue || 0) : 0
+  }
+}
+
 export async function listDocuments(filters?: {
   q?: string
   type?: string
@@ -117,9 +157,88 @@ export async function listDocuments(filters?: {
   const paidAmount = paidAmountValue.as('paid_amount')
   const customerName = customerNameValue.as('customer_name')
   const balanceDue = balanceDueValue.as('balance_due')
+  const baseFilters = [
+    filters?.type ? eq(documents.type, filters.type as typeof documents.$inferSelect.type) : undefined,
+    filters?.status ? eq(documents.status, filters.status as typeof documents.$inferSelect.status) : undefined,
+    filters?.customerId ? eq(documents.customerId, filters.customerId) : undefined,
+    filters?.ticketId ? eq(documents.ticketId, filters.ticketId) : undefined,
+    filters?.dateFrom ? gte(documents.issuedAt, filters.dateFrom) : undefined,
+    filters?.dateTo ? lte(documents.issuedAt, filters.dateTo) : undefined
+  ] as const
   const dueFilter = filters?.paymentState === 'due'
     ? sql`${documents.type} in ('invoice', 'receipt') and ${documents.total} > ${paidAmountValue}`
     : undefined
+  const useAggregateList = !!searchPattern || filters?.paymentState === 'due' || sortBy === 'balanceDue'
+
+  if (!useAggregateList) {
+    const filteredDocuments = db.select({
+      id: documents.id,
+      status: documents.status,
+      balanceDue
+    })
+      .from(documents)
+      .leftJoin(payments, eq(payments.documentId, documents.id))
+      .where(and(...baseFilters))
+      .groupBy(documents.id)
+      .as('filtered_documents')
+
+    const [summaryRows, pageIdRows] = await Promise.all([
+      db.select({
+        total: sql<number>`count(*)`,
+        paidCount: sql<number>`coalesce(sum(case when ${filteredDocuments.status} = 'paid' then 1 else 0 end), 0)`,
+        totalBalanceDue: sql<number>`coalesce(sum(${filteredDocuments.balanceDue}), 0)`
+      }).from(filteredDocuments),
+      db.select({ id: documents.id })
+        .from(documents)
+        .where(and(...baseFilters))
+        .orderBy(desc(documents.issuedAt), desc(documents.id))
+        .limit(pageSize)
+        .offset(offset)
+    ])
+
+    const pageIds = pageIdRows.map(row => row.id)
+    const rows = pageIds.length
+      ? await db.select({
+          id: documents.id,
+          documentNumber: documents.documentNumber,
+          type: documents.type,
+          status: documents.status,
+          customerId: documents.customerId,
+          ticketId: documents.ticketId,
+          issuedAt: documents.issuedAt,
+          subtotal: documents.subtotal,
+          taxAmount: documents.taxAmount,
+          total: documents.total,
+          notes: documents.notes,
+          createdAt: documents.createdAt,
+          updatedAt: documents.updatedAt,
+          customerName,
+          ticketNumber: tickets.ticketNumber,
+          paidAmount,
+          balanceDue
+        })
+          .from(documents)
+          .innerJoin(customers, eq(documents.customerId, customers.id))
+          .leftJoin(tickets, eq(documents.ticketId, tickets.id))
+          .leftJoin(payments, eq(payments.documentId, documents.id))
+          .where(inArray(documents.id, pageIds))
+          .groupBy(documents.id, customers.id, tickets.id)
+          .orderBy(desc(documents.issuedAt), desc(documents.id))
+      : []
+
+    const summary = summaryRows[0]
+
+    return {
+      items: rows.map(mapDocumentListItem),
+      page,
+      pageSize,
+      total: Number(summary?.total || 0),
+      summary: {
+        paidCount: Number(summary?.paidCount || 0),
+        totalBalanceDue: Number(summary?.totalBalanceDue || 0)
+      }
+    }
+  }
 
   const baseQuery = db.select({
     id: documents.id,
@@ -152,12 +271,7 @@ export async function listDocuments(filters?: {
             sql`lower(coalesce(${tickets.ticketNumber}, '')) like ${searchPattern}`
           )
         : undefined,
-      filters?.type ? eq(documents.type, filters.type as typeof documents.$inferSelect.type) : undefined,
-      filters?.status ? eq(documents.status, filters.status as typeof documents.$inferSelect.status) : undefined,
-      filters?.customerId ? eq(documents.customerId, filters.customerId) : undefined,
-      filters?.ticketId ? eq(documents.ticketId, filters.ticketId) : undefined,
-      filters?.dateFrom ? gte(documents.issuedAt, filters.dateFrom) : undefined,
-      filters?.dateTo ? lte(documents.issuedAt, filters.dateTo) : undefined
+      ...baseFilters
     ))
     .groupBy(documents.id, customers.id, tickets.id)
     .having(dueFilter)
@@ -182,25 +296,7 @@ export async function listDocuments(filters?: {
   const summary = summaryRows[0]
 
   return {
-    items: rows.map((row): DocumentListItem => ({
-      id: row.id,
-      documentNumber: row.documentNumber,
-      type: row.type,
-      status: row.status,
-      customerId: row.customerId,
-      ticketId: row.ticketId,
-      issuedAt: row.issuedAt,
-      subtotal: row.subtotal,
-      taxAmount: row.taxAmount,
-      total: row.total,
-      notes: row.notes,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      customerName: row.customerName,
-      ticketNumber: row.ticketNumber,
-      paidAmount: Number(row.paidAmount || 0),
-      balanceDue: isPayableDocumentType(row.type) ? Number(row.balanceDue || 0) : 0
-    })),
+    items: rows.map(mapDocumentListItem),
     page,
     pageSize,
     total: Number(summary?.total || 0),
