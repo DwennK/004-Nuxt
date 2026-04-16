@@ -162,6 +162,36 @@ function addCatalogItem(item: CatalogItemRecord) {
   search.value = ''
 }
 
+async function createNewLine() {
+  const line = createSaleLine({
+    catalogItemId: null,
+    label: '',
+    quantity: 1,
+    unitPrice: 0,
+    vatRate: 8.1,
+    categoryHint: null
+  })
+
+  closeSearchPanel()
+  search.value = ''
+  lines.value.push(line)
+
+  await nextTick()
+
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const input = document.getElementById(`sale-line-label-${line.id}`)
+
+  if (!(input instanceof HTMLInputElement)) {
+    return
+  }
+
+  input.focus()
+  input.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+}
+
 function incrementLine(index: number) {
   lines.value[index]!.quantity += 1
 }
@@ -640,6 +670,17 @@ function selectAllOnFocus(event: FocusEvent) {
                     trigger-size="lg"
                     trigger-aria-label="Scanner un code-barres"
                     @scanned="handleBarcodeScan"
+                  />
+                  <UButton
+                    type="button"
+                    icon="i-lucide-plus"
+                    label="Nouvelle ligne"
+                    color="primary"
+                    variant="subtle"
+                    size="lg"
+                    class="shrink-0"
+                    @pointerdown.stop
+                    @click.stop="createNewLine"
                   />
                 </div>
 
