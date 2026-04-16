@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TabsItem } from '@nuxt/ui'
 import { lineCategoryColors, paymentMethodColors, paymentMethodLabels } from '~~/shared/constants/pos'
 import type { ReportsOverview } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
@@ -9,11 +10,23 @@ const props = defineProps<{
   overview: ReportsOverview
 }>()
 
+const selectedPaymentPeriod = ref<'week' | 'month' | 'year'>('week')
+
+const paymentPeriodTabs: TabsItem[] = [
+  { label: '7 jours', value: 'week' },
+  { label: 'Mois', value: 'month' },
+  { label: 'Année', value: 'year' }
+]
+
 function toChartColor(color: UiColorToken) {
   return `var(--ui-color-${color}-500)`
 }
 
-const paymentsChartData = computed(() => props.overview.paymentsByDay)
+const activePaymentPeriod = computed(() => {
+  return props.overview.paymentPeriods.find(period => period.key === selectedPaymentPeriod.value) || props.overview.paymentPeriods[0]
+})
+
+const paymentsChartData = computed(() => activePaymentPeriod.value?.buckets || [])
 
 const paymentsCategories = {
   cash: {
@@ -30,13 +43,29 @@ const paymentsCategories = {
   }
 }
 
-const paymentTicks = computed(() => paymentsChartData.value.map((_, index) => index))
+const paymentTicks = computed(() => {
+  const count = paymentsChartData.value.length
+
+  if (count <= 8) {
+    return paymentsChartData.value.map((_, index) => index)
+  }
+
+  const targetTickCount = selectedPaymentPeriod.value === 'month' ? 7 : 6
+  const step = Math.max(1, Math.ceil((count - 1) / (targetTickCount - 1)))
+  const ticks = Array.from({ length: count }, (_, index) => index).filter(index => index % step === 0)
+
+  if (ticks[ticks.length - 1] !== count - 1) {
+    ticks.push(count - 1)
+  }
+
+  return ticks
+})
 
 const hasPaymentActivity = computed(() => paymentsChartData.value.some(day => day.total > 0))
 
 const dayLabel = (tick: number | Date) => {
   const index = Math.round(Number(tick))
-  return props.overview.range.labels[index] || ''
+  return paymentsChartData.value[index]?.label || ''
 }
 
 const currencyLabel = (tick: number | Date) => formatCurrency(Number(tick))
@@ -97,13 +126,28 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
   <div class="space-y-4 reports-overview-chart">
     <UCard :ui="{ body: 'space-y-4 p-4', header: 'p-4 pb-0' }">
       <template #header>
-        <div class="flex flex-col gap-1">
-          <h2 class="text-base font-semibold text-highlighted">
-            Encaissements sur 7 jours
-          </h2>
-          <p class="text-sm text-toned">
-            Total journalier avec ventilation par mode de paiement.
-          </p>
+        <div class="space-y-4">
+          <div class="flex flex-col gap-1">
+            <h2 class="text-base font-semibold text-highlighted">
+              Chiffre d’affaires encaissé
+            </h2>
+            <p class="text-sm text-toned">
+              {{ activePaymentPeriod?.description || 'Ventilation par mode de paiement sur la période sélectionnée.' }}
+            </p>
+          </div>
+
+          <UTabs
+            v-model="selectedPaymentPeriod"
+            :items="paymentPeriodTabs"
+            variant="link"
+            color="neutral"
+            :content="false"
+            size="sm"
+            :ui="{
+              list: 'w-full border-b border-default',
+              trigger: 'grow justify-center sm:grow-0'
+            }"
+          />
         </div>
       </template>
 
@@ -128,7 +172,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
           :y-tick-line="false"
           :x-formatter="dayLabel"
           :y-formatter="currencyLabel"
-          :tooltip-title-formatter="(item) => formatTooltipDate(item.date)"
+          :tooltip-title-formatter="(item) => item.tooltipLabel || formatTooltipDate(item.date)"
         />
       </div>
 
@@ -136,7 +180,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
         v-else
         icon="i-lucide-chart-column-stacked"
         title="Aucun encaissement sur la période"
-        description="Les 7 derniers jours sélectionnés ne contiennent encore aucun paiement encaissé."
+        description="La période sélectionnée ne contient encore aucun paiement encaissé."
       />
     </UCard>
 

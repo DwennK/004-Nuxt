@@ -353,6 +353,20 @@ export interface ReportsOverview {
     cardTwint: number
     bankTransfer: number
   }>
+  paymentPeriods: Array<{
+    key: 'week' | 'month' | 'year'
+    label: string
+    description: string
+    buckets: Array<{
+      date: string
+      label: string
+      tooltipLabel: string
+      total: number
+      cash: number
+      cardTwint: number
+      bankTransfer: number
+    }>
+  }>
   turnoverByCategory: Array<{
     category: LineCategoryHint
     label: string

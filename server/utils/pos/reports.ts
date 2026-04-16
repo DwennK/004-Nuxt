@@ -28,6 +28,134 @@ function formatDayLabel(date: string) {
   }).format(new Date(Date.UTC(year!, month! - 1, day!, 12, 0, 0)))
 }
 
+function formatMonthDayLabel(date: string) {
+  const [year, month, day] = date.split('-').map(Number)
+
+  return new Intl.DateTimeFormat('fr-CH', {
+    day: '2-digit',
+    timeZone: businessTimeZone
+  }).format(new Date(Date.UTC(year!, month! - 1, day!, 12, 0, 0)))
+}
+
+function formatLongDateLabel(date: string) {
+  const [year, month, day] = date.split('-').map(Number)
+
+  return new Intl.DateTimeFormat('fr-CH', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: businessTimeZone
+  }).format(new Date(Date.UTC(year!, month! - 1, day!, 12, 0, 0)))
+}
+
+function formatDetailedDayLabel(date: string) {
+  const [year, month, day] = date.split('-').map(Number)
+
+  return new Intl.DateTimeFormat('fr-CH', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: businessTimeZone
+  }).format(new Date(Date.UTC(year!, month! - 1, day!, 12, 0, 0)))
+}
+
+function formatMonthLabel(year: number, month: number) {
+  return new Intl.DateTimeFormat('fr-CH', {
+    month: 'short',
+    timeZone: businessTimeZone
+  }).format(new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)))
+}
+
+function formatMonthTooltipLabel(year: number, month: number) {
+  return new Intl.DateTimeFormat('fr-CH', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: businessTimeZone
+  }).format(new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)))
+}
+
+function buildMonthStart(date: string) {
+  const [year, month] = date.split('-').map(Number)
+  return `${year}-${String(month).padStart(2, '0')}-01`
+}
+
+function buildYearStart(date: string) {
+  const [year] = date.split('-').map(Number)
+  return `${year}-01-01`
+}
+
+function buildDailyPaymentBuckets(
+  startDate: string,
+  endDate: string,
+  labelFormatter: (date: string) => string,
+  tooltipFormatter: (date: string) => string
+) {
+  const buckets: ReportsOverview['paymentPeriods'][number]['buckets'] = []
+
+  for (let current = startDate; current <= endDate; current = shiftIsoDate(current, 1)) {
+    buckets.push({
+      date: current,
+      label: labelFormatter(current),
+      tooltipLabel: tooltipFormatter(current),
+      total: 0,
+      cash: 0,
+      cardTwint: 0,
+      bankTransfer: 0
+    })
+  }
+
+  return buckets
+}
+
+function buildYearlyPaymentBuckets(date: string): ReportsOverview['paymentPeriods'][number]['buckets'] {
+  const [year, month] = date.split('-').map(Number)
+  const monthCount = month || 1
+
+  return Array.from({ length: monthCount }, (_, index): ReportsOverview['paymentPeriods'][number]['buckets'][number] => {
+    const monthNumber = index + 1
+
+    return {
+      date: `${year}-${String(monthNumber).padStart(2, '0')}`,
+      label: formatMonthLabel(year!, monthNumber),
+      tooltipLabel: formatMonthTooltipLabel(year!, monthNumber),
+      total: 0,
+      cash: 0,
+      cardTwint: 0,
+      bankTransfer: 0
+    }
+  })
+}
+
+type PaymentAggregationBucket = Pick<
+  ReportsOverview['paymentPeriods'][number]['buckets'][number],
+  'total' | 'cash' | 'cardTwint' | 'bankTransfer'
+>
+
+function applyPaymentAmount(
+  bucket: PaymentAggregationBucket | undefined,
+  method: (typeof paymentMethods)[number],
+  amount: number
+) {
+  if (!bucket) {
+    return
+  }
+
+  bucket.total += amount
+
+  switch (method) {
+    case 'cash':
+      bucket.cash += amount
+      break
+    case 'card_twint':
+      bucket.cardTwint += amount
+      break
+    case 'bank_transfer':
+      bucket.bankTransfer += amount
+      break
+  }
+}
+
 export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
   await ensurePosSchema()
 
@@ -139,8 +267,12 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
   const rangeDates = Array.from({ length: 7 }, (_, index) => shiftIsoDate(date, index - 6))
   const startDate = rangeDates[0]!
   const endDate = rangeDates[rangeDates.length - 1]!
+  const monthStartDate = buildMonthStart(date)
+  const yearStartDate = buildYearStart(date)
   const { start } = buildDayRange(startDate)
   const { end } = buildDayRange(endDate)
+  const { start: yearStart } = buildDayRange(yearStartDate)
+  const { end: selectedDayEnd } = buildDayRange(date)
 
   const [paymentRows, paidDocumentRows, openTicketRows, openedRows, closedRows] = await Promise.all([
     db.select({
@@ -149,7 +281,7 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
       paidAt: payments.paidAt
     })
       .from(payments)
-      .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end))),
+      .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, yearStart), lte(payments.paidAt, selectedDayEnd))),
     db.select({
       documentId: documents.id
     })
@@ -185,28 +317,22 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
 
   const paymentsByDayMap = new Map(paymentsByDay.map(item => [item.date, item]))
 
+  const weeklyBuckets = buildDailyPaymentBuckets(startDate, endDate, formatDayLabel, formatDetailedDayLabel)
+  const monthlyBuckets = buildDailyPaymentBuckets(monthStartDate, date, formatMonthDayLabel, formatLongDateLabel)
+  const yearlyBuckets = buildYearlyPaymentBuckets(date)
+
+  const weeklyBucketsMap = new Map(weeklyBuckets.map(item => [item.date, item]))
+  const monthlyBucketsMap = new Map(monthlyBuckets.map(item => [item.date, item]))
+  const yearlyBucketsMap = new Map(yearlyBuckets.map(item => [item.date, item]))
+
   for (const payment of paymentRows) {
     const dayKey = toDateInputValue(new Date(payment.paidAt), businessTimeZone)
-    const bucket = paymentsByDayMap.get(dayKey)
-
-    if (!bucket) {
-      continue
-    }
-
     const amount = Number(payment.amount || 0)
-    bucket.total += amount
 
-    switch (payment.method) {
-      case 'cash':
-        bucket.cash += amount
-        break
-      case 'card_twint':
-        bucket.cardTwint += amount
-        break
-      case 'bank_transfer':
-        bucket.bankTransfer += amount
-        break
-    }
+    applyPaymentAmount(paymentsByDayMap.get(dayKey), payment.method, amount)
+    applyPaymentAmount(weeklyBucketsMap.get(dayKey), payment.method, amount)
+    applyPaymentAmount(monthlyBucketsMap.get(dayKey), payment.method, amount)
+    applyPaymentAmount(yearlyBucketsMap.get(dayKey.slice(0, 7)), payment.method, amount)
   }
 
   const ticketFlowByDay = rangeDates.map(day => ({
@@ -270,6 +396,22 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
       openTickets: Number(openTicketRows[0]?.count || 0)
     },
     paymentsByDay,
+    paymentPeriods: [{
+      key: 'week',
+      label: '7 jours',
+      description: 'Vue glissante quotidienne sur les 7 derniers jours encaissés.',
+      buckets: weeklyBuckets
+    }, {
+      key: 'month',
+      label: 'Mois',
+      description: 'Vue quotidienne cumulée depuis le début du mois jusqu’à la date sélectionnée.',
+      buckets: monthlyBuckets
+    }, {
+      key: 'year',
+      label: 'Année',
+      description: 'Vue mensuelle cumulée depuis janvier jusqu’au mois sélectionné.',
+      buckets: yearlyBuckets
+    }],
     turnoverByCategory: turnoverRows
       .filter((row): row is typeof row & { category: NonNullable<typeof row.category> } => Boolean(row.category))
       .map(row => ({
