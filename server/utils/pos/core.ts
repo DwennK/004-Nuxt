@@ -148,31 +148,44 @@ export function calculateDocumentTotals(lines: Array<{
 }
 
 async function refreshStoredDocumentTotals() {
-  const db = useDb()
-  const storedDocuments = await db.select({ id: documents.id }).from(documents)
+  const client = useTursoClient()
 
-  for (const document of storedDocuments) {
-    const lines = await db.select({
-      quantity: documentLines.quantity,
-      unitPrice: documentLines.unitPrice,
-      vatRate: documentLines.vatRate,
-      lineTotal: documentLines.lineTotal
-    }).from(documentLines).where(eq(documentLines.documentId, document.id))
-
-    if (!lines.length) {
-      continue
-    }
-
-    const totals = calculateDocumentTotals(lines)
-
-    await db.update(documents)
-      .set({
-        subtotal: totals.subtotal,
-        taxAmount: totals.taxAmount,
-        total: totals.total
-      })
-      .where(eq(documents.id, document.id))
-  }
+  await client.execute(`
+    UPDATE documents
+    SET
+      subtotal = COALESCE((
+        SELECT CAST(SUM(
+          CASE
+            WHEN document_lines.vat_rate > 0 THEN ROUND(document_lines.line_total / (1 + (document_lines.vat_rate / 100.0)))
+            ELSE document_lines.line_total
+          END
+        ) AS INTEGER)
+        FROM document_lines
+        WHERE document_lines.document_id = documents.id
+      ), subtotal),
+      tax_amount = COALESCE((
+        SELECT CAST(SUM(
+          document_lines.line_total - (
+            CASE
+              WHEN document_lines.vat_rate > 0 THEN ROUND(document_lines.line_total / (1 + (document_lines.vat_rate / 100.0)))
+              ELSE document_lines.line_total
+            END
+          )
+        ) AS INTEGER)
+        FROM document_lines
+        WHERE document_lines.document_id = documents.id
+      ), tax_amount),
+      total = COALESCE((
+        SELECT CAST(SUM(document_lines.line_total) AS INTEGER)
+        FROM document_lines
+        WHERE document_lines.document_id = documents.id
+      ), total)
+    WHERE EXISTS (
+      SELECT 1
+      FROM document_lines
+      WHERE document_lines.document_id = documents.id
+    )
+  `)
 }
 
 async function createPosTables() {
