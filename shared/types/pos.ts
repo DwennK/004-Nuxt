@@ -248,6 +248,20 @@ export interface DocumentListItem extends DocumentRecord {
   balanceDue: number
 }
 
+export interface PaginatedResponse<T> {
+  items: T[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+export interface DocumentListResponse extends PaginatedResponse<DocumentListItem> {
+  summary: {
+    paidCount: number
+    totalBalanceDue: number
+  }
+}
+
 export interface PaymentListItem extends PaymentRecord {
   customerName: string | null
   documentNumber: string

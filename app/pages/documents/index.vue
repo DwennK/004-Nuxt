@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import { getPaginationRowModel } from '@tanstack/table-core'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
 import {
@@ -8,26 +7,25 @@ import {
   documentStatusLabels,
   documentTypeLabels
 } from '~~/shared/constants/pos'
-import type { DocumentListItem } from '~~/shared/types/pos'
-import { formatCurrency, formatDateTime, isPayableDocumentType, toDateInputValue } from '~~/shared/utils/pos'
+import type { DocumentListItem, DocumentListResponse } from '~~/shared/types/pos'
+import { formatCurrency, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
-const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 const search = ref('')
+const debouncedSearch = refDebounced(search, 250)
 const typeFilter = ref<'all' | DocumentListItem['type']>('all')
 const statusFilter = ref<'all' | DocumentListItem['status']>('all')
 const dateFrom = ref('')
 const dateTo = ref('')
 const pagination = ref({
   pageIndex: 0,
-  pageSize: 10
+  pageSize: 50
 })
-const sorting = ref([{ id: 'issuedAt', desc: true }])
 const columnVisibility = ref()
 
 const typeItems = [
@@ -40,30 +38,38 @@ const statusItems = [
   ...Object.entries(documentStatusLabels).map(([value, label]) => ({ label, value }))
 ]
 
-const { data: documents, status, refresh } = await useFetch<DocumentListItem[]>('/api/documents')
+const query = computed(() => ({
+  q: debouncedSearch.value.trim() || undefined,
+  type: typeFilter.value === 'all' ? undefined : typeFilter.value,
+  status: statusFilter.value === 'all' ? undefined : statusFilter.value,
+  dateFrom: dateFrom.value || undefined,
+  dateTo: dateTo.value || undefined,
+  page: pagination.value.pageIndex + 1,
+  pageSize: pagination.value.pageSize
+}))
 
-const filteredDocuments = computed(() => {
-  const term = search.value.trim().toLowerCase()
-
-  return (documents.value || []).filter((document) => {
-    const matchesSearch = !term || [
-      document.documentNumber,
-      document.customerName,
-      document.ticketNumber
-    ].some(value => value?.toLowerCase().includes(term))
-
-    const matchesType = typeFilter.value === 'all' || document.type === typeFilter.value
-    const matchesStatus = statusFilter.value === 'all' || document.status === statusFilter.value
-    const issuedDate = toDateInputValue(new Date(document.issuedAt))
-    const matchesDateFrom = !dateFrom.value || issuedDate >= dateFrom.value
-    const matchesDateTo = !dateTo.value || issuedDate <= dateTo.value
-
-    return matchesSearch && matchesType && matchesStatus && matchesDateFrom && matchesDateTo
-  })
+const { data: documentsResponse, status, refresh } = await useFetch<DocumentListResponse>('/api/documents', {
+  query
 })
 
-watch([search, typeFilter, statusFilter, dateFrom, dateTo], () => {
+const documents = computed(() => documentsResponse.value?.items || [])
+const totalResults = computed(() => documentsResponse.value?.total || 0)
+const totalPages = computed(() => Math.max(Math.ceil(totalResults.value / pagination.value.pageSize), 1))
+const summary = computed(() => documentsResponse.value?.summary || {
+  paidCount: 0,
+  totalBalanceDue: 0
+})
+
+watch([debouncedSearch, typeFilter, statusFilter, dateFrom, dateTo], () => {
   pagination.value.pageIndex = 0
+})
+
+watch(totalResults, (total) => {
+  const lastPageIndex = Math.max(Math.ceil(total / pagination.value.pageSize) - 1, 0)
+
+  if (pagination.value.pageIndex > lastPageIndex) {
+    pagination.value.pageIndex = lastPageIndex
+  }
 })
 
 const hasActiveFilters = computed(() =>
@@ -137,18 +143,7 @@ function getBalanceDueClass(document: DocumentListItem) {
 const columns: TableColumn<DocumentListItem>[] = [
   {
     accessorKey: 'documentNumber',
-    header: ({ column }) => h(UButton, {
-      color: 'neutral',
-      variant: 'ghost',
-      label: 'Document',
-      icon: column.getIsSorted() === 'asc'
-        ? 'i-lucide-arrow-up-az'
-        : column.getIsSorted() === 'desc'
-          ? 'i-lucide-arrow-down-az'
-          : 'i-lucide-arrow-up-down',
-      class: '-mx-2.5',
-      onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
-    }),
+    header: 'Document',
     cell: ({ row }) => {
       const statusBadge = getDocumentStatusBadge(row.original.status)
 
@@ -190,7 +185,7 @@ const columns: TableColumn<DocumentListItem>[] = [
         content: { align: 'end' },
         items: getRowItems(row.original)
       },
-      () => h(UButton, {
+      () => h(resolveComponent('UButton'), {
         icon: 'i-lucide-ellipsis-vertical',
         color: 'neutral',
         variant: 'ghost'
@@ -290,19 +285,16 @@ const columns: TableColumn<DocumentListItem>[] = [
     <template #body>
       <div class="space-y-4">
         <div class="grid gap-4 md:grid-cols-4">
-          <PosSummaryCard title="Documents" :value="String(documents?.length || 0)" icon="i-lucide-files" />
-          <PosSummaryCard title="Payés" :value="String((documents || []).filter(document => document.status === 'paid').length)" icon="i-lucide-wallet" />
-          <PosSummaryCard title="Restant à encaisser" :value="formatCurrency((documents || []).reduce((sum, document) => sum + document.balanceDue, 0))" icon="i-lucide-scale" />
-          <PosSummaryCard title="Visibles" :value="String(filteredDocuments.length)" icon="i-lucide-filter" />
+          <PosSummaryCard title="Documents" :value="String(totalResults)" icon="i-lucide-files" />
+          <PosSummaryCard title="Payés" :value="String(summary.paidCount)" icon="i-lucide-wallet" />
+          <PosSummaryCard title="Restant à encaisser" :value="formatCurrency(summary.totalBalanceDue)" icon="i-lucide-scale" />
+          <PosSummaryCard title="Sur la page" :value="String(documents.length)" icon="i-lucide-filter" />
         </div>
 
         <UTable
           ref="table"
-          v-model:pagination="pagination"
-          v-model:sorting="sorting"
           v-model:column-visibility="columnVisibility"
-          :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-          :data="filteredDocuments"
+          :data="documents"
           :columns="columns"
           sticky="header"
           :loading="status === 'pending'"
@@ -328,14 +320,14 @@ const columns: TableColumn<DocumentListItem>[] = [
 
         <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
           <p class="text-sm text-toned">
-            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredDocuments.length }} document(s)
+            {{ totalResults }} résultat(s) · page {{ pagination.pageIndex + 1 }} / {{ totalPages }}
           </p>
 
           <UPagination
-            :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-            :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-            :total="table?.tableApi?.getFilteredRowModel().rows.length || filteredDocuments.length"
-            @update:page="(page: number) => table?.tableApi?.setPageIndex(page - 1)"
+            :page="pagination.pageIndex + 1"
+            :items-per-page="pagination.pageSize"
+            :total="totalResults"
+            @update:page="(page: number) => { pagination.pageIndex = page - 1 }"
           />
         </div>
       </div>

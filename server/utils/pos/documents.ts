@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, lte, or, sql } from 'drizzle-orm'
 import {
   customers,
   documentLines,
@@ -11,6 +11,7 @@ import type {
   DocumentDetail,
   DocumentLineRecord,
   DocumentListItem,
+  DocumentListResponse,
   DocumentRecord,
   PaymentRecord
 } from '~~/shared/types/pos'
@@ -88,17 +89,39 @@ function getDocumentCreatedLabel(type: DocumentRecord['type']) {
 }
 
 export async function listDocuments(filters?: {
+  q?: string
   type?: string
   status?: string
   dateFrom?: string
   dateTo?: string
   customerId?: number
   ticketId?: number
-}) {
+  paymentState?: 'all' | 'due'
+  sortBy?: 'issuedAt' | 'balanceDue'
+  page?: number
+  pageSize?: number
+}): Promise<DocumentListResponse> {
   await ensurePosSchema()
 
   const db = useDb()
-  const rows = await db.select({
+
+  const page = Math.max(filters?.page || 1, 1)
+  const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
+  const offset = (page - 1) * pageSize
+  const sortBy = filters?.sortBy || 'issuedAt'
+  const searchTerm = filters?.q?.trim().toLowerCase()
+  const searchPattern = searchTerm ? `%${searchTerm}%` : null
+  const paidAmountValue = sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
+  const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
+  const balanceDueValue = sql<number>`case when ${documents.type} in ('invoice', 'receipt') then max(${documents.total} - ${paidAmountValue}, 0) else 0 end`
+  const paidAmount = paidAmountValue.as('paid_amount')
+  const customerName = customerNameValue.as('customer_name')
+  const balanceDue = balanceDueValue.as('balance_due')
+  const dueFilter = filters?.paymentState === 'due'
+    ? sql`${documents.type} in ('invoice', 'receipt') and ${documents.total} > ${paidAmountValue}`
+    : undefined
+
+  const baseQuery = db.select({
     id: documents.id,
     documentNumber: documents.documentNumber,
     type: documents.type,
@@ -112,17 +135,23 @@ export async function listDocuments(filters?: {
     notes: documents.notes,
     createdAt: documents.createdAt,
     updatedAt: documents.updatedAt,
-    customerFirstName: customers.firstName,
-    customerLastName: customers.lastName,
-    customerCompanyName: customers.companyName,
+    customerName,
     ticketNumber: tickets.ticketNumber,
-    paidAmount: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
+    paidAmount,
+    balanceDue
   })
     .from(documents)
     .innerJoin(customers, eq(documents.customerId, customers.id))
     .leftJoin(tickets, eq(documents.ticketId, tickets.id))
     .leftJoin(payments, eq(payments.documentId, documents.id))
     .where(and(
+      searchPattern
+        ? or(
+            sql`lower(${documents.documentNumber}) like ${searchPattern}`,
+            sql`lower(${customerNameValue}) like ${searchPattern}`,
+            sql`lower(coalesce(${tickets.ticketNumber}, '')) like ${searchPattern}`
+          )
+        : undefined,
       filters?.type ? eq(documents.type, filters.type as typeof documents.$inferSelect.type) : undefined,
       filters?.status ? eq(documents.status, filters.status as typeof documents.$inferSelect.status) : undefined,
       filters?.customerId ? eq(documents.customerId, filters.customerId) : undefined,
@@ -131,27 +160,55 @@ export async function listDocuments(filters?: {
       filters?.dateTo ? lte(documents.issuedAt, filters.dateTo) : undefined
     ))
     .groupBy(documents.id, customers.id, tickets.id)
-    .orderBy(desc(documents.issuedAt), desc(documents.id))
+    .having(dueFilter)
+    .as('document_list')
 
-  return rows.map((row): DocumentListItem => ({
-    id: row.id,
-    documentNumber: row.documentNumber,
-    type: row.type,
-    status: row.status,
-    customerId: row.customerId,
-    ticketId: row.ticketId,
-    issuedAt: row.issuedAt,
-    subtotal: row.subtotal,
-    taxAmount: row.taxAmount,
-    total: row.total,
-    notes: row.notes,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    customerName: row.customerCompanyName || `${row.customerFirstName} ${row.customerLastName}`,
-    ticketNumber: row.ticketNumber,
-    paidAmount: Number(row.paidAmount || 0),
-    balanceDue: isPayableDocumentType(row.type) ? row.total - Number(row.paidAmount || 0) : 0
-  }))
+  const [summaryRows, rows] = await Promise.all([
+    db.select({
+      total: sql<number>`count(*)`,
+      paidCount: sql<number>`coalesce(sum(case when ${baseQuery.status} = 'paid' then 1 else 0 end), 0)`,
+      totalBalanceDue: sql<number>`coalesce(sum(${baseQuery.balanceDue}), 0)`
+    }).from(baseQuery),
+    db.select().from(baseQuery)
+      .orderBy(
+        sortBy === 'balanceDue' ? desc(baseQuery.balanceDue) : desc(baseQuery.issuedAt),
+        desc(baseQuery.issuedAt),
+        desc(baseQuery.id)
+      )
+      .limit(pageSize)
+      .offset(offset)
+  ])
+
+  const summary = summaryRows[0]
+
+  return {
+    items: rows.map((row): DocumentListItem => ({
+      id: row.id,
+      documentNumber: row.documentNumber,
+      type: row.type,
+      status: row.status,
+      customerId: row.customerId,
+      ticketId: row.ticketId,
+      issuedAt: row.issuedAt,
+      subtotal: row.subtotal,
+      taxAmount: row.taxAmount,
+      total: row.total,
+      notes: row.notes,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      customerName: row.customerName,
+      ticketNumber: row.ticketNumber,
+      paidAmount: Number(row.paidAmount || 0),
+      balanceDue: isPayableDocumentType(row.type) ? Number(row.balanceDue || 0) : 0
+    })),
+    page,
+    pageSize,
+    total: Number(summary?.total || 0),
+    summary: {
+      paidCount: Number(summary?.paidCount || 0),
+      totalBalanceDue: Number(summary?.totalBalanceDue || 0)
+    }
+  }
 }
 
 export async function getDocumentById(id: number): Promise<DocumentDetail> {

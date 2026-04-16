@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import { documentStatusColors, documentStatusLabels, documentTypeColors, documentTypeLabels, paymentMethodColors, paymentMethodLabels, ticketStatusColors, ticketStatusLabels } from '~~/shared/constants/pos'
-import type { CustomerFormValue, CustomerRecord, DocumentListItem, PaymentListItem, TicketListItem } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerRecord, DocumentListItem, DocumentListResponse, PaymentListItem, TicketListItem } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
@@ -24,8 +24,12 @@ const [{ data: customer, refresh: refreshCustomer }, { data: tickets, refresh: r
   useFetch<TicketListItem[]>('/api/tickets', {
     query: computed(() => ({ customerId: id.value }))
   }),
-  useFetch<DocumentListItem[]>('/api/documents', {
-    query: computed(() => ({ customerId: id.value }))
+  useFetch<DocumentListResponse>('/api/documents', {
+    query: computed(() => ({
+      customerId: id.value,
+      page: 1,
+      pageSize: 100
+    }))
   }),
   useFetch<PaymentListItem[]>('/api/payments', {
     query: computed(() => ({ customerId: id.value }))
@@ -191,7 +195,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
                   Documents
                 </p>
                 <p class="text-sm font-semibold text-highlighted">
-                  {{ documents?.length || 0 }}
+                  {{ documents?.total || 0 }}
                 </p>
               </div>
               <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
@@ -326,7 +330,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
 
               <UTable
                 v-else-if="activeTab === 'documents'"
-                :data="documents || []"
+                :data="documents?.items || []"
                 :columns="documentColumns"
                 sticky="header"
               >

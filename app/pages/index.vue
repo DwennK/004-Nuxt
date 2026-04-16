@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import { documentTypeColors, documentTypeLabels, paymentMethodColors } from '~~/shared/constants/pos'
-import type { DailySummary, DocumentListItem } from '~~/shared/types/pos'
+import type { DailySummary, DocumentListItem, DocumentListResponse } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime, getPaymentMethodLabel, toDateInputValue } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
@@ -9,25 +9,30 @@ const NuxtLink = resolveComponent('NuxtLink')
 
 const selectedActivity = ref<'paid' | 'due'>('paid')
 
-const [{ data: summary }, { data: documents }] = await Promise.all([
+const [{ data: summary }, { data: dueDocumentsResponse }] = await Promise.all([
   useFetch<DailySummary>('/api/reports/end-of-day', {
     query: {
       date: toDateInputValue()
     }
   }),
-  useFetch<DocumentListItem[]>('/api/documents')
+  useFetch<DocumentListResponse>('/api/documents', {
+    query: {
+      paymentState: 'due',
+      sortBy: 'balanceDue',
+      page: 1,
+      pageSize: 5
+    }
+  })
 ])
 
 const paidDocuments = computed(() => summary.value?.paidDocuments || [])
 
 const dueDocuments = computed(() => {
-  return [...(documents.value || [])]
-    .filter(document => document.balanceDue > 0)
-    .sort((left, right) => right.balanceDue - left.balanceDue)
+  return dueDocumentsResponse.value?.items || []
 })
 
 const totalBalanceDue = computed(() => {
-  return dueDocuments.value.reduce((sum, document) => sum + document.balanceDue, 0)
+  return dueDocumentsResponse.value?.summary.totalBalanceDue || 0
 })
 
 const latestPaymentAt = computed(() => {
@@ -64,7 +69,7 @@ const stats = computed(() => [{
 }, {
   title: 'Restant à encaisser',
   value: formatCurrency(totalBalanceDue.value),
-  description: `${dueDocuments.value.length} document(s) avec solde`,
+  description: `${dueDocumentsResponse.value?.total || 0} document(s) avec solde`,
   icon: 'i-lucide-scale'
 }, {
   title: 'Clôturés aujourd’hui',
@@ -82,7 +87,7 @@ const queueItems = computed(() => [{
   badge: 'Voir les tickets'
 }, {
   title: 'Documents à encaisser',
-  value: String(dueDocuments.value.length),
+  value: String(dueDocumentsResponse.value?.total || 0),
   description: `${formatCurrency(totalBalanceDue.value)} restant à encaisser`,
   to: '/documents',
   icon: 'i-lucide-receipt-text',
