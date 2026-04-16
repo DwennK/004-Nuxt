@@ -111,7 +111,7 @@ const [{ data: customers }, { data: tickets }, { data: documents }] = await Prom
 const counterActions = [{
   id: 'new-sale',
   label: 'Vente rapide',
-  icon: 'i-lucide-receipt',
+  icon: 'i-lucide-shopping-cart',
   to: '/sales/new'
 }, {
   id: 'new-ticket',

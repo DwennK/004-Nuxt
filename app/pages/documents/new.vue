@@ -62,7 +62,7 @@ async function saveDocument(payload: {
             Document avancé
           </h2>
           <p class="text-sm text-toned">
-            À utiliser pour les devis, commandes, factures ou reçus hors flux rapide, avec contrôle complet des lignes et du client.
+            À utiliser pour les devis, commandes ou factures hors flux rapide, avec contrôle complet des lignes et du client.
           </p>
         </div>
 

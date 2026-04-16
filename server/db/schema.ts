@@ -127,7 +127,7 @@ export const ticketEvents = sqliteTable('ticket_events', {
 export const documents = sqliteTable('documents', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   documentNumber: text('document_number').notNull(),
-  type: text('type', { enum: ['quote', 'customer_order', 'invoice', 'receipt'] }).notNull(),
+  type: text('type', { enum: ['quote', 'customer_order', 'invoice'] }).notNull(),
   status: text('status', { enum: ['draft', 'issued', 'paid', 'cancelled'] }).notNull().default('draft'),
   customerId: integer('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' }),
   ticketId: integer('ticket_id').references(() => tickets.id, { onDelete: 'set null' }),

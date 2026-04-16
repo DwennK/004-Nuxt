@@ -160,7 +160,7 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
           <UButton
             v-if="supportsThermalPrint"
             :to="`/documents/${id}/print?profile=thermal`"
-            icon="i-lucide-receipt"
+            icon="i-lucide-printer"
             label="Imprimer thermique"
           />
         </template>

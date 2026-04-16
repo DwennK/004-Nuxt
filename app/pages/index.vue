@@ -90,7 +90,7 @@ const queueItems = computed(() => [{
   value: String(dueDocumentsResponse.value?.total || 0),
   description: `${formatCurrency(totalBalanceDue.value)} restant à encaisser`,
   to: '/documents',
-  icon: 'i-lucide-receipt-text',
+  icon: 'i-lucide-file-clock',
   badge: 'Ouvrir les documents'
 }, {
   title: 'Encaissements du jour',
@@ -386,7 +386,7 @@ const activityColumns = computed<TableColumn<ActivityRow>[]>(() => {
           >
             <template #empty>
               <UEmpty
-                :icon="selectedActivity === 'paid' ? 'i-lucide-receipt' : 'i-lucide-scale'"
+                :icon="selectedActivity === 'paid' ? 'i-lucide-wallet-cards' : 'i-lucide-scale'"
                 :title="selectedActivity === 'paid' ? 'Aucun document encaissé' : 'Aucun solde en attente'"
                 :description="selectedActivity === 'paid'
                   ? 'Les encaissements validés aujourd’hui apparaîtront ici.'

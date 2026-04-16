@@ -100,7 +100,7 @@ function getRowItems(ticket: TicketListItem) {
     }
   }, {
     label: 'Créer une facture',
-    icon: 'i-lucide-receipt',
+    icon: 'i-lucide-file-text',
     onSelect() {
       createInvoice(ticket.id)
     }

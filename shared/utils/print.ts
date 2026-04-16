@@ -3,8 +3,7 @@ import type { DocumentType, PrintProfile } from '../types/pos'
 const documentPrintProfiles: Record<DocumentType, PrintProfile[]> = {
   quote: ['a4'],
   customer_order: ['a4'],
-  invoice: ['a4', 'thermal'],
-  receipt: ['a4', 'thermal']
+  invoice: ['a4', 'thermal']
 }
 
 const ticketPrintProfiles: PrintProfile[] = ['thermal']

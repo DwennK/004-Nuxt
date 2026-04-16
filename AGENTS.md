@@ -132,7 +132,7 @@ When debugging or checking the UI with Playwright:
 Respect the POS model described in `README.md`:
 
 - `ticket`: tracked work case
-- `document`: commercial object such as quote, invoice, receipt, credit note
+- `document`: commercial object such as quote, invoice, credit note
 - `payment`: cashflow object tracked separately
 
 Do not collapse these concepts together in UI, API, or database changes unless explicitly requested.

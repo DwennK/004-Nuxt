@@ -868,7 +868,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 <UButton
                   v-if="canCreateInvoice"
                   label="Créer une facture"
-                  icon="i-lucide-receipt"
+                  icon="i-lucide-file-text"
                   size="sm"
                   block
                   class="justify-start"

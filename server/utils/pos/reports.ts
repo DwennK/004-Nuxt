@@ -193,7 +193,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       .where(and(
         eq(payments.status, 'paid'),
         eq(documents.status, 'paid'),
-        inArray(documents.type, ['invoice', 'receipt']),
+        inArray(documents.type, ['invoice']),
         gte(payments.paidAt, start),
         lte(payments.paidAt, end)
       ))
@@ -315,7 +315,7 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
       .where(and(
         eq(payments.status, 'paid'),
         eq(documents.status, 'paid'),
-        inArray(documents.type, ['invoice', 'receipt']),
+        inArray(documents.type, ['invoice']),
         gte(payments.paidAt, start),
         lte(payments.paidAt, end)
       ))

@@ -373,7 +373,7 @@ function getTicketCommercialSummary(documentRows: DocumentRecord[], paymentRows:
   const latestDocument = documentRows[0] || null
   const payableDocuments = documentRows.filter(document =>
     document.status !== 'cancelled'
-    && (document.type === 'invoice' || document.type === 'receipt')
+    && document.type === 'invoice'
   )
   const payableDocument = invoice || payableDocuments[0] || null
   const totalPaid = paymentRows
@@ -480,9 +480,7 @@ function buildSyntheticEvents(ticket: TicketRecord, documentRows: DocumentRecord
       ? 'Devis créé'
       : document.type === 'customer_order'
         ? 'Commande créée'
-        : document.type === 'invoice'
-          ? 'Facture créée'
-          : 'Reçu créé'
+        : 'Facture créée'
 
     events.push({
       id: `synthetic-document-${document.id}`,

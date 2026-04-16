@@ -142,7 +142,7 @@ useHead(() => ({
           <UButton
             v-if="availableProfiles.includes('thermal')"
             :to="`/documents/${id}/print?profile=thermal`"
-            icon="i-lucide-receipt"
+            icon="i-lucide-printer"
             label="Thermique"
             :color="profile === 'thermal' ? 'primary' : 'neutral'"
             :variant="profile === 'thermal' ? 'solid' : 'soft'"

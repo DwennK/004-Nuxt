@@ -24,7 +24,7 @@ It uses Nuxt server routes, Drizzle ORM, and Turso/libSQL, and is deployed throu
 The project follows these rules:
 
 - a `ticket` is an operational work case: repair, diagnostic, follow-up support, or any tracked intervention
-- a `document` is the commercial object: quote, customer order, invoice, receipt, or credit note
+- a `document` is the commercial object: quote, customer order, invoice, or credit note
 - a `payment` is the cashflow object and is tracked separately from tickets and documents
 - direct sales can happen without a ticket
 - quick support can happen without a ticket when there is no follow-up workflow
@@ -33,8 +33,8 @@ Typical flows:
 
 - tracked repair: `Ticket -> Quote -> Invoice -> Payment -> Ticket closed`
 - customer order: `Ticket or direct context -> Customer order -> Invoice -> Payment`
-- direct sale: `Quick sale -> Receipt or invoice -> Payment`
-- quick support: `Invoice or receipt -> Payment`
+- direct sale: `Quick sale -> Invoice -> Payment`
+- quick support: `Invoice -> Payment`
 
 ## Module Status
 
@@ -348,7 +348,7 @@ The daily report is designed for quick store closing checks.
 Current output includes:
 
 - total paid today
-- invoices and receipts paid today
+- invoices paid today
 - totals by payment method
 - number of open tickets
 - number of tickets opened today

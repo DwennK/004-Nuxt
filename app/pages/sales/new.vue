@@ -16,16 +16,6 @@ type SaleLine = {
 
 const toast = useToast()
 
-const saleType = ref<'receipt' | 'invoice'>('receipt')
-const receiptAttachCustomer = ref(false)
-const attachCustomer = computed({
-  get: () => saleType.value === 'invoice' || receiptAttachCustomer.value,
-  set: (value: boolean) => {
-    if (saleType.value === 'receipt') {
-      receiptAttachCustomer.value = value
-    }
-  }
-})
 const search = ref('')
 const selectedCustomerId = ref<number | null>(null)
 const lines = ref<SaleLine[]>([])
@@ -107,15 +97,7 @@ const totals = computed(() => {
 })
 
 const canCharge = computed(() => {
-  if (!lines.value.length) {
-    return false
-  }
-
-  if (saleType.value === 'invoice') {
-    return Boolean(selectedCustomerId.value)
-  }
-
-  return !attachCustomer.value || Boolean(selectedCustomerId.value)
+  return Boolean(lines.value.length)
 })
 
 const lastPaymentMethodLabel = computed(() => {
@@ -394,8 +376,7 @@ function resetSaleState() {
   search.value = ''
   closeSearchPanel()
   lines.value = []
-  receiptAttachCustomer.value = false
-  selectedCustomerId.value = saleType.value === 'invoice' ? selectedCustomerId.value : null
+  selectedCustomerId.value = null
 }
 
 function focusSearchInput() {
@@ -428,26 +409,15 @@ async function completeSale(method: PaymentMethod) {
     return
   }
 
-  if (saleType.value === 'invoice' && !selectedCustomerId.value) {
-    toast.add({
-      title: 'Client requis',
-      description: 'Sélectionnez un client pour créer une facture nominative.',
-      color: 'warning'
-    })
-    return
-  }
-
   isSaving.value = method
 
   try {
-    const customerId = (saleType.value === 'invoice' || attachCustomer.value)
-      ? selectedCustomerId.value!
-      : await ensureCounterCustomer()
+    const customerId = selectedCustomerId.value || await ensureCounterCustomer()
 
     const createdDocument = await $fetch<DocumentDetail>('/api/documents', {
       method: 'POST',
       body: {
-        type: saleType.value,
+        type: 'invoice',
         status: 'issued',
         customerId,
         ticketId: null,
@@ -883,7 +853,7 @@ function selectAllOnFocus(event: FocusEvent) {
                       Encaissement
                     </h2>
                     <p class="text-sm text-toned">
-                      Type de document, client éventuel, puis paiement direct.
+                      Facture immédiate, client éventuel, puis paiement direct.
                     </p>
                   </div>
                   <UBadge color="primary" variant="soft" size="sm">
@@ -892,43 +862,14 @@ function selectAllOnFocus(event: FocusEvent) {
                 </div>
               </template>
 
-              <div class="grid grid-cols-2 gap-2">
-                <UButton
-                  type="button"
-                  :color="saleType === 'receipt' ? 'primary' : 'neutral'"
-                  :variant="saleType === 'receipt' ? 'solid' : 'soft'"
-                  label="Reçu"
-                  class="justify-center"
-                  @click="saleType = 'receipt'"
-                />
-                <UButton
-                  type="button"
-                  :color="saleType === 'invoice' ? 'primary' : 'neutral'"
-                  :variant="saleType === 'invoice' ? 'solid' : 'soft'"
-                  label="Facture"
-                  class="justify-center"
-                  @click="saleType = 'invoice'"
-                />
-              </div>
-
               <UFormField
-                v-if="saleType === 'receipt'"
-                label="Client nominatif"
-                name="attachCustomer"
-              >
-                <USwitch v-model="attachCustomer" label="Associer un client à ce reçu" />
-              </UFormField>
-
-              <UFormField
-                v-if="saleType === 'invoice' || attachCustomer"
                 label="Client"
                 name="customerId"
-                :required="saleType === 'invoice'"
               >
                 <PosCustomerSelectField
                   :model-value="selectedCustomerId"
                   :customers="customerPool"
-                  placeholder="Rechercher ou créer un client"
+                  placeholder="Rechercher un client ou laisser Client comptoir"
                   @update:model-value="selectedCustomerId = $event"
                   @created="customerPool = [...customerPool, $event]"
                 />

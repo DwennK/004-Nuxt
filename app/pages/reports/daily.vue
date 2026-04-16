@@ -150,7 +150,7 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
               <div class="flex items-center justify-between gap-3">
                 <div>
                   <h2 class="text-base font-semibold text-highlighted">
-                    Factures et reçus encaissés
+                    Factures encaissées
                   </h2>
                 </div>
                 <span class="text-xs text-toned">
@@ -175,7 +175,7 @@ const turnoverColumns: TableColumn<DailySummary['turnoverByCategory'][number]>[]
               >
                 <template #empty>
                   <UEmpty
-                    icon="i-lucide-receipt"
+                    icon="i-lucide-wallet-cards"
                     title="Aucun document encaissé"
                     description="Aucun paiement n’a été comptabilisé à la date sélectionnée."
                   />

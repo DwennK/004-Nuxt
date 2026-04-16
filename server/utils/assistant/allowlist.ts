@@ -83,7 +83,7 @@ export const assistantTableAllowlist = {
     ]
   },
   documents: {
-    description: 'Documents commerciaux: devis, commandes, factures, reçus.',
+    description: 'Documents commerciaux: devis, commandes et factures.',
     columns: {
       id: 'Identifiant document.',
       document_number: 'Numéro document.',

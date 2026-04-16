@@ -74,7 +74,7 @@ function onFileClick() {
       <UFormField
         name="name"
         label="Nom"
-        description="Apparaîtra sur les reçus, factures et autres communications."
+        description="Apparaîtra sur les factures et autres communications."
         required
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
@@ -87,7 +87,7 @@ function onFileClick() {
       <UFormField
         name="email"
         label="E-mail"
-        description="Utilisé pour la connexion, les reçus envoyés par e-mail et les mises à jour."
+        description="Utilisé pour la connexion, les factures envoyées par e-mail et les mises à jour."
         required
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >

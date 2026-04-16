@@ -418,7 +418,7 @@ async function removePayment(payment: PaymentRecord) {
             color="neutral"
             variant="subtle"
             title="Document non payable"
-            description="Cette section reste disponible uniquement pour les reçus et factures."
+            description="Cette section reste disponible uniquement pour les factures."
           />
         </template>
       </UCard>

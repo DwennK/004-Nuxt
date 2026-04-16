@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   initialValue: () => ({}),
   submitLabel: 'Enregistrer le document',
-  allowedTypes: () => ['quote', 'customer_order', 'invoice', 'receipt'],
+  allowedTypes: () => ['quote', 'customer_order', 'invoice'],
   fixedCustomerId: null,
   fixedTicketId: null
 })

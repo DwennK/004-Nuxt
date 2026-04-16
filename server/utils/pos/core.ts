@@ -1119,9 +1119,9 @@ async function seedOperations() {
     updatedAt: toIsoDateTime()
   }).returning()
 
-  const receipt = await db.insert(documents).values({
-    documentNumber: 'RE-1',
-    type: 'receipt',
+  const accessoryInvoice = await db.insert(documents).values({
+    documentNumber: 'FA-1',
+    type: 'invoice',
     status: 'paid',
     customerId: accessoryCustomer.id,
     ticketId: null,
@@ -1135,7 +1135,7 @@ async function seedOperations() {
   }).returning()
 
   const supportInvoice = await db.insert(documents).values({
-    documentNumber: 'FA-1',
+    documentNumber: 'FA-2',
     type: 'invoice',
     status: 'paid',
     customerId: supportCustomer.id,
@@ -1150,10 +1150,10 @@ async function seedOperations() {
   }).returning()
 
   const quoteDocument = quote[0]
-  const receiptDocument = receipt[0]
+  const accessoryInvoiceDocument = accessoryInvoice[0]
   const supportDocument = supportInvoice[0]
 
-  if (!quoteDocument || !receiptDocument || !supportDocument) {
+  if (!quoteDocument || !accessoryInvoiceDocument || !supportDocument) {
     return
   }
 
@@ -1179,7 +1179,7 @@ async function seedOperations() {
       categoryHint: 'service'
     },
     {
-      documentId: receiptDocument.id,
+      documentId: accessoryInvoiceDocument.id,
       catalogItemId: caseItem.id,
       label: caseItem.name,
       quantity: 1,
@@ -1189,7 +1189,7 @@ async function seedOperations() {
       categoryHint: 'accessory'
     },
     {
-      documentId: receiptDocument.id,
+      documentId: accessoryInvoiceDocument.id,
       catalogItemId: glassItem.id,
       label: glassItem.name,
       quantity: 1,
@@ -1213,10 +1213,10 @@ async function seedOperations() {
   await db.insert(payments).values([
     {
       customerId: accessoryCustomer.id,
-      documentId: receiptDocument.id,
+      documentId: accessoryInvoiceDocument.id,
       method: 'card_twint',
       status: 'paid',
-      amount: receiptDocument.total,
+      amount: accessoryInvoiceDocument.total,
       paidAt: toIsoDateTime(new Date('2026-03-25T08:42:00.000Z')),
       reference: 'POS-8001',
       notes: null,

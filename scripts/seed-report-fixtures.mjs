@@ -171,14 +171,8 @@ function distributeTotal(total, count, rng, minValue) {
   return values
 }
 
-function pickWeightedCategory(type, rng) {
+function pickWeightedCategory(rng) {
   const draw = rng()
-  if (type === 'receipt') {
-    if (draw < 0.62) return 'accessory'
-    if (draw < 0.88) return 'service'
-    return 'repair'
-  }
-
   if (draw < 0.42) return 'repair'
   if (draw < 0.82) return 'service'
   return 'accessory'
@@ -258,23 +252,20 @@ function buildDailyTargets(year, endDate) {
 function buildDayDocuments(dayTarget, customers, sequences) {
   const [year, month, day] = dayTarget.date.split('-').map(Number)
   const rng = mulberry32(hashString(`documents-${dayTarget.date}`))
-  const typeWeights = Array.from({ length: DOCS_PER_DAY }, (_, index) => ({
-    type: index < 7 ? 'invoice' : 'receipt',
-    weight: (index < 7 ? 1.18 : 0.72) * (0.82 + rng() * 1.3)
-  }))
+  const documentWeights = Array.from({ length: DOCS_PER_DAY }, () => 1.18 * (0.82 + rng() * 1.3))
 
-  const weightSum = typeWeights.reduce((sum, item) => sum + item.weight, 0)
+  const weightSum = documentWeights.reduce((sum, weight) => sum + weight, 0)
   const docTotals = []
   let assigned = 0
 
   for (let index = 0; index < DOCS_PER_DAY; index++) {
-    const minValue = typeWeights[index].type === 'invoice' ? 4_500 : 2_500
+    const minValue = 4_500
     if (index === DOCS_PER_DAY - 1) {
       docTotals.push(Math.max(dayTarget.total - assigned, minValue))
       break
     }
 
-    const raw = Math.max(Math.round((dayTarget.total * typeWeights[index].weight) / weightSum), minValue)
+    const raw = Math.max(Math.round((dayTarget.total * documentWeights[index]) / weightSum), minValue)
     docTotals.push(raw)
     assigned += raw
   }
@@ -283,18 +274,18 @@ function buildDayDocuments(dayTarget, customers, sequences) {
   docTotals[docTotals.length - 1] += totalAdjustment
 
   return docTotals.map((total, index) => {
-    const type = typeWeights[index].type
+    const type = 'invoice'
     const customer = customers[Math.floor(rng() * customers.length)]
     const issuedHour = 8 + Math.floor((index * 11 + rng() * 5) % 10)
     const issuedMinute = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55][(index * 3) % 12]
     const paymentMinuteOffset = 4 + Math.floor(rng() * 40)
     const lineCount = total > 70_000 ? 3 : total > 24_000 ? 2 : (rng() > 0.55 ? 2 : 1)
     const lineTotals = distributeTotal(total, lineCount, rng, 1_500)
-    const number = `${type === 'invoice' ? 'FA' : 'RE'}-${++sequences[type]}`
+    const number = `FA-${++sequences.invoice}`
     const note = `${MARKER} ${dayTarget.date} ${type} #${index + 1}`
 
     const lines = lineTotals.map((lineTotal) => {
-      const category = pickWeightedCategory(type, rng)
+      const category = pickWeightedCategory(rng)
       return {
         label: pickLabel(category, rng),
         quantity: 1,
@@ -505,24 +496,14 @@ async function insertDocuments(dataset) {
 }
 
 async function updateSequences(sequences) {
-  await client.batch([
-    {
-      sql: `
-        INSERT INTO number_sequences (scope, last_value)
-        VALUES (?, ?)
-        ON CONFLICT(scope) DO UPDATE SET last_value = excluded.last_value
-      `,
-      args: ['document:invoice', sequences.invoice]
-    },
-    {
-      sql: `
-        INSERT INTO number_sequences (scope, last_value)
-        VALUES (?, ?)
-        ON CONFLICT(scope) DO UPDATE SET last_value = excluded.last_value
-      `,
-      args: ['document:receipt', sequences.receipt]
-    }
-  ], 'write')
+  await client.batch([{
+    sql: `
+      INSERT INTO number_sequences (scope, last_value)
+      VALUES (?, ?)
+      ON CONFLICT(scope) DO UPDATE SET last_value = excluded.last_value
+    `,
+    args: ['document:invoice', sequences.invoice]
+  }], 'write')
 }
 
 async function printSummary() {
@@ -559,8 +540,7 @@ async function main() {
   const customers = await insertCustomers()
 
   const sequences = {
-    invoice: await fetchCurrentSequence('invoice', 'FA'),
-    receipt: await fetchCurrentSequence('receipt', 'RE')
+    invoice: await fetchCurrentSequence('invoice', 'FA')
   }
 
   const dayTargets = [

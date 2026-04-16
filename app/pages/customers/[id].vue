@@ -335,7 +335,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
                 sticky="header"
               >
                 <template #empty>
-                  <UEmpty icon="i-lucide-files" title="Aucun document" description="Les devis, commandes, factures et reçus apparaîtront ici." />
+                  <UEmpty icon="i-lucide-files" title="Aucun document" description="Les devis, commandes et factures apparaîtront ici." />
                 </template>
               </UTable>
 
