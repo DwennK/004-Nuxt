@@ -1,54 +1,37 @@
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
-import { documentTypeColors, documentTypeLabels, paymentMethodColors } from '~~/shared/constants/pos'
-import type { DailySummary, DocumentListItem, DocumentListResponse } from '~~/shared/types/pos'
-import { formatCurrency, formatDateTime, getPaymentMethodLabel, toDateInputValue } from '~~/shared/utils/pos'
+import {
+  documentTypeColors,
+  documentTypeLabels,
+  paymentMethodColors,
+  paymentMethodLabels,
+  ticketStatusColors,
+  ticketStatusLabels
+} from '~~/shared/constants/pos'
+import type { HomeOverview } from '~~/shared/types/pos'
+import { formatCurrency, formatDateTime, toDateInputValue } from '~~/shared/utils/pos'
 
-const UBadge = resolveComponent('UBadge')
-const NuxtLink = resolveComponent('NuxtLink')
-
-const selectedActivity = ref<'paid' | 'due'>('paid')
-
-const [{ data: summary }, { data: dueDocumentsResponse }] = await Promise.all([
-  useFetch<DailySummary>('/api/reports/end-of-day', {
-    query: {
-      date: toDateInputValue()
-    }
-  }),
-  useFetch<DocumentListResponse>('/api/documents', {
-    query: {
-      paymentState: 'due',
-      sortBy: 'balanceDue',
-      page: 1,
-      pageSize: 5
-    }
-  })
-])
-
-const paidDocuments = computed(() => summary.value?.paidDocuments || [])
-
-const dueDocuments = computed(() => {
-  return dueDocumentsResponse.value?.items || []
+const { data: home } = await useFetch<HomeOverview>('/api/home', {
+  query: {
+    date: toDateInputValue()
+  }
 })
 
-const totalBalanceDue = computed(() => {
-  return dueDocumentsResponse.value?.summary.totalBalanceDue || 0
-})
+const activityIcons = {
+  payment: 'i-lucide-wallet-cards',
+  ticket: 'i-lucide-wrench',
+  document: 'i-lucide-file-text'
+} as const
 
-const latestPaymentAt = computed(() => {
-  return paidDocuments.value.reduce<string | null>((latest, document) => {
-    if (!latest) {
-      return document.paidAt
-    }
-
-    return new Date(document.paidAt).getTime() > new Date(latest).getTime()
-      ? document.paidAt
-      : latest
-  }, null)
-})
+const priorityIcons = {
+  'due-documents': 'i-lucide-scale',
+  'ready-tickets': 'i-lucide-package-check',
+  'open-tickets': 'i-lucide-wrench',
+  'reports': 'i-lucide-chart-column'
+} as const
 
 const displayDate = computed(() => {
-  const date = summary.value?.date || toDateInputValue()
+  const date = home.value?.date || toDateInputValue()
+
   return new Intl.DateTimeFormat('fr-CH', {
     weekday: 'long',
     day: 'numeric',
@@ -56,139 +39,44 @@ const displayDate = computed(() => {
   }).format(new Date(`${date}T12:00:00`))
 })
 
-const stats = computed(() => [{
-  title: 'Encaissé aujourd’hui',
-  value: formatCurrency(summary.value?.totalPaid || 0),
-  description: `${paidDocuments.value.length} encaissement(s) comptabilisé(s)`,
-  icon: 'i-lucide-wallet-cards'
-}, {
-  title: 'Tickets ouverts',
-  value: String(summary.value?.ticketStats.openCount || 0),
-  description: `${summary.value?.ticketStats.openedToday || 0} ouvert(s) aujourd’hui`,
-  icon: 'i-lucide-wrench'
-}, {
-  title: 'Restant à encaisser',
-  value: formatCurrency(totalBalanceDue.value),
-  description: `${dueDocumentsResponse.value?.total || 0} document(s) avec solde`,
-  icon: 'i-lucide-scale'
-}, {
-  title: 'Clôturés aujourd’hui',
-  value: String(summary.value?.ticketStats.closedToday || 0),
-  description: 'Suivi des remises et clôtures',
-  icon: 'i-lucide-package-check'
-}])
+const summaryItems = computed(() => {
+  const summary = home.value?.summary
+  const cashbox = home.value?.cashbox
 
-const queueItems = computed(() => [{
-  title: 'Tickets ouverts',
-  value: String(summary.value?.ticketStats.openCount || 0),
-  description: `${summary.value?.ticketStats.openedToday || 0} nouveau(x) aujourd’hui`,
-  to: '/tickets',
-  icon: 'i-lucide-wrench',
-  badge: 'Voir les tickets'
-}, {
-  title: 'Documents à encaisser',
-  value: String(dueDocumentsResponse.value?.total || 0),
-  description: `${formatCurrency(totalBalanceDue.value)} restant à encaisser`,
-  to: '/documents',
-  icon: 'i-lucide-file-clock',
-  badge: 'Ouvrir les documents'
-}, {
-  title: 'Encaissements du jour',
-  value: formatCurrency(summary.value?.totalPaid || 0),
-  description: latestPaymentAt.value
-    ? `Dernier encaissement à ${new Intl.DateTimeFormat('fr-CH', { hour: '2-digit', minute: '2-digit' }).format(new Date(latestPaymentAt.value))}`
-    : 'Aucun encaissement enregistré',
-  to: '/payments',
-  icon: 'i-lucide-wallet',
-  badge: 'Voir les paiements'
-}, {
-  title: 'Reports',
-  value: String(summary.value?.ticketStats.closedToday || 0),
-  description: 'Préparer le rapport et vérifier la caisse',
-  to: '/reports',
-  icon: 'i-lucide-chart-column',
-  badge: 'Ouvrir le rapport'
-}])
-
-const paymentMethodSummary = computed(() => {
-  return [...(summary.value?.totalsByMethod || [])]
-    .filter(item => item.total > 0)
-    .sort((left, right) => right.total - left.total)
+  return [{
+    title: 'Encaissé aujourd’hui',
+    value: formatCurrency(summary?.totalPaid || 0),
+    description: `${cashbox?.methods.length || 0} mode(s) utilisé(s)`,
+    icon: 'i-lucide-wallet-cards'
+  }, {
+    title: 'À encaisser',
+    value: formatCurrency(summary?.totalBalanceDue || 0),
+    description: `${summary?.dueDocumentCount || 0} facture(s) avec solde`,
+    icon: 'i-lucide-scale'
+  }, {
+    title: 'Tickets ouverts',
+    value: String(summary?.openTicketCount || 0),
+    description: `${summary?.openedToday || 0} nouveau(x) aujourd’hui`,
+    icon: 'i-lucide-wrench'
+  }, {
+    title: 'Prêts pour retrait',
+    value: String(summary?.readyForPickupCount || 0),
+    description: 'Dossiers à restituer',
+    icon: 'i-lucide-package-check'
+  }]
 })
 
-const activityTabItems = [{
-  label: 'Encaissements',
-  value: 'paid'
-}, {
-  label: 'À encaisser',
-  value: 'due'
-}]
+const latestPaymentLabel = computed(() => {
+  const latest = home.value?.cashbox.latestPaymentAt
 
-const paidDocumentColumns: TableColumn<DailySummary['paidDocuments'][number]>[] = [
-  {
-    accessorKey: 'documentNumber',
-    header: 'Document',
-    cell: ({ row }) => h('div', { class: 'space-y-1' }, [
-      h(NuxtLink, { to: `/documents/${row.original.id}`, class: 'font-medium text-highlighted' }, () => row.original.documentNumber),
-      h(UBadge, {
-        color: documentTypeColors[row.original.type],
-        variant: 'subtle',
-        size: 'sm'
-      }, () => documentTypeLabels[row.original.type])
-    ])
-  },
-  {
-    accessorKey: 'customerName',
-    header: 'Client'
-  },
-  {
-    accessorKey: 'paidAmountToday',
-    header: 'Encaissé',
-    cell: ({ row }) => h('div', { class: 'text-right font-medium text-highlighted' }, formatCurrency(row.original.paidAmountToday))
-  },
-  {
-    accessorKey: 'paidAt',
-    header: 'Heure',
-    cell: ({ row }) => h('div', { class: 'text-sm text-toned' }, formatDateTime(row.original.paidAt))
+  if (!latest) {
+    return 'Aucun encaissement validé aujourd’hui.'
   }
-]
 
-const dueDocumentColumns: TableColumn<DocumentListItem>[] = [
-  {
-    accessorKey: 'documentNumber',
-    header: 'Document',
-    cell: ({ row }) => h('div', { class: 'space-y-1' }, [
-      h(NuxtLink, { to: `/documents/${row.original.id}`, class: 'font-medium text-highlighted' }, () => row.original.documentNumber),
-      h(UBadge, {
-        color: documentTypeColors[row.original.type],
-        variant: 'subtle',
-        size: 'sm'
-      }, () => documentTypeLabels[row.original.type])
-    ])
-  },
-  {
-    accessorKey: 'customerName',
-    header: 'Client'
-  },
-  {
-    accessorKey: 'balanceDue',
-    header: 'Restant',
-    cell: ({ row }) => h('div', { class: 'text-right font-medium text-highlighted' }, formatCurrency(row.original.balanceDue))
-  },
-  {
-    accessorKey: 'total',
-    header: 'Total TTC',
-    cell: ({ row }) => h('div', { class: 'text-right text-toned' }, formatCurrency(row.original.total))
-  }
-]
-
-type ActivityRow = DailySummary['paidDocuments'][number] | DocumentListItem
-
-const activityRows = computed(() => selectedActivity.value === 'paid' ? paidDocuments.value : dueDocuments.value)
-const activityColumns = computed<TableColumn<ActivityRow>[]>(() => {
-  return selectedActivity.value === 'paid'
-    ? paidDocumentColumns as TableColumn<ActivityRow>[]
-    : dueDocumentColumns as TableColumn<ActivityRow>[]
+  return `Dernier encaissement à ${new Intl.DateTimeFormat('fr-CH', {
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(latest))}`
 })
 </script>
 
@@ -210,191 +98,350 @@ const activityColumns = computed<TableColumn<ActivityRow>[]>(() => {
 
     <template #body>
       <div class="space-y-4">
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <UCard
-            v-for="stat in stats"
-            :key="stat.title"
-            :ui="{ body: 'p-4' }"
-          >
-            <div class="flex items-start gap-3">
+        <section class="rounded-2xl border border-default bg-elevated/35 px-4 py-3">
+          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div
+              v-for="item in summaryItems"
+              :key="item.title"
+              class="flex items-start gap-3 rounded-xl px-1 py-1"
+            >
               <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring ring-primary/15">
-                <UIcon :name="stat.icon" class="size-4.5" />
+                <UIcon :name="item.icon" class="size-4.5" />
               </div>
 
               <div class="min-w-0 space-y-1">
                 <p class="text-[11px] font-medium uppercase tracking-[0.14em] text-toned">
-                  {{ stat.title }}
+                  {{ item.title }}
                 </p>
                 <p class="text-2xl font-semibold leading-none text-highlighted">
-                  {{ stat.value }}
+                  {{ item.value }}
                 </p>
                 <p class="text-sm text-toned">
-                  {{ stat.description }}
+                  {{ item.description }}
                 </p>
               </div>
             </div>
-          </UCard>
-        </div>
+          </div>
+        </section>
 
-        <div class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <div class="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_22rem]">
           <UCard :ui="{ body: 'p-0' }">
             <template #header>
               <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h2 class="text-lg font-semibold text-highlighted">
-                    À traiter maintenant
+                    Activité récente
                   </h2>
                   <p class="text-sm text-toned">
-                    Vue opérateur des éléments qui demandent une action aujourd’hui.
+                    Chronologie du comptoir: encaissements, tickets et documents créés aujourd’hui.
                   </p>
                 </div>
 
-                <UBadge variant="subtle" color="primary">
-                  {{ queueItems.length }} priorités
+                <UBadge variant="subtle" color="neutral">
+                  {{ home?.activity.length || 0 }} événement(s)
                 </UBadge>
               </div>
             </template>
 
-            <div class="divide-y divide-default">
+            <div v-if="home?.activity.length" class="divide-y divide-default">
               <NuxtLink
-                v-for="item in queueItems"
-                :key="item.title"
+                v-for="item in home.activity"
+                :key="item.id"
                 :to="item.to"
-                class="group flex items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/40"
+                class="group flex items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/35"
               >
                 <div class="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-toned transition-colors group-hover:bg-primary/10 group-hover:text-primary">
-                  <UIcon :name="item.icon" class="size-4.5" />
+                  <UIcon :name="activityIcons[item.kind]" class="size-4.5" />
                 </div>
 
                 <div class="min-w-0 flex-1">
-                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p class="font-medium text-highlighted">
-                        {{ item.title }}
-                      </p>
+                  <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="font-medium text-highlighted">
+                          {{ item.title }}
+                        </p>
+
+                        <UBadge
+                          v-if="item.badgeLabel"
+                          :color="item.badgeColor || 'neutral'"
+                          variant="subtle"
+                          size="sm"
+                        >
+                          {{ item.badgeLabel }}
+                        </UBadge>
+                      </div>
+
                       <p class="text-sm text-toned">
-                        {{ item.description }}
+                        {{ item.subtitle }}
                       </p>
                     </div>
 
-                    <div class="flex items-center gap-3">
-                      <span class="text-xl font-semibold text-highlighted">
-                        {{ item.value }}
+                    <div class="flex shrink-0 items-center gap-3">
+                      <span class="text-xs text-toned">
+                        {{ formatDateTime(item.occurredAt) }}
                       </span>
-                      <UBadge variant="soft" color="neutral">
-                        {{ item.badge }}
-                      </UBadge>
+
+                      <span
+                        v-if="typeof item.amount === 'number'"
+                        class="font-medium text-highlighted"
+                      >
+                        {{ formatCurrency(item.amount) }}
+                      </span>
                     </div>
                   </div>
                 </div>
               </NuxtLink>
             </div>
+
+            <UEmpty
+              v-else
+              icon="i-lucide-activity"
+              title="Aucune activité aujourd’hui"
+              description="Les derniers mouvements du comptoir apparaîtront ici."
+            />
           </UCard>
 
           <div class="space-y-4">
-            <UCard>
+            <UCard :ui="{ body: 'p-0' }">
               <template #header>
-                <div class="flex items-center justify-between gap-3">
+                <div class="flex items-start justify-between gap-3">
                   <div>
                     <h2 class="text-lg font-semibold text-highlighted">
-                      Répartition des encaissements
+                      À faire maintenant
                     </h2>
                     <p class="text-sm text-toned">
-                      Contrôle rapide des modes de paiement utilisés aujourd’hui.
+                      Les priorités comptoir du jour, sans détour.
                     </p>
                   </div>
 
-                  <UBadge variant="subtle" color="neutral">
-                    {{ paymentMethodSummary.length }} mode(s)
+                  <UBadge variant="subtle" color="primary">
+                    {{ home?.priorities.length || 0 }} items
                   </UBadge>
                 </div>
               </template>
 
-              <div v-if="paymentMethodSummary.length" class="space-y-3">
-                <div
-                  v-for="method in paymentMethodSummary"
-                  :key="method.method"
-                  class="flex items-center justify-between gap-3 rounded-xl border border-default px-3 py-2"
+              <div class="divide-y divide-default">
+                <NuxtLink
+                  v-for="item in home?.priorities || []"
+                  :key="item.id"
+                  :to="item.to"
+                  class="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/35"
                 >
-                  <div class="flex items-center gap-3">
+                  <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-toned transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                    <UIcon :name="priorityIcons[item.id]" class="size-4.5" />
+                  </div>
+
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="min-w-0">
+                        <p class="font-medium text-highlighted">
+                          {{ item.title }}
+                        </p>
+                        <p class="text-sm text-toned">
+                          {{ item.description }}
+                        </p>
+                      </div>
+
+                      <span class="text-lg font-semibold text-highlighted">
+                        {{ item.value }}
+                      </span>
+                    </div>
+
+                    <div class="mt-2">
+                      <UBadge :color="item.badgeColor" variant="soft" size="sm">
+                        {{ item.badgeLabel }}
+                      </UBadge>
+                    </div>
+                  </div>
+                </NuxtLink>
+              </div>
+            </UCard>
+
+            <UCard>
+              <template #header>
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 class="text-lg font-semibold text-highlighted">
+                      Caisse du jour
+                    </h2>
+                    <p class="text-sm text-toned">
+                      Encaissement validé, dernier mouvement et modes utilisés.
+                    </p>
+                  </div>
+
+                  <NuxtLink to="/payments">
+                    <UBadge variant="soft" color="neutral">
+                      Paiements
+                    </UBadge>
+                  </NuxtLink>
+                </div>
+              </template>
+
+              <div class="space-y-4">
+                <div class="rounded-2xl border border-default bg-elevated/35 px-4 py-3">
+                  <p class="text-xs font-medium uppercase tracking-[0.12em] text-toned">
+                    Total encaissé
+                  </p>
+                  <p class="mt-1 text-3xl font-semibold text-highlighted">
+                    {{ formatCurrency(home?.cashbox.totalPaid || 0) }}
+                  </p>
+                  <p class="mt-2 text-sm text-toned">
+                    {{ latestPaymentLabel }}
+                  </p>
+                </div>
+
+                <div v-if="home?.cashbox.methods.length" class="space-y-2">
+                  <div
+                    v-for="method in home.cashbox.methods"
+                    :key="method.method"
+                    class="flex items-center justify-between gap-3 rounded-xl border border-default px-3 py-2"
+                  >
                     <UBadge
                       :color="paymentMethodColors[method.method]"
                       variant="subtle"
                       size="sm"
                     >
-                      {{ getPaymentMethodLabel(method.method) }}
+                      {{ paymentMethodLabels[method.method] }}
                     </UBadge>
+
+                    <span class="font-medium text-highlighted">
+                      {{ formatCurrency(method.total) }}
+                    </span>
                   </div>
-
-                  <span class="font-medium text-highlighted">
-                    {{ formatCurrency(method.total) }}
-                  </span>
                 </div>
-              </div>
 
-              <UEmpty
-                v-else
-                icon="i-lucide-wallet"
-                title="Aucun paiement enregistré"
-                description="Les modes de paiement utilisés aujourd’hui apparaîtront ici."
-              />
+                <UEmpty
+                  v-else
+                  icon="i-lucide-wallet"
+                  title="Aucun paiement enregistré"
+                  description="Les encaissements du jour apparaîtront ici."
+                />
+              </div>
             </UCard>
           </div>
         </div>
 
-        <UCard>
-          <template #header>
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <h2 class="text-lg font-semibold text-highlighted">
-                  Activité du jour
-                </h2>
-                <p class="text-sm text-toned">
-                  Suivi compact des encaissements réalisés et des documents restant à traiter.
-                </p>
-              </div>
+        <div class="grid gap-4 xl:grid-cols-2">
+          <UCard :ui="{ body: 'p-0' }">
+            <template #header>
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h2 class="text-lg font-semibold text-highlighted">
+                    Tickets prêts pour retrait
+                  </h2>
+                  <p class="text-sm text-toned">
+                    Dossiers à restituer ou à confirmer avec le client.
+                  </p>
+                </div>
 
-              <div class="flex items-center gap-3">
-                <UBadge variant="subtle" color="neutral">
-                  {{ activityRows.length }} ligne(s)
+                <UBadge variant="subtle" color="success">
+                  {{ home?.summary.readyForPickupCount || 0 }}
                 </UBadge>
-
-                <UTabs
-                  v-model="selectedActivity"
-                  :items="activityTabItems"
-                  :content="false"
-                  size="xs"
-                />
               </div>
-            </div>
-          </template>
-
-          <UTable
-            :data="activityRows"
-            :columns="activityColumns"
-            sticky="header"
-            class="shrink-0"
-            :ui="{
-              base: 'table-fixed border-separate border-spacing-0',
-              thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
-              tbody: '[&>tr]:last:[&>td]:border-b-0',
-              th: 'px-3 py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs uppercase tracking-[0.12em] text-toned',
-              td: 'px-3 py-3 border-b border-default align-top',
-              separator: 'h-0'
-            }"
-            @select="(_, row) => navigateTo(`/documents/${row.original.id}`)"
-          >
-            <template #empty>
-              <UEmpty
-                :icon="selectedActivity === 'paid' ? 'i-lucide-wallet-cards' : 'i-lucide-scale'"
-                :title="selectedActivity === 'paid' ? 'Aucun document encaissé' : 'Aucun solde en attente'"
-                :description="selectedActivity === 'paid'
-                  ? 'Les encaissements validés aujourd’hui apparaîtront ici.'
-                  : 'Les documents avec un reste à payer apparaîtront ici.'"
-              />
             </template>
-          </UTable>
-        </UCard>
+
+            <div v-if="home?.readyTickets.length" class="divide-y divide-default">
+              <NuxtLink
+                v-for="ticket in home.readyTickets"
+                :key="ticket.id"
+                :to="`/tickets/${ticket.id}`"
+                class="group flex items-start justify-between gap-4 px-5 py-4 transition-colors hover:bg-muted/35"
+              >
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="font-medium text-highlighted">
+                      {{ ticket.ticketNumber }}
+                    </p>
+                    <UBadge :color="ticketStatusColors[ticket.status]" variant="subtle" size="sm">
+                      {{ ticketStatusLabels[ticket.status] }}
+                    </UBadge>
+                  </div>
+
+                  <p class="text-sm text-toned">
+                    {{ ticket.customerName }}<span v-if="ticket.brand || ticket.model"> · {{ [ticket.brand, ticket.model].filter(Boolean).join(' ') }}</span>
+                  </p>
+                  <p class="mt-1 line-clamp-1 text-sm text-toned">
+                    {{ ticket.issueDescription }}
+                  </p>
+                </div>
+
+                <span class="shrink-0 text-xs text-toned">
+                  {{ formatDateTime(ticket.openedAt) }}
+                </span>
+              </NuxtLink>
+            </div>
+
+            <UEmpty
+              v-else
+              icon="i-lucide-package-check"
+              title="Aucun ticket prêt"
+              description="Les dossiers prêts à restituer apparaîtront ici."
+            />
+          </UCard>
+
+          <UCard :ui="{ body: 'p-0' }">
+            <template #header>
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h2 class="text-lg font-semibold text-highlighted">
+                    Documents à encaisser
+                  </h2>
+                  <p class="text-sm text-toned">
+                    Factures avec solde, triées par montant restant.
+                  </p>
+                </div>
+
+                <UBadge variant="subtle" color="warning">
+                  {{ home?.summary.dueDocumentCount || 0 }}
+                </UBadge>
+              </div>
+            </template>
+
+            <div v-if="home?.dueDocuments.length" class="divide-y divide-default">
+              <NuxtLink
+                v-for="document in home.dueDocuments"
+                :key="document.id"
+                :to="`/documents/${document.id}`"
+                class="group flex items-start justify-between gap-4 px-5 py-4 transition-colors hover:bg-muted/35"
+              >
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="font-medium text-highlighted">
+                      {{ document.documentNumber }}
+                    </p>
+                    <UBadge :color="documentTypeColors[document.type]" variant="subtle" size="sm">
+                      {{ documentTypeLabels[document.type] }}
+                    </UBadge>
+                  </div>
+
+                  <p class="text-sm text-toned">
+                    {{ document.customerName }}
+                  </p>
+                  <p class="mt-1 text-sm text-toned">
+                    Total TTC {{ formatCurrency(document.total) }} · Émis le {{ formatDateTime(document.issuedAt) }}
+                  </p>
+                </div>
+
+                <div class="shrink-0 text-right">
+                  <p class="font-medium text-highlighted">
+                    {{ formatCurrency(document.balanceDue) }}
+                  </p>
+                  <p class="text-xs text-toned">
+                    restant
+                  </p>
+                </div>
+              </NuxtLink>
+            </div>
+
+            <UEmpty
+              v-else
+              icon="i-lucide-scale"
+              title="Aucun solde en attente"
+              description="Les factures à encaisser apparaîtront ici."
+            />
+          </UCard>
+        </div>
       </div>
     </template>
   </UDashboardPanel>

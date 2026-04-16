@@ -347,6 +347,73 @@ export interface DailySummary {
   }>
 }
 
+export interface HomeActivityItem {
+  id: string
+  kind: 'payment' | 'ticket' | 'document'
+  title: string
+  subtitle: string
+  occurredAt: string
+  to: string
+  amount?: number
+  badgeLabel?: string
+  badgeColor?: 'neutral' | 'info' | 'warning' | 'success' | 'error'
+}
+
+export interface HomePriorityItem {
+  id: 'due-documents' | 'ready-tickets' | 'open-tickets' | 'reports'
+  title: string
+  value: string
+  description: string
+  to: string
+  badgeLabel: string
+  badgeColor: 'neutral' | 'info' | 'warning' | 'success' | 'error'
+}
+
+export interface HomeReadyTicketItem {
+  id: number
+  ticketNumber: string
+  customerName: string
+  issueDescription: string
+  brand: string | null
+  model: string | null
+  openedAt: string
+  status: TicketStatus
+}
+
+export interface HomeDueDocumentItem {
+  id: number
+  documentNumber: string
+  customerName: string
+  issuedAt: string
+  total: number
+  balanceDue: number
+  type: DocumentType
+}
+
+export interface HomeOverview {
+  date: string
+  summary: {
+    totalPaid: number
+    totalBalanceDue: number
+    dueDocumentCount: number
+    openTicketCount: number
+    openedToday: number
+    readyForPickupCount: number
+  }
+  cashbox: {
+    totalPaid: number
+    latestPaymentAt: string | null
+    methods: Array<{
+      method: PaymentMethod
+      total: number
+    }>
+  }
+  priorities: HomePriorityItem[]
+  activity: HomeActivityItem[]
+  readyTickets: HomeReadyTicketItem[]
+  dueDocuments: HomeDueDocumentItem[]
+}
+
 export interface ReportsOverview {
   range: {
     startDate: string
