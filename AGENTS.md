@@ -39,8 +39,8 @@ Before local work, check `.env.example` and confirm the relevant variables exist
 
 - required for most POS flows: `TURSO_URL`, `TURSO_TOKEN`
 - used for public app metadata and OG generation: `NUXT_PUBLIC_SITE_URL`
-- required only for internal assistant work: `OPENAI_API_KEY`
-- optional for internal assistant provider selection: `OPENAI_MODEL`, `OPENAI_BASE_URL`
+- required only for internal assistant work: `MINIMAX_API_KEY`
+- optional for internal assistant provider selection: `MINIMAX_MODEL`, `MINIMAX_BASE_URL`
 
 ## Repo Shape
 

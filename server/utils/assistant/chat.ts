@@ -1,6 +1,6 @@
 import type { AssistantChatMessageInput, AssistantChatResponse } from '~~/shared/types/assistant'
 import { buildAssistantSchemaContext } from './allowlist'
-import { requestOpenAITextResponse, requestStructuredOpenAIResponse } from './openai'
+import { requestStructuredResponse, requestTextResponse } from './provider'
 import {
   AssistantSqlValidationError,
   runReadOnlyQuery,
@@ -111,23 +111,34 @@ function buildAssistantMessage(content: string): AssistantChatResponse['message'
   }
 }
 
+function normalizePlanningResult(planning: Partial<AssistantPlanningResult>) {
+  return {
+    action: planning.action === 'query' ? 'query' : 'reject',
+    sql: typeof planning.sql === 'string' ? planning.sql.trim() : '',
+    querySummary: typeof planning.querySummary === 'string' ? planning.querySummary.trim() : '',
+    answerPlan: typeof planning.answerPlan === 'string' ? planning.answerPlan.trim() : '',
+    rejectionReason: typeof planning.rejectionReason === 'string' ? planning.rejectionReason.trim() : ''
+  } satisfies AssistantPlanningResult
+}
+
 export async function runAssistantChat(messages: AssistantChatMessageInput[], debug: boolean): Promise<AssistantChatResponse> {
   const requestId = crypto.randomUUID()
   const latestQuestion = [...messages].reverse().find(message => message.role === 'user')?.content || ''
 
-  const planning = await requestStructuredOpenAIResponse<AssistantPlanningResult>({
+  const rawPlanning = await requestStructuredResponse<Partial<AssistantPlanningResult>>({
     requestId,
     schemaName: 'assistant_query_plan',
     schema: planningSchema,
     systemPrompt: buildPlanningSystemPrompt(),
     userPrompt: buildPlanningPrompt(messages)
   })
+  const planning = normalizePlanningResult(rawPlanning)
 
-  if (planning.action === 'reject' || !planning.sql.trim()) {
+  if (planning.action === 'reject' || !planning.sql) {
     return {
       message: buildAssistantMessage(
-        planning.rejectionReason.trim()
-          ? planning.rejectionReason.trim()
+        planning.rejectionReason
+          ? planning.rejectionReason
           : 'Je ne peux pas répondre de façon sûre avec les données exposées actuellement.'
       ),
       error: {
@@ -167,7 +178,7 @@ export async function runAssistantChat(messages: AssistantChatMessageInput[], de
 
   try {
     const result = await runReadOnlyQuery(validatedQuery, requestId)
-    const explanation = await requestOpenAITextResponse({
+    const explanation = await requestTextResponse({
       requestId,
       systemPrompt: [
         'Tu rédiges des réponses métier internes en français pour un tableau de bord POS/CRM.',

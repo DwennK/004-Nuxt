@@ -127,9 +127,9 @@ Defined in [`.env.example`](./.env.example):
 NUXT_PUBLIC_SITE_URL=
 TURSO_URL=
 TURSO_TOKEN=
-OPENAI_API_KEY=
-OPENAI_MODEL=
-OPENAI_BASE_URL=
+MINIMAX_API_KEY=
+MINIMAX_MODEL=MiniMax-M2.7
+MINIMAX_BASE_URL=https://api.minimax.io/v1
 RESEND_API_KEY=
 MAIL_FROM=
 MAIL_REPLY_TO=
@@ -138,9 +138,9 @@ MAIL_REPLY_TO=
 - `NUXT_PUBLIC_SITE_URL`: public site URL, mainly used for OG image generation
 - `TURSO_URL`: Turso database URL
 - `TURSO_TOKEN`: Turso auth token
-- `OPENAI_API_KEY`: server-side OpenAI API key for the internal assistant
-- `OPENAI_MODEL`: model id used by the internal assistant
-- `OPENAI_BASE_URL`: optional OpenAI-compatible base URL
+- `MINIMAX_API_KEY`: server-side MiniMax API key for the internal assistant
+- `MINIMAX_MODEL`: MiniMax model id used by the internal assistant, defaults to `MiniMax-M2.7`
+- `MINIMAX_BASE_URL`: MiniMax API base URL, defaults to `https://api.minimax.io/v1`
 - `RESEND_API_KEY`: Resend API key used to send commercial documents by e-mail
 - `MAIL_FROM`: authenticated sender used for outgoing document e-mails, for example `Atelier Pixel <facturation@shop.example.ch>`
 - `MAIL_REPLY_TO`: optional reply-to address for outgoing document e-mails

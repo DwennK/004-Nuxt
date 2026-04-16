@@ -10,7 +10,7 @@
 Le flux est strictement serveur:
 
 1. le client envoie l’historique utile et la question courante
-2. OpenAI génère un plan SQL structuré
+2. MiniMax génère un plan SQL structuré
 3. la requête SQL est validée par la couche de garde-fous
 4. la requête validée est exécutée en lecture seule sur Turso via Drizzle
 5. les résultats sont reformulés en réponse métier concise
@@ -83,12 +83,14 @@ Les résultats eux-mêmes ne sont pas loggés.
 
 Variables serveur requises:
 
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
+- `MINIMAX_API_KEY`
 
-Variable optionnelle:
+Variables optionnelles:
 
-- `OPENAI_BASE_URL`
+- `MINIMAX_MODEL`
+- `MINIMAX_BASE_URL`
+
+Par défaut, l’assistant utilise `https://api.minimax.io/v1`. Selon le compte MiniMax, `https://api.minimaxi.com/v1` peut exister aussi, mais certaines clés ne sont valides que sur l’un des deux environnements.
 
 Variables Turso inchangées:
 
