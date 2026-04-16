@@ -83,7 +83,7 @@ const cardTitle = computed(() => {
 const cardDescription = computed(() => {
   return resolvedMode.value === 'ticket'
     ? 'Préparez ce qui devra être facturé plus tard sans ressaisir lors du document.'
-    : 'Gardez les lignes au centre et ajustez le contexte seulement si nécessaire.'
+    : ''
 })
 
 const emptyTitle = computed(() => {
@@ -249,11 +249,16 @@ function handleBarcodeScan(value: string) {
                 <h2 class="text-base font-semibold text-highlighted">
                   {{ cardTitle }}
                 </h2>
-                <UBadge color="neutral" variant="soft" size="sm">
+                <UBadge
+                  v-if="resolvedMode === 'ticket'"
+                  color="neutral"
+                  variant="soft"
+                  size="sm"
+                >
                   {{ state.lines.length ? `${state.lines.length} ligne(s)` : 'Document vide' }}
                 </UBadge>
               </div>
-              <p class="text-sm text-toned">
+              <p v-if="cardDescription" class="text-sm text-toned">
                 {{ cardDescription }}
               </p>
             </div>

@@ -6,8 +6,11 @@ const props = withDefaults(defineProps<{
   editor: DocumentDraftController
   customers: CustomerRecord[]
   fixedCustomerId?: number | null
+  formId: string
+  submitLabel?: string
 }>(), {
-  fixedCustomerId: null
+  fixedCustomerId: null,
+  submitLabel: 'Enregistrer le document'
 })
 
 const open = defineModel<boolean>('open', { default: false })
@@ -89,7 +92,25 @@ const documentStatusItems = props.editor.documentStatusItems
           color="neutral"
           variant="subtle"
           title="Enregistrement"
-          description="Les modifications du contexte seront prises en compte quand vous cliquerez sur Enregistrer."
+          description="Vous pouvez enregistrer directement depuis ce panneau."
+        />
+      </div>
+    </template>
+
+    <template #footer>
+      <div class="flex items-center justify-end gap-2">
+        <UButton
+          type="button"
+          color="neutral"
+          variant="soft"
+          label="Fermer"
+          @click="open = false"
+        />
+        <UButton
+          :form="props.formId"
+          type="submit"
+          icon="i-lucide-save"
+          :label="props.submitLabel"
         />
       </div>
     </template>

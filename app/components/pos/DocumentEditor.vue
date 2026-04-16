@@ -32,6 +32,7 @@ const editor = useDocumentDraft({
 const schema = editor.schema
 const state = editor.state
 const contextOpen = defineModel<boolean>('contextOpen', { default: false })
+const formId = useId()
 
 function onSubmit() {
   emit('save', editor.serialize())
@@ -40,6 +41,7 @@ function onSubmit() {
 
 <template>
   <UForm
+    :id="formId"
     :schema="schema"
     :state="state"
     class="space-y-4"
@@ -64,6 +66,8 @@ function onSubmit() {
       :editor="editor"
       :customers="customers"
       :fixed-customer-id="fixedCustomerId"
+      :form-id="formId"
+      :submit-label="submitLabel"
     />
   </UForm>
 </template>

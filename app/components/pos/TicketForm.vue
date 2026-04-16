@@ -611,9 +611,6 @@ function handleIntakeScan(value: string) {
                     <h3 class="text-sm font-semibold text-highlighted">
                       Informations appareil
                     </h3>
-                    <p class="text-xs text-toned">
-                      Gardez les accès et identifiants visibles pendant la prise en charge.
-                    </p>
                   </div>
                   <UBadge color="neutral" variant="soft" size="sm">
                     Atelier
@@ -698,9 +695,6 @@ function handleIntakeScan(value: string) {
                 <h2 class="text-base font-semibold text-highlighted">
                   Réglages ticket
                 </h2>
-                <p class="text-sm text-toned">
-                  Cadre opérationnel et validation.
-                </p>
               </div>
             </template>
 
