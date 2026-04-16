@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
+import type { TableColumn, TabsItem } from '@nuxt/ui'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
 import {
@@ -28,9 +28,27 @@ const pagination = ref({
 })
 const columnVisibility = ref()
 
-const typeItems = [
-  { label: 'Tous les types', value: 'all' },
-  ...Object.entries(documentTypeLabels).map(([value, label]) => ({ label, value }))
+const tabItems: TabsItem[] = [
+  {
+    label: 'Tous',
+    icon: 'i-lucide-files',
+    value: 'all'
+  },
+  {
+    label: documentTypeLabels.quote,
+    icon: 'i-lucide-scroll-text',
+    value: 'quote'
+  },
+  {
+    label: documentTypeLabels.customer_order,
+    icon: 'i-lucide-clipboard-list',
+    value: 'customer_order'
+  },
+  {
+    label: documentTypeLabels.invoice,
+    icon: 'i-lucide-file-text',
+    value: 'invoice'
+  }
 ]
 
 const statusItems = [
@@ -208,6 +226,15 @@ const columns: TableColumn<DocumentListItem>[] = [
         </template>
       </UDashboardNavbar>
 
+      <UTabs
+        v-model="typeFilter"
+        :items="tabItems"
+        value-key="value"
+        variant="link"
+        :content="false"
+        class="w-full border-t border-default px-4 pt-3 sm:px-6"
+      />
+
       <UDashboardToolbar class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex flex-wrap items-center gap-3">
           <UInput
@@ -215,12 +242,6 @@ const columns: TableColumn<DocumentListItem>[] = [
             icon="i-lucide-search"
             placeholder="Rechercher par document, client ou ticket"
             class="max-w-md"
-          />
-          <USelectMenu
-            v-model="typeFilter"
-            :items="typeItems"
-            value-key="value"
-            class="w-48"
           />
           <USelectMenu
             v-model="statusFilter"
