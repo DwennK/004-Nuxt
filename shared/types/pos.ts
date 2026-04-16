@@ -354,7 +354,7 @@ export interface ReportsOverview {
     bankTransfer: number
   }>
   paymentPeriods: Array<{
-    key: 'week' | 'month' | 'year'
+    key: 'week' | 'month' | 'years'
     label: string
     description: string
     buckets: Array<{

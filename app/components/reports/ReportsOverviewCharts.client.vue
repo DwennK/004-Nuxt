@@ -10,12 +10,12 @@ const props = defineProps<{
   overview: ReportsOverview
 }>()
 
-const selectedPaymentPeriod = ref<'week' | 'month' | 'year'>('week')
+const selectedPaymentPeriod = ref<'week' | 'month' | 'years'>('week')
 
 const paymentPeriodTabs: TabsItem[] = [
   { label: '7 jours', value: 'week' },
   { label: 'Mois', value: 'month' },
-  { label: 'Année', value: 'year' }
+  { label: 'Années', value: 'years' }
 ]
 
 function toChartColor(color: UiColorToken) {
@@ -46,11 +46,11 @@ const paymentsCategories = {
 const paymentTicks = computed(() => {
   const count = paymentsChartData.value.length
 
-  if (count <= 8) {
+  if (count <= 12) {
     return paymentsChartData.value.map((_, index) => index)
   }
 
-  const targetTickCount = selectedPaymentPeriod.value === 'month' ? 7 : 6
+  const targetTickCount = 6
   const step = Math.max(1, Math.ceil((count - 1) / (targetTickCount - 1)))
   const ticks = Array.from({ length: count }, (_, index) => index).filter(index => index % step === 0)
 
@@ -172,7 +172,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
           :y-tick-line="false"
           :x-formatter="dayLabel"
           :y-formatter="currencyLabel"
-          :tooltip-title-formatter="(item) => item.tooltipLabel || formatTooltipDate(item.date)"
+          :tooltip-title-formatter="(item) => item.tooltipLabel"
         />
       </div>
 
