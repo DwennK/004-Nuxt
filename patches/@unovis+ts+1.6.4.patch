@@ -1,0 +1,18 @@
+diff --git a/node_modules/@unovis/ts/components/stacked-bar/index.js b/node_modules/@unovis/ts/components/stacked-bar/index.js
+index a46064f..30b1f0e 100644
+--- a/node_modules/@unovis/ts/components/stacked-bar/index.js
++++ b/node_modules/@unovis/ts/components/stacked-bar/index.js
+@@ -96,9 +96,10 @@ class StackedBar extends XYComponentCore {
+             index: j,
+             stacked: s[j],
+             stackIndex: i,
+-            // Ending bar if the next stack is not the same as the current one
+-            isEnding: (i === stacked.length - 1) ||
+-                ((i <= stacked.length - 1) && stacked[i + 1][j][0] !== s[j][1]),
++            // Ending bar if there are no visible stack segments above the current one
++            isEnding: !stacked
++                .slice(i + 1)
++                .some(nextStack => nextStack[j][0] !== nextStack[j][1]),
+         }))
+             .filter(d => d.stacked[0] !== d.stacked[1]), // Skip zero-height bars
+         // Skip zero-height bars
