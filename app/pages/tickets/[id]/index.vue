@@ -237,11 +237,6 @@ const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
     accessorKey: 'paidAt',
     header: 'Encaissé à',
     cell: ({ row }) => formatDateTime(row.original.paidAt)
-  },
-  {
-    accessorKey: 'reference',
-    header: 'Référence',
-    cell: ({ row }) => row.original.reference || 'Aucune référence'
   }
 ]
 
@@ -435,7 +430,6 @@ async function createInvoice() {
 async function markPaid(payload: {
   method: PaymentMethod
   amount: number
-  reference: string
   notes: string
 }) {
   if (!payableDocument.value) {

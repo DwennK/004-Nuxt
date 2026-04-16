@@ -68,7 +68,6 @@ export function mapPayment(row: typeof payments.$inferSelect): PaymentRecord {
     status: row.status,
     amount: row.amount,
     paidAt: row.paidAt,
-    reference: row.reference,
     notes: row.notes,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
@@ -536,7 +535,6 @@ export async function markDocumentAsPaid(id: number, input: {
   method: typeof payments.$inferSelect.method
   amount?: number
   paidAt: string
-  reference?: string | null
   notes?: string | null
 }) {
   await ensurePosSchema()
@@ -564,7 +562,6 @@ export async function markDocumentAsPaid(id: number, input: {
     status: 'paid',
     amount,
     paidAt: input.paidAt,
-    reference: normalizeOptionalText(input.reference),
     notes: normalizeOptionalText(input.notes),
     createdAt: now,
     updatedAt: now
@@ -588,8 +585,7 @@ export async function markDocumentAsPaid(id: number, input: {
         documentType: detail.type,
         amount,
         method: input.method,
-        methodLabel: paymentMethodLabels[input.method],
-        reference: input.reference || null
+        methodLabel: paymentMethodLabels[input.method]
       },
       occurredAt: payment.paidAt
     })

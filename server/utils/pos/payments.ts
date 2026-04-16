@@ -73,7 +73,6 @@ export async function createPaymentRecord(input: Omit<PaymentRecord, 'id' | 'cre
     status: input.status,
     amount: input.amount,
     paidAt: input.paidAt,
-    reference: normalizeOptionalText(input.reference),
     notes: normalizeOptionalText(input.notes),
     createdAt: now,
     updatedAt: now
@@ -103,8 +102,7 @@ export async function createPaymentRecord(input: Omit<PaymentRecord, 'id' | 'cre
         documentType: document.type,
         amount: input.amount,
         method: input.method,
-        methodLabel: paymentMethodLabels[input.method],
-        reference: input.reference || null
+        methodLabel: paymentMethodLabels[input.method]
       },
       occurredAt: input.paidAt
     })
@@ -125,7 +123,6 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
       status: input.status,
       amount: input.amount,
       paidAt: input.paidAt,
-      reference: normalizeOptionalText(input.reference),
       notes: normalizeOptionalText(input.notes),
       updatedAt: new Date().toISOString()
     })

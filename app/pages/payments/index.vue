@@ -53,8 +53,7 @@ const filteredPayments = computed(() => {
   return (payments.value || []).filter((payment) => {
     const matchesSearch = !term || [
       payment.customerName,
-      payment.documentNumber,
-      payment.reference
+      payment.documentNumber
     ].some(value => value?.toLowerCase().includes(term))
 
     const matchesMethod = methodFilter.value === 'all' || payment.method === methodFilter.value
@@ -175,11 +174,6 @@ const columns: TableColumn<PaymentListItem>[] = [
     cell: ({ row }) => h('span', { class: 'font-medium text-highlighted' }, row.original.documentNumber)
   },
   {
-    accessorKey: 'reference',
-    header: 'Référence',
-    cell: ({ row }) => h('span', { class: row.original.reference ? '' : 'text-toned' }, row.original.reference || '—')
-  },
-  {
     accessorKey: 'paidAt',
     header: 'Encaissé à',
     cell: ({ row }) => formatDateTime(row.original.paidAt)
@@ -216,7 +210,7 @@ const columns: TableColumn<PaymentListItem>[] = [
           <UInput
             v-model="search"
             icon="i-lucide-search"
-            placeholder="Rechercher par client, document ou référence"
+            placeholder="Rechercher par client ou document"
             class="max-w-md"
           />
           <USelectMenu
@@ -259,7 +253,6 @@ const columns: TableColumn<PaymentListItem>[] = [
                   amount: 'Montant',
                   customerName: 'Client',
                   documentType: 'Document',
-                  reference: 'Référence',
                   paidAt: 'Encaissé à',
                   actions: 'Actions'
                 } as Record<string, string>)[column.id] || upperFirst(column.id),

@@ -15,7 +15,6 @@ type PaymentDraft = {
   status: PaymentStatus
   amount: number
   paidAt: string
-  reference: string
   notes: string
 }
 
@@ -66,7 +65,6 @@ function createPaymentDraft(payment?: PaymentRecord): PaymentDraft {
     status: payment?.status || 'paid',
     amount: payment ? payment.amount / 100 : Math.max(props.balanceDue / 100, 0),
     paidAt: toDateTimeLocal(payment?.paidAt),
-    reference: payment?.reference || '',
     notes: payment?.notes || ''
   }
 }
@@ -93,7 +91,6 @@ watchEffect(() => {
 async function addPayment(input: {
   method: PaymentMethod
   amount?: number
-  reference?: string
   notes?: string
 }, source: PaymentMethod | 'details') {
   creatingMethod.value = source
@@ -145,7 +142,6 @@ async function savePayment(payment: PaymentRecord) {
         status: draft.status,
         amount: Math.round((draft.amount || 0) * 100),
         paidAt: new Date(draft.paidAt).toISOString(),
-        reference: draft.reference,
         notes: draft.notes
       }
     })
@@ -199,9 +195,6 @@ async function removePayment(payment: PaymentRecord) {
             <h2 class="text-base font-semibold text-highlighted">
               Paiements du document
             </h2>
-            <p class="text-sm text-toned">
-              Modifiez directement les paiements existants sans quitter la page.
-            </p>
           </div>
           <span class="text-xs text-toned">
             {{ payments.length }} paiement(s)
@@ -276,16 +269,7 @@ async function removePayment(payment: PaymentRecord) {
             </div>
           </div>
 
-          <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-            <UFormField label="Référence">
-              <UInput
-                v-model="paymentDrafts[payment.id]!.reference"
-                size="sm"
-                class="w-full"
-                placeholder="Référence terminal, TWINT, virement"
-              />
-            </UFormField>
-
+          <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
             <UFormField label="Notes">
               <UTextarea
                 v-model="paymentDrafts[payment.id]!.notes"
@@ -344,9 +328,6 @@ async function removePayment(payment: PaymentRecord) {
               <h2 class="text-base font-semibold text-highlighted">
                 Encaissement
               </h2>
-              <p class="text-sm text-toned">
-                Raccourcis opérateur pour solder rapidement le document.
-              </p>
             </div>
             <UBadge :color="canCreatePayment ? 'primary' : 'neutral'" variant="soft" size="sm">
               {{ !isPayableDocument ? 'Non payable' : canCreatePayment ? 'Prêt à encaisser' : 'Soldé' }}
@@ -408,7 +389,7 @@ async function removePayment(payment: PaymentRecord) {
           />
 
           <p class="text-xs text-toned">
-            Utilisez le paiement détaillé pour un montant partiel, une référence terminal ou une note.
+            Utilisez le paiement détaillé pour un montant partiel ou une note.
           </p>
         </template>
 
@@ -446,9 +427,6 @@ async function removePayment(payment: PaymentRecord) {
           </div>
           <p class="mt-3 text-lg font-semibold text-highlighted">
             {{ formatCurrency(payments[0]!.amount) }}
-          </p>
-          <p class="mt-1 text-sm text-toned">
-            {{ payments[0]!.reference || 'Sans référence' }}
           </p>
           <p v-if="payments[0]!.notes" class="mt-2 text-sm text-toned">
             {{ payments[0]!.notes }}

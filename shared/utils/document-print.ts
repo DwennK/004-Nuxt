@@ -7,7 +7,6 @@ import { buildSwissQrBill, type SwissQrBillData } from './qr-bill'
 
 export interface DocumentPrintPaymentSummary {
   label: string
-  reference: string | null
   paidAt: string
 }
 
@@ -47,7 +46,6 @@ export function buildDocumentPaymentSummary(document: DocumentDetail): DocumentP
 
   return {
     label: paymentMethodLabels[latestPaid.method],
-    reference: latestPaid.reference,
     paidAt: formatDateTime(latestPaid.paidAt)
   }
 }

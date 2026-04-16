@@ -235,7 +235,6 @@ export const assistantBlockedColumns = new Set([
   'sim_code',
   'issue_description',
   'internal_notes',
-  'reference',
   'iban',
   'bank_name',
   'vat_number',

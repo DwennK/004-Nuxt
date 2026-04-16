@@ -348,7 +348,6 @@ async function createPosTables() {
         status TEXT NOT NULL DEFAULT 'pending',
         amount INTEGER NOT NULL,
         paid_at TEXT NOT NULL,
-        reference TEXT,
         notes TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1218,7 +1217,6 @@ async function seedOperations() {
       status: 'paid',
       amount: accessoryInvoiceDocument.total,
       paidAt: toIsoDateTime(new Date('2026-03-25T08:42:00.000Z')),
-      reference: 'POS-8001',
       notes: null,
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
@@ -1230,7 +1228,6 @@ async function seedOperations() {
       status: 'paid',
       amount: supportDocument.total,
       paidAt: toIsoDateTime(new Date('2026-03-25T11:17:00.000Z')),
-      reference: null,
       notes: 'Paid at the counter.',
       createdAt: toIsoDateTime(),
       updatedAt: toIsoDateTime()
@@ -1552,7 +1549,6 @@ export async function getTicketPayments(ticketId: number) {
     status: payments.status,
     amount: payments.amount,
     paidAt: payments.paidAt,
-    reference: payments.reference,
     notes: payments.notes,
     createdAt: payments.createdAt,
     updatedAt: payments.updatedAt

@@ -193,7 +193,6 @@ export const payments = sqliteTable('payments', {
   status: text('status', { enum: ['pending', 'paid', 'refunded', 'cancelled'] }).notNull().default('pending'),
   amount: integer('amount').notNull(),
   paidAt: text('paid_at').notNull(),
-  reference: text('reference'),
   notes: text('notes'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)

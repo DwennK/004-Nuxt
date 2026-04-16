@@ -544,9 +544,6 @@ useHead(() => ({
               Paiement
             </p>
             <p>{{ paymentSummary.label }} · {{ paymentSummary.paidAt }}</p>
-            <p v-if="paymentSummary.reference">
-              Réf. {{ paymentSummary.reference }}
-            </p>
           </div>
 
           <div v-if="document.type === 'invoice'" class="thermal-note">

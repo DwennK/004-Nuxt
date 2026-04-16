@@ -137,7 +137,6 @@ export const paymentInputSchema = z.object({
   status: z.enum(paymentStatuses).default('paid'),
   amount: z.coerce.number().int().min(0),
   paidAt: z.string().trim().min(1).default(() => new Date().toISOString()),
-  reference: optionalText,
   notes: optionalText
 })
 
@@ -153,7 +152,6 @@ export const markDocumentPaidSchema = z.object({
   method: z.enum(paymentMethods),
   amount: z.coerce.number().int().min(0).optional(),
   paidAt: z.string().trim().min(1).default(() => new Date().toISOString()),
-  reference: optionalText,
   notes: optionalText
 })
 

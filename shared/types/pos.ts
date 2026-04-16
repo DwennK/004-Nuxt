@@ -197,7 +197,6 @@ export interface PaymentRecord {
   status: PaymentStatus
   amount: number
   paidAt: string
-  reference: string | null
   notes: string | null
   createdAt: string
   updatedAt: string

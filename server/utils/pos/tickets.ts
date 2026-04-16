@@ -511,8 +511,7 @@ function buildSyntheticEvents(ticket: TicketRecord, documentRows: DocumentRecord
         paymentId: payment.id,
         amount: payment.amount,
         method: payment.method,
-        documentId: payment.documentId,
-        reference: payment.reference
+        documentId: payment.documentId
       },
       occurredAt: payment.paidAt,
       createdAt: payment.createdAt,

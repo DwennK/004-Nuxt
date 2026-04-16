@@ -13,13 +13,12 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { default: false })
 
 const emit = defineEmits<{
-  save: [payload: { method: PaymentMethod, amount: number, reference: string, notes: string }]
+  save: [payload: { method: PaymentMethod, amount: number, notes: string }]
 }>()
 
 const schema = z.object({
   method: z.enum(paymentMethods),
   amount: z.coerce.number().min(0, 'Le montant doit être positif'),
-  reference: z.string().optional().default(''),
   notes: z.string().optional().default('')
 })
 
@@ -33,7 +32,6 @@ const methodItems = paymentMethods.map(method => ({
 const state = reactive<Schema>({
   method: 'cash',
   amount: 0,
-  reference: '',
   notes: ''
 })
 
@@ -45,7 +43,6 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
   emit('save', {
     method: event.data.method,
     amount: Math.round((event.data.amount || 0) * 100),
-    reference: event.data.reference,
     notes: event.data.notes
   })
 }
@@ -92,10 +89,6 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
             class="w-full"
           />
-        </UFormField>
-
-        <UFormField label="Référence" name="reference">
-          <UInput v-model="state.reference" class="w-full" placeholder="Référence terminal, TWINT, virement" />
         </UFormField>
 
         <UFormField label="Notes" name="notes">
