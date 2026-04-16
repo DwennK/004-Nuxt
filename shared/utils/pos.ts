@@ -94,7 +94,21 @@ export function buildZonedDayRange(date: string, timeZone = businessTimeZone) {
   }
 }
 
+function groupThousands(value: string, separator: string) {
+  return value.replace(/\B(?=(\d{3})+(?!\d))/g, separator)
+}
+
 export function formatCurrency(cents: number, currency = 'CHF', locale = 'fr-CH') {
+  if (locale === 'fr-CH' && currency === 'CHF') {
+    const absoluteValue = Math.abs(Math.trunc(cents))
+    const integerPart = Math.floor(absoluteValue / 100).toString()
+    const fractionPart = String(absoluteValue % 100).padStart(2, '0')
+    const sign = cents < 0 ? '-' : ''
+
+    // Keep SSR and browser output identical. ICU data differs on fr-CH grouping.
+    return `${sign}${groupThousands(integerPart, '\u202F')}.${fractionPart}\u00A0CHF`
+  }
+
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency
