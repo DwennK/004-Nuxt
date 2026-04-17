@@ -1,21 +1,15 @@
 <script setup lang="ts">
-import type { CatalogItemListResponse, CustomerListResponse, TicketDetail } from '~~/shared/types/pos'
+import type { CustomerListResponse, TicketDetail } from '~~/shared/types/pos'
 
 const route = useRoute()
 const toast = useToast()
 const id = computed(() => Number(route.params.id))
 const formId = 'ticket-editor-form'
 
-const [{ data: ticket }, { data: customers }, { data: catalogItems }] = await Promise.all([
+const [{ data: ticket }, { data: customers }] = await Promise.all([
   useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
   useFetch<CustomerListResponse>('/api/customers', {
     query: { pageSize: 250 }
-  }),
-  useFetch<CatalogItemListResponse>('/api/catalog-items', {
-    query: {
-      activeOnly: true,
-      pageSize: 250
-    }
   })
 ])
 
@@ -99,7 +93,6 @@ async function saveTicket(payload: {
           layout="intake"
           :show-submit="false"
           :customers="customers.items"
-          :catalog-items="catalogItems?.items || []"
           :initial-value="ticket"
           @save="saveTicket"
         />

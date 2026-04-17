@@ -4,13 +4,14 @@ import type { DocumentInitialValue, DocumentSavePayload } from '~~/app/composabl
 
 const props = withDefaults(defineProps<{
   customers: CustomerRecord[]
-  catalogItems: CatalogItemRecord[]
+  catalogItems?: CatalogItemRecord[]
   initialValue?: DocumentInitialValue
   submitLabel?: string
   allowedTypes?: DocumentType[]
   fixedCustomerId?: number | null
   fixedTicketId?: number | null
 }>(), {
+  catalogItems: () => [],
   initialValue: () => ({}),
   submitLabel: 'Enregistrer le document',
   allowedTypes: () => ['quote', 'customer_order', 'invoice'],

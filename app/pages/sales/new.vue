@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { documentTypeLabels, paymentMethodLabels, paymentMethods } from '~~/shared/constants/pos'
-import type { CatalogItemListResponse, CustomerListResponse, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
+import type { CatalogItemRecord, CustomerListResponse, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, normalizeSearchText, parseCurrencyInput } from '~~/shared/utils/pos'
 
@@ -16,7 +16,6 @@ type SaleLine = {
 
 const toast = useToast()
 
-const search = ref('')
 const selectedCustomerId = ref<number | null>(null)
 const lines = ref<SaleLine[]>([])
 const isSaving = ref<PaymentMethod | null>(null)
@@ -24,60 +23,34 @@ const lastCreatedDocument = ref<DocumentDetail | null>(null)
 const lastCompletedPaymentMethod = ref<PaymentMethod | null>(null)
 const saleCompletionOpen = ref(false)
 const customerPool = ref<CustomerRecord[]>([])
-const searchOpen = ref(false)
-const highlightedItemIndex = ref(0)
 let nextSaleLineId = 0
-let searchCloseTimeout: ReturnType<typeof setTimeout> | null = null
+const {
+  search,
+  highlightedItemIndex,
+  remoteSearchPending,
+  searchPanelItems,
+  shouldShowSearchPanel,
+  minSearchLength,
+  searchCatalogItems,
+  openSearchPanel,
+  closeSearchPanel,
+  scheduleSearchClose,
+  cancelSearchClose,
+  highlightNextResult,
+  highlightPreviousResult,
+  resetSearch
+} = useCatalogItemSearch()
 
-const [{ data: customers }, { data: catalogItems }] = await Promise.all([
-  useFetch<CustomerListResponse>('/api/customers', {
-    query: { pageSize: 250 }
-  }),
-  useFetch<CatalogItemListResponse>('/api/catalog-items', {
-    query: {
-      activeOnly: true,
-      pageSize: 250
-    }
-  })
-])
+const { data: customers } = await useFetch<CustomerListResponse>('/api/customers', {
+  query: { pageSize: 250 }
+})
 
 watchEffect(() => {
   customerPool.value = customers.value?.items ? [...customers.value.items] : []
 })
 
-const activeItems = computed(() => (catalogItems.value?.items || []).filter(item => item.isActive))
-
-const quickPickItems = computed(() => {
-  return activeItems.value.slice(0, 8)
-})
-
-const filteredItems = computed(() => {
-  const term = normalizeSearchText(search.value)
-
-  if (!term) {
-    return quickPickItems.value
-  }
-
-  return activeItems.value.filter((item) => {
-    return [
-      item.name,
-      item.sku,
-      item.type,
-      item.category,
-      item.brand,
-      item.model,
-      item.serviceKind,
-      item.keywords.join(' ')
-    ].some(value => normalizeSearchText(value).includes(term))
-  }).slice(0, 10)
-})
-
-const searchPanelItems = computed(() => {
-  return search.value.trim() ? filteredItems.value : quickPickItems.value
-})
-
 const searchPanelTitle = computed(() => {
-  return search.value.trim() ? 'Résultats' : 'Suggestions'
+  return 'Résultats'
 })
 
 const totals = computed(() => {
@@ -105,28 +78,6 @@ const canCharge = computed(() => {
 
 const lastPaymentMethodLabel = computed(() => {
   return lastCompletedPaymentMethod.value ? paymentMethodLabels[lastCompletedPaymentMethod.value] : ''
-})
-
-watch(searchPanelItems, (items) => {
-  if (!items.length) {
-    highlightedItemIndex.value = 0
-    return
-  }
-
-  if (highlightedItemIndex.value >= items.length) {
-    highlightedItemIndex.value = 0
-  }
-})
-
-watch(search, (value) => {
-  highlightedItemIndex.value = 0
-
-  if (value.trim()) {
-    openSearchPanel()
-    return
-  }
-
-  cancelSearchClose()
 })
 
 function getCategoryHint(item: CatalogItemRecord): SaleLine['categoryHint'] {
@@ -161,8 +112,7 @@ function addCatalogItem(item: CatalogItemRecord) {
     categoryHint: getCategoryHint(item)
   }))
 
-  closeSearchPanel()
-  search.value = ''
+  resetSearch()
 }
 
 async function createNewLine() {
@@ -175,8 +125,7 @@ async function createNewLine() {
     categoryHint: null
   })
 
-  closeSearchPanel()
-  search.value = ''
+  resetSearch()
   lines.value.push(line)
 
   await nextTick()
@@ -277,57 +226,13 @@ function updateLineUnitPrice(index: number, value: number | null) {
 }
 
 function addFirstMatch() {
-  const item = searchPanelItems.value[highlightedItemIndex.value] || filteredItems.value[0]
+  const item = searchPanelItems.value[highlightedItemIndex.value] || searchPanelItems.value[0]
 
   if (!item || !search.value.trim()) {
     return
   }
 
   addCatalogItem(item)
-}
-
-function openSearchPanel() {
-  cancelSearchClose()
-  searchOpen.value = true
-}
-
-function closeSearchPanel() {
-  cancelSearchClose()
-  searchOpen.value = false
-  highlightedItemIndex.value = 0
-}
-
-function scheduleSearchClose() {
-  cancelSearchClose()
-  searchCloseTimeout = setTimeout(() => {
-    searchOpen.value = false
-    highlightedItemIndex.value = 0
-  }, 120)
-}
-
-function cancelSearchClose() {
-  if (searchCloseTimeout) {
-    clearTimeout(searchCloseTimeout)
-    searchCloseTimeout = null
-  }
-}
-
-function highlightNextResult() {
-  if (!searchPanelItems.value.length) {
-    return
-  }
-
-  highlightedItemIndex.value = (highlightedItemIndex.value + 1) % searchPanelItems.value.length
-}
-
-function highlightPreviousResult() {
-  if (!searchPanelItems.value.length) {
-    return
-  }
-
-  highlightedItemIndex.value = highlightedItemIndex.value <= 0
-    ? searchPanelItems.value.length - 1
-    : highlightedItemIndex.value - 1
 }
 
 function handleSearchKeydown(event: KeyboardEvent) {
@@ -357,9 +262,9 @@ function handleSearchKeydown(event: KeyboardEvent) {
   }
 }
 
-function handleBarcodeScan(value: string) {
+async function handleBarcodeScan(value: string) {
   const normalizedValue = normalizeSearchText(value)
-  const match = activeItems.value.find((item) => {
+  const match = (await searchCatalogItems(value)).find((item) => {
     return normalizeSearchText(item.sku) === normalizedValue
       || normalizeSearchText(item.name) === normalizedValue
   })
@@ -406,8 +311,7 @@ async function ensureCounterCustomer() {
 }
 
 function resetSaleState() {
-  search.value = ''
-  closeSearchPanel()
+  resetSearch()
   lines.value = []
   selectedCustomerId.value = null
 }
@@ -688,7 +592,7 @@ function selectAllOnFocus(event: FocusEvent) {
                 </div>
 
                 <div
-                  v-if="searchOpen"
+                  v-if="shouldShowSearchPanel"
                   class="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
                 >
                   <div class="flex items-center justify-between gap-3 px-2 pb-2">
@@ -700,7 +604,11 @@ function selectAllOnFocus(event: FocusEvent) {
                     </span>
                   </div>
 
-                  <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
+                  <div v-if="search.trim().length < minSearchLength" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                    Tapez au moins {{ minSearchLength }} caractères.
+                  </div>
+
+                  <div v-else-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
                     <button
                       v-for="(item, index) in searchPanelItems"
                       :key="item.id"
@@ -724,6 +632,10 @@ function selectAllOnFocus(event: FocusEvent) {
                         {{ formatCurrency(item.defaultPrice) }}
                       </span>
                     </button>
+                  </div>
+
+                  <div v-else-if="remoteSearchPending" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                    Recherche dans le catalogue...
                   </div>
 
                   <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">

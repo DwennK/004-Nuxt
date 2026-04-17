@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import { ticketStatusLabels, ticketStatuses, ticketTypeLabels, ticketTypes } from '~~/shared/constants/pos'
-import type { CatalogItemListResponse, CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
+import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
 import { formatCurrency, formatImei, getImeiWarning, normalizeImei, normalizeSearchText } from '~~/shared/utils/pos'
 import { useCommercialLinesDraft, type EditableCommercialLinePayload } from '~~/app/composables/useCommercialLinesDraft'
 
@@ -103,15 +103,25 @@ const statusItems = ticketStatuses.map(status => ({
 
 const toast = useToast()
 const patternOpen = ref(false)
-const intakeQuery = ref('')
-const debouncedIntakeQuery = refDebounced(intakeQuery, 200)
 const createdCustomer = ref<CustomerRecord | null>(null)
-const searchOpen = ref(false)
-const highlightedSuggestionIndex = ref(0)
-const remoteSuggestions = ref<CatalogItemRecord[]>([])
-const remoteSuggestionsPending = ref(false)
-let searchCloseTimeout: ReturnType<typeof setTimeout> | null = null
-let remoteSearchRequestId = 0
+const {
+  search: intakeQuery,
+  searchOpen,
+  highlightedItemIndex: highlightedSuggestionIndex,
+  remoteSearchPending: remoteSuggestionsPending,
+  searchPanelItems: remoteSuggestions,
+  shouldShowSearchPanel,
+  minSearchLength,
+  searchCatalogItems,
+  openSearchPanel,
+  closeSearchPanel,
+  scheduleSearchClose,
+  cancelSearchClose,
+  highlightNextResult,
+  highlightPreviousResult
+} = useCatalogItemSearch({
+  filterItem: item => (item.type === 'repair' || item.type === 'service') && item.isActive
+})
 
 const state = reactive<Schema>({
   customerId: 0,
@@ -149,21 +159,6 @@ watchEffect(() => {
   state.internalNotes = props.initialValue.internalNotes || ''
   state.openedAt = toDateTimeLocal(props.initialValue.openedAt)
   state.closedAt = props.initialValue.closedAt ? toDateTimeLocal(props.initialValue.closedAt) : ''
-})
-
-const searchableCatalogItems = computed(() => {
-  return props.catalogItems
-    .filter(item => (item.type === 'repair' || item.type === 'service') && item.isActive)
-    .sort((left, right) => {
-      if (left.type !== right.type) {
-        return left.type === 'repair' ? -1 : 1
-      }
-
-      return left.name.localeCompare(right.name)
-    })
-})
-const quickPickServices = computed(() => {
-  return searchableCatalogItems.value.slice(0, 6)
 })
 
 function buildServiceSearchText(item: CatalogItemRecord) {
@@ -241,7 +236,7 @@ function getCatalogServiceResult(query: string) {
   if (!normalizedQuery) {
     return {
       bestMatch: null as CatalogItemRecord | null,
-      suggestedMatches: quickPickServices.value
+      suggestedMatches: []
     }
   }
 
@@ -262,13 +257,13 @@ function getCatalogServiceResult(query: string) {
 const serviceSearchResult = computed(() => getCatalogServiceResult(intakeQuery.value))
 const bestSuggestedService = computed(() => serviceSearchResult.value.bestMatch)
 const searchPanelItems = computed(() => {
-  return intakeQuery.value.trim() ? serviceSearchResult.value.suggestedMatches : quickPickServices.value
+  return intakeQuery.value.trim().length >= minSearchLength ? serviceSearchResult.value.suggestedMatches : []
 })
 
 const imeiWarning = computed(() => getImeiWarning(state.imei))
 
 const searchPanelTitle = computed(() => {
-  return intakeQuery.value.trim() ? 'Résultats atelier' : 'Réparations & services'
+  return 'Résultats atelier'
 })
 
 watch(bestSuggestedService, (suggestion) => {
@@ -281,52 +276,6 @@ watch(bestSuggestedService, (suggestion) => {
   state.type = suggestion.type === 'service' ? 'support' : 'repair'
   state.issueDescription = suggestion.serviceKind || suggestion.name
 }, { immediate: true })
-
-watch(searchPanelItems, (items) => {
-  if (!items.length) {
-    highlightedSuggestionIndex.value = 0
-    return
-  }
-
-  if (highlightedSuggestionIndex.value >= items.length) {
-    highlightedSuggestionIndex.value = 0
-  }
-})
-
-watch(debouncedIntakeQuery, async (value) => {
-  const query = value.trim()
-
-  if (!query) {
-    remoteSuggestions.value = []
-    remoteSuggestionsPending.value = false
-    return
-  }
-
-  const requestId = ++remoteSearchRequestId
-  remoteSuggestionsPending.value = true
-
-  try {
-    const response = await $fetch<CatalogItemListResponse>('/api/catalog-items', {
-      query: {
-        search: query,
-        activeOnly: true,
-        pageSize: 25
-      }
-    })
-
-    if (requestId !== remoteSearchRequestId) {
-      return
-    }
-
-    remoteSuggestions.value = response.items.filter((item) => {
-      return (item.type === 'repair' || item.type === 'service') && item.isActive
-    })
-  } finally {
-    if (requestId === remoteSearchRequestId) {
-      remoteSuggestionsPending.value = false
-    }
-  }
-})
 
 function onSubmit(event: FormSubmitEvent<Schema>) {
   emit('save', {
@@ -367,61 +316,6 @@ function applyCatalogSuggestion(item: CatalogItemRecord) {
   state.issueDescription = item.serviceKind || item.name
   lineEditor.addCatalogItem(item)
   closeSearchPanel()
-}
-
-function handleIntakeQueryInput(value: string) {
-  highlightedSuggestionIndex.value = 0
-
-  if (value.trim()) {
-    openSearchPanel()
-    return
-  }
-
-  cancelSearchClose()
-}
-
-function openSearchPanel() {
-  cancelSearchClose()
-  searchOpen.value = true
-}
-
-function closeSearchPanel() {
-  cancelSearchClose()
-  searchOpen.value = false
-  highlightedSuggestionIndex.value = 0
-}
-
-function scheduleSearchClose() {
-  cancelSearchClose()
-  searchCloseTimeout = setTimeout(() => {
-    searchOpen.value = false
-    highlightedSuggestionIndex.value = 0
-  }, 120)
-}
-
-function cancelSearchClose() {
-  if (searchCloseTimeout) {
-    clearTimeout(searchCloseTimeout)
-    searchCloseTimeout = null
-  }
-}
-
-function highlightNextResult() {
-  if (!searchPanelItems.value.length) {
-    return
-  }
-
-  highlightedSuggestionIndex.value = (highlightedSuggestionIndex.value + 1) % searchPanelItems.value.length
-}
-
-function highlightPreviousResult() {
-  if (!searchPanelItems.value.length) {
-    return
-  }
-
-  highlightedSuggestionIndex.value = highlightedSuggestionIndex.value <= 0
-    ? searchPanelItems.value.length - 1
-    : highlightedSuggestionIndex.value - 1
 }
 
 function applyFirstSearchResult() {
@@ -481,17 +375,7 @@ async function handleIntakeScan(value: string) {
   }
 
   const normalizedQuery = normalizeSearchText(sanitizedValue)
-  const response = await $fetch<CatalogItemListResponse>('/api/catalog-items', {
-    query: {
-      search: sanitizedValue,
-      activeOnly: true,
-      pageSize: 25
-    }
-  })
-  const match = response.items
-    .filter((item) => {
-      return (item.type === 'repair' || item.type === 'service') && item.isActive
-    })
+  const match = (await searchCatalogItems(sanitizedValue))
     .map(item => ({
       item,
       score: scoreCatalogService(item, normalizedQuery)
@@ -582,7 +466,6 @@ async function handleIntakeScan(value: string) {
                         class="flex-1"
                         placeholder="iphone 14 ecran"
                         autofocus
-                        @update:model-value="handleIntakeQueryInput"
                         @keydown="handleSearchKeydown"
                       />
                       <PosBarcodeScanner
@@ -596,7 +479,7 @@ async function handleIntakeScan(value: string) {
                   </UFormField>
 
                   <div
-                    v-if="searchOpen"
+                    v-if="shouldShowSearchPanel"
                     class="absolute inset-x-0 top-full z-50 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
                   >
                     <div class="flex items-center justify-between gap-3 px-2 pb-2">
@@ -608,7 +491,11 @@ async function handleIntakeScan(value: string) {
                       </span>
                     </div>
 
-                    <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
+                    <div v-if="intakeQuery.trim().length < minSearchLength" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                      Tapez au moins {{ minSearchLength }} caractères.
+                    </div>
+
+                    <div v-else-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
                       <button
                         v-for="(suggestion, index) in searchPanelItems"
                         :key="suggestion.id"

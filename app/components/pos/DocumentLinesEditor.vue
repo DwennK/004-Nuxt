@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CatalogItemRecord } from '~~/shared/types/pos'
 import type { CommercialLinesDraftController } from '~~/app/composables/useCommercialLinesDraft'
-import { formatCurrency, getCatalogItemTypeLabel, normalizeSearchText } from '~~/shared/utils/pos'
+import { formatCurrency, getCatalogItemTypeLabel } from '~~/shared/utils/pos'
 
 const props = withDefaults(defineProps<{
   editor: CommercialLinesDraftController
@@ -15,45 +15,26 @@ const props = withDefaults(defineProps<{
 const state = props.editor.state
 const totals = props.editor.totals
 const categoryItems = props.editor.categoryItems
-const search = ref('')
-const searchOpen = ref(false)
-const highlightedItemIndex = ref(0)
-let searchCloseTimeout: ReturnType<typeof setTimeout> | null = null
-
-const activeItems = computed(() => props.catalogItems.filter(item => item.isActive))
 const resolvedMode = computed(() => props.mode || 'document')
-
-const quickPickItems = computed(() => {
-  return activeItems.value.slice(0, 8)
-})
-
-const filteredItems = computed(() => {
-  const term = normalizeSearchText(search.value)
-
-  if (!term) {
-    return quickPickItems.value
-  }
-
-  return activeItems.value.filter((item) => {
-    return [
-      item.name,
-      item.sku,
-      item.type,
-      item.category,
-      item.brand,
-      item.model,
-      item.serviceKind,
-      item.keywords.join(' ')
-    ].some(value => normalizeSearchText(value).includes(term))
-  }).slice(0, 10)
-})
-
-const searchPanelItems = computed(() => {
-  return search.value.trim() ? filteredItems.value : quickPickItems.value
-})
+const {
+  search,
+  highlightedItemIndex,
+  remoteSearchPending,
+  searchPanelItems,
+  shouldShowSearchPanel,
+  minSearchLength,
+  searchCatalogItems,
+  openSearchPanel,
+  closeSearchPanel,
+  scheduleSearchClose,
+  cancelSearchClose,
+  highlightNextResult,
+  highlightPreviousResult,
+  resetSearch
+} = useCatalogItemSearch()
 
 const searchPanelTitle = computed(() => {
-  return search.value.trim() ? 'Résultats' : 'Suggestions'
+  return 'Résultats'
 })
 
 const searchPlaceholder = computed(() => {
@@ -94,86 +75,18 @@ const emptyDescription = computed(() => {
 
 const catalogItemById = computed(() => new Map(props.catalogItems.map(item => [item.id, item])))
 
-watch(searchPanelItems, (items) => {
-  if (!items.length) {
-    highlightedItemIndex.value = 0
-    return
-  }
-
-  if (highlightedItemIndex.value >= items.length) {
-    highlightedItemIndex.value = 0
-  }
-})
-
-watch(search, (value) => {
-  highlightedItemIndex.value = 0
-
-  if (value.trim()) {
-    openSearchPanel()
-    return
-  }
-
-  cancelSearchClose()
-})
-
-function openSearchPanel() {
-  cancelSearchClose()
-  searchOpen.value = true
-}
-
-function closeSearchPanel() {
-  cancelSearchClose()
-  searchOpen.value = false
-  highlightedItemIndex.value = 0
-}
-
 function createNewLine() {
-  closeSearchPanel()
-  search.value = ''
+  resetSearch()
   props.editor.addEmptyLine()
-}
-
-function scheduleSearchClose() {
-  cancelSearchClose()
-  searchCloseTimeout = setTimeout(() => {
-    searchOpen.value = false
-    highlightedItemIndex.value = 0
-  }, 120)
-}
-
-function cancelSearchClose() {
-  if (searchCloseTimeout) {
-    clearTimeout(searchCloseTimeout)
-    searchCloseTimeout = null
-  }
-}
-
-function highlightNextResult() {
-  if (!searchPanelItems.value.length) {
-    return
-  }
-
-  highlightedItemIndex.value = (highlightedItemIndex.value + 1) % searchPanelItems.value.length
-}
-
-function highlightPreviousResult() {
-  if (!searchPanelItems.value.length) {
-    return
-  }
-
-  highlightedItemIndex.value = highlightedItemIndex.value <= 0
-    ? searchPanelItems.value.length - 1
-    : highlightedItemIndex.value - 1
 }
 
 function addCatalogItem(item: CatalogItemRecord) {
   props.editor.addCatalogItem(item)
-  closeSearchPanel()
-  search.value = ''
+  resetSearch()
 }
 
 function addFirstMatch() {
-  const item = searchPanelItems.value[highlightedItemIndex.value] || filteredItems.value[0]
+  const item = searchPanelItems.value[highlightedItemIndex.value] || searchPanelItems.value[0]
 
   if (!item || !search.value.trim()) {
     return
@@ -209,20 +122,16 @@ function handleSearchKeydown(event: KeyboardEvent) {
   }
 }
 
-function handleBarcodeScan(value: string) {
-  const normalizedValue = normalizeSearchText(value)
-  const match = activeItems.value.find((item) => {
-    return normalizeSearchText(item.sku) === normalizedValue
-      || normalizeSearchText(item.name) === normalizedValue
-  })
+async function handleBarcodeScan(value: string) {
+  const remoteMatch = (await searchCatalogItems(value))[0] || null
 
-  if (!match) {
-    search.value = value
-    openSearchPanel()
+  if (remoteMatch) {
+    addCatalogItem(remoteMatch)
     return
   }
 
-  addCatalogItem(match)
+  search.value = value
+  openSearchPanel()
 }
 </script>
 
@@ -307,7 +216,7 @@ function handleBarcodeScan(value: string) {
             </div>
 
             <div
-              v-if="searchOpen"
+              v-if="shouldShowSearchPanel"
               class="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
             >
               <div class="flex items-center justify-between gap-3 px-2 pb-2">
@@ -319,7 +228,11 @@ function handleBarcodeScan(value: string) {
                 </span>
               </div>
 
-              <div v-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
+              <div v-if="search.trim().length < minSearchLength" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                Tapez au moins {{ minSearchLength }} caractères.
+              </div>
+
+              <div v-else-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
                 <button
                   v-for="(item, index) in searchPanelItems"
                   :key="item.id"
@@ -343,6 +256,10 @@ function handleBarcodeScan(value: string) {
                     {{ formatCurrency(item.defaultPrice) }}
                   </span>
                 </button>
+              </div>
+
+              <div v-else-if="remoteSearchPending" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                Recherche dans le catalogue...
               </div>
 
               <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">

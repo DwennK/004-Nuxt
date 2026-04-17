@@ -1,22 +1,14 @@
 <script setup lang="ts">
-import type { CatalogItemListResponse, CustomerListResponse } from '~~/shared/types/pos'
+import type { CustomerListResponse } from '~~/shared/types/pos'
 
 const route = useRoute()
 const toast = useToast()
 const customerId = computed(() => Number(route.query.customerId || 0))
 const formId = 'ticket-editor-form'
 
-const [{ data: customers }, { data: catalogItems }] = await Promise.all([
-  useFetch<CustomerListResponse>('/api/customers', {
-    query: { pageSize: 250 }
-  }),
-  useFetch<CatalogItemListResponse>('/api/catalog-items', {
-    query: {
-      activeOnly: true,
-      pageSize: 250
-    }
-  })
-])
+const { data: customers } = await useFetch<CustomerListResponse>('/api/customers', {
+  query: { pageSize: 250 }
+})
 
 async function saveTicket(payload: {
   customerId: number
@@ -100,7 +92,6 @@ async function saveTicket(payload: {
           layout="intake"
           :show-submit="false"
           :customers="customers.items"
-          :catalog-items="catalogItems?.items || []"
           :initial-value="{ customerId: customerId || undefined, type: 'repair' }"
           @save="saveTicket"
         />
