@@ -1,29 +1,51 @@
-import { asc, eq, or, sql } from 'drizzle-orm'
+import { and, asc, eq, or, sql } from 'drizzle-orm'
 import { customers } from '~~/server/db/schema'
-import type { CustomerUpsertInput } from '~~/shared/types/pos'
+import type { CustomerListResponse, CustomerUpsertInput } from '~~/shared/types/pos'
 import { useDb } from '../turso'
 import { ensurePosSchema, mapCustomer, normalizeOptionalText, normalizeRequiredText, splitLegacyName } from './core'
 
-export async function listCustomers(search?: string) {
+export async function listCustomers(filters?: {
+  search?: string
+  page?: number
+  pageSize?: number
+}): Promise<CustomerListResponse> {
   await ensurePosSchema()
 
   const db = useDb()
-  const normalizedSearch = search?.trim().toLowerCase()
+  const normalizedSearch = filters?.search?.trim().toLowerCase()
+  const searchPattern = normalizedSearch ? `%${normalizedSearch}%` : null
+  const page = Math.max(filters?.page || 1, 1)
+  const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
+  const offset = (page - 1) * pageSize
 
-  const rows = await db.select()
-    .from(customers)
-    .where(normalizedSearch
+  const whereClause = and(
+    searchPattern
       ? or(
-          sql`lower(${customers.firstName}) like ${`%${normalizedSearch}%`}`,
-          sql`lower(${customers.lastName}) like ${`%${normalizedSearch}%`}`,
-          sql`lower(coalesce(${customers.companyName}, '')) like ${`%${normalizedSearch}%`}`,
-          sql`lower(${customers.phone}) like ${`%${normalizedSearch}%`}`,
-          sql`lower(${customers.email}) like ${`%${normalizedSearch}%`}`
+          sql`lower(${customers.firstName}) like ${searchPattern}`,
+          sql`lower(${customers.lastName}) like ${searchPattern}`,
+          sql`lower(coalesce(${customers.companyName}, '')) like ${searchPattern}`,
+          sql`lower(${customers.phone}) like ${searchPattern}`,
+          sql`lower(${customers.email}) like ${searchPattern}`
         )
-      : undefined)
-    .orderBy(asc(customers.lastName), asc(customers.firstName), asc(customers.id))
+      : undefined
+  )
 
-  return rows.map(mapCustomer)
+  const [totalRows, rows] = await Promise.all([
+    db.select({ total: sql<number>`count(*)` }).from(customers).where(whereClause),
+    db.select()
+      .from(customers)
+      .where(whereClause)
+      .orderBy(asc(customers.lastName), asc(customers.firstName), asc(customers.id))
+      .limit(pageSize)
+      .offset(offset)
+  ])
+
+  return {
+    items: rows.map(mapCustomer),
+    page,
+    pageSize,
+    total: Number(totalRows[0]?.total || 0)
+  }
 }
 
 export async function getCustomerById(id: number) {

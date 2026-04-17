@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
-import type { CustomerRecord, DocumentListResponse, TicketListResponse } from '~~/shared/types/pos'
+import type { CustomerListResponse, DocumentListResponse, TicketListResponse } from '~~/shared/types/pos'
 
 const open = ref(false)
 
@@ -102,7 +102,12 @@ const footerLinks = [{
 }] satisfies NavigationMenuItem[]
 
 const [{ data: customers }, { data: tickets }, { data: documents }] = await Promise.all([
-  useFetch<CustomerRecord[]>('/api/customers'),
+  useFetch<CustomerListResponse>('/api/customers', {
+    query: {
+      page: 1,
+      pageSize: 5
+    }
+  }),
   useFetch<TicketListResponse>('/api/tickets', {
     query: {
       page: 1,
@@ -142,7 +147,7 @@ const quickActions = [...counterActions, {
 }]
 
 const groups = computed(() => {
-  const customerItems = (customers.value || []).slice(0, 5).map(customer => ({
+  const customerItems = (customers.value?.items || []).slice(0, 5).map(customer => ({
     id: `customer-${customer.id}`,
     label: customer.displayName,
     icon: 'i-lucide-users',

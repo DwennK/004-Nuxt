@@ -268,6 +268,10 @@ export interface TicketListResponse extends PaginatedResponse<TicketListItem> {
   }
 }
 
+export type CustomerListResponse = PaginatedResponse<CustomerRecord>
+
+export type CatalogItemListResponse = PaginatedResponse<CatalogItemRecord>
+
 export interface PaymentListItem extends PaymentRecord {
   customerName: string | null
   documentNumber: string

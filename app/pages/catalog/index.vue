@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import type { TableColumn, TabsItem } from '@nuxt/ui'
-import { getPaginationRowModel } from '@tanstack/table-core'
 import type { LocationQueryValue } from 'vue-router'
-import type { DashboardTableInstance } from '~/types/table'
 import type {
   CatalogItemInput,
+  CatalogItemListResponse,
   CatalogItemRecord,
   CatalogItemType
 } from '~~/shared/types/pos'
@@ -13,7 +12,7 @@ import {
   catalogRepairCategories,
   catalogServiceCategories
 } from '~~/shared/constants/pos'
-import { formatCurrency, normalizeSearchText } from '~~/shared/utils/pos'
+import { formatCurrency } from '~~/shared/utils/pos'
 
 type CatalogView = 'articles' | 'repairs' | 'services'
 const ALL_CATEGORIES = '__all__'
@@ -25,9 +24,6 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const articleTable = useTemplateRef<DashboardTableInstance>('articleTable')
-const repairTable = useTemplateRef<DashboardTableInstance>('repairTable')
-const serviceTable = useTemplateRef<DashboardTableInstance>('serviceTable')
 
 const activeView = ref<CatalogView>('articles')
 const createOpen = ref(false)
@@ -38,6 +34,9 @@ const createType = ref<CatalogItemType>('product')
 const articleSearch = ref('')
 const repairSearch = ref('')
 const serviceSearch = ref('')
+const debouncedArticleSearch = refDebounced(articleSearch, 250)
+const debouncedRepairSearch = refDebounced(repairSearch, 250)
+const debouncedServiceSearch = refDebounced(serviceSearch, 250)
 const articleCategory = ref(ALL_CATEGORIES)
 const repairCategory = ref(ALL_CATEGORIES)
 const serviceCategory = ref(ALL_CATEGORIES)
@@ -45,18 +44,54 @@ const articleActiveOnly = ref(false)
 const repairActiveOnly = ref(false)
 const serviceActiveOnly = ref(false)
 
-const articlePagination = ref({ pageIndex: 0, pageSize: 10 })
-const repairPagination = ref({ pageIndex: 0, pageSize: 10 })
-const servicePagination = ref({ pageIndex: 0, pageSize: 10 })
-const articleSorting = ref([{ id: 'name', desc: false }])
-const repairSorting = ref([{ id: 'name', desc: false }])
-const serviceSorting = ref([{ id: 'name', desc: false }])
+const articlePagination = ref({ pageIndex: 0, pageSize: 50 })
+const repairPagination = ref({ pageIndex: 0, pageSize: 50 })
+const servicePagination = ref({ pageIndex: 0, pageSize: 50 })
 
-const {
-  data: items,
-  status,
-  refresh
-} = await useFetch<CatalogItemRecord[]>('/api/catalog-items')
+function buildQuery(
+  type: CatalogItemType,
+  search: string,
+  category: string,
+  activeOnly: boolean,
+  pagination: { pageIndex: number, pageSize: number }
+) {
+  return {
+    type,
+    search: search.trim() || undefined,
+    category: category === ALL_CATEGORIES ? undefined : category,
+    activeOnly: activeOnly || undefined,
+    page: pagination.pageIndex + 1,
+    pageSize: pagination.pageSize
+  }
+}
+
+const articleQuery = computed(() => buildQuery('product', debouncedArticleSearch.value, articleCategory.value, articleActiveOnly.value, articlePagination.value))
+const repairQuery = computed(() => buildQuery('repair', debouncedRepairSearch.value, repairCategory.value, repairActiveOnly.value, repairPagination.value))
+const serviceQuery = computed(() => buildQuery('service', debouncedServiceSearch.value, serviceCategory.value, serviceActiveOnly.value, servicePagination.value))
+
+const [
+  { data: articleResponse, status: articleStatus, refresh: refreshArticles },
+  { data: repairResponse, status: repairStatus, refresh: refreshRepairs },
+  { data: serviceResponse, status: serviceStatus, refresh: refreshServices }
+] = await Promise.all([
+  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: articleQuery, key: 'catalog-articles' }),
+  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: repairQuery, key: 'catalog-repairs' }),
+  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: serviceQuery, key: 'catalog-services' })
+])
+
+async function refresh() {
+  await Promise.all([refreshArticles(), refreshRepairs(), refreshServices()])
+}
+
+const articleItems = computed(() => articleResponse.value?.items || [])
+const repairItems = computed(() => repairResponse.value?.items || [])
+const serviceItems = computed(() => serviceResponse.value?.items || [])
+const articleTotal = computed(() => articleResponse.value?.total || 0)
+const repairTotal = computed(() => repairResponse.value?.total || 0)
+const serviceTotal = computed(() => serviceResponse.value?.total || 0)
+const articleTotalPages = computed(() => Math.max(Math.ceil(articleTotal.value / articlePagination.value.pageSize), 1))
+const repairTotalPages = computed(() => Math.max(Math.ceil(repairTotal.value / repairPagination.value.pageSize), 1))
+const serviceTotalPages = computed(() => Math.max(Math.ceil(serviceTotal.value / servicePagination.value.pageSize), 1))
 
 const tabItems: TabsItem[] = [
   {
@@ -172,119 +207,19 @@ function openEditSlideover(
   }
 }
 
-function filterItems(
-  type: CatalogItemType,
-  search: string,
-  category: string,
-  activeOnly: boolean
-) {
-  const term = normalizeSearchText(search)
-  const requestedCategory = category === ALL_CATEGORIES ? '' : category.trim()
-
-  return (items.value || []).filter((item) => {
-    if (item.type !== type) {
-      return false
-    }
-
-    if (activeOnly && !item.isActive) {
-      return false
-    }
-
-    if (requestedCategory && item.category !== requestedCategory) {
-      return false
-    }
-
-    if (!term) {
-      return true
-    }
-
-    return [
-      item.name,
-      item.sku,
-      item.category,
-      item.brand,
-      item.model,
-      item.serviceKind,
-      item.keywords.join(' ')
-    ].some(value => normalizeSearchText(value).includes(term))
-  })
+function buildCategoryOptions(base: readonly string[]) {
+  return [
+    { label: 'Toutes les catégories', value: ALL_CATEGORIES },
+    ...Array.from(new Set(base))
+      .filter(Boolean)
+      .sort()
+      .map(value => ({ label: value, value }))
+  ]
 }
 
-const articleItems = computed(() =>
-  filterItems(
-    'product',
-    articleSearch.value,
-    articleCategory.value,
-    articleActiveOnly.value
-  )
-)
-const repairItems = computed(() =>
-  filterItems(
-    'repair',
-    repairSearch.value,
-    repairCategory.value,
-    repairActiveOnly.value
-  )
-)
-const serviceItems = computed(() =>
-  filterItems(
-    'service',
-    serviceSearch.value,
-    serviceCategory.value,
-    serviceActiveOnly.value
-  )
-)
-
-const articleCategoryOptions = computed(() => {
-  const values = new Set([
-    ...catalogArticleCategories,
-    ...(items.value || [])
-      .filter(item => item.type === 'product')
-      .map(item => item.category)
-  ])
-
-  return [
-    { label: 'Toutes les catégories', value: ALL_CATEGORIES },
-    ...Array.from(values)
-      .filter(Boolean)
-      .sort()
-      .map(value => ({ label: value, value }))
-  ]
-})
-
-const repairCategoryOptions = computed(() => {
-  const values = new Set([
-    ...catalogRepairCategories,
-    ...(items.value || [])
-      .filter(item => item.type === 'repair')
-      .map(item => item.category)
-  ])
-
-  return [
-    { label: 'Toutes les catégories', value: ALL_CATEGORIES },
-    ...Array.from(values)
-      .filter(Boolean)
-      .sort()
-      .map(value => ({ label: value, value }))
-  ]
-})
-
-const serviceCategoryOptions = computed(() => {
-  const values = new Set([
-    ...catalogServiceCategories,
-    ...(items.value || [])
-      .filter(item => item.type === 'service')
-      .map(item => item.category)
-  ])
-
-  return [
-    { label: 'Toutes les catégories', value: ALL_CATEGORIES },
-    ...Array.from(values)
-      .filter(Boolean)
-      .sort()
-      .map(value => ({ label: value, value }))
-  ]
-})
+const articleCategoryOptions = computed(() => buildCategoryOptions(catalogArticleCategories))
+const repairCategoryOptions = computed(() => buildCategoryOptions(catalogRepairCategories))
+const serviceCategoryOptions = computed(() => buildCategoryOptions(catalogServiceCategories))
 
 const createInitialValue = computed<Partial<CatalogItemInput>>(() => ({
   type: createType.value,
@@ -631,21 +566,29 @@ function getRowItems(item: CatalogItemRecord) {
   ]
 }
 
-watch([articleSearch, articleCategory, articleActiveOnly], () => {
+watch([debouncedArticleSearch, articleCategory, articleActiveOnly], () => {
   articlePagination.value.pageIndex = 0
 })
 
-watch([repairSearch, repairCategory, repairActiveOnly], () => {
+watch([debouncedRepairSearch, repairCategory, repairActiveOnly], () => {
   repairPagination.value.pageIndex = 0
 })
 
-watch([serviceSearch, serviceCategory, serviceActiveOnly], () => {
+watch([debouncedServiceSearch, serviceCategory, serviceActiveOnly], () => {
   servicePagination.value.pageIndex = 0
 })
 
+async function fetchItemById(itemId: number) {
+  try {
+    return await $fetch<CatalogItemRecord>(`/api/catalog-items/${itemId}`)
+  } catch {
+    return null
+  }
+}
+
 watch(
-  [items, () => route.query.edit, () => route.query.create],
-  () => {
+  [() => route.query.edit, () => route.query.create],
+  async () => {
     const createQuery = getQueryValue(route.query.create)
     const editQuery = getQueryValue(route.query.edit)
 
@@ -655,21 +598,18 @@ watch(
     }
 
     if (editQuery) {
-      const item = (items.value || []).find(
-        candidate => String(candidate.id) === editQuery
-      )
+      const numericId = Number(editQuery)
+      const item = Number.isFinite(numericId) ? await fetchItemById(numericId) : null
 
       if (item) {
         openEditSlideover(item, { syncQuery: false })
         return
       }
 
-      if (items.value) {
-        createOpen.value = false
-        editOpen.value = false
-        editingItem.value = null
-        void replaceCatalogQuery({ edit: null })
-      }
+      createOpen.value = false
+      editOpen.value = false
+      editingItem.value = null
+      void replaceCatalogQuery({ edit: null })
       return
     }
 
@@ -730,42 +670,21 @@ watch(editOpen, (open) => {
 
     <template #body>
       <div class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-4">
+        <div class="grid gap-4 md:grid-cols-3">
           <PosSummaryCard
             title="Articles"
-            :value="
-              String(
-                (items || []).filter((item) => item.type === 'product').length
-              )
-            "
+            :value="String(articleTotal)"
             icon="i-lucide-package-search"
           />
           <PosSummaryCard
             title="Réparations"
-            :value="
-              String(
-                (items || [])
-                  .filter((item) => item.type === 'repair').length
-              )
-            "
+            :value="String(repairTotal)"
             icon="i-lucide-wrench"
           />
           <PosSummaryCard
             title="Services"
-            :value="
-              String(
-                (items || [])
-                  .filter((item) => item.type === 'service').length
-              )
-            "
+            :value="String(serviceTotal)"
             icon="i-lucide-briefcase-business"
-          />
-          <PosSummaryCard
-            title="Actifs"
-            :value="
-              String((items || []).filter((item) => item.isActive).length)
-            "
-            icon="i-lucide-badge-check"
           />
         </div>
 
@@ -803,16 +722,10 @@ watch(editOpen, (open) => {
               </UDashboardToolbar>
 
               <UTable
-                ref="articleTable"
-                v-model:pagination="articlePagination"
-                v-model:sorting="articleSorting"
-                :pagination-options="{
-                  getPaginationRowModel: getPaginationRowModel()
-                }"
                 :data="articleItems"
                 :columns="articleColumns"
                 sticky="header"
-                :loading="status === 'pending'"
+                :loading="articleStatus === 'pending'"
                 class="shrink-0"
                 :ui="{
                   base: 'table-fixed border-separate border-spacing-0',
@@ -837,29 +750,14 @@ watch(editOpen, (open) => {
                 class="flex items-center justify-between gap-3 border-t border-default pt-4"
               >
                 <p class="text-sm text-toned">
-                  {{
-                    articleTable?.tableApi?.getFilteredRowModel().rows.length
-                      || articleItems.length
-                  }}
-                  article(s)
+                  {{ articleTotal }} article(s) · page {{ articlePagination.pageIndex + 1 }} / {{ articleTotalPages }}
                 </p>
 
                 <UPagination
-                  :default-page="
-                    (articleTable?.tableApi?.getState().pagination.pageIndex
-                      || 0) + 1
-                  "
-                  :items-per-page="
-                    articleTable?.tableApi?.getState().pagination.pageSize
-                  "
-                  :total="
-                    articleTable?.tableApi?.getFilteredRowModel().rows.length
-                      || articleItems.length
-                  "
-                  @update:page="
-                    (page: number) =>
-                      articleTable?.tableApi?.setPageIndex(page - 1)
-                  "
+                  :page="articlePagination.pageIndex + 1"
+                  :items-per-page="articlePagination.pageSize"
+                  :total="articleTotal"
+                  @update:page="(page: number) => { articlePagination.pageIndex = page - 1 }"
                 />
               </div>
             </div>
@@ -891,16 +789,10 @@ watch(editOpen, (open) => {
               </UDashboardToolbar>
 
               <UTable
-                ref="repairTable"
-                v-model:pagination="repairPagination"
-                v-model:sorting="repairSorting"
-                :pagination-options="{
-                  getPaginationRowModel: getPaginationRowModel()
-                }"
                 :data="repairItems"
                 :columns="repairColumns"
                 sticky="header"
-                :loading="status === 'pending'"
+                :loading="repairStatus === 'pending'"
                 class="shrink-0"
                 :ui="{
                   base: 'table-fixed border-separate border-spacing-0',
@@ -925,29 +817,14 @@ watch(editOpen, (open) => {
                 class="flex items-center justify-between gap-3 border-t border-default pt-4"
               >
                 <p class="text-sm text-toned">
-                  {{
-                    repairTable?.tableApi?.getFilteredRowModel().rows.length
-                      || repairItems.length
-                  }}
-                  réparation(s)
+                  {{ repairTotal }} réparation(s) · page {{ repairPagination.pageIndex + 1 }} / {{ repairTotalPages }}
                 </p>
 
                 <UPagination
-                  :default-page="
-                    (repairTable?.tableApi?.getState().pagination.pageIndex
-                      || 0) + 1
-                  "
-                  :items-per-page="
-                    repairTable?.tableApi?.getState().pagination.pageSize
-                  "
-                  :total="
-                    repairTable?.tableApi?.getFilteredRowModel().rows.length
-                      || repairItems.length
-                  "
-                  @update:page="
-                    (page: number) =>
-                      repairTable?.tableApi?.setPageIndex(page - 1)
-                  "
+                  :page="repairPagination.pageIndex + 1"
+                  :items-per-page="repairPagination.pageSize"
+                  :total="repairTotal"
+                  @update:page="(page: number) => { repairPagination.pageIndex = page - 1 }"
                 />
               </div>
             </div>
@@ -979,16 +856,10 @@ watch(editOpen, (open) => {
               </UDashboardToolbar>
 
               <UTable
-                ref="serviceTable"
-                v-model:pagination="servicePagination"
-                v-model:sorting="serviceSorting"
-                :pagination-options="{
-                  getPaginationRowModel: getPaginationRowModel()
-                }"
                 :data="serviceItems"
                 :columns="serviceColumns"
                 sticky="header"
-                :loading="status === 'pending'"
+                :loading="serviceStatus === 'pending'"
                 class="shrink-0"
                 :ui="{
                   base: 'table-fixed border-separate border-spacing-0',
@@ -1013,29 +884,14 @@ watch(editOpen, (open) => {
                 class="flex items-center justify-between gap-3 border-t border-default pt-4"
               >
                 <p class="text-sm text-toned">
-                  {{
-                    serviceTable?.tableApi?.getFilteredRowModel().rows.length
-                      || serviceItems.length
-                  }}
-                  service(s)
+                  {{ serviceTotal }} service(s) · page {{ servicePagination.pageIndex + 1 }} / {{ serviceTotalPages }}
                 </p>
 
                 <UPagination
-                  :default-page="
-                    (serviceTable?.tableApi?.getState().pagination.pageIndex
-                      || 0) + 1
-                  "
-                  :items-per-page="
-                    serviceTable?.tableApi?.getState().pagination.pageSize
-                  "
-                  :total="
-                    serviceTable?.tableApi?.getFilteredRowModel().rows.length
-                      || serviceItems.length
-                  "
-                  @update:page="
-                    (page: number) =>
-                      serviceTable?.tableApi?.setPageIndex(page - 1)
-                  "
+                  :page="servicePagination.pageIndex + 1"
+                  :items-per-page="servicePagination.pageSize"
+                  :total="serviceTotal"
+                  @update:page="(page: number) => { servicePagination.pageIndex = page - 1 }"
                 />
               </div>
             </div>

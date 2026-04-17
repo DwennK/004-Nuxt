@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { documentTypeLabels, paymentMethodLabels, paymentMethods } from '~~/shared/constants/pos'
-import type { CatalogItemRecord, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
+import type { CatalogItemListResponse, CustomerListResponse, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, normalizeSearchText, parseCurrencyInput } from '~~/shared/utils/pos'
 
@@ -30,19 +30,22 @@ let nextSaleLineId = 0
 let searchCloseTimeout: ReturnType<typeof setTimeout> | null = null
 
 const [{ data: customers }, { data: catalogItems }] = await Promise.all([
-  useFetch<CustomerRecord[]>('/api/customers'),
-  useFetch<CatalogItemRecord[]>('/api/catalog-items', {
+  useFetch<CustomerListResponse>('/api/customers', {
+    query: { pageSize: 250 }
+  }),
+  useFetch<CatalogItemListResponse>('/api/catalog-items', {
     query: {
-      activeOnly: true
+      activeOnly: true,
+      pageSize: 250
     }
   })
 ])
 
 watchEffect(() => {
-  customerPool.value = customers.value ? [...customers.value] : []
+  customerPool.value = customers.value?.items ? [...customers.value.items] : []
 })
 
-const activeItems = computed(() => (catalogItems.value || []).filter(item => item.isActive))
+const activeItems = computed(() => (catalogItems.value?.items || []).filter(item => item.isActive))
 
 const quickPickItems = computed(() => {
   return activeItems.value.slice(0, 8)

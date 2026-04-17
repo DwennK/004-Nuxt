@@ -1,6 +1,6 @@
 import { and, asc, eq, or, sql } from 'drizzle-orm'
 import { catalogItems } from '~~/server/db/schema'
-import type { CatalogItemInput, CatalogItemRecord, CatalogItemType } from '~~/shared/types/pos'
+import type { CatalogItemInput, CatalogItemListResponse, CatalogItemRecord, CatalogItemType } from '~~/shared/types/pos'
 import { useDb } from '../turso'
 import { ensurePosSchema, normalizeOptionalText, normalizeRequiredText } from './core'
 
@@ -9,6 +9,8 @@ type ListCatalogItemsOptions = {
   activeOnly?: boolean
   type?: CatalogItemType
   category?: string
+  page?: number
+  pageSize?: number
 }
 
 function normalizeKeywords(value: string[] | null | undefined) {
@@ -79,35 +81,51 @@ function mapCatalogItem(row: typeof catalogItems.$inferSelect): CatalogItemRecor
   }
 }
 
-export async function listCatalogItems(options: ListCatalogItemsOptions = {}) {
+export async function listCatalogItems(options: ListCatalogItemsOptions = {}): Promise<CatalogItemListResponse> {
   await ensurePosSchema()
 
   const db = useDb()
   const normalizedSearch = options.search?.trim().toLowerCase()
   const normalizedCategory = options.category?.trim()
+  const searchPattern = normalizedSearch ? `%${normalizedSearch}%` : null
+  const page = Math.max(options.page || 1, 1)
+  const pageSize = Math.min(Math.max(options.pageSize || 50, 1), 250)
+  const offset = (page - 1) * pageSize
 
-  const rows = await db.select()
-    .from(catalogItems)
-    .where(and(
-      options.activeOnly ? eq(catalogItems.isActive, true) : undefined,
-      options.type ? eq(catalogItems.type, options.type) : undefined,
-      normalizedCategory ? eq(catalogItems.category, normalizedCategory) : undefined,
-      normalizedSearch
-        ? or(
-            sql`lower(${catalogItems.name}) like ${`%${normalizedSearch}%`}`,
-            sql`lower(coalesce(${catalogItems.sku}, '')) like ${`%${normalizedSearch}%`}`,
-            sql`lower(${catalogItems.type}) like ${`%${normalizedSearch}%`}`,
-            sql`lower(${catalogItems.category}) like ${`%${normalizedSearch}%`}`,
-            sql`lower(coalesce(${catalogItems.brand}, '')) like ${`%${normalizedSearch}%`}`,
-            sql`lower(coalesce(${catalogItems.model}, '')) like ${`%${normalizedSearch}%`}`,
-            sql`lower(coalesce(${catalogItems.serviceKind}, '')) like ${`%${normalizedSearch}%`}`,
-            sql`lower(coalesce(${catalogItems.keywordsJson}, '')) like ${`%${normalizedSearch}%`}`
-          )
-        : undefined
-    ))
-    .orderBy(asc(catalogItems.category), asc(catalogItems.name), asc(catalogItems.id))
+  const whereClause = and(
+    options.activeOnly ? eq(catalogItems.isActive, true) : undefined,
+    options.type ? eq(catalogItems.type, options.type) : undefined,
+    normalizedCategory ? eq(catalogItems.category, normalizedCategory) : undefined,
+    searchPattern
+      ? or(
+          sql`lower(${catalogItems.name}) like ${searchPattern}`,
+          sql`lower(coalesce(${catalogItems.sku}, '')) like ${searchPattern}`,
+          sql`lower(${catalogItems.type}) like ${searchPattern}`,
+          sql`lower(${catalogItems.category}) like ${searchPattern}`,
+          sql`lower(coalesce(${catalogItems.brand}, '')) like ${searchPattern}`,
+          sql`lower(coalesce(${catalogItems.model}, '')) like ${searchPattern}`,
+          sql`lower(coalesce(${catalogItems.serviceKind}, '')) like ${searchPattern}`,
+          sql`lower(coalesce(${catalogItems.keywordsJson}, '')) like ${searchPattern}`
+        )
+      : undefined
+  )
 
-  return rows.map(mapCatalogItem)
+  const [totalRows, rows] = await Promise.all([
+    db.select({ total: sql<number>`count(*)` }).from(catalogItems).where(whereClause),
+    db.select()
+      .from(catalogItems)
+      .where(whereClause)
+      .orderBy(asc(catalogItems.category), asc(catalogItems.name), asc(catalogItems.id))
+      .limit(pageSize)
+      .offset(offset)
+  ])
+
+  return {
+    items: rows.map(mapCatalogItem),
+    page,
+    pageSize,
+    total: Number(totalRows[0]?.total || 0)
+  }
 }
 
 export async function getCatalogItemById(id: number) {

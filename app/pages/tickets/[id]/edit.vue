@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CatalogItemRecord, CustomerRecord, TicketDetail } from '~~/shared/types/pos'
+import type { CatalogItemListResponse, CustomerListResponse, TicketDetail } from '~~/shared/types/pos'
 
 const route = useRoute()
 const toast = useToast()
@@ -8,10 +8,13 @@ const formId = 'ticket-editor-form'
 
 const [{ data: ticket }, { data: customers }, { data: catalogItems }] = await Promise.all([
   useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
-  useFetch<CustomerRecord[]>('/api/customers'),
-  useFetch<CatalogItemRecord[]>('/api/catalog-items', {
+  useFetch<CustomerListResponse>('/api/customers', {
+    query: { pageSize: 250 }
+  }),
+  useFetch<CatalogItemListResponse>('/api/catalog-items', {
     query: {
-      activeOnly: true
+      activeOnly: true,
+      pageSize: 250
     }
   })
 ])
@@ -91,12 +94,12 @@ async function saveTicket(payload: {
     <template #body>
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
         <PosTicketForm
-          v-if="ticket && customers"
+          v-if="ticket && customers?.items"
           :form-id="formId"
           layout="intake"
           :show-submit="false"
-          :customers="customers"
-          :catalog-items="catalogItems || []"
+          :customers="customers.items"
+          :catalog-items="catalogItems?.items || []"
           :initial-value="ticket"
           @save="saveTicket"
         />

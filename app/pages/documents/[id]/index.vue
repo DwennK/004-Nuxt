@@ -4,7 +4,7 @@ import type { z } from 'zod'
 import { nextTick } from 'vue'
 
 import type { DocumentSavePayload } from '~~/app/composables/useDocumentDraft'
-import type { CatalogItemRecord, CustomerRecord, DocumentDetail, DocumentEmailInput } from '~~/shared/types/pos'
+import type { CatalogItemListResponse, CustomerListResponse, DocumentDetail, DocumentEmailInput } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { documentEmailSchema } from '~~/shared/validation/pos'
 import { getDocumentEmailMessage, getDocumentEmailSubject } from '~~/shared/utils/document-email'
@@ -34,8 +34,8 @@ const emailState = reactive<DocumentEmailInput>({
 
 const [{ data: document, refresh }, { data: customers }, { data: catalogItems }, { data: company }] = await Promise.all([
   useFetch<DocumentDetail>(() => `/api/documents/${id.value}`),
-  useFetch<CustomerRecord[]>('/api/customers'),
-  useFetch<CatalogItemRecord[]>('/api/catalog-items', { query: { activeOnly: true } }),
+  useFetch<CustomerListResponse>('/api/customers', { query: { pageSize: 250 } }),
+  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: { activeOnly: true, pageSize: 250 } }),
   useFetch<CompanySettingsRecord>('/api/settings/company')
 ])
 
@@ -168,7 +168,7 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
     </template>
 
     <template #body>
-      <div v-if="document && customers && catalogItems" class="space-y-3">
+      <div v-if="document && customers?.items && catalogItems?.items" class="space-y-3">
         <PosDocumentDetailHeader
           :document="document"
           :paid-amount="paidAmount"
@@ -188,10 +188,10 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
 
         <div v-if="activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)]">
           <PosDocumentEditor
-            v-if="customers && catalogItems"
+            v-if="customers?.items && catalogItems?.items"
             v-model:context-open="isContextOpen"
-            :customers="customers"
-            :catalog-items="catalogItems"
+            :customers="customers.items"
+            :catalog-items="catalogItems.items"
             :initial-value="document"
             :fixed-ticket-id="document.ticketId"
             submit-label="Enregistrer le document"

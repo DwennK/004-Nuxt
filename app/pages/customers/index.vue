@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import { getPaginationRowModel } from '@tanstack/table-core'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
-import type { CustomerFormValue, CustomerRecord } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerListResponse, CustomerRecord } from '~~/shared/types/pos'
 
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
@@ -12,34 +11,40 @@ const toast = useToast()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 const search = ref('')
+const debouncedSearch = refDebounced(search, 250)
 const createOpen = ref(false)
 const editOpen = ref(false)
 const editingCustomer = ref<CustomerRecord | null>(null)
 const pagination = ref({
   pageIndex: 0,
-  pageSize: 10
+  pageSize: 50
 })
-const sorting = ref([{ id: 'displayName', desc: false }])
 const columnVisibility = ref()
 
-const { data: customers, status, refresh } = await useFetch<CustomerRecord[]>('/api/customers')
+const query = computed(() => ({
+  search: debouncedSearch.value.trim() || undefined,
+  page: pagination.value.pageIndex + 1,
+  pageSize: pagination.value.pageSize
+}))
 
-const filteredCustomers = computed(() => {
-  const term = search.value.trim().toLowerCase()
+const { data: customersResponse, status, refresh } = await useFetch<CustomerListResponse>('/api/customers', {
+  query
+})
 
-  if (!term) {
-    return customers.value || []
+const customers = computed(() => customersResponse.value?.items || [])
+const totalResults = computed(() => customersResponse.value?.total || 0)
+const totalPages = computed(() => Math.max(Math.ceil(totalResults.value / pagination.value.pageSize), 1))
+
+watch(debouncedSearch, () => {
+  pagination.value.pageIndex = 0
+})
+
+watch(totalResults, (total) => {
+  const lastPageIndex = Math.max(Math.ceil(total / pagination.value.pageSize) - 1, 0)
+
+  if (pagination.value.pageIndex > lastPageIndex) {
+    pagination.value.pageIndex = lastPageIndex
   }
-
-  return (customers.value || []).filter((customer) => {
-    return [
-      customer.displayName,
-      customer.companyName,
-      customer.phone,
-      customer.email,
-      customer.city
-    ].some(value => value?.toLowerCase().includes(term))
-  })
 })
 
 const editingCustomerForm = computed(() => {
@@ -60,10 +65,6 @@ const editingCustomerForm = computed(() => {
     city: editingCustomer.value.city || '',
     notes: editingCustomer.value.notes || ''
   }
-})
-
-watch(search, () => {
-  pagination.value.pageIndex = 0
 })
 
 async function saveCustomer(payload: CustomerFormValue) {
@@ -138,18 +139,7 @@ function getRowItems(customer: CustomerRecord) {
 const columns: TableColumn<CustomerRecord>[] = [
   {
     accessorKey: 'displayName',
-    header: ({ column }) => h(UButton, {
-      color: 'neutral',
-      variant: 'ghost',
-      label: 'Client',
-      icon: column.getIsSorted() === 'asc'
-        ? 'i-lucide-arrow-up-az'
-        : column.getIsSorted() === 'desc'
-          ? 'i-lucide-arrow-down-az'
-          : 'i-lucide-arrow-up-down',
-      class: '-mx-2.5',
-      onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
-    }),
+    header: 'Client',
     cell: ({ row }) => h('div', { class: 'min-w-0 leading-tight' }, [
       h('p', { class: 'truncate font-medium text-highlighted' }, row.original.displayName),
       row.original.companyName
@@ -265,18 +255,15 @@ const columns: TableColumn<CustomerRecord>[] = [
     <template #body>
       <div class="space-y-4">
         <div class="grid gap-4 md:grid-cols-3">
-          <PosSummaryCard title="Clients" :value="String(customers?.length || 0)" icon="i-lucide-users" />
-          <PosSummaryCard title="Visibles" :value="String(filteredCustomers.length)" icon="i-lucide-filter" />
+          <PosSummaryCard title="Clients" :value="String(totalResults)" icon="i-lucide-users" />
+          <PosSummaryCard title="Sur la page" :value="String(customers.length)" icon="i-lucide-filter" />
           <PosSummaryCard title="Mode de recherche" :value="search ? 'Filtré' : 'Tous'" icon="i-lucide-search" />
         </div>
 
         <UTable
           ref="table"
-          v-model:pagination="pagination"
-          v-model:sorting="sorting"
           v-model:column-visibility="columnVisibility"
-          :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-          :data="filteredCustomers"
+          :data="customers"
           :columns="columns"
           sticky="header"
           :loading="status === 'pending'"
@@ -302,14 +289,14 @@ const columns: TableColumn<CustomerRecord>[] = [
 
         <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
           <p class="text-sm text-toned">
-            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredCustomers.length }} client(s)
+            {{ totalResults }} client(s) · page {{ pagination.pageIndex + 1 }} / {{ totalPages }}
           </p>
 
           <UPagination
-            :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-            :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-            :total="table?.tableApi?.getFilteredRowModel().rows.length || filteredCustomers.length"
-            @update:page="(page: number) => table?.tableApi?.setPageIndex(page - 1)"
+            :page="pagination.pageIndex + 1"
+            :items-per-page="pagination.pageSize"
+            :total="totalResults"
+            @update:page="(page: number) => { pagination.pageIndex = page - 1 }"
           />
         </div>
       </div>

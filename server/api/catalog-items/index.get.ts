@@ -6,7 +6,9 @@ const querySchema = z.object({
   search: z.string().optional(),
   activeOnly: z.coerce.boolean().optional(),
   type: z.enum(catalogItemTypes).optional(),
-  category: z.string().optional()
+  category: z.string().optional(),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(250).default(50)
 })
 
 export default eventHandler(async (event) => {
@@ -15,6 +17,8 @@ export default eventHandler(async (event) => {
     search: query.search,
     activeOnly: query.activeOnly ?? false,
     type: query.type,
-    category: query.category
+    category: query.category,
+    page: query.page,
+    pageSize: query.pageSize
   })
 })

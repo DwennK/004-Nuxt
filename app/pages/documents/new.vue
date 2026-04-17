@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CatalogItemRecord, CustomerRecord, DocumentDetail, DocumentStatus, DocumentType } from '~~/shared/types/pos'
+import type { CatalogItemListResponse, CustomerListResponse, DocumentDetail, DocumentStatus, DocumentType } from '~~/shared/types/pos'
 
 const route = useRoute()
 const toast = useToast()
@@ -7,10 +7,13 @@ const customerId = computed(() => Number(route.query.customerId || 0) || null)
 const ticketId = computed(() => Number(route.query.ticketId || 0) || null)
 
 const [{ data: customers }, { data: catalogItems }] = await Promise.all([
-  useFetch<CustomerRecord[]>('/api/customers'),
-  useFetch<CatalogItemRecord[]>('/api/catalog-items', {
+  useFetch<CustomerListResponse>('/api/customers', {
+    query: { pageSize: 250 }
+  }),
+  useFetch<CatalogItemListResponse>('/api/catalog-items', {
     query: {
-      activeOnly: true
+      activeOnly: true,
+      pageSize: 250
     }
   })
 ])
@@ -67,9 +70,9 @@ async function saveDocument(payload: {
         </div>
 
         <PosDocumentEditor
-          v-if="customers && catalogItems"
-          :customers="customers"
-          :catalog-items="catalogItems"
+          v-if="customers?.items && catalogItems?.items"
+          :customers="customers.items"
+          :catalog-items="catalogItems.items"
           :fixed-customer-id="customerId"
           :fixed-ticket-id="ticketId"
           submit-label="Créer le document"
