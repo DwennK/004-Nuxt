@@ -261,6 +261,13 @@ export interface DocumentListResponse extends PaginatedResponse<DocumentListItem
   }
 }
 
+export interface TicketListResponse extends PaginatedResponse<TicketListItem> {
+  summary: {
+    openCount: number
+    readyCount: number
+  }
+}
+
 export interface PaymentListItem extends PaymentRecord {
   customerName: string | null
   documentNumber: string

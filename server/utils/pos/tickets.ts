@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { customers, documents, ticketEvents, ticketLines, tickets } from '~~/server/db/schema'
 import {
   ticketStatusLabels,
@@ -13,6 +13,7 @@ import type {
   TicketEvent,
   TicketLineRecord,
   TicketListItem,
+  TicketListResponse,
   TicketRecord,
   TicketStatus,
   TicketWorkflowAction,
@@ -541,32 +542,87 @@ function buildSyntheticEvents(ticket: TicketRecord, documentRows: DocumentRecord
 }
 
 export async function listTickets(filters?: {
+  q?: string
   status?: string
   customerId?: number
-}) {
+  page?: number
+  pageSize?: number
+}): Promise<TicketListResponse> {
   await ensurePosSchema()
 
   const db = useDb()
-  const rows = await db.select({
-    ticket: tickets,
-    customer: customers,
-    documentCount: sql<number>`count(${documents.id})`
-  })
-    .from(tickets)
-    .innerJoin(customers, eq(tickets.customerId, customers.id))
-    .leftJoin(documents, eq(documents.ticketId, tickets.id))
-    .where(and(
-      filters?.status ? eq(tickets.status, filters.status as typeof tickets.$inferSelect.status) : undefined,
-      filters?.customerId ? eq(tickets.customerId, filters.customerId) : undefined
-    ))
-    .groupBy(tickets.id, customers.id)
-    .orderBy(desc(tickets.openedAt), desc(tickets.id))
 
-  return rows.map((row): TicketListItem => ({
-    ...mapTicket(row.ticket),
-    customerName: row.customer.companyName || `${row.customer.firstName} ${row.customer.lastName}`,
-    documentCount: Number(row.documentCount || 0)
-  }))
+  const page = Math.max(filters?.page || 1, 1)
+  const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
+  const offset = (page - 1) * pageSize
+  const searchTerm = filters?.q?.trim().toLowerCase()
+  const searchPattern = searchTerm ? `%${searchTerm}%` : null
+
+  const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
+
+  const whereClause = and(
+    filters?.status ? eq(tickets.status, filters.status as typeof tickets.$inferSelect.status) : undefined,
+    filters?.customerId ? eq(tickets.customerId, filters.customerId) : undefined,
+    searchPattern
+      ? or(
+          sql`lower(${tickets.ticketNumber}) like ${searchPattern}`,
+          sql`lower(${customerNameValue}) like ${searchPattern}`,
+          sql`lower(coalesce(${tickets.brand}, '')) like ${searchPattern}`,
+          sql`lower(coalesce(${tickets.model}, '')) like ${searchPattern}`,
+          sql`lower(${tickets.issueDescription}) like ${searchPattern}`
+        )
+      : undefined
+  )
+
+  const [summaryRows, pageIdRows] = await Promise.all([
+    db.select({
+      total: sql<number>`count(*)`,
+      openCount: sql<number>`coalesce(sum(case when ${tickets.status} not in ('closed', 'cancelled') then 1 else 0 end), 0)`,
+      readyCount: sql<number>`coalesce(sum(case when ${tickets.status} = 'ready_for_pickup' then 1 else 0 end), 0)`
+    })
+      .from(tickets)
+      .innerJoin(customers, eq(tickets.customerId, customers.id))
+      .where(whereClause),
+    db.select({ id: tickets.id })
+      .from(tickets)
+      .innerJoin(customers, eq(tickets.customerId, customers.id))
+      .where(whereClause)
+      .orderBy(desc(tickets.openedAt), desc(tickets.id))
+      .limit(pageSize)
+      .offset(offset)
+  ])
+
+  const pageIds = pageIdRows.map(row => row.id)
+  const rows = pageIds.length
+    ? await db.select({
+        ticket: tickets,
+        customer: customers,
+        documentCount: sql<number>`count(${documents.id})`
+      })
+        .from(tickets)
+        .innerJoin(customers, eq(tickets.customerId, customers.id))
+        .leftJoin(documents, eq(documents.ticketId, tickets.id))
+        .where(inArray(tickets.id, pageIds))
+        .groupBy(tickets.id, customers.id)
+        .orderBy(desc(tickets.openedAt), desc(tickets.id))
+    : []
+
+  const summary = summaryRows[0]
+
+  return {
+    items: rows.map((row): TicketListItem => ({
+      ...mapTicket(row.ticket),
+      customerName: row.customer.companyName || `${row.customer.firstName} ${row.customer.lastName}`,
+      documentCount: Number(row.documentCount || 0)
+    })),
+    page,
+    pageSize,
+    total: Number(summary?.total || 0),
+    summary: {
+      openCount: Number(summary?.openCount || 0),
+      readyCount: Number(summary?.readyCount || 0)
+    }
+  }
 }
 
 export async function getTicketById(id: number): Promise<TicketDetail> {

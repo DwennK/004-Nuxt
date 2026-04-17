@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import { getPaginationRowModel } from '@tanstack/table-core'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
 import { ticketStatusColors, ticketStatusLabels, ticketTypeColors, ticketTypeLabels } from '~~/shared/constants/pos'
-import type { DocumentDetail, TicketListItem } from '~~/shared/types/pos'
+import type { DocumentDetail, TicketListItem, TicketListResponse } from '~~/shared/types/pos'
 import { formatDateTime } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
@@ -15,12 +14,12 @@ const toast = useToast()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 const search = ref('')
+const debouncedSearch = refDebounced(search, 250)
 const statusFilter = ref<'all' | TicketListItem['status']>('all')
 const pagination = ref({
   pageIndex: 0,
-  pageSize: 10
+  pageSize: 50
 })
-const sorting = ref([{ id: 'openedAt', desc: true }])
 const columnVisibility = ref()
 
 const statusItems = [
@@ -28,28 +27,35 @@ const statusItems = [
   ...Object.entries(ticketStatusLabels).map(([value, label]) => ({ label, value }))
 ]
 
-const { data: tickets, status, refresh } = await useFetch<TicketListItem[]>('/api/tickets')
+const query = computed(() => ({
+  q: debouncedSearch.value.trim() || undefined,
+  status: statusFilter.value === 'all' ? undefined : statusFilter.value,
+  page: pagination.value.pageIndex + 1,
+  pageSize: pagination.value.pageSize
+}))
 
-const filteredTickets = computed(() => {
-  const term = search.value.trim().toLowerCase()
-
-  return (tickets.value || []).filter((ticket) => {
-    const matchesSearch = !term || [
-      ticket.ticketNumber,
-      ticket.customerName,
-      ticket.brand,
-      ticket.model,
-      ticket.issueDescription
-    ].some(value => value?.toLowerCase().includes(term))
-
-    const matchesStatus = statusFilter.value === 'all' || ticket.status === statusFilter.value
-
-    return matchesSearch && matchesStatus
-  })
+const { data: ticketsResponse, status, refresh } = await useFetch<TicketListResponse>('/api/tickets', {
+  query
 })
 
-watch([search, statusFilter], () => {
+const tickets = computed(() => ticketsResponse.value?.items || [])
+const totalResults = computed(() => ticketsResponse.value?.total || 0)
+const totalPages = computed(() => Math.max(Math.ceil(totalResults.value / pagination.value.pageSize), 1))
+const summary = computed(() => ticketsResponse.value?.summary || {
+  openCount: 0,
+  readyCount: 0
+})
+
+watch([debouncedSearch, statusFilter], () => {
   pagination.value.pageIndex = 0
+})
+
+watch(totalResults, (total) => {
+  const lastPageIndex = Math.max(Math.ceil(total / pagination.value.pageSize) - 1, 0)
+
+  if (pagination.value.pageIndex > lastPageIndex) {
+    pagination.value.pageIndex = lastPageIndex
+  }
 })
 
 async function createQuote(ticketId: number) {
@@ -117,18 +123,7 @@ function getRowItems(ticket: TicketListItem) {
 const columns: TableColumn<TicketListItem>[] = [
   {
     accessorKey: 'ticketNumber',
-    header: ({ column }) => h(UButton, {
-      color: 'neutral',
-      variant: 'ghost',
-      label: 'Ticket',
-      icon: column.getIsSorted() === 'asc'
-        ? 'i-lucide-arrow-up-az'
-        : column.getIsSorted() === 'desc'
-          ? 'i-lucide-arrow-down-az'
-          : 'i-lucide-arrow-up-down',
-      class: '-mx-2.5',
-      onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
-    }),
+    header: 'Ticket',
     cell: ({ row }) => h('div', { class: 'space-y-1' }, [
       h('p', { class: 'font-medium text-highlighted' }, row.original.ticketNumber),
       h('div', { class: 'flex flex-wrap gap-2' }, [
@@ -157,18 +152,7 @@ const columns: TableColumn<TicketListItem>[] = [
   },
   {
     accessorKey: 'openedAt',
-    header: ({ column }) => h(UButton, {
-      color: 'neutral',
-      variant: 'ghost',
-      label: 'Ouvert le',
-      icon: column.getIsSorted() === 'asc'
-        ? 'i-lucide-arrow-up'
-        : column.getIsSorted() === 'desc'
-          ? 'i-lucide-arrow-down'
-          : 'i-lucide-arrow-up-down',
-      class: '-mx-2.5',
-      onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
-    }),
+    header: 'Ouvert le',
     cell: ({ row }) => formatDateTime(row.original.openedAt)
   },
   {
@@ -251,19 +235,16 @@ const columns: TableColumn<TicketListItem>[] = [
     <template #body>
       <div class="space-y-4">
         <div class="grid gap-4 md:grid-cols-4">
-          <PosSummaryCard title="Tickets" :value="String(tickets?.length || 0)" icon="i-lucide-wrench" />
-          <PosSummaryCard title="Ouverts" :value="String((tickets || []).filter(ticket => !['closed', 'cancelled'].includes(ticket.status)).length)" icon="i-lucide-folder-open" />
-          <PosSummaryCard title="Prêts" :value="String((tickets || []).filter(ticket => ticket.status === 'ready_for_pickup').length)" icon="i-lucide-package-check" />
-          <PosSummaryCard title="Visibles" :value="String(filteredTickets.length)" icon="i-lucide-filter" />
+          <PosSummaryCard title="Tickets" :value="String(totalResults)" icon="i-lucide-wrench" />
+          <PosSummaryCard title="Ouverts" :value="String(summary.openCount)" icon="i-lucide-folder-open" />
+          <PosSummaryCard title="Prêts" :value="String(summary.readyCount)" icon="i-lucide-package-check" />
+          <PosSummaryCard title="Sur la page" :value="String(tickets.length)" icon="i-lucide-filter" />
         </div>
 
         <UTable
           ref="table"
-          v-model:pagination="pagination"
-          v-model:sorting="sorting"
           v-model:column-visibility="columnVisibility"
-          :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-          :data="filteredTickets"
+          :data="tickets"
           :columns="columns"
           sticky="header"
           :loading="status === 'pending'"
@@ -289,14 +270,14 @@ const columns: TableColumn<TicketListItem>[] = [
 
         <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
           <p class="text-sm text-toned">
-            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredTickets.length }} ticket(s)
+            {{ totalResults }} résultat(s) · page {{ pagination.pageIndex + 1 }} / {{ totalPages }}
           </p>
 
           <UPagination
-            :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-            :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-            :total="table?.tableApi?.getFilteredRowModel().rows.length || filteredTickets.length"
-            @update:page="(page: number) => table?.tableApi?.setPageIndex(page - 1)"
+            :page="pagination.pageIndex + 1"
+            :items-per-page="pagination.pageSize"
+            :total="totalResults"
+            @update:page="(page: number) => { pagination.pageIndex = page - 1 }"
           />
         </div>
       </div>

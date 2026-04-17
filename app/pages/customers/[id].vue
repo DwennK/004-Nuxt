@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import { documentStatusColors, documentStatusLabels, documentTypeColors, documentTypeLabels, paymentMethodColors, paymentMethodLabels, ticketStatusColors, ticketStatusLabels } from '~~/shared/constants/pos'
-import type { CustomerFormValue, CustomerRecord, DocumentListItem, DocumentListResponse, PaymentListItem, TicketListItem } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerRecord, DocumentListItem, DocumentListResponse, PaymentListItem, TicketListItem, TicketListResponse } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
@@ -21,8 +21,8 @@ const tabItems = [
 
 const [{ data: customer, refresh: refreshCustomer }, { data: tickets, refresh: refreshTickets }, { data: documents, refresh: refreshDocuments }, { data: payments, refresh: refreshPayments }] = await Promise.all([
   useFetch<CustomerRecord>(() => `/api/customers/${id.value}`),
-  useFetch<TicketListItem[]>('/api/tickets', {
-    query: computed(() => ({ customerId: id.value }))
+  useFetch<TicketListResponse>('/api/tickets', {
+    query: computed(() => ({ customerId: id.value, page: 1, pageSize: 250 }))
   }),
   useFetch<DocumentListResponse>('/api/documents', {
     query: computed(() => ({
@@ -187,7 +187,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
                   Tickets ouverts
                 </p>
                 <p class="text-sm font-semibold text-highlighted">
-                  {{ (tickets || []).filter(ticket => ticket.status !== 'closed' && ticket.status !== 'cancelled').length }}
+                  {{ (tickets?.items || []).filter(ticket => ticket.status !== 'closed' && ticket.status !== 'cancelled').length }}
                 </p>
               </div>
               <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
@@ -319,7 +319,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
             <div class="xl:max-h-[calc(100vh-24rem)] xl:overflow-auto pr-1">
               <UTable
                 v-if="activeTab === 'tickets'"
-                :data="tickets || []"
+                :data="tickets?.items || []"
                 :columns="ticketColumns"
                 sticky="header"
               >

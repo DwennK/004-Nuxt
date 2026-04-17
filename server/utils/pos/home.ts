@@ -53,7 +53,7 @@ export async function getHomeOverview(date: string): Promise<HomeOverview> {
       page: 1,
       pageSize: 5
     }),
-    listTickets({ status: 'ready_for_pickup' }),
+    listTickets({ status: 'ready_for_pickup', page: 1, pageSize: 5 }),
     db.select({
       id: payments.id,
       documentId: documents.id,
@@ -171,7 +171,7 @@ export async function getHomeOverview(date: string): Promise<HomeOverview> {
     .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())
     .slice(0, 12)
 
-  const readyForPickupCount = readyTickets.length
+  const readyForPickupCount = readyTickets.total
 
   return {
     date,
@@ -222,7 +222,7 @@ export async function getHomeOverview(date: string): Promise<HomeOverview> {
       badgeColor: 'neutral'
     }],
     activity,
-    readyTickets: readyTickets.slice(0, 5).map(ticket => ({
+    readyTickets: readyTickets.items.slice(0, 5).map(ticket => ({
       id: ticket.id,
       ticketNumber: ticket.ticketNumber,
       customerName: ticket.customerName,
