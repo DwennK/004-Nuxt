@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import { ticketStatusLabels, ticketStatuses, ticketTypeLabels, ticketTypes } from '~~/shared/constants/pos'
-import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
+import type { CatalogItemListResponse, CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
 import { formatCurrency, formatImei, getImeiWarning, normalizeImei, normalizeSearchText } from '~~/shared/utils/pos'
 import { useCommercialLinesDraft, type EditableCommercialLinePayload } from '~~/app/composables/useCommercialLinesDraft'
 
@@ -104,10 +104,14 @@ const statusItems = ticketStatuses.map(status => ({
 const toast = useToast()
 const patternOpen = ref(false)
 const intakeQuery = ref('')
+const debouncedIntakeQuery = refDebounced(intakeQuery, 200)
 const createdCustomer = ref<CustomerRecord | null>(null)
 const searchOpen = ref(false)
 const highlightedSuggestionIndex = ref(0)
+const remoteSuggestions = ref<CatalogItemRecord[]>([])
+const remoteSuggestionsPending = ref(false)
 let searchCloseTimeout: ReturnType<typeof setTimeout> | null = null
+let remoteSearchRequestId = 0
 
 const state = reactive<Schema>({
   customerId: 0,
@@ -241,7 +245,7 @@ function getCatalogServiceResult(query: string) {
     }
   }
 
-  const matches = searchableCatalogItems.value
+  const matches = remoteSuggestions.value
     .map(item => ({
       item,
       score: scoreCatalogService(item, normalizedQuery)
@@ -286,6 +290,41 @@ watch(searchPanelItems, (items) => {
 
   if (highlightedSuggestionIndex.value >= items.length) {
     highlightedSuggestionIndex.value = 0
+  }
+})
+
+watch(debouncedIntakeQuery, async (value) => {
+  const query = value.trim()
+
+  if (!query) {
+    remoteSuggestions.value = []
+    remoteSuggestionsPending.value = false
+    return
+  }
+
+  const requestId = ++remoteSearchRequestId
+  remoteSuggestionsPending.value = true
+
+  try {
+    const response = await $fetch<CatalogItemListResponse>('/api/catalog-items', {
+      query: {
+        search: query,
+        activeOnly: true,
+        pageSize: 25
+      }
+    })
+
+    if (requestId !== remoteSearchRequestId) {
+      return
+    }
+
+    remoteSuggestions.value = response.items.filter((item) => {
+      return (item.type === 'repair' || item.type === 'service') && item.isActive
+    })
+  } finally {
+    if (requestId === remoteSearchRequestId) {
+      remoteSuggestionsPending.value = false
+    }
   }
 })
 
@@ -422,7 +461,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
   }
 }
 
-function handleIntakeScan(value: string) {
+async function handleIntakeScan(value: string) {
   const sanitizedValue = value.trim()
 
   if (!sanitizedValue) {
@@ -441,7 +480,24 @@ function handleIntakeScan(value: string) {
     return
   }
 
-  const match = getCatalogServiceResult(sanitizedValue).bestMatch
+  const normalizedQuery = normalizeSearchText(sanitizedValue)
+  const response = await $fetch<CatalogItemListResponse>('/api/catalog-items', {
+    query: {
+      search: sanitizedValue,
+      activeOnly: true,
+      pageSize: 25
+    }
+  })
+  const match = response.items
+    .filter((item) => {
+      return (item.type === 'repair' || item.type === 'service') && item.isActive
+    })
+    .map(item => ({
+      item,
+      score: scoreCatalogService(item, normalizedQuery)
+    }))
+    .filter((entry): entry is { item: CatalogItemRecord, score: number } => entry.score !== null)
+    .sort((left, right) => right.score - left.score || left.item.name.localeCompare(right.item.name))[0]?.item || null
 
   if (match) {
     applyCatalogSuggestion(match)
@@ -582,6 +638,10 @@ function handleIntakeScan(value: string) {
                           {{ formatCurrency(suggestion.defaultPrice) }}
                         </span>
                       </button>
+                    </div>
+
+                    <div v-else-if="remoteSuggestionsPending" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+                      Recherche dans le catalogue...
                     </div>
 
                     <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">

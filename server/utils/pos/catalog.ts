@@ -1,5 +1,6 @@
 import { and, asc, eq, or, sql } from 'drizzle-orm'
 import { catalogItems } from '~~/server/db/schema'
+import { normalizeSearchText } from '~~/shared/utils/pos'
 import type { CatalogItemInput, CatalogItemListResponse, CatalogItemRecord, CatalogItemType } from '~~/shared/types/pos'
 import { useDb } from '../turso'
 import { ensurePosSchema, normalizeOptionalText, normalizeRequiredText } from './core'
@@ -85,29 +86,33 @@ export async function listCatalogItems(options: ListCatalogItemsOptions = {}): P
   await ensurePosSchema()
 
   const db = useDb()
-  const normalizedSearch = options.search?.trim().toLowerCase()
+  const normalizedSearch = normalizeSearchText(options.search)
+  const searchTokens = normalizedSearch.split(' ').filter(Boolean)
   const normalizedCategory = options.category?.trim()
-  const searchPattern = normalizedSearch ? `%${normalizedSearch}%` : null
   const page = Math.max(options.page || 1, 1)
   const pageSize = Math.min(Math.max(options.pageSize || 50, 1), 250)
   const offset = (page - 1) * pageSize
+  const searchableColumns = [
+    sql`lower(${catalogItems.name})`,
+    sql`lower(coalesce(${catalogItems.sku}, ''))`,
+    sql`lower(${catalogItems.type})`,
+    sql`lower(${catalogItems.category})`,
+    sql`lower(coalesce(${catalogItems.brand}, ''))`,
+    sql`lower(coalesce(${catalogItems.model}, ''))`,
+    sql`lower(coalesce(${catalogItems.serviceKind}, ''))`,
+    sql`lower(coalesce(${catalogItems.keywordsJson}, ''))`
+  ] as const
+  const searchClause = searchTokens.length
+    ? and(...searchTokens.map(token => or(
+        ...searchableColumns.map(column => sql`${column} like ${`%${token}%`}`)
+      )))
+    : undefined
 
   const whereClause = and(
     options.activeOnly ? eq(catalogItems.isActive, true) : undefined,
     options.type ? eq(catalogItems.type, options.type) : undefined,
     normalizedCategory ? eq(catalogItems.category, normalizedCategory) : undefined,
-    searchPattern
-      ? or(
-          sql`lower(${catalogItems.name}) like ${searchPattern}`,
-          sql`lower(coalesce(${catalogItems.sku}, '')) like ${searchPattern}`,
-          sql`lower(${catalogItems.type}) like ${searchPattern}`,
-          sql`lower(${catalogItems.category}) like ${searchPattern}`,
-          sql`lower(coalesce(${catalogItems.brand}, '')) like ${searchPattern}`,
-          sql`lower(coalesce(${catalogItems.model}, '')) like ${searchPattern}`,
-          sql`lower(coalesce(${catalogItems.serviceKind}, '')) like ${searchPattern}`,
-          sql`lower(coalesce(${catalogItems.keywordsJson}, '')) like ${searchPattern}`
-        )
-      : undefined
+    searchClause
   )
 
   const [totalRows, rows] = await Promise.all([
