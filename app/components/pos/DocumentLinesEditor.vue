@@ -56,10 +56,6 @@ const searchPanelTitle = computed(() => {
   return search.value.trim() ? 'Résultats' : 'Suggestions'
 })
 
-const searchHintLabel = computed(() => {
-  return resolvedMode.value === 'ticket' ? 'Entrée ajoute la première correspondance' : 'Entrée ajoute le premier résultat'
-})
-
 const searchPlaceholder = computed(() => {
   return resolvedMode.value === 'ticket'
     ? 'batterie iphone 13, diagnostic, coque...'
@@ -308,12 +304,6 @@ function handleBarcodeScan(value: string) {
                 @pointerdown.stop
                 @click.stop="createNewLine"
               />
-            </div>
-
-            <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-toned">
-              <span>{{ searchHintLabel }}</span>
-              <span>·</span>
-              <span>{{ formatCurrency(totals.total) }}</span>
             </div>
 
             <div

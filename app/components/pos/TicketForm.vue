@@ -548,12 +548,6 @@ async function handleIntakeScan(value: string) {
                     Identifiez le client, décrivez la panne, puis préparez les lignes à facturer.
                   </p>
                 </div>
-
-                <div class="flex flex-wrap items-center gap-2 text-xs text-toned">
-                  <span>{{ ticketTypeLabels[state.type] }}</span>
-                  <span class="hidden sm:inline">·</span>
-                  <span>{{ formatCurrency(lineEditor.totals.value.total) }}</span>
-                </div>
               </div>
             </template>
 
@@ -757,17 +751,6 @@ async function handleIntakeScan(value: string) {
                 </h2>
               </div>
             </template>
-
-            <div class="rounded-2xl border border-default/70 bg-default/70 px-4 py-3">
-              <div class="flex items-center justify-between gap-3 text-sm">
-                <span class="text-toned">Lignes prévues</span>
-                <span class="font-medium text-highlighted">{{ lineEditor.state.lines.length }}</span>
-              </div>
-              <div class="mt-2 flex items-center justify-between gap-3 border-t border-default/70 pt-2">
-                <span class="text-sm font-medium text-highlighted">Total prévisionnel</span>
-                <span class="text-lg font-semibold text-highlighted">{{ formatCurrency(lineEditor.totals.value.total) }}</span>
-              </div>
-            </div>
 
             <UFormField label="Statut" name="status" required>
               <USelect
