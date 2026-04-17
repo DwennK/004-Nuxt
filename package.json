@@ -45,6 +45,7 @@
     "eslint": "^9.39.4",
     "nitro-cloudflare-dev": "^0.2.2",
     "patch-package": "^8.0.1",
+    "playwright": "^1.59.1",
     "typescript": "^5.9.3",
     "vue-tsc": "^3.2.6",
     "wrangler": "^4.82.1"

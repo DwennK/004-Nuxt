@@ -280,8 +280,21 @@ export async function getVacationSummariesByYear(year: number): Promise<Employee
       gte(vacationEntries.endDate, `${year}-01-01`)
     ))
 
+  const entriesByEmployeeId = new Map<number, typeof entries>()
+
+  for (const entry of entries) {
+    const employeeEntries = entriesByEmployeeId.get(entry.employeeId)
+
+    if (employeeEntries) {
+      employeeEntries.push(entry)
+      continue
+    }
+
+    entriesByEmployeeId.set(entry.employeeId, [entry])
+  }
+
   return allEmployees.map((emp) => {
-    const employeeEntries = entries.filter(e => e.employeeId === emp.id)
+    const employeeEntries = entriesByEmployeeId.get(emp.id) ?? []
     const employee = mapEmployee(emp)
 
     let usedDays = 0
