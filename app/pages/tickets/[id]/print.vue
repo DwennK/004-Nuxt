@@ -45,6 +45,38 @@ const deviceLabel = computed(() => {
   return [ticket.value.brand, ticket.value.model].filter(Boolean).join(' ').trim() || 'Appareil non renseigné'
 })
 
+function parsePatternPoints(value?: string | null) {
+  if (!value?.toLowerCase().startsWith('pattern')) {
+    return []
+  }
+
+  return value
+    .replace(/pattern/i, '')
+    .split(/[^0-9]+/)
+    .map(part => Number(part))
+    .filter(point => Number.isInteger(point) && point >= 1 && point <= 9)
+    .filter((point, index, array) => array.indexOf(point) === index)
+}
+
+const patternPoints = computed(() => parsePatternPoints(ticket.value?.accessCode))
+const isAccessPattern = computed(() => patternPoints.value.length > 0)
+
+const patternPath = computed(() => {
+  return patternPoints.value
+    .map((point) => {
+      const col = (point - 1) % 3
+      const row = Math.floor((point - 1) / 3)
+      const x = 20 + col * 30
+      const y = 20 + row * 30
+      return `${x},${y}`
+    })
+    .join(' ')
+})
+
+const hasCodesSection = computed(() => {
+  return Boolean(ticket.value?.accessCode || ticket.value?.simCode)
+})
+
 function printTicket() {
   window.print()
 }
@@ -152,6 +184,65 @@ function printTicket() {
           <p>
             {{ ticket.issueDescription }}
           </p>
+        </section>
+
+        <section v-if="hasCodesSection" class="ticket-block ticket-codes">
+          <p class="ticket-kicker">
+            Codes
+          </p>
+
+          <div v-if="ticket.accessCode" class="ticket-code-row">
+            <p class="ticket-code-label">
+              Déverrouillage
+            </p>
+            <div v-if="isAccessPattern" class="ticket-pattern">
+              <svg viewBox="0 0 100 100" class="ticket-pattern-svg" aria-label="Schéma de déverrouillage">
+                <polyline
+                  v-if="patternPath"
+                  :points="patternPath"
+                  fill="none"
+                  stroke="#0f172a"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <g>
+                  <template v-for="point in 9" :key="point">
+                    <circle
+                      :cx="20 + ((point - 1) % 3) * 30"
+                      :cy="20 + Math.floor((point - 1) / 3) * 30"
+                      r="4"
+                      fill="#0f172a"
+                    />
+                    <text
+                      :x="20 + ((point - 1) % 3) * 30"
+                      :y="20 + Math.floor((point - 1) / 3) * 30 + 11"
+                      text-anchor="middle"
+                      font-size="5"
+                      fill="#64748b"
+                    >
+                      {{ point }}
+                    </text>
+                  </template>
+                </g>
+              </svg>
+              <p class="ticket-pattern-sequence">
+                {{ patternPoints.join(' - ') }}
+              </p>
+            </div>
+            <p v-else class="ticket-code-value">
+              {{ ticket.accessCode }}
+            </p>
+          </div>
+
+          <div v-if="ticket.simCode" class="ticket-code-row">
+            <p class="ticket-code-label">
+              SIM (PIN/PUK)
+            </p>
+            <p class="ticket-code-value">
+              {{ ticket.simCode }}
+            </p>
+          </div>
         </section>
 
         <section class="ticket-block">
@@ -272,6 +363,58 @@ body {
 .ticket-block {
   padding-block: 3mm;
   border-bottom: 0.3mm dashed #cbd5e1;
+}
+
+.ticket-codes {
+  background: #f8fafc;
+  border-radius: 1.6mm;
+  padding-inline: 2mm;
+}
+
+.ticket-code-row {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  padding-block: 1.4mm;
+}
+
+.ticket-code-row + .ticket-code-row {
+  border-top: 0.2mm dashed #cbd5e1;
+}
+
+.ticket-code-label {
+  flex: 0 0 18mm;
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.ticket-code-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-pattern {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+}
+
+.ticket-pattern-svg {
+  width: 22mm;
+  height: 22mm;
+  flex-shrink: 0;
+}
+
+.ticket-pattern-sequence {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: 0.08em;
 }
 
 .ticket-footer {
