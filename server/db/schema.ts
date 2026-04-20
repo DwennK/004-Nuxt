@@ -252,6 +252,18 @@ export const vacationEntries = sqliteTable('vacation_entries', {
   statusIdx: index('vacation_entries_status_idx').on(table.status)
 }))
 
+export const users = sqliteTable('users', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull(),
+  name: text('name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, table => ({
+  emailIdx: uniqueIndex('users_email_idx').on(table.email)
+}))
+
 export const smartphoneReservationRequests = sqliteTable('smartphone_reservation_requests', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),

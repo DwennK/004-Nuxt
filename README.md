@@ -104,6 +104,13 @@ cp .env.example .env
 
 Fill in the required database credentials in `.env`.
 
+Provision the database schema and create a first account (see [Authentication](#authentication) for details):
+
+```bash
+npm run db:push
+node scripts/seed-user.mjs
+```
+
 Run the dev server:
 
 ```bash
@@ -133,6 +140,7 @@ MINIMAX_BASE_URL=https://api.minimax.io/v1
 RESEND_API_KEY=
 MAIL_FROM=
 MAIL_REPLY_TO=
+NUXT_SESSION_PASSWORD=
 ```
 
 - `NUXT_PUBLIC_SITE_URL`: public site URL, mainly used for OG image generation
@@ -144,8 +152,40 @@ MAIL_REPLY_TO=
 - `RESEND_API_KEY`: Resend API key used to send commercial documents by e-mail
 - `MAIL_FROM`: authenticated sender used for outgoing document e-mails, for example `Atelier Pixel <facturation@shop.example.ch>`
 - `MAIL_REPLY_TO`: optional reply-to address for outgoing document e-mails
+- `NUXT_SESSION_PASSWORD`: secret used to seal session cookies (min. 32 chars). Generate one with `openssl rand -base64 32`
 
 For document e-mail sending, `MAIL_FROM` must use an address on a domain verified in Resend.
+
+## Authentication
+
+The app is protected by session-based authentication powered by [`nuxt-auth-utils`](https://github.com/atinux/nuxt-auth-utils). Every `/api/**` route is protected by [`server/middleware/auth.ts`](./server/middleware/auth.ts) except `/api/auth/*`, and a global client middleware redirects unauthenticated visitors to `/login`.
+
+There is no public sign-up: users are created manually via a CLI script.
+
+### First-time setup
+
+Once `TURSO_URL` and `TURSO_TOKEN` are filled in `.env`, sync the schema (creates the `users` table among others):
+
+```bash
+npm run db:push
+```
+
+Then create a first user:
+
+```bash
+node scripts/seed-user.mjs
+```
+
+The script prompts for email, display name and password (min. 8 characters). Running it again with the same email updates the existing account (password, name, reactivation).
+
+### Relevant files
+
+- schema: [`server/db/schema.ts`](./server/db/schema.ts) (`users` table)
+- login / logout routes: [`server/api/auth/login.post.ts`](./server/api/auth/login.post.ts), [`server/api/auth/logout.post.ts`](./server/api/auth/logout.post.ts)
+- server middleware: [`server/middleware/auth.ts`](./server/middleware/auth.ts)
+- client middleware: [`app/middleware/auth.global.ts`](./app/middleware/auth.global.ts)
+- login page: [`app/pages/login.vue`](./app/pages/login.vue)
+- session types: [`auth.d.ts`](./auth.d.ts)
 
 ## Local Workflow
 

@@ -6,7 +6,8 @@ export default defineNuxtConfig({
     '@nuxt/ui',
     'nuxt-charts',
     '@vueuse/nuxt',
-    'nitro-cloudflare-dev'
+    'nitro-cloudflare-dev',
+    'nuxt-auth-utils'
   ],
   devtools: {
     enabled: true
@@ -23,12 +24,6 @@ export default defineNuxtConfig({
     resendApiKey: process.env.RESEND_API_KEY,
     mailFrom: process.env.MAIL_FROM,
     mailReplyTo: process.env.MAIL_REPLY_TO
-  },
-
-  routeRules: {
-    '/api/**': {
-      cors: true
-    }
   },
 
   compatibilityDate: '2026-03-10',

@@ -7,17 +7,24 @@ defineProps<{
 
 const colorMode = useColorMode()
 const appConfig = useAppConfig()
+const { user: sessionUser, clear: clearSession } = useUserSession()
 
 const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
 const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone']
 
-const user = ref({
-  name: 'Benjamin Canac',
-  avatar: {
-    src: 'https://github.com/benjamincanac.png',
-    alt: 'Benjamin Canac'
+const user = computed(() => ({
+  name: sessionUser.value?.name || sessionUser.value?.email || 'Utilisateur',
+  avatar: undefined as { src: string, alt: string } | undefined
+}))
+
+async function handleLogout() {
+  try {
+    await $fetch('/api/auth/logout', { method: 'POST' })
+  } finally {
+    await clearSession()
+    await navigateTo('/login')
   }
-})
+}
 
 const items = computed<DropdownMenuItem[][]>(() => ([[{
   type: 'label',
@@ -147,7 +154,8 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
   target: '_blank'
 }, {
   label: 'Déconnexion',
-  icon: 'i-lucide-log-out'
+  icon: 'i-lucide-log-out',
+  onSelect: handleLogout
 }]]))
 </script>
 
