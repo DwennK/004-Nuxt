@@ -88,7 +88,7 @@ const secondaryLinks = [{
 const footerLinks = [{
   label: 'Paramètres',
   icon: 'i-lucide-settings',
-  to: '/settings',
+  to: '/settings/users',
   onSelect: () => {
     open.value = false
   }
