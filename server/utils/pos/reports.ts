@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, inArray, lte, sql, sum } from 'drizzle-orm'
-import { customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
+import { catalogItems, customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
 import type { DailySummary, ReportsOverview } from '~~/shared/types/pos'
 import { businessTimeZone, toDateInputValue } from '~~/shared/utils/pos'
@@ -157,6 +157,25 @@ function applyPaymentAmount(
       bucket.bankTransfer += amount
       break
   }
+}
+
+type TurnoverRow = {
+  category: ReportsOverview['turnoverByCategory'][number]['category'] | null
+  total: number | string | null
+}
+
+type TopCustomerRow = {
+  customerId: number
+  customerName: string
+  total: number | string | null
+  documentCount: number | string | null
+}
+
+type TopItemRow = {
+  label: string
+  category: ReportsOverview['topItems'][number]['category']
+  total: number | string | null
+  quantity: number | string | null
 }
 
 export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
@@ -386,18 +405,43 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
   }
 
   const paidDocumentIds = paidDocumentRows.map(row => row.documentId)
-  const turnoverRows = paidDocumentIds.length
-    ? await db.select({
-        category: documentLines.categoryHint,
-        total: sum(documentLines.lineTotal)
-      })
-        .from(documentLines)
-        .where(and(
-          inArray(documentLines.documentId, paidDocumentIds),
-          sql`${documentLines.categoryHint} is not null`
-        ))
-        .groupBy(documentLines.categoryHint)
-    : []
+  const [turnoverRows, topCustomerRows, topItemRows]: [TurnoverRow[], TopCustomerRow[], TopItemRow[]] = paidDocumentIds.length
+    ? await Promise.all([
+        db.select({
+          category: documentLines.categoryHint,
+          total: sum(documentLines.lineTotal)
+        })
+          .from(documentLines)
+          .where(and(
+            inArray(documentLines.documentId, paidDocumentIds),
+            sql`${documentLines.categoryHint} is not null`
+          ))
+          .groupBy(documentLines.categoryHint),
+        db.select({
+          customerId: customers.id,
+          customerName: sql<string>`coalesce(${customers.companyName}, ${customers.firstName} || ' ' || ${customers.lastName})`,
+          total: sum(documents.total),
+          documentCount: sql<number>`count(${documents.id})`
+        })
+          .from(documents)
+          .innerJoin(customers, eq(documents.customerId, customers.id))
+          .where(inArray(documents.id, paidDocumentIds))
+          .groupBy(customers.id),
+        db.select({
+          label: sql<string>`coalesce(${catalogItems.name}, ${documentLines.label})`,
+          category: documentLines.categoryHint,
+          total: sum(documentLines.lineTotal),
+          quantity: sum(documentLines.quantity)
+        })
+          .from(documentLines)
+          .leftJoin(catalogItems, eq(documentLines.catalogItemId, catalogItems.id))
+          .where(inArray(documentLines.documentId, paidDocumentIds))
+          .groupBy(
+            sql`coalesce(${catalogItems.name}, ${documentLines.label})`,
+            documentLines.categoryHint
+          )
+      ])
+    : [[], [], []]
 
   const paymentsByDay = weeklyBuckets.map(({ date: bucketDate, label, total, cash, cardTwint, bankTransfer }) => ({
     date: bucketDate,
@@ -410,6 +454,33 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
 
   const totalPaid = weeklyBuckets.reduce((sum, item) => sum + item.total, 0)
   const paidToday = weeklyBucketsMap.get(date)?.total || 0
+  const topCustomers = topCustomerRows
+    .map(row => ({
+      customerId: row.customerId,
+      customerName: row.customerName,
+      total: Number(row.total || 0),
+      documentCount: Number(row.documentCount || 0)
+    }))
+    .sort((left, right) =>
+      right.total - left.total
+      || right.documentCount - left.documentCount
+      || left.customerName.localeCompare(right.customerName, 'fr-CH')
+    )
+    .slice(0, 8)
+  const topItems = topItemRows
+    .map(row => ({
+      key: `${row.category || 'uncategorized'}:${row.label}`,
+      label: row.label,
+      category: row.category,
+      total: Number(row.total || 0),
+      quantity: Number(row.quantity || 0)
+    }))
+    .sort((left, right) =>
+      right.total - left.total
+      || right.quantity - left.quantity
+      || left.label.localeCompare(right.label, 'fr-CH')
+    )
+    .slice(0, 8)
 
   return {
     range: {
@@ -447,6 +518,8 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
         label: lineCategoryLabels[row.category],
         total: Number(row.total || 0)
       })),
+    topCustomers,
+    topItems,
     ticketFlowByDay
   }
 }

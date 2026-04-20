@@ -463,6 +463,19 @@ export interface ReportsOverview {
     label: string
     total: number
   }>
+  topCustomers: Array<{
+    customerId: number
+    customerName: string
+    total: number
+    documentCount: number
+  }>
+  topItems: Array<{
+    key: string
+    label: string
+    category: LineCategoryHint | null
+    total: number
+    quantity: number
+  }>
   ticketFlowByDay: Array<{
     date: string
     label: string
