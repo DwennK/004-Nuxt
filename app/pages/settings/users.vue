@@ -4,7 +4,6 @@ import type { FormSubmitEvent } from '@nuxt/ui'
 import type { UserRecord } from '~~/shared/types/users'
 import {
   createUserSchema,
-  updateUserSchema,
   changePasswordSchema
 } from '~~/shared/validation/users'
 
@@ -324,7 +323,12 @@ async function onDeleteConfirm() {
               class="w-full"
             />
           </UFormField>
-          <UFormField name="password" label="Mot de passe" required help="8 caractères minimum.">
+          <UFormField
+            name="password"
+            label="Mot de passe"
+            required
+            help="8 caractères minimum."
+          >
             <UInput
               v-model="createState.password"
               type="password"
@@ -416,7 +420,12 @@ async function onDeleteConfirm() {
           class="space-y-4"
           @submit="onPasswordSubmit"
         >
-          <UFormField name="password" label="Nouveau mot de passe" required help="8 caractères minimum.">
+          <UFormField
+            name="password"
+            label="Nouveau mot de passe"
+            required
+            help="8 caractères minimum."
+          >
             <UInput
               v-model="passwordState.password"
               type="password"
