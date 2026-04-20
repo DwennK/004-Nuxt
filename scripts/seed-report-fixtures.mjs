@@ -301,9 +301,6 @@ function buildDayDocuments(dayTarget, customers, sequences) {
     const taxAmount = totalAmount - subtotal
     const methodDraw = rng()
     const paymentMethod = methodDraw < 0.22 ? 'cash' : methodDraw < 0.85 ? 'card_twint' : 'bank_transfer'
-    const paymentReference = paymentMethod === 'cash'
-      ? null
-      : `${MARKER}-PAY-${year}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}-${index + 1}`
 
     return {
       document: {
@@ -327,7 +324,6 @@ function buildDayDocuments(dayTarget, customers, sequences) {
         status: 'paid',
         amount: totalAmount,
         paid_at: toIsoDateTime(year, month, day, issuedHour, Math.min(59, issuedMinute + paymentMinuteOffset)),
-        reference: paymentReference,
         notes: `${MARKER} payment`,
         created_at: toIsoDateTime(year, month, day, issuedHour, Math.min(59, issuedMinute + paymentMinuteOffset)),
         updated_at: toIsoDateTime(year, month, day, issuedHour, Math.min(59, issuedMinute + paymentMinuteOffset))
@@ -352,7 +348,7 @@ async function fetchCurrentSequence(type, prefix) {
 
 async function deleteExistingFixtures() {
   await client.batch([
-    { sql: 'DELETE FROM payments WHERE notes LIKE ? OR reference LIKE ?', args: [`${MARKER}%`, `${MARKER}%`] },
+    { sql: 'DELETE FROM payments WHERE notes LIKE ?', args: [`${MARKER}%`] },
     { sql: 'DELETE FROM document_lines WHERE document_id IN (SELECT id FROM documents WHERE notes LIKE ?)', args: [`${MARKER}%`] },
     { sql: 'DELETE FROM documents WHERE notes LIKE ?', args: [`${MARKER}%`] },
     { sql: 'DELETE FROM customers WHERE notes LIKE ? OR email LIKE ?', args: [`${MARKER}%`, `%@${FIXTURE_DOMAIN}`] }
@@ -452,7 +448,6 @@ async function insertDocuments(dataset) {
         status: item.payment.status,
         amount: insertedDocument.total,
         paid_at: item.payment.paid_at,
-        reference: item.payment.reference,
         notes: item.payment.notes,
         created_at: item.payment.created_at,
         updated_at: item.payment.updated_at
@@ -481,7 +476,6 @@ async function insertDocuments(dataset) {
         'status',
         'amount',
         'paid_at',
-        'reference',
         'notes',
         'created_at',
         'updated_at'
