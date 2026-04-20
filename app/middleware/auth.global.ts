@@ -1,10 +1,13 @@
 export default defineNuxtRouteMiddleware((to) => {
   const { loggedIn } = useUserSession()
+  const isPublicPage = to.meta.auth === false
 
-  if (to.path === '/login') {
-    if (loggedIn.value) {
-      return navigateTo('/')
+  if (isPublicPage) {
+    if (to.path === '/login' && loggedIn.value) {
+      const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : '/'
+      return navigateTo(redirect)
     }
+
     return
   }
 

@@ -18,12 +18,8 @@ const user = computed(() => ({
 }))
 
 async function handleLogout() {
-  try {
-    await $fetch('/api/auth/logout', { method: 'POST' })
-  } finally {
-    await clearSession()
-    await navigateTo('/login')
-  }
+  await clearSession()
+  await navigateTo('/login')
 }
 
 const items = computed<DropdownMenuItem[][]>(() => ([[{

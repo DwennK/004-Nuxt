@@ -3,7 +3,8 @@ import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 
 definePageMeta({
-  layout: false
+  layout: false,
+  auth: false
 })
 
 const schema = z.object({

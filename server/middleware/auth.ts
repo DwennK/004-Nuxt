@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
     return
   }
 
-  if (path.startsWith('/api/auth/')) {
+  if (path.startsWith('/api/auth/') || path.startsWith('/api/_auth/')) {
     return
   }
 
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   if (!session.user) {
     throw createError({
       statusCode: 401,
-      statusMessage: 'Non authentifié'
+      message: 'Non authentifié'
     })
   }
 })

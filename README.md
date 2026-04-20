@@ -158,7 +158,7 @@ For document e-mail sending, `MAIL_FROM` must use an address on a domain verifie
 
 ## Authentication
 
-The app is protected by session-based authentication powered by [`nuxt-auth-utils`](https://github.com/atinux/nuxt-auth-utils). Every `/api/**` route is protected by [`server/middleware/auth.ts`](./server/middleware/auth.ts) except `/api/auth/*`, and a global client middleware redirects unauthenticated visitors to `/login`.
+The app is protected by session-based authentication powered by [`nuxt-auth-utils`](https://github.com/atinux/nuxt-auth-utils). Every business `/api/**` route is protected by [`server/middleware/auth.ts`](./server/middleware/auth.ts) while the auth/session endpoints (`/api/auth/*`, `/api/_auth/*`) stay reachable for the login flow. A global client middleware redirects unauthenticated visitors to `/login`, while pages marked with `definePageMeta({ auth: false })` stay public.
 
 There is no public sign-up: users are created manually via a CLI script.
 
@@ -181,8 +181,9 @@ The script prompts for email, display name and password (min. 8 characters). Run
 ### Relevant files
 
 - schema: [`server/db/schema.ts`](./server/db/schema.ts) (`users` table)
-- login / logout routes: [`server/api/auth/login.post.ts`](./server/api/auth/login.post.ts), [`server/api/auth/logout.post.ts`](./server/api/auth/logout.post.ts)
+- login route: [`server/api/auth/login.post.ts`](./server/api/auth/login.post.ts)
 - server middleware: [`server/middleware/auth.ts`](./server/middleware/auth.ts)
+- session revalidation: [`server/plugins/session.ts`](./server/plugins/session.ts)
 - client middleware: [`app/middleware/auth.global.ts`](./app/middleware/auth.global.ts)
 - login page: [`app/pages/login.vue`](./app/pages/login.vue)
 - session types: [`auth.d.ts`](./auth.d.ts)

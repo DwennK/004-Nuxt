@@ -10,4 +10,10 @@ declare module '#auth-utils' {
   }
 }
 
+declare module 'nuxt/schema' {
+  interface PageMeta {
+    auth?: boolean
+  }
+}
+
 export {}
