@@ -10,11 +10,6 @@ const links = [[{
   icon: 'i-lucide-message-square-share',
   to: '/settings/customer-sms'
 }, {
-  label: 'Général',
-  icon: 'i-lucide-user',
-  to: '/settings',
-  exact: true
-}, {
   label: 'Utilisateurs',
   icon: 'i-lucide-users',
   to: '/settings/users'
