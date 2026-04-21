@@ -771,81 +771,99 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           <!-- Right: compact sticky sidebar -->
           <div class="space-y-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-19rem)] xl:overflow-y-auto pr-1">
             <!-- Commercial -->
-            <UCard :ui="{ body: 'p-3 sm:p-3 space-y-2' }">
+            <UCard
+              :ui="{
+                root: 'rounded-[1.5rem] border border-default/80 bg-elevated/50 shadow-sm',
+                header: 'border-b border-default/70 px-4 py-3',
+                body: 'space-y-4 p-4'
+              }"
+            >
               <template #header>
                 <h2 class="text-sm font-semibold text-highlighted">
                   Commercial
                 </h2>
               </template>
 
-              <div class="space-y-2 text-sm">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="text-xs text-toned">
-                      Devis
-                    </p>
-                    <p class="font-medium text-highlighted">
-                      {{ ticket.commercialSummary.quote?.documentNumber || '—' }}
-                    </p>
-                  </div>
-                  <UButton
-                    v-if="ticket.commercialSummary.quote"
-                    :to="`/documents/${ticket.commercialSummary.quote.id}`"
-                    icon="i-lucide-arrow-up-right"
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                  />
-                </div>
+              <div class="space-y-2">
+                <p class="text-[11px] font-medium uppercase tracking-[0.14em] text-toned">
+                  Documents
+                </p>
 
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="text-xs text-toned">
-                      Commande
-                    </p>
-                    <p class="font-medium text-highlighted">
-                      {{ ticket.commercialSummary.customerOrder?.documentNumber || '—' }}
-                    </p>
+                <div class="space-y-2 text-sm">
+                  <div class="flex items-center justify-between gap-3 rounded-xl border border-default/70 bg-default/80 px-3 py-2.5">
+                    <div class="min-w-0">
+                      <p class="text-xs text-toned">
+                        Devis
+                      </p>
+                      <p class="truncate font-medium text-highlighted">
+                        {{ ticket.commercialSummary.quote?.documentNumber || '—' }}
+                      </p>
+                    </div>
+                    <UButton
+                      v-if="ticket.commercialSummary.quote"
+                      :to="`/documents/${ticket.commercialSummary.quote.id}`"
+                      label="Ouvrir"
+                      icon="i-lucide-arrow-up-right"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                    />
                   </div>
-                  <UButton
-                    v-if="ticket.commercialSummary.customerOrder"
-                    :to="`/documents/${ticket.commercialSummary.customerOrder.id}`"
-                    icon="i-lucide-arrow-up-right"
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                  />
-                </div>
 
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="text-xs text-toned">
-                      Facture
-                    </p>
-                    <p class="font-medium text-highlighted">
-                      {{ ticket.commercialSummary.invoice?.documentNumber || '—' }}
-                    </p>
+                  <div class="flex items-center justify-between gap-3 rounded-xl border border-default/70 bg-default/80 px-3 py-2.5">
+                    <div class="min-w-0">
+                      <p class="text-xs text-toned">
+                        Commande
+                      </p>
+                      <p class="truncate font-medium text-highlighted">
+                        {{ ticket.commercialSummary.customerOrder?.documentNumber || '—' }}
+                      </p>
+                    </div>
+                    <UButton
+                      v-if="ticket.commercialSummary.customerOrder"
+                      :to="`/documents/${ticket.commercialSummary.customerOrder.id}`"
+                      label="Ouvrir"
+                      icon="i-lucide-arrow-up-right"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                    />
                   </div>
-                  <UButton
-                    v-if="ticket.commercialSummary.invoice"
-                    :to="`/documents/${ticket.commercialSummary.invoice.id}`"
-                    icon="i-lucide-arrow-up-right"
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                  />
+
+                  <div class="flex items-center justify-between gap-3 rounded-xl border border-default/70 bg-default/80 px-3 py-2.5">
+                    <div class="min-w-0">
+                      <p class="text-xs text-toned">
+                        Facture
+                      </p>
+                      <p class="truncate font-medium text-highlighted">
+                        {{ ticket.commercialSummary.invoice?.documentNumber || '—' }}
+                      </p>
+                    </div>
+                    <UButton
+                      v-if="ticket.commercialSummary.invoice"
+                      :to="`/documents/${ticket.commercialSummary.invoice.id}`"
+                      label="Ouvrir"
+                      icon="i-lucide-arrow-up-right"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div class="space-y-1.5">
+              <div class="border-t border-default/70 pt-4 space-y-2">
+                <p class="text-[11px] font-medium uppercase tracking-[0.14em] text-toned">
+                  Actions
+                </p>
                 <UButton
                   v-if="canCreateQuote"
                   label="Créer un devis"
                   icon="i-lucide-scroll-text"
                   variant="soft"
-                  size="sm"
+                  size="md"
                   block
-                  class="justify-start"
+                  class="justify-start rounded-xl"
                   @click="createQuote"
                 />
                 <UButton
@@ -854,18 +872,18 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                   icon="i-lucide-clipboard-plus"
                   color="warning"
                   variant="soft"
-                  size="sm"
+                  size="md"
                   block
-                  class="justify-start"
+                  class="justify-start rounded-xl"
                   @click="createOrder"
                 />
                 <UButton
                   v-if="canCreateInvoice"
                   label="Créer une facture"
                   icon="i-lucide-file-text"
-                  size="sm"
+                  size="md"
                   block
-                  class="justify-start"
+                  class="justify-start rounded-xl"
                   @click="createInvoice"
                 />
                 <UButton
@@ -874,9 +892,9 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                   icon="i-lucide-wallet"
                   color="success"
                   variant="soft"
-                  size="sm"
+                  size="md"
                   block
-                  class="justify-start"
+                  class="justify-start rounded-xl"
                   @click="paymentOpen = true"
                 />
               </div>
