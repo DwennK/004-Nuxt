@@ -4,6 +4,7 @@ import type { CustomerListResponse, DocumentListResponse, TicketListResponse } f
 
 const open = ref(false)
 const route = useRoute()
+const toolRoutes = ['/tools', '/vacances', '/inbox', '/assistant']
 
 const primaryLinks = [{
   label: 'Documents',
@@ -57,13 +58,6 @@ const secondaryLinks = [{
     open.value = false
   }
 }, {
-  label: 'Assistant IA',
-  icon: 'i-lucide-sparkles',
-  to: '/assistant',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
   label: 'Stock téléphones',
   icon: 'i-lucide-smartphone',
   to: '/stocks-smartphone',
@@ -78,20 +72,34 @@ const secondaryLinks = [{
     open.value = false
   }
 }, {
-  label: 'Vacances',
-  icon: 'i-lucide-umbrella',
-  to: '/vacances',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
   label: 'Outils',
   icon: 'i-lucide-folder-cog',
-  defaultOpen: route.path.startsWith('/tools'),
+  defaultOpen: toolRoutes.some(prefix => route.path.startsWith(prefix)),
   children: [{
     label: 'Import Woocommerce',
     icon: 'i-lucide-shopping-cart',
     to: '/tools/woocommerce-import',
+    onSelect: () => {
+      open.value = false
+    }
+  }, {
+    label: 'Vacances',
+    icon: 'i-lucide-umbrella',
+    to: '/vacances',
+    onSelect: () => {
+      open.value = false
+    }
+  }, {
+    label: 'Mails envoyés',
+    icon: 'i-lucide-send',
+    to: '/inbox',
+    onSelect: () => {
+      open.value = false
+    }
+  }, {
+    label: 'Assistant IA',
+    icon: 'i-lucide-sparkles',
+    to: '/assistant',
     onSelect: () => {
       open.value = false
     }
@@ -102,13 +110,6 @@ const footerLinks = [{
   label: 'Paramètres',
   icon: 'i-lucide-settings',
   to: '/settings/users',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
-  label: 'Mails envoyés',
-  icon: 'i-lucide-send',
-  to: '/inbox',
   onSelect: () => {
     open.value = false
   }
