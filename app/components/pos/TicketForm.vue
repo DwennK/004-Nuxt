@@ -560,14 +560,6 @@ async function handleIntakeScan(value: string) {
               <h2 class="text-sm font-semibold text-highlighted">
                 Appareil
               </h2>
-              <UButton
-                type="button"
-                label="Détails"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                @click="intakeSection = 'details'"
-              />
             </div>
 
             <div class="space-y-3">
