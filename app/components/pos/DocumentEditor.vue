@@ -7,6 +7,8 @@ const props = withDefaults(defineProps<{
   catalogItems?: CatalogItemRecord[]
   initialValue?: DocumentInitialValue
   submitLabel?: string
+  formId?: string
+  showSubmitButton?: boolean
   allowedTypes?: DocumentType[]
   fixedCustomerId?: number | null
   fixedTicketId?: number | null
@@ -14,6 +16,8 @@ const props = withDefaults(defineProps<{
   catalogItems: () => [],
   initialValue: () => ({}),
   submitLabel: 'Enregistrer le document',
+  formId: undefined,
+  showSubmitButton: true,
   allowedTypes: () => ['quote', 'customer_order', 'invoice'],
   fixedCustomerId: null,
   fixedTicketId: null
@@ -33,7 +37,8 @@ const editor = useDocumentDraft({
 const schema = editor.schema
 const state = editor.state
 const contextOpen = defineModel<boolean>('contextOpen', { default: false })
-const formId = useId()
+const internalFormId = useId()
+const resolvedFormId = computed(() => props.formId || internalFormId)
 
 function onSubmit() {
   emit('save', editor.serialize())
@@ -42,7 +47,7 @@ function onSubmit() {
 
 <template>
   <UForm
-    :id="formId"
+    :id="resolvedFormId"
     :schema="schema"
     :state="state"
     class="space-y-4"
@@ -52,7 +57,7 @@ function onSubmit() {
       :editor="editor"
       :catalog-items="catalogItems"
     >
-      <template #header-actions>
+      <template v-if="showSubmitButton" #header-actions>
         <UButton
           type="submit"
           icon="i-lucide-save"
@@ -67,7 +72,7 @@ function onSubmit() {
       :editor="editor"
       :customers="customers"
       :fixed-customer-id="fixedCustomerId"
-      :form-id="formId"
+      :form-id="resolvedFormId"
       :submit-label="submitLabel"
     />
   </UForm>

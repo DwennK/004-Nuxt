@@ -39,28 +39,8 @@ const searchPanelTitle = computed(() => {
 
 const searchPlaceholder = computed(() => {
   return resolvedMode.value === 'ticket'
-    ? 'batterie iphone 13, diagnostic, coque...'
-    : 'cable, coque, chargeur, verre...'
-})
-
-const searchScannerTitle = computed(() => {
-  return resolvedMode.value === 'ticket' ? 'Scanner un article ou une prestation' : 'Scanner un article'
-})
-
-const searchScannerDescription = computed(() => {
-  return resolvedMode.value === 'ticket'
-    ? 'Scannez un code-barres ou QR code pour ajouter rapidement une ligne prévue au ticket.'
-    : 'Scannez le code-barres ou QR code d\'un article pour l\'ajouter au document.'
-})
-
-const cardTitle = computed(() => {
-  return resolvedMode.value === 'ticket' ? 'Lignes prévues' : 'Lignes du document'
-})
-
-const cardDescription = computed(() => {
-  return resolvedMode.value === 'ticket'
-    ? 'Préparez ce qui devra être facturé plus tard sans ressaisir lors du document.'
-    : ''
+    ? 'Ajouter un article ou une prestation'
+    : 'Ajouter un article'
 })
 
 const emptyTitle = computed(() => {
@@ -142,129 +122,96 @@ async function handleBarcodeScan(value: string) {
       :ui="{
         root: 'overflow-visible rounded-[2rem] shadow-sm',
         body: 'space-y-0 p-0',
-        header: 'p-4 pb-0 sm:p-4 sm:pb-0',
+        header: 'p-4 sm:p-4',
         footer: 'border-t border-default/70 px-4 py-3 sm:px-4'
       }"
     >
       <template #header>
-        <div class="flex flex-col gap-4">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="space-y-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-base font-semibold text-highlighted">
-                  {{ cardTitle }}
-                </h2>
-                <UBadge
-                  v-if="resolvedMode === 'ticket'"
-                  color="neutral"
-                  variant="soft"
-                  size="sm"
-                >
-                  {{ state.lines.length ? `${state.lines.length} ligne(s)` : 'Document vide' }}
-                </UBadge>
-              </div>
-              <p v-if="cardDescription" class="text-sm text-toned">
-                {{ cardDescription }}
-              </p>
-            </div>
-            <div class="flex flex-wrap items-start justify-end gap-2">
-              <div class="text-right">
-                <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                  Total document
-                </p>
-                <p class="text-2xl font-semibold text-highlighted">
-                  {{ formatCurrency(totals.total) }}
-                </p>
-              </div>
-              <slot name="header-actions" />
-            </div>
+        <div
+          v-if="showSearchCard !== false"
+          class="relative"
+          @focusin="cancelSearchClose"
+          @focusout="scheduleSearchClose"
+          @pointerdown="openSearchPanel"
+        >
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <UInput
+              v-model="search"
+              icon="i-lucide-search"
+              size="lg"
+              class="flex-1"
+              :placeholder="searchPlaceholder"
+              :autofocus="resolvedMode === 'document'"
+              @keydown="handleSearchKeydown"
+            />
+            <PosBarcodeScanner
+              title="Scanner un code-barres"
+              description="Scannez un article ou une prestation pour l'ajouter rapidement."
+              trigger-size="md"
+              trigger-aria-label="Scanner un code-barres"
+              @scanned="handleBarcodeScan"
+            />
+            <UButton
+              icon="i-lucide-plus"
+              label="Nouvelle ligne"
+              color="neutral"
+              variant="soft"
+              size="md"
+              @pointerdown.stop
+              @click.stop="createNewLine"
+            />
+            <slot name="header-actions" />
           </div>
 
           <div
-            v-if="showSearchCard !== false"
-            class="relative"
-            @focusin="cancelSearchClose"
-            @focusout="scheduleSearchClose"
-            @pointerdown="openSearchPanel"
+            v-if="shouldShowSearchPanel"
+            class="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
           >
-            <div class="flex flex-col gap-2 lg:flex-row">
-              <UInput
-                v-model="search"
-                icon="i-lucide-search"
-                size="xl"
-                class="flex-1"
-                :placeholder="searchPlaceholder"
-                :autofocus="resolvedMode === 'document'"
-                @keydown="handleSearchKeydown"
-              />
-              <PosBarcodeScanner
-                :title="searchScannerTitle"
-                :description="searchScannerDescription"
-                trigger-size="lg"
-                trigger-aria-label="Scanner un code-barres"
-                @scanned="handleBarcodeScan"
-              />
-              <UButton
-                icon="i-lucide-plus"
-                label="Nouvelle ligne"
-                color="neutral"
-                variant="soft"
-                size="lg"
-                @pointerdown.stop
-                @click.stop="createNewLine"
-              />
+            <div class="flex items-center justify-between gap-3 px-2 pb-2">
+              <p class="text-sm font-medium text-highlighted">
+                {{ searchPanelTitle }}
+              </p>
+              <span class="text-xs text-toned">
+                {{ searchPanelItems.length }} article(s)
+              </span>
             </div>
 
-            <div
-              v-if="shouldShowSearchPanel"
-              class="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
-            >
-              <div class="flex items-center justify-between gap-3 px-2 pb-2">
-                <p class="text-sm font-medium text-highlighted">
-                  {{ searchPanelTitle }}
-                </p>
-                <span class="text-xs text-toned">
-                  {{ searchPanelItems.length }} article(s)
+            <div v-if="search.trim().length < minSearchLength" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+              Tapez au moins {{ minSearchLength }} caractères.
+            </div>
+
+            <div v-else-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
+              <button
+                v-for="(item, index) in searchPanelItems"
+                :key="item.id"
+                type="button"
+                class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
+                :class="index === highlightedItemIndex
+                  ? 'bg-primary/8 ring-1 ring-primary/20'
+                  : 'hover:bg-muted/60'"
+                @mouseenter="highlightedItemIndex = index"
+                @click="addCatalogItem(item)"
+              >
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-medium text-highlighted">
+                    {{ item.name }}
+                  </p>
+                  <p class="truncate text-xs text-toned">
+                    {{ item.sku || getCatalogItemTypeLabel(item.type) }}
+                  </p>
+                </div>
+                <span class="shrink-0 text-sm font-medium text-highlighted">
+                  {{ formatCurrency(item.defaultPrice) }}
                 </span>
-              </div>
+              </button>
+            </div>
 
-              <div v-if="search.trim().length < minSearchLength" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
-                Tapez au moins {{ minSearchLength }} caractères.
-              </div>
+            <div v-else-if="remoteSearchPending" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+              Recherche dans le catalogue...
+            </div>
 
-              <div v-else-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
-                <button
-                  v-for="(item, index) in searchPanelItems"
-                  :key="item.id"
-                  type="button"
-                  class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
-                  :class="index === highlightedItemIndex
-                    ? 'bg-primary/8 ring-1 ring-primary/20'
-                    : 'hover:bg-muted/60'"
-                  @mouseenter="highlightedItemIndex = index"
-                  @click="addCatalogItem(item)"
-                >
-                  <div class="min-w-0">
-                    <p class="truncate text-sm font-medium text-highlighted">
-                      {{ item.name }}
-                    </p>
-                    <p class="truncate text-xs text-toned">
-                      {{ item.sku || getCatalogItemTypeLabel(item.type) }}
-                    </p>
-                  </div>
-                  <span class="shrink-0 text-sm font-medium text-highlighted">
-                    {{ formatCurrency(item.defaultPrice) }}
-                  </span>
-                </button>
-              </div>
-
-              <div v-else-if="remoteSearchPending" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
-                Recherche dans le catalogue...
-              </div>
-
-              <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
-                Aucun article trouvé pour cette recherche.
-              </div>
+            <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
+              Aucun article trouvé pour cette recherche.
             </div>
           </div>
         </div>
@@ -281,11 +228,11 @@ async function handleBarcodeScan(value: string) {
       <div v-else class="pb-0 pt-4">
         <div class="overflow-x-auto">
           <div class="min-w-[54rem]">
-            <div class="grid grid-cols-[minmax(0,1.9fr)_10rem_6rem_5rem_5rem_8.5rem_6rem] gap-2 px-4 pb-2 text-[11px] uppercase tracking-[0.14em] text-toned">
+            <div class="grid grid-cols-[minmax(0,1.9fr)_6rem_5rem_10rem_5rem_8.5rem_6rem] gap-2 px-4 pb-2 text-[11px] uppercase tracking-[0.14em] text-toned">
               <span>Libellé</span>
-              <span>Catégorie</span>
               <span class="text-right">PU TTC</span>
               <span class="text-center">Qté</span>
+              <span>Catégorie</span>
               <span class="text-center">TVA</span>
               <span class="text-right">Total</span>
               <span class="text-center">Actions</span>
@@ -295,7 +242,7 @@ async function handleBarcodeScan(value: string) {
               <div
                 v-for="(line, index) in state.lines"
                 :key="line.id"
-                class="grid grid-cols-[minmax(0,1.9fr)_10rem_6rem_5rem_5rem_8.5rem_6rem] items-center gap-2 border-t border-default/70 bg-default px-4 py-3 first:border-t-0"
+                class="grid grid-cols-[minmax(0,1.9fr)_6rem_5rem_10rem_5rem_8.5rem_6rem] items-center gap-2 border-t border-default/70 bg-default px-4 py-3 first:border-t-0"
               >
                 <div class="min-w-0">
                   <UFormField :name="`lines.${index}.label`" class="min-w-0">
@@ -308,24 +255,13 @@ async function handleBarcodeScan(value: string) {
                       @update:model-value="editor.updateLineLabel(index, String($event || ''))"
                     />
                   </UFormField>
-                  <p v-if="line.catalogItemId && (catalogItemById.get(line.catalogItemId)?.sku || catalogItemById.get(line.catalogItemId)?.name)" class="mt-1 truncate text-xs text-toned">
+                  <p
+                    v-if="line.catalogItemId && (catalogItemById.get(line.catalogItemId)?.sku || catalogItemById.get(line.catalogItemId)?.name)"
+                    class="mt-1 truncate text-xs text-toned"
+                  >
                     {{ catalogItemById.get(line.catalogItemId)?.sku || catalogItemById.get(line.catalogItemId)?.name }}
                   </p>
                 </div>
-
-                <UFormField :name="`lines.${index}.categoryHint`">
-                  <USelectMenu
-                    v-model="line.categoryHint"
-                    :items="categoryItems"
-                    value-key="value"
-                    placeholder="Catégorie"
-                    clear
-                    size="sm"
-                    variant="subtle"
-                    :search-input="false"
-                    class="w-full"
-                  />
-                </UFormField>
 
                 <UFormField :name="`lines.${index}.unitPrice`" class="justify-self-end">
                   <UInputNumber
@@ -358,6 +294,20 @@ async function handleBarcodeScan(value: string) {
                     />
                   </UFormField>
                 </div>
+
+                <UFormField :name="`lines.${index}.categoryHint`">
+                  <USelectMenu
+                    v-model="line.categoryHint"
+                    :items="categoryItems"
+                    value-key="value"
+                    placeholder="Catégorie"
+                    clear
+                    size="sm"
+                    variant="subtle"
+                    :search-input="false"
+                    class="w-full"
+                  />
+                </UFormField>
 
                 <div class="text-center text-sm font-medium text-highlighted tabular-nums">
                   {{ line.vatRate }}%

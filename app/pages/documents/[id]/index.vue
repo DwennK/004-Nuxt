@@ -18,6 +18,7 @@ const activeTab = ref('lines')
 const isEmailModalOpen = ref(false)
 const isSendingEmail = ref(false)
 const isContextOpen = ref(false)
+const documentFormId = 'document-detail-form'
 
 const tabItems = [
   { label: 'Lignes', value: 'lines', icon: 'i-lucide-list' },
@@ -162,6 +163,13 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
             icon="i-lucide-printer"
             label="Imprimer thermique"
           />
+          <UButton
+            v-if="activeTab === 'lines'"
+            :form="documentFormId"
+            type="submit"
+            icon="i-lucide-save"
+            label="Enregistrer"
+          />
         </template>
       </UDashboardNavbar>
     </template>
@@ -189,6 +197,8 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
           <PosDocumentEditor
             v-if="customers?.items"
             v-model:context-open="isContextOpen"
+            :form-id="documentFormId"
+            :show-submit-button="false"
             :customers="customers.items"
             :initial-value="document"
             :fixed-ticket-id="document.ticketId"
