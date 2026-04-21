@@ -93,8 +93,8 @@ const footerLinks = [{
     open.value = false
   }
 }, {
-  label: 'Boîte de réception',
-  icon: 'i-lucide-inbox',
+  label: 'Mails envoyés',
+  icon: 'i-lucide-send',
   to: '/inbox',
   onSelect: () => {
     open.value = false

@@ -284,6 +284,46 @@ export interface DocumentEmailInput {
   message: string
 }
 
+export type SentMailStatus
+  = | 'queued'
+    | 'scheduled'
+    | 'sent'
+    | 'delivered'
+    | 'delivery_delayed'
+    | 'bounced'
+    | 'complained'
+    | 'opened'
+    | 'clicked'
+    | 'rendering_failure'
+    | 'canceled'
+    | 'suppressed'
+    | 'unknown'
+
+export interface SentMailSummary {
+  id: string
+  to: string[]
+  from: string
+  subject: string
+  createdAt: string
+  lastEvent: SentMailStatus
+  replyTo: string[]
+  preview: string
+}
+
+export interface SentMailDetail extends SentMailSummary {
+  cc: string[]
+  bcc: string[]
+  bodyText: string
+}
+
+export interface SentMailListResponse {
+  items: SentMailSummary[]
+  hasMore: boolean
+  beforeCursor: string | null
+  afterCursor: string | null
+  limit: number
+}
+
 export type VacationEntryType = (typeof vacationEntryTypes)[number]
 export type VacationEntryStatus = (typeof vacationEntryStatuses)[number]
 

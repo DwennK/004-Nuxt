@@ -1,53 +1,25 @@
 <script setup lang="ts">
 import { format } from 'date-fns'
-import type { Mail } from '~/types'
+import type { SentMailDetail, SentMailSummary } from '~~/shared/types/pos'
+import { getSentMailStatusMeta } from '~~/shared/utils/sent-email'
 
-defineProps<{
-  mail: Mail
+const props = defineProps<{
+  summary: SentMailSummary | null
+  mail: SentMailDetail | null
+  loading?: boolean
+  errorMessage?: string | null
 }>()
 
-const emits = defineEmits(['close'])
+const emits = defineEmits<{
+  close: []
+}>()
 
-const dropdownItems = [[{
-  label: 'Marquer comme non lu',
-  icon: 'i-lucide-check-circle'
-}, {
-  label: 'Marquer comme important',
-  icon: 'i-lucide-triangle-alert'
-}], [{
-  label: 'Mettre en favori',
-  icon: 'i-lucide-star'
-}, {
-  label: 'Couper les notifications',
-  icon: 'i-lucide-circle-pause'
-}]]
-
-const toast = useToast()
-
-const reply = ref('')
-const loading = ref(false)
-
-function onSubmit() {
-  loading.value = true
-
-  setTimeout(() => {
-    reply.value = ''
-
-    toast.add({
-      title: 'E-mail envoyé',
-      description: 'Votre e-mail a bien été envoyé.',
-      icon: 'i-lucide-check-circle',
-      color: 'success'
-    })
-
-    loading.value = false
-  }, 1000)
-}
+const displayedMail = computed(() => props.mail || props.summary)
 </script>
 
 <template>
-  <UDashboardPanel id="inbox-2">
-    <UDashboardNavbar :title="mail.subject" :toggle="false">
+  <UDashboardPanel id="sent-mails-detail">
+    <UDashboardNavbar :title="displayedMail?.subject || 'Mails envoyés'" :toggle="false">
       <template #leading>
         <UButton
           icon="i-lucide-x"
@@ -59,107 +31,122 @@ function onSubmit() {
       </template>
 
       <template #right>
-        <UTooltip text="Archiver">
-          <UButton
-            icon="i-lucide-inbox"
-            color="neutral"
-            variant="ghost"
-          />
-        </UTooltip>
-
-        <UTooltip text="Répondre">
-          <UButton icon="i-lucide-reply" color="neutral" variant="ghost" />
-        </UTooltip>
-
-        <UDropdownMenu :items="dropdownItems">
-          <UButton
-            icon="i-lucide-ellipsis-vertical"
-            color="neutral"
-            variant="ghost"
-          />
-        </UDropdownMenu>
+        <UBadge
+          v-if="displayedMail"
+          :color="getSentMailStatusMeta(displayedMail.lastEvent).color"
+          variant="subtle"
+        >
+          {{ getSentMailStatusMeta(displayedMail.lastEvent).label }}
+        </UBadge>
       </template>
     </UDashboardNavbar>
 
-    <div class="flex flex-col sm:flex-row justify-between gap-1 p-4 sm:px-6 border-b border-default">
-      <div class="flex items-start gap-4 sm:my-1.5">
-        <UAvatar
-          v-bind="mail.from.avatar"
-          :alt="mail.from.name"
-          size="3xl"
-        />
+    <template v-if="displayedMail">
+      <div class="border-b border-default p-4 sm:px-6">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="space-y-3">
+            <div class="space-y-1">
+              <p class="text-xs uppercase tracking-[0.14em] text-toned">
+                À
+              </p>
+              <p class="font-medium text-highlighted">
+                {{ displayedMail.to.join(', ') || 'Destinataire inconnu' }}
+              </p>
+            </div>
 
-        <div class="min-w-0">
-          <p class="font-semibold text-highlighted">
-            {{ mail.from.name }}
-          </p>
-          <p class="text-muted">
-            {{ mail.from.email }}
-          </p>
+            <div class="grid gap-3 text-sm text-toned sm:grid-cols-3">
+              <div>
+                <p class="text-xs uppercase tracking-[0.14em] text-toned">
+                  De
+                </p>
+                <p class="mt-1 text-default">
+                  {{ displayedMail.from || '—' }}
+                </p>
+              </div>
+
+              <div>
+                <p class="text-xs uppercase tracking-[0.14em] text-toned">
+                  Reply-to
+                </p>
+                <p class="mt-1 text-default">
+                  {{ displayedMail.replyTo.join(', ') || '—' }}
+                </p>
+              </div>
+
+              <div>
+                <p class="text-xs uppercase tracking-[0.14em] text-toned">
+                  Envoyé le
+                </p>
+                <p class="mt-1 text-default">
+                  {{ format(new Date(displayedMail.createdAt), 'dd MMM yyyy HH:mm') }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="mail && (mail.cc.length || mail.bcc.length)"
+          class="mt-4 grid gap-3 border-t border-default pt-4 text-sm text-toned sm:grid-cols-2"
+        >
+          <div v-if="mail.cc.length">
+            <p class="text-xs uppercase tracking-[0.14em] text-toned">
+              Cc
+            </p>
+            <p class="mt-1 text-default">
+              {{ mail.cc.join(', ') }}
+            </p>
+          </div>
+
+          <div v-if="mail.bcc.length">
+            <p class="text-xs uppercase tracking-[0.14em] text-toned">
+              Bcc
+            </p>
+            <p class="mt-1 text-default">
+              {{ mail.bcc.join(', ') }}
+            </p>
+          </div>
         </div>
       </div>
 
-      <p class="max-sm:pl-16 text-muted text-sm sm:mt-2">
-        {{ format(new Date(mail.date), 'dd MMM HH:mm') }}
-      </p>
-    </div>
+      <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <UAlert
+          v-if="errorMessage"
+          icon="i-lucide-triangle-alert"
+          color="error"
+          variant="soft"
+          title="Détail indisponible"
+          :description="errorMessage"
+        />
 
-    <div class="flex-1 p-4 sm:p-6 overflow-y-auto">
-      <p class="whitespace-pre-wrap">
-        {{ mail.body }}
-      </p>
-    </div>
+        <div v-else-if="loading" class="space-y-3">
+          <USkeleton class="h-5 w-2/3" />
+          <USkeleton class="h-5 w-full" />
+          <USkeleton class="h-5 w-full" />
+          <USkeleton class="h-5 w-4/5" />
+        </div>
 
-    <div class="pb-4 px-4 sm:px-6 shrink-0">
-      <UCard variant="subtle" class="mt-auto" :ui="{ header: 'flex items-center gap-1.5 text-dimmed' }">
-        <template #header>
-          <UIcon name="i-lucide-reply" class="size-5" />
+        <div v-else-if="mail?.bodyText" class="whitespace-pre-wrap text-sm text-default">
+          {{ mail.bodyText }}
+        </div>
 
-          <span class="text-sm truncate">
-            Répondre à {{ mail.from.name }} ({{ mail.from.email }})
-          </span>
-        </template>
+        <UEmpty
+          v-else
+          icon="i-lucide-file-text"
+          title="Contenu indisponible"
+          description="Resend n’a retourné aucun texte exploitable pour cet e-mail."
+          class="py-12"
+        />
+      </div>
+    </template>
 
-        <form @submit.prevent="onSubmit">
-          <UTextarea
-            v-model="reply"
-            color="neutral"
-            variant="none"
-            required
-            autoresize
-            placeholder="Écrire une réponse..."
-            :rows="4"
-            :disabled="loading"
-            class="w-full"
-            :ui="{ base: 'p-0 resize-none' }"
-          />
-
-          <div class="flex items-center justify-between">
-            <UTooltip text="Joindre un fichier">
-              <UButton
-                color="neutral"
-                variant="ghost"
-                icon="i-lucide-paperclip"
-              />
-            </UTooltip>
-
-            <div class="flex items-center justify-end gap-2">
-              <UButton
-                color="neutral"
-                variant="ghost"
-                label="Enregistrer le brouillon"
-              />
-              <UButton
-                type="submit"
-                color="neutral"
-                :loading="loading"
-                label="Envoyer"
-                icon="i-lucide-send"
-              />
-            </div>
-          </div>
-        </form>
-      </UCard>
+    <div v-else class="flex flex-1 items-center justify-center">
+      <UEmpty
+        icon="i-lucide-send"
+        title="Sélectionnez un e-mail"
+        description="Choisissez un envoi dans la liste pour afficher son contenu."
+        class="py-12"
+      />
     </div>
   </UDashboardPanel>
 </template>
