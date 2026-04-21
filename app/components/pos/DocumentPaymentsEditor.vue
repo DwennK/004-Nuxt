@@ -387,10 +387,6 @@ async function removePayment(payment: PaymentRecord) {
             :disabled="!canCreatePayment || Boolean(creatingMethod)"
             @click="paymentOpen = true"
           />
-
-          <p class="text-xs text-toned">
-            Utilisez le paiement détaillé pour un montant partiel ou une note.
-          </p>
         </template>
 
         <template v-else>
