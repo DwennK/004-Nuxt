@@ -2,7 +2,7 @@
 import type { TabsItem } from '@nuxt/ui'
 import { Orientation } from 'vue-chrts'
 import { lineCategoryColors, lineCategoryLabels } from '~~/shared/constants/pos'
-import type { ReportsOverview } from '~~/shared/types/pos'
+import type { ReportsLeaders } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
 
 type RankingKind = 'customers' | 'items'
@@ -19,7 +19,7 @@ type CustomerRow = {
 type ItemRow = {
   key: string
   label: string
-  category: ReportsOverview['topItems'][number]['category']
+  category: ReportsLeaders['topItems'][number]['category']
   total: number
   quantity: number
   share: number
@@ -27,7 +27,7 @@ type ItemRow = {
 
 const props = defineProps<{
   kind: RankingKind
-  overview: ReportsOverview
+  leaders: ReportsLeaders
 }>()
 
 const customerMetric = ref<CustomerMetric>('total')
@@ -55,7 +55,7 @@ const config = computed(() => {
   if (props.kind === 'customers') {
     return {
       title: 'Top clients',
-      description: 'Classement des clients sur la fenêtre glissante sélectionnée.',
+      description: 'Classement des clients sur la période sélectionnée.',
       icon: 'i-lucide-users',
       emptyTitle: 'Aucun client à classer',
       emptyDescription: 'Les clients encaissés sur la période apparaîtront ici.'
@@ -64,7 +64,7 @@ const config = computed(() => {
 
   return {
     title: 'Top articles',
-    description: 'Classement des lignes encaissées sur la fenêtre glissante sélectionnée.',
+    description: 'Classement des lignes encaissées sur la période sélectionnée.',
     icon: 'i-lucide-package',
     emptyTitle: 'Aucun article à classer',
     emptyDescription: 'Les articles encaissés sur la période apparaîtront ici.'
@@ -72,19 +72,19 @@ const config = computed(() => {
 })
 
 const customerRows = computed<CustomerRow[]>(() => {
-  return props.overview.topCustomers.map(item => ({
+  return props.leaders.topCustomers.map(item => ({
     key: String(item.customerId),
     label: item.customerName,
     total: item.total,
     documentCount: item.documentCount,
-    share: props.overview.kpis.totalPaid > 0 ? item.total / props.overview.kpis.totalPaid : 0
+    share: props.leaders.totalPaid > 0 ? item.total / props.leaders.totalPaid : 0
   }))
 })
 
 const itemRows = computed<ItemRow[]>(() => {
-  return props.overview.topItems.map(item => ({
+  return props.leaders.topItems.map(item => ({
     ...item,
-    share: props.overview.kpis.totalPaid > 0 ? item.total / props.overview.kpis.totalPaid : 0
+    share: props.leaders.totalPaid > 0 ? item.total / props.leaders.totalPaid : 0
   }))
 })
 

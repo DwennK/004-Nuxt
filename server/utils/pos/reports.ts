@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, lte, sql, sum } from 'drizzle-orm'
 import { catalogItems, customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
-import type { DailySummary, ReportsOverview } from '~~/shared/types/pos'
+import type { DailySummary, ReportsLeaders, ReportsOverview } from '~~/shared/types/pos'
 import { businessTimeZone, toDateInputValue } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
 import { buildDayRange, ensurePosSchema } from './core'
@@ -176,6 +176,80 @@ type TopItemRow = {
   category: ReportsOverview['topItems'][number]['category']
   total: number | string | null
   quantity: number | string | null
+}
+
+function normalizeDateRange(startDate: string, endDate: string) {
+  return startDate <= endDate
+    ? { startDate, endDate }
+    : { startDate: endDate, endDate: startDate }
+}
+
+async function getTopLeaders(
+  db: ReturnType<typeof useDb>,
+  paidDocumentIds: number[]
+): Promise<Pick<ReportsLeaders, 'topCustomers' | 'topItems'>> {
+  if (!paidDocumentIds.length) {
+    return {
+      topCustomers: [],
+      topItems: []
+    }
+  }
+
+  const [topCustomerRows, topItemRows]: [TopCustomerRow[], TopItemRow[]] = await Promise.all([
+    db.select({
+      customerId: customers.id,
+      customerName: sql<string>`coalesce(${customers.companyName}, ${customers.firstName} || ' ' || ${customers.lastName})`,
+      total: sum(documents.total),
+      documentCount: sql<number>`count(${documents.id})`
+    })
+      .from(documents)
+      .innerJoin(customers, eq(documents.customerId, customers.id))
+      .where(inArray(documents.id, paidDocumentIds))
+      .groupBy(customers.id),
+    db.select({
+      label: sql<string>`coalesce(${catalogItems.name}, ${documentLines.label})`,
+      category: documentLines.categoryHint,
+      total: sum(documentLines.lineTotal),
+      quantity: sum(documentLines.quantity)
+    })
+      .from(documentLines)
+      .leftJoin(catalogItems, eq(documentLines.catalogItemId, catalogItems.id))
+      .where(inArray(documentLines.documentId, paidDocumentIds))
+      .groupBy(
+        sql`coalesce(${catalogItems.name}, ${documentLines.label})`,
+        documentLines.categoryHint
+      )
+  ])
+
+  return {
+    topCustomers: topCustomerRows
+      .map(row => ({
+        customerId: row.customerId,
+        customerName: row.customerName,
+        total: Number(row.total || 0),
+        documentCount: Number(row.documentCount || 0)
+      }))
+      .sort((left, right) =>
+        right.total - left.total
+        || right.documentCount - left.documentCount
+        || left.customerName.localeCompare(right.customerName, 'fr-CH')
+      )
+      .slice(0, 8),
+    topItems: topItemRows
+      .map(row => ({
+        key: `${row.category || 'uncategorized'}:${row.label}`,
+        label: row.label,
+        category: row.category,
+        total: Number(row.total || 0),
+        quantity: Number(row.quantity || 0)
+      }))
+      .sort((left, right) =>
+        right.total - left.total
+        || right.quantity - left.quantity
+        || left.label.localeCompare(right.label, 'fr-CH')
+      )
+      .slice(0, 8)
+  }
 }
 
 export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
@@ -405,9 +479,10 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
   }
 
   const paidDocumentIds = paidDocumentRows.map(row => row.documentId)
-  const [turnoverRows, topCustomerRows, topItemRows]: [TurnoverRow[], TopCustomerRow[], TopItemRow[]] = paidDocumentIds.length
-    ? await Promise.all([
-        db.select({
+  const [{ topCustomers, topItems }, turnoverRows]: [Pick<ReportsLeaders, 'topCustomers' | 'topItems'>, TurnoverRow[]] = await Promise.all([
+    getTopLeaders(db, paidDocumentIds),
+    paidDocumentIds.length
+      ? db.select({
           category: documentLines.categoryHint,
           total: sum(documentLines.lineTotal)
         })
@@ -416,32 +491,9 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
             inArray(documentLines.documentId, paidDocumentIds),
             sql`${documentLines.categoryHint} is not null`
           ))
-          .groupBy(documentLines.categoryHint),
-        db.select({
-          customerId: customers.id,
-          customerName: sql<string>`coalesce(${customers.companyName}, ${customers.firstName} || ' ' || ${customers.lastName})`,
-          total: sum(documents.total),
-          documentCount: sql<number>`count(${documents.id})`
-        })
-          .from(documents)
-          .innerJoin(customers, eq(documents.customerId, customers.id))
-          .where(inArray(documents.id, paidDocumentIds))
-          .groupBy(customers.id),
-        db.select({
-          label: sql<string>`coalesce(${catalogItems.name}, ${documentLines.label})`,
-          category: documentLines.categoryHint,
-          total: sum(documentLines.lineTotal),
-          quantity: sum(documentLines.quantity)
-        })
-          .from(documentLines)
-          .leftJoin(catalogItems, eq(documentLines.catalogItemId, catalogItems.id))
-          .where(inArray(documentLines.documentId, paidDocumentIds))
-          .groupBy(
-            sql`coalesce(${catalogItems.name}, ${documentLines.label})`,
-            documentLines.categoryHint
-          )
-      ])
-    : [[], [], []]
+          .groupBy(documentLines.categoryHint)
+      : Promise.resolve([])
+  ])
 
   const paymentsByDay = weeklyBuckets.map(({ date: bucketDate, label, total, cash, cardTwint, bankTransfer }) => ({
     date: bucketDate,
@@ -454,33 +506,6 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
 
   const totalPaid = weeklyBuckets.reduce((sum, item) => sum + item.total, 0)
   const paidToday = weeklyBucketsMap.get(date)?.total || 0
-  const topCustomers = topCustomerRows
-    .map(row => ({
-      customerId: row.customerId,
-      customerName: row.customerName,
-      total: Number(row.total || 0),
-      documentCount: Number(row.documentCount || 0)
-    }))
-    .sort((left, right) =>
-      right.total - left.total
-      || right.documentCount - left.documentCount
-      || left.customerName.localeCompare(right.customerName, 'fr-CH')
-    )
-    .slice(0, 8)
-  const topItems = topItemRows
-    .map(row => ({
-      key: `${row.category || 'uncategorized'}:${row.label}`,
-      label: row.label,
-      category: row.category,
-      total: Number(row.total || 0),
-      quantity: Number(row.quantity || 0)
-    }))
-    .sort((left, right) =>
-      right.total - left.total
-      || right.quantity - left.quantity
-      || left.label.localeCompare(right.label, 'fr-CH')
-    )
-    .slice(0, 8)
 
   return {
     range: {
@@ -521,5 +546,41 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
     topCustomers,
     topItems,
     ticketFlowByDay
+  }
+}
+
+export async function getReportsLeaders(startDate: string, endDate: string): Promise<ReportsLeaders> {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const normalizedRange = normalizeDateRange(startDate, endDate)
+  const { start } = buildDayRange(normalizedRange.startDate)
+  const { end } = buildDayRange(normalizedRange.endDate)
+
+  const [paymentTotalRows, paidDocumentRows] = await Promise.all([
+    db.select({ total: sum(payments.amount) })
+      .from(payments)
+      .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end))),
+    db.select({
+      documentId: documents.id
+    })
+      .from(payments)
+      .innerJoin(documents, eq(payments.documentId, documents.id))
+      .where(and(
+        eq(payments.status, 'paid'),
+        eq(documents.status, 'paid'),
+        inArray(documents.type, ['invoice']),
+        gte(payments.paidAt, start),
+        lte(payments.paidAt, end)
+      ))
+      .groupBy(documents.id)
+  ])
+
+  const leaders = await getTopLeaders(db, paidDocumentRows.map(row => row.documentId))
+
+  return {
+    range: normalizedRange,
+    totalPaid: Number(paymentTotalRows[0]?.total || 0),
+    ...leaders
   }
 }

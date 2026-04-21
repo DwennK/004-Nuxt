@@ -308,8 +308,8 @@ async function handleBarcodeScan(value: string) {
                       @update:model-value="editor.updateLineLabel(index, String($event || ''))"
                     />
                   </UFormField>
-                  <p class="mt-1 truncate text-xs text-toned">
-                    {{ line.catalogItemId ? (catalogItemById.get(line.catalogItemId)?.sku || catalogItemById.get(line.catalogItemId)?.name || 'Catalogue lié') : 'Ligne libre' }}
+                  <p v-if="line.catalogItemId && (catalogItemById.get(line.catalogItemId)?.sku || catalogItemById.get(line.catalogItemId)?.name)" class="mt-1 truncate text-xs text-toned">
+                    {{ catalogItemById.get(line.catalogItemId)?.sku || catalogItemById.get(line.catalogItemId)?.name }}
                   </p>
                 </div>
 

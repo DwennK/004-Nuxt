@@ -61,13 +61,6 @@ async function saveTicket(payload: {
         <template #right>
           <div class="flex items-center gap-2">
             <UButton
-              label="Imprimer"
-              icon="i-lucide-printer"
-              color="neutral"
-              variant="subtle"
-              disabled
-            />
-            <UButton
               to="/tickets"
               label="Annuler"
               color="neutral"
@@ -76,7 +69,7 @@ async function saveTicket(payload: {
             <UButton
               :form="formId"
               type="submit"
-              label="Valider"
+              label="Créer le ticket"
               icon="i-lucide-check"
             />
           </div>

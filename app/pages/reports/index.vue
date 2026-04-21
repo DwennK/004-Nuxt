@@ -2,10 +2,23 @@
 import type { TabsItem } from '@nuxt/ui'
 import ReportsLeaders from '~/components/reports/ReportsLeaders.client.vue'
 import ReportsOverviewCharts from '~/components/reports/ReportsOverviewCharts.client.vue'
-import type { ReportsOverview } from '~~/shared/types/pos'
+import type { ReportsLeaders as ReportsLeadersData, ReportsOverview } from '~~/shared/types/pos'
 import { formatCurrency, toDateInputValue } from '~~/shared/utils/pos'
 
+function shiftIsoDate(date: string, days: number) {
+  const [year, month, day] = date.split('-').map(Number)
+  const value = new Date(Date.UTC(year!, month! - 1, day! + days, 12, 0, 0))
+
+  return [
+    value.getUTCFullYear(),
+    String(value.getUTCMonth() + 1).padStart(2, '0'),
+    String(value.getUTCDate()).padStart(2, '0')
+  ].join('-')
+}
+
 const date = ref(toDateInputValue())
+const leadersStartDate = ref(shiftIsoDate(date.value, -6))
+const leadersEndDate = ref(date.value)
 const selectedTab = ref('revenue')
 
 const tabs: TabsItem[] = [
@@ -22,6 +35,29 @@ const { data: overview, refresh, status } = await useFetch<ReportsOverview>('/ap
 
 watch(date, async () => {
   await refresh()
+})
+
+const normalizedLeadersRange = computed(() => {
+  return leadersStartDate.value <= leadersEndDate.value
+    ? {
+        startDate: leadersStartDate.value,
+        endDate: leadersEndDate.value
+      }
+    : {
+        startDate: leadersEndDate.value,
+        endDate: leadersStartDate.value
+      }
+})
+
+const { data: leaders, refresh: refreshLeaders, status: leadersStatus } = await useFetch<ReportsLeadersData>('/api/reports/leaders', {
+  query: computed(() => ({
+    startDate: normalizedLeadersRange.value.startDate,
+    endDate: normalizedLeadersRange.value.endDate
+  }))
+})
+
+watch([leadersStartDate, leadersEndDate], async () => {
+  await refreshLeaders()
 })
 
 function formatRangeDate(value: string) {
@@ -82,7 +118,10 @@ const stats = computed(() => {
       <div class="space-y-4">
         <UDashboardToolbar>
           <div class="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="flex flex-wrap items-center gap-2">
+            <div
+              v-if="selectedTab === 'revenue'"
+              class="flex flex-wrap items-center gap-2"
+            >
               <UInput v-model="date" type="date" class="w-52" />
 
               <UBadge
@@ -92,6 +131,29 @@ const stats = computed(() => {
                 size="sm"
               >
                 {{ formatRangeDate(overview.range.startDate) }} → {{ formatRangeDate(overview.range.endDate) }}
+              </UBadge>
+            </div>
+
+            <div
+              v-else
+              class="flex flex-wrap items-end gap-2"
+            >
+              <UFormField label="Date début">
+                <UInput v-model="leadersStartDate" type="date" class="w-40" />
+              </UFormField>
+
+              <UFormField label="Date fin">
+                <UInput v-model="leadersEndDate" type="date" class="w-40" />
+              </UFormField>
+
+              <UBadge
+                v-if="leaders"
+                color="primary"
+                variant="subtle"
+                size="sm"
+                class="mb-0.5"
+              >
+                {{ formatRangeDate(leaders.range.startDate) }} → {{ formatRangeDate(leaders.range.endDate) }}
               </UBadge>
             </div>
 
@@ -154,17 +216,27 @@ const stats = computed(() => {
 
           <template #customers>
             <ReportsLeaders
-              v-if="overview"
+              v-if="leaders"
               kind="customers"
-              :overview="overview"
+              :leaders="leaders"
+            />
+
+            <USkeleton
+              v-else-if="leadersStatus === 'pending'"
+              class="h-[28rem] rounded-2xl"
             />
           </template>
 
           <template #items>
             <ReportsLeaders
-              v-if="overview"
+              v-if="leaders"
               kind="items"
-              :overview="overview"
+              :leaders="leaders"
+            />
+
+            <USkeleton
+              v-else-if="leadersStatus === 'pending'"
+              class="h-[28rem] rounded-2xl"
             />
           </template>
         </UTabs>
