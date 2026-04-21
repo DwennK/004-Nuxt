@@ -1,11 +1,9 @@
 import { eq } from 'drizzle-orm'
-import { customers } from '~~/server/db/schema'
+import { customers, documentImports, documentLines, documents } from '~~/server/db/schema'
 import { woocommerceOpenOrderStatuses } from '~~/shared/constants/pos'
 import type { CustomerUpsertInput, WooImportResult, WooOrderListResponse, WooOrderSummary } from '~~/shared/types/pos'
-import { createDocumentImportRecord, getDocumentImportByExternalId, listDocumentImportsByExternalIds } from './document-imports'
-import { createDocumentRecord } from './pos/documents'
-import { createCustomer } from './pos/customers'
-import { ensurePosSchema, normalizeOptionalText } from './pos/core'
+import { getDocumentImportByExternalId, listDocumentImportsByExternalIds } from './document-imports'
+import { calculateDocumentTotals, ensurePosSchema, generateDocumentNumber, normalizeOptionalText } from './pos/core'
 import { useDb } from './turso'
 
 type WooOrderMeta = {
@@ -65,6 +63,7 @@ type WooOrder = {
 }
 
 const WOOCOMMERCE_SOURCE = 'woocommerce_order' as const
+type WooCustomerDb = Pick<ReturnType<typeof useDb>, 'insert' | 'select'>
 
 function getWooCommerceConfig() {
   const config = useRuntimeConfig()
@@ -146,6 +145,29 @@ function parseMoneyToCents(value: string | number | null | undefined) {
   }
 
   return Math.round(amount * 100)
+}
+
+function getErrorMessage(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return ''
+  }
+
+  if ('message' in error && typeof error.message === 'string') {
+    return error.message
+  }
+
+  if ('cause' in error && error.cause && typeof error.cause === 'object' && 'message' in error.cause && typeof error.cause.message === 'string') {
+    return error.cause.message
+  }
+
+  return ''
+}
+
+function isDocumentImportConflictError(error: unknown) {
+  const message = getErrorMessage(error)
+
+  return message.includes('document_imports_source_external_id_idx')
+    || message.includes('UNIQUE constraint failed: document_imports.source, document_imports.external_id')
 }
 
 function computeVatRate(netCents: number, taxCents: number) {
@@ -350,11 +372,10 @@ async function findWooOrderByRef(orderRef: string) {
   })
 }
 
-async function resolveWooCustomerId(order: WooOrder) {
+async function resolveWooCustomerId(order: WooOrder, db: WooCustomerDb) {
   const email = normalizeOptionalText(order.billing?.email)
 
   if (email) {
-    const db = useDb()
     const matches = await db.select()
       .from(customers)
       .where(eq(customers.email, email))
@@ -385,7 +406,31 @@ async function resolveWooCustomerId(order: WooOrder) {
     notes: `Client créé depuis WooCommerce #${order.number}`
   }
 
-  const customer = await createCustomer(customerInput)
+  const now = new Date().toISOString()
+  const rows = await db.insert(customers).values({
+    firstName: customerInput.firstName || '',
+    lastName: customerInput.lastName || '',
+    companyName: customerInput.companyName || null,
+    phone: customerInput.phone || '',
+    email: customerInput.email || '',
+    addressLine1: customerInput.addressLine1 || null,
+    addressLine2: customerInput.addressLine2 || null,
+    postalCode: customerInput.postalCode || null,
+    city: customerInput.city || null,
+    notes: customerInput.notes || null,
+    createdAt: now,
+    updatedAt: now
+  }).returning({ id: customers.id })
+
+  const customer = rows[0]
+
+  if (!customer) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Impossible de créer le client WooCommerce.'
+    })
+  }
+
   return customer.id
 }
 
@@ -448,28 +493,79 @@ export async function importWooOrderToInvoice(orderRef: string): Promise<WooImpo
     })
   }
 
-  const customerId = await resolveWooCustomerId(order)
+  const db = useDb()
+  const documentNumber = await generateDocumentNumber('invoice')
+  const issuedAt = normalizeOptionalText(order.date_created) || new Date().toISOString()
   const notes = [
     `Import WooCommerce #${order.number}`,
     normalizeOptionalText(order.customer_note)
   ].filter(Boolean).join('\n\n')
+  const totals = calculateDocumentTotals(lines)
 
-  const document = await createDocumentRecord({
-    type: 'invoice',
-    status: 'issued',
-    customerId,
-    ticketId: null,
-    issuedAt: normalizeOptionalText(order.date_created) || new Date().toISOString(),
-    notes,
-    lines
-  })
+  let document: { id: number, documentNumber: string } | null = null
 
-  await createDocumentImportRecord({
-    documentId: document.id,
-    source: WOOCOMMERCE_SOURCE,
-    externalId: String(order.id),
-    externalNumber: order.number
-  })
+  try {
+    document = await db.transaction(async (tx) => {
+      const customerId = await resolveWooCustomerId(order, tx)
+      const now = new Date().toISOString()
+      const insertedRows = await tx.insert(documents).values({
+        documentNumber,
+        type: 'invoice',
+        status: 'issued',
+        customerId,
+        ticketId: null,
+        issuedAt,
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        total: totals.total,
+        notes,
+        createdAt: now,
+        updatedAt: now
+      }).returning({
+        id: documents.id,
+        documentNumber: documents.documentNumber
+      })
+
+      const createdDocument = insertedRows[0]
+
+      if (!createdDocument) {
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Impossible de créer la facture WooCommerce.'
+        })
+      }
+
+      await tx.insert(documentLines).values(totals.lines.map((line, index) => ({
+        documentId: createdDocument.id,
+        catalogItemId: lines[index]?.catalogItemId ?? null,
+        label: lines[index]!.label,
+        quantity: lines[index]!.quantity,
+        unitPrice: lines[index]!.unitPrice,
+        vatRate: lines[index]!.vatRate,
+        lineTotal: line.lineTotal,
+        categoryHint: lines[index]!.categoryHint ?? null
+      })))
+
+      await tx.insert(documentImports).values({
+        documentId: createdDocument.id,
+        source: WOOCOMMERCE_SOURCE,
+        externalId: String(order.id),
+        externalNumber: order.number,
+        createdAt: now
+      })
+
+      return createdDocument
+    })
+  } catch (error) {
+    if (isDocumentImportConflictError(error)) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: `La commande WooCommerce #${order.number} a déjà été importée.`
+      })
+    }
+
+    throw error
+  }
 
   return {
     documentId: document.id,
