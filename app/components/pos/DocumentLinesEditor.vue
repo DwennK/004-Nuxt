@@ -242,16 +242,19 @@ async function handleBarcodeScan(value: string) {
               <div
                 v-for="(line, index) in state.lines"
                 :key="line.id"
-                class="grid grid-cols-[minmax(0,1.9fr)_6rem_5rem_10rem_5rem_8.5rem_6rem] items-center gap-2 border-t border-default/70 bg-default px-4 py-3 first:border-t-0"
+                class="grid grid-cols-[minmax(0,1.9fr)_6rem_5rem_10rem_5rem_8.5rem_6rem] items-start gap-2 border-t border-default/70 bg-default px-4 py-3 first:border-t-0"
               >
                 <div class="min-w-0">
                   <UFormField :name="`lines.${index}.label`" class="min-w-0">
-                    <UInput
+                    <UTextarea
                       :id="`document-line-label-${line.id}`"
                       :model-value="line.label"
+                      :rows="1"
+                      autoresize
                       size="sm"
                       class="w-full"
                       placeholder="Libellé de la ligne"
+                      :ui="{ base: 'resize-none' }"
                       @update:model-value="editor.updateLineLabel(index, String($event || ''))"
                     />
                   </UFormField>
