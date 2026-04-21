@@ -3,6 +3,7 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 import type { CustomerListResponse, DocumentListResponse, TicketListResponse } from '~~/shared/types/pos'
 
 const open = ref(false)
+const route = useRoute()
 
 const primaryLinks = [{
   label: 'Documents',
@@ -83,6 +84,18 @@ const secondaryLinks = [{
   onSelect: () => {
     open.value = false
   }
+}, {
+  label: 'Outils',
+  icon: 'i-lucide-folder-cog',
+  defaultOpen: route.path.startsWith('/tools'),
+  children: [{
+    label: 'Import Woocommerce',
+    icon: 'i-lucide-shopping-cart',
+    to: '/tools/woocommerce-import',
+    onSelect: () => {
+      open.value = false
+    }
+  }]
 }] satisfies NavigationMenuItem[]
 
 const footerLinks = [{
@@ -146,6 +159,32 @@ const quickActions = [...counterActions, {
   to: '/documents/new'
 }]
 
+type SearchNavigationItem = {
+  id: string
+  label: string
+  icon?: string
+  to: string
+}
+
+function flattenNavigationItems(items: NavigationMenuItem[]): SearchNavigationItem[] {
+  return items.flatMap((item) => {
+    if (item.children?.length) {
+      return flattenNavigationItems(item.children)
+    }
+
+    if (typeof item.to !== 'string' || typeof item.label !== 'string') {
+      return []
+    }
+
+    return [{
+      id: `nav-${item.to}`,
+      label: item.label,
+      icon: item.icon,
+      to: item.to
+    }]
+  })
+}
+
 const groups = computed(() => {
   const customerItems = (customers.value?.items || []).slice(0, 5).map(customer => ({
     id: `customer-${customer.id}`,
@@ -174,7 +213,11 @@ const groups = computed(() => {
   return [{
     id: 'navigate',
     label: 'Navigation',
-    items: [...primaryLinks, ...secondaryLinks, ...footerLinks]
+    items: [
+      ...flattenNavigationItems(primaryLinks),
+      ...flattenNavigationItems(secondaryLinks),
+      ...flattenNavigationItems(footerLinks)
+    ]
   }, {
     id: 'create',
     label: 'Actions rapides',

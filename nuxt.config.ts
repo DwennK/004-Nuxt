@@ -23,7 +23,10 @@ export default defineNuxtConfig({
     minimaxBaseUrl: process.env.MINIMAX_BASE_URL,
     resendApiKey: process.env.RESEND_API_KEY,
     mailFrom: process.env.MAIL_FROM,
-    mailReplyTo: process.env.MAIL_REPLY_TO
+    mailReplyTo: process.env.MAIL_REPLY_TO,
+    woocommerceStoreUrl: process.env.WOOCOMMERCE_STORE_URL,
+    woocommerceConsumerKey: process.env.WOOCOMMERCE_CONSUMER_KEY,
+    woocommerceConsumerSecret: process.env.WOOCOMMERCE_CONSUMER_SECRET
   },
 
   compatibilityDate: '2026-03-10',

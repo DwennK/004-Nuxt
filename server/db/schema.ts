@@ -169,6 +169,19 @@ export const documentLines = sqliteTable('document_lines', {
   categoryIdx: index('document_lines_category_hint_idx').on(table.categoryHint)
 }))
 
+export const documentImports = sqliteTable('document_imports', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  documentId: integer('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  source: text('source', { enum: ['woocommerce_order'] }).notNull(),
+  externalId: text('external_id').notNull(),
+  externalNumber: text('external_number').notNull(),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, table => ({
+  documentIdx: index('document_imports_document_id_idx').on(table.documentId),
+  sourceExternalIdIdx: uniqueIndex('document_imports_source_external_id_idx').on(table.source, table.externalId),
+  sourceExternalNumberIdx: index('document_imports_source_external_number_idx').on(table.source, table.externalNumber)
+}))
+
 export const ticketLines = sqliteTable('ticket_lines', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   ticketId: integer('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),

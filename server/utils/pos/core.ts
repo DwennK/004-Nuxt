@@ -325,6 +325,17 @@ async function createPosTables() {
       )
     `,
     `
+      CREATE TABLE IF NOT EXISTS document_imports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        source TEXT NOT NULL,
+        external_id TEXT NOT NULL,
+        external_number TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+      )
+    `,
+    `
       CREATE TABLE IF NOT EXISTS ticket_lines (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ticket_id INTEGER NOT NULL,
@@ -383,11 +394,54 @@ async function createPosTables() {
     'CREATE INDEX IF NOT EXISTS payments_status_idx ON payments(status)',
     'CREATE INDEX IF NOT EXISTS payments_document_id_paid_at_id_idx ON payments(document_id, paid_at, id)',
     'CREATE INDEX IF NOT EXISTS document_lines_document_id_idx ON document_lines(document_id)',
+    'CREATE INDEX IF NOT EXISTS document_lines_catalog_item_id_idx ON document_lines(catalog_item_id)',
     'CREATE INDEX IF NOT EXISTS document_lines_category_hint_idx ON document_lines(category_hint)',
+    'CREATE INDEX IF NOT EXISTS document_imports_document_id_idx ON document_imports(document_id)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS document_imports_source_external_id_idx ON document_imports(source, external_id)',
+    'CREATE INDEX IF NOT EXISTS document_imports_source_external_number_idx ON document_imports(source, external_number)',
     'CREATE INDEX IF NOT EXISTS ticket_lines_ticket_id_idx ON ticket_lines(ticket_id)',
     'CREATE INDEX IF NOT EXISTS ticket_lines_catalog_item_id_idx ON ticket_lines(catalog_item_id)',
     'CREATE INDEX IF NOT EXISTS ticket_lines_category_hint_idx ON ticket_lines(category_hint)'
   ], 'write')
+}
+
+async function ensureDocumentImportsTable() {
+  const client = useTursoClient()
+  const tableInfo = await client.execute('PRAGMA table_info(document_imports)')
+
+  if (!tableInfo.rows.length) {
+    await client.batch([
+      `
+        CREATE TABLE IF NOT EXISTS document_imports (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          document_id INTEGER NOT NULL,
+          source TEXT NOT NULL,
+          external_id TEXT NOT NULL,
+          external_number TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+        )
+      `,
+      'CREATE INDEX IF NOT EXISTS document_imports_document_id_idx ON document_imports(document_id)',
+      'CREATE UNIQUE INDEX IF NOT EXISTS document_imports_source_external_id_idx ON document_imports(source, external_id)',
+      'CREATE INDEX IF NOT EXISTS document_imports_source_external_number_idx ON document_imports(source, external_number)'
+    ], 'write')
+    return
+  }
+
+  const columns = new Set(tableInfo.rows.map(row => String(row.name)))
+  const statements: string[] = []
+
+  if (!columns.has('external_number')) {
+    statements.push('ALTER TABLE document_imports ADD COLUMN external_number TEXT')
+    statements.push('UPDATE document_imports SET external_number = external_id WHERE trim(coalesce(external_number, \'\')) = \'\'')
+  }
+
+  statements.push('CREATE INDEX IF NOT EXISTS document_imports_document_id_idx ON document_imports(document_id)')
+  statements.push('CREATE UNIQUE INDEX IF NOT EXISTS document_imports_source_external_id_idx ON document_imports(source, external_id)')
+  statements.push('CREATE INDEX IF NOT EXISTS document_imports_source_external_number_idx ON document_imports(source, external_number)')
+
+  await client.batch(statements, 'write')
 }
 
 async function migrateDocumentLinesQuantityToInteger() {
@@ -1288,6 +1342,7 @@ export async function ensurePosSchema() {
     posSchemaPromise = (async () => {
       await migrateLegacyCustomersTable()
       await createPosTables()
+      await ensureDocumentImportsTable()
       await migrateCatalogStructure()
       await migrateTicketAccessColumns()
       await migrateCompanySettingsColumns()

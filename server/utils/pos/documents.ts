@@ -125,6 +125,16 @@ function mapDocumentListItem(row: {
   }
 }
 
+type DocumentWriteLineInput = {
+  catalogItemId?: number | null
+  label: string
+  quantity: number
+  unitPrice: number
+  vatRate: number
+  lineTotal?: number | null
+  categoryHint?: typeof documentLines.$inferSelect.categoryHint | null
+}
+
 export async function listDocuments(filters?: {
   q?: string
   type?: string
@@ -369,14 +379,7 @@ export async function createDocumentRecord(input: {
   ticketId?: number | null
   issuedAt: string
   notes?: string | null
-  lines: Array<{
-    catalogItemId?: number | null
-    label: string
-    quantity: number
-    unitPrice: number
-    vatRate: number
-    categoryHint?: typeof documentLines.$inferSelect.categoryHint | null
-  }>
+  lines: DocumentWriteLineInput[]
 }) {
   await ensurePosSchema()
 
@@ -447,14 +450,7 @@ export async function updateDocumentRecord(id: number, input: {
   ticketId?: number | null
   issuedAt: string
   notes?: string | null
-  lines: Array<{
-    catalogItemId?: number | null
-    label: string
-    quantity: number
-    unitPrice: number
-    vatRate: number
-    categoryHint?: typeof documentLines.$inferSelect.categoryHint | null
-  }>
+  lines: DocumentWriteLineInput[]
 }) {
   await ensurePosSchema()
 
