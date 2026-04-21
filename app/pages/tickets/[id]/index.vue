@@ -78,6 +78,7 @@ const operationalStatuses: TicketStatus[] = [
 const tabItems = computed(() => [
   { label: 'Suivi', icon: 'i-lucide-clock', value: 'suivi' },
   { label: 'Documents', icon: 'i-lucide-files', value: 'documents', badge: ticket.value?.documents.length || 0 },
+  { label: 'SMS', icon: 'i-lucide-message-square-share', value: 'sms', badge: smsTimelineItems.value.length || 0 },
   { label: 'Client & Appareil', icon: 'i-lucide-user', value: 'client' }
 ])
 
@@ -249,6 +250,10 @@ const timelineItems = computed<TimelineItem[]>(() => {
     icon: getEventIcon(event.kind)
   }))
 })
+
+const smsTimelineItems = computed(() =>
+  timelineItems.value.filter(event => event.kind === 'ticket_sms_qr_opened')
+)
 
 function getEventIcon(kind: TicketEvent['kind']) {
   switch (kind) {
@@ -723,6 +728,106 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                       </template>
                     </UTable>
                   </div>
+                </UCard>
+              </div>
+
+              <!-- SMS tab -->
+              <div v-else-if="activeTab === 'sms'" class="grid gap-4 xl:h-full xl:grid-cols-[minmax(0,1fr)_18rem]">
+                <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
+                  <template #header>
+                    <div class="flex items-center justify-between gap-3">
+                      <h3 class="text-sm font-medium text-highlighted">
+                        Historique QR SMS
+                      </h3>
+                      <span class="text-xs text-toned">
+                        {{ smsTimelineItems.length }} événement(s)
+                      </span>
+                    </div>
+                  </template>
+
+                  <div v-if="smsTimelineItems.length" class="space-y-3 xl:max-h-[calc(100vh-28rem)] xl:overflow-y-auto pr-1">
+                    <div
+                      v-for="event in smsTimelineItems"
+                      :key="event.id"
+                      class="space-y-2 rounded-xl border border-default bg-default p-3"
+                    >
+                      <div class="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p class="text-sm font-medium text-highlighted">
+                            {{ event.title }}
+                          </p>
+                          <p class="text-xs text-toned">
+                            {{ event.date }}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p class="text-sm text-toned">
+                        {{ event.description }}
+                      </p>
+
+                      <div v-if="event.note" class="rounded-lg border border-default bg-muted/30 px-3 py-2">
+                        <p class="text-xs text-toned">
+                          Note
+                        </p>
+                        <p class="text-sm text-highlighted">
+                          {{ event.note }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <UEmpty
+                    v-else
+                    icon="i-lucide-message-square-share"
+                    title="Aucun QR SMS affiché"
+                    description="Les ouvertures du flux SMS client apparaîtront ici."
+                    class="py-12"
+                  />
+                </UCard>
+
+                <UCard :ui="{ body: 'space-y-4 p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
+                  <template #header>
+                    <div class="flex items-center justify-between gap-3">
+                      <h3 class="text-sm font-medium text-highlighted">
+                        SMS client
+                      </h3>
+                    </div>
+                  </template>
+
+                  <div class="rounded-xl border border-default bg-default/80 px-3 py-3">
+                    <p class="text-xs uppercase tracking-[0.14em] text-toned">
+                      Numéro client
+                    </p>
+                    <p class="mt-2 font-medium text-highlighted">
+                      {{ ticket.customer.phone || 'Pas de téléphone' }}
+                    </p>
+                    <p class="mt-1 text-xs text-toned">
+                      {{ canSendSms ? 'Le QR ouvre l’app Messages sur l’iPhone de comptoir.' : smsButtonHelp }}
+                    </p>
+                  </div>
+
+                  <div class="rounded-xl border border-default bg-default/80 px-3 py-3">
+                    <p class="text-xs uppercase tracking-[0.14em] text-toned">
+                      Modèles configurés
+                    </p>
+                    <p class="mt-2 font-medium text-highlighted">
+                      {{ smsTemplates.length }} modèle(s)
+                    </p>
+                    <p class="mt-1 text-xs text-toned">
+                      Message libre disponible en plus des modèles enregistrés.
+                    </p>
+                  </div>
+
+                  <UButton
+                    label="Ouvrir le flux SMS"
+                    icon="i-lucide-message-square-share"
+                    color="neutral"
+                    variant="soft"
+                    block
+                    :disabled="!canSendSms"
+                    @click="openSmsModal"
+                  />
                 </UCard>
               </div>
 
