@@ -65,7 +65,7 @@ export async function getCustomerById(id: number) {
   return mapCustomer(row)
 }
 
-function mapCustomerInput(input: CustomerUpsertInput) {
+export function mapCustomerInput(input: CustomerUpsertInput) {
   const companyName = normalizeOptionalText(input.companyName)
   const displayName = normalizeOptionalText(input.displayName)
   const explicitFirstName = normalizeOptionalText(input.firstName)

@@ -3,6 +3,7 @@ import { customers, documentImports, documentLines, documents } from '~~/server/
 import { woocommerceOpenOrderStatuses } from '~~/shared/constants/pos'
 import type { CustomerUpsertInput, WooImportResult, WooOrderListResponse, WooOrderSummary } from '~~/shared/types/pos'
 import { getDocumentImportByExternalId, listDocumentImportsByExternalIds } from './document-imports'
+import { mapCustomerInput } from './pos/customers'
 import { calculateDocumentTotals, ensurePosSchema, generateDocumentNumber, normalizeOptionalText } from './pos/core'
 import { useDb } from './turso'
 
@@ -43,9 +44,11 @@ type WooOrder = {
   currency?: string
   date_created?: string
   total?: string
+  total_tax?: string
   discount_total?: string
   customer_note?: string
   coupon_lines?: Array<unknown>
+  tax_lines?: Array<unknown>
   billing?: {
     first_name?: string
     last_name?: string
@@ -63,6 +66,17 @@ type WooOrder = {
 }
 
 const WOOCOMMERCE_SOURCE = 'woocommerce_order' as const
+const DEFAULT_POS_VAT_RATE = 8.1
+const wooHonorificCompanyNames = new Set([
+  'm',
+  'mr',
+  'mrs',
+  'mme',
+  'mlle',
+  'mademoiselle',
+  'madame',
+  'monsieur'
+])
 type WooCustomerDb = Pick<ReturnType<typeof useDb>, 'insert' | 'select'>
 
 function getWooCommerceConfig() {
@@ -163,8 +177,31 @@ function getErrorMessage(error: unknown) {
   return ''
 }
 
+function getErrorCode(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return ''
+  }
+
+  if ('code' in error && typeof error.code === 'string') {
+    return error.code
+  }
+
+  if ('cause' in error && error.cause && typeof error.cause === 'object' && 'code' in error.cause && typeof error.cause.code === 'string') {
+    return error.cause.code
+  }
+
+  return ''
+}
+
 function isDocumentImportConflictError(error: unknown) {
   const message = getErrorMessage(error)
+  const code = getErrorCode(error)
+
+  // libSQL/SQLite error shapes vary a bit by runtime and driver version.
+  // Keep both code and message matching so duplicate imports still map to a clean 409.
+  if (code === 'SQLITE_CONSTRAINT_UNIQUE' || code === 'SQLITE_CONSTRAINT') {
+    return true
+  }
 
   return message.includes('document_imports_source_external_id_idx')
     || message.includes('UNIQUE constraint failed: document_imports.source, document_imports.external_id')
@@ -176,6 +213,39 @@ function computeVatRate(netCents: number, taxCents: number) {
   }
 
   return Number(((taxCents / netCents) * 100).toFixed(3))
+}
+
+function normalizeWooCompanyName(order: WooOrder) {
+  const company = normalizeOptionalText(order.billing?.company)
+
+  if (!company) {
+    return null
+  }
+
+  const normalizedCompany = company
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '')
+
+  const hasPersonName = Boolean(
+    normalizeOptionalText(order.billing?.first_name)
+    || normalizeOptionalText(order.billing?.last_name)
+  )
+
+  if (hasPersonName && wooHonorificCompanyNames.has(normalizedCompany)) {
+    return null
+  }
+
+  return company
+}
+
+function resolveWooVatRate(netCents: number, taxCents: number) {
+  if (netCents > 0 && taxCents <= 0) {
+    return DEFAULT_POS_VAT_RATE
+  }
+
+  return computeVatRate(netCents, taxCents)
 }
 
 function formatMetaEntry(meta: WooOrderMeta) {
@@ -215,7 +285,7 @@ function buildWooLineLabel(baseLabel: string, metaData?: WooOrderMeta[]) {
 function buildWooCustomerName(order: WooOrder) {
   const firstName = normalizeOptionalText(order.billing?.first_name)
   const lastName = normalizeOptionalText(order.billing?.last_name)
-  const company = normalizeOptionalText(order.billing?.company)
+  const company = normalizeWooCompanyName(order)
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
 
   return fullName || company || `Commande Woo #${order.number}`
@@ -257,7 +327,7 @@ function buildWooDocumentLines(order: WooOrder) {
         label: buildWooLineLabel(line.name || 'Article WooCommerce', line.meta_data),
         quantity,
         unitPrice: Math.round(lineTotal / quantity),
-        vatRate: computeVatRate(netTotal, taxTotal),
+        vatRate: resolveWooVatRate(netTotal, taxTotal),
         lineTotal,
         categoryHint: null
       }
@@ -279,7 +349,7 @@ function buildWooDocumentLines(order: WooOrder) {
         label: `Livraison · ${normalizeOptionalText(line.method_title) || 'WooCommerce'}`,
         quantity: 1,
         unitPrice: lineTotal,
-        vatRate: computeVatRate(netTotal, taxTotal),
+        vatRate: resolveWooVatRate(netTotal, taxTotal),
         lineTotal,
         categoryHint: null
       }
@@ -301,14 +371,24 @@ function buildWooDocumentLines(order: WooOrder) {
         label: normalizeOptionalText(line.name) || 'Frais WooCommerce',
         quantity: 1,
         unitPrice: lineTotal,
-        vatRate: computeVatRate(netTotal, taxTotal),
+        vatRate: resolveWooVatRate(netTotal, taxTotal),
         lineTotal,
         categoryHint: null
       }
     })
     .filter((line): line is NonNullable<typeof line> => Boolean(line))
 
-  return [...productLines, ...shippingLines, ...feeLines]
+  const referenceLine = {
+    catalogItemId: null,
+    label: `Commande ShopyPhone #${order.number}`,
+    quantity: 1,
+    unitPrice: 0,
+    vatRate: 0,
+    lineTotal: 0,
+    categoryHint: null
+  }
+
+  return [...productLines, ...shippingLines, ...feeLines, referenceLine]
 }
 
 function assertWooOrderSupported(order: WooOrder) {
@@ -396,7 +476,7 @@ async function resolveWooCustomerId(order: WooOrder, db: WooCustomerDb) {
     displayName: buildWooCustomerName(order),
     firstName: normalizeOptionalText(order.billing?.first_name),
     lastName: normalizeOptionalText(order.billing?.last_name),
-    companyName: normalizeOptionalText(order.billing?.company),
+    companyName: normalizeWooCompanyName(order),
     phone: normalizeOptionalText(order.billing?.phone),
     email,
     addressLine1: normalizeOptionalText(order.billing?.address_1),
@@ -408,16 +488,7 @@ async function resolveWooCustomerId(order: WooOrder, db: WooCustomerDb) {
 
   const now = new Date().toISOString()
   const rows = await db.insert(customers).values({
-    firstName: customerInput.firstName || '',
-    lastName: customerInput.lastName || '',
-    companyName: customerInput.companyName || null,
-    phone: customerInput.phone || '',
-    email: customerInput.email || '',
-    addressLine1: customerInput.addressLine1 || null,
-    addressLine2: customerInput.addressLine2 || null,
-    postalCode: customerInput.postalCode || null,
-    city: customerInput.city || null,
-    notes: customerInput.notes || null,
+    ...mapCustomerInput(customerInput),
     createdAt: now,
     updatedAt: now
   }).returning({ id: customers.id })
