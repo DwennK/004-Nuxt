@@ -74,7 +74,7 @@ const emit = defineEmits<{
         </div>
       </div>
 
-      <div class="grid gap-2 sm:grid-cols-4">
+      <div class="grid gap-2 sm:grid-cols-3">
         <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
           <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
             Total
@@ -97,14 +97,6 @@ const emit = defineEmits<{
           </p>
           <p class="text-sm font-semibold text-highlighted">
             {{ props.isPayableDocument ? formatCurrency(props.balanceDue) : documentTypeLabels[props.document.type] }}
-          </p>
-        </div>
-        <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
-          <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-            Lignes
-          </p>
-          <p class="text-sm font-semibold text-highlighted">
-            {{ props.document.lines.length }}
           </p>
         </div>
       </div>
