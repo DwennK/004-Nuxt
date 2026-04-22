@@ -40,6 +40,13 @@ const methodItems = [
   }))
 ]
 
+const paymentMethodIcons: Record<PaymentListItem['method'], string> = {
+  cash: 'i-lucide-banknote',
+  card_twint: 'i-lucide-credit-card',
+  bank_transfer: 'i-lucide-landmark',
+  stripe: 'i-lucide-wallet-cards'
+}
+
 const statusItems = [
   { label: 'Tous les statuts', value: 'all' },
   ...Object.entries(paymentStatusLabels).map(([value, label]) => ({ label, value }))
@@ -77,6 +84,15 @@ const hasActiveFilters = computed(() =>
   || !!dateFrom.value
   || !!dateTo.value
 )
+
+const filteredPaymentMethodTotals = computed(() => {
+  return paymentMethods.map(method => ({
+    method,
+    total: filteredPayments.value.reduce((sum, payment) => {
+      return payment.method === method ? sum + payment.amount : sum
+    }, 0)
+  }))
+})
 
 function resetFilters() {
   search.value = ''
@@ -280,10 +296,16 @@ const columns: TableColumn<PaymentListItem>[] = [
 
     <template #body>
       <div class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-4">
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           <PosSummaryCard title="Paiements" :value="String(payments?.length || 0)" icon="i-lucide-wallet" />
           <PosSummaryCard title="Total encaissé" :value="formatCurrency((filteredPayments || []).reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-wallet-cards" />
-          <PosSummaryCard title="Espèces" :value="formatCurrency((filteredPayments || []).filter(payment => payment.method === 'cash').reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-banknote" />
+          <PosSummaryCard
+            v-for="item in filteredPaymentMethodTotals"
+            :key="item.method"
+            :title="paymentMethodLabels[item.method]"
+            :value="formatCurrency(item.total)"
+            :icon="paymentMethodIcons[item.method]"
+          />
           <PosSummaryCard title="Visibles" :value="String(filteredPayments.length)" icon="i-lucide-filter" />
         </div>
 

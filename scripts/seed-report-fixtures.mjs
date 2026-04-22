@@ -300,7 +300,13 @@ function buildDayDocuments(dayTarget, customers, sequences) {
     const totalAmount = lines.reduce((sum, line) => sum + line.lineTotal, 0)
     const taxAmount = totalAmount - subtotal
     const methodDraw = rng()
-    const paymentMethod = methodDraw < 0.22 ? 'cash' : methodDraw < 0.85 ? 'card_twint' : 'bank_transfer'
+    const paymentMethod = methodDraw < 0.2
+      ? 'cash'
+      : methodDraw < 0.72
+        ? 'card_twint'
+        : methodDraw < 0.9
+          ? 'bank_transfer'
+          : 'stripe'
 
     return {
       document: {

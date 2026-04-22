@@ -86,7 +86,8 @@ function buildDailyPaymentBuckets(
       total: 0,
       cash: 0,
       cardTwint: 0,
-      bankTransfer: 0
+      bankTransfer: 0,
+      stripe: 0
     })
   }
 
@@ -106,7 +107,8 @@ function buildMonthlyPaymentBuckets(date: string): ReportsOverview['paymentPerio
       total: 0,
       cash: 0,
       cardTwint: 0,
-      bankTransfer: 0
+      bankTransfer: 0,
+      stripe: 0
     }
   })
 }
@@ -125,14 +127,15 @@ function buildAnnualPaymentBuckets(date: string, count = 5): ReportsOverview['pa
       total: 0,
       cash: 0,
       cardTwint: 0,
-      bankTransfer: 0
+      bankTransfer: 0,
+      stripe: 0
     }
   })
 }
 
 type PaymentAggregationBucket = Pick<
   ReportsOverview['paymentPeriods'][number]['buckets'][number],
-  'total' | 'cash' | 'cardTwint' | 'bankTransfer'
+  'total' | 'cash' | 'cardTwint' | 'bankTransfer' | 'stripe'
 >
 
 function applyPaymentAmount(
@@ -155,6 +158,9 @@ function applyPaymentAmount(
       break
     case 'bank_transfer':
       bucket.bankTransfer += amount
+      break
+    case 'stripe':
+      bucket.stripe += amount
       break
   }
 }
@@ -264,7 +270,8 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end))),
     db.select({
       method: payments.method,
-      total: sum(payments.amount)
+      total: sum(payments.amount),
+      transactionCount: sql<number>`count(*)`
     })
       .from(payments)
       .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end)))
@@ -317,10 +324,16 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
         .groupBy(documentLines.categoryHint)
     : []
 
-  const totalsByMethod = new Map(paymentMethods.map(method => [method, 0]))
+  const totalsByMethod = new Map(paymentMethods.map(method => [method, {
+    total: 0,
+    transactionCount: 0
+  }]))
 
   for (const row of totalsByMethodRows) {
-    totalsByMethod.set(row.method, (totalsByMethod.get(row.method) || 0) + Number(row.total || 0))
+    totalsByMethod.set(row.method, {
+      total: Number(row.total || 0),
+      transactionCount: Number(row.transactionCount || 0)
+    })
   }
 
   return {
@@ -339,7 +352,8 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
     totalsByMethod: paymentMethods
       .map(method => ({
         method,
-        total: totalsByMethod.get(method) || 0
+        total: totalsByMethod.get(method)?.total || 0,
+        transactionCount: totalsByMethod.get(method)?.transactionCount || 0
       }))
       .filter(item => item.total > 0),
     ticketStats: {
@@ -495,13 +509,14 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
       : Promise.resolve([])
   ])
 
-  const paymentsByDay = weeklyBuckets.map(({ date: bucketDate, label, total, cash, cardTwint, bankTransfer }) => ({
+  const paymentsByDay = weeklyBuckets.map(({ date: bucketDate, label, total, cash, cardTwint, bankTransfer, stripe }) => ({
     date: bucketDate,
     label,
     total,
     cash,
     cardTwint,
-    bankTransfer
+    bankTransfer,
+    stripe
   }))
 
   const totalPaid = weeklyBuckets.reduce((sum, item) => sum + item.total, 0)

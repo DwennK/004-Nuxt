@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui'
 import { lineCategoryColors, paymentMethodColors, paymentMethodLabels } from '~~/shared/constants/pos'
-import type { ReportsOverview } from '~~/shared/types/pos'
+import type { PaymentMethod, ReportsOverview } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
 
 type UiColorToken = 'primary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
@@ -28,20 +28,27 @@ const activePaymentPeriod = computed(() => {
 
 const paymentsChartData = computed(() => activePaymentPeriod.value?.buckets || [])
 
-const paymentsCategories = {
-  cash: {
-    name: paymentMethodLabels.cash,
-    color: toChartColor(paymentMethodColors.cash)
-  },
-  cardTwint: {
-    name: paymentMethodLabels.card_twint,
-    color: toChartColor(paymentMethodColors.card_twint)
-  },
-  bankTransfer: {
-    name: paymentMethodLabels.bank_transfer,
-    color: toChartColor(paymentMethodColors.bank_transfer)
-  }
-}
+const paymentSeries: Array<{
+  method: PaymentMethod
+  key: keyof ReportsOverview['paymentPeriods'][number]['buckets'][number]
+}> = [
+  { method: 'cash', key: 'cash' },
+  { method: 'card_twint', key: 'cardTwint' },
+  { method: 'bank_transfer', key: 'bankTransfer' },
+  { method: 'stripe', key: 'stripe' }
+]
+
+const paymentsCategories = Object.fromEntries(
+  paymentSeries.map(({ method, key }) => [
+    key,
+    {
+      name: paymentMethodLabels[method],
+      color: toChartColor(paymentMethodColors[method])
+    }
+  ])
+)
+
+const paymentAxisKeys = paymentSeries.map(({ key }) => key)
 
 const paymentTicks = computed(() => {
   const count = paymentsChartData.value.length
@@ -160,7 +167,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
           :categories="paymentsCategories"
           :height="320"
           :stacked="true"
-          :y-axis="['cash', 'cardTwint', 'bankTransfer']"
+          :y-axis="paymentAxisKeys"
           :padding="{ top: 12, right: 12, bottom: 0, left: 0 }"
           :radius="10"
           :group-padding="18"

@@ -386,6 +386,7 @@ export interface DailySummary {
   totalsByMethod: Array<{
     method: PaymentMethod
     total: number
+    transactionCount: number
   }>
   ticketStats: {
     openCount: number
@@ -484,6 +485,7 @@ export interface ReportsOverview {
     cash: number
     cardTwint: number
     bankTransfer: number
+    stripe: number
   }>
   paymentPeriods: Array<{
     key: 'week' | 'month' | 'years'
@@ -497,6 +499,7 @@ export interface ReportsOverview {
       cash: number
       cardTwint: number
       bankTransfer: number
+      stripe: number
     }>
   }>
   turnoverByCategory: Array<{
