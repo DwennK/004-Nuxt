@@ -43,6 +43,7 @@ const a4PrintModel = computed(() => {
 
   return buildDocumentA4PrintModel(document.value, company.value)
 })
+const printDocumentTitle = computed(() => document.value?.documentNumber || 'Document commercial')
 const documentTitle = computed(() => a4PrintModel.value?.documentTitle || (document.value ? documentTypeLabels[document.value.type] : 'Document'))
 const paymentSummary = computed(() => a4PrintModel.value?.paymentSummary || null)
 const companyAddress = computed(() => a4PrintModel.value?.companyAddress || [])
@@ -108,6 +109,7 @@ function formatQrLocation(address: SwissQrAddress) {
 }
 
 useHead(() => ({
+  title: printDocumentTitle.value,
   style: [
     {
       key: 'document-print-page-rule',

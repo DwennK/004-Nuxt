@@ -825,6 +825,8 @@ function drawFooter(context: PdfContext, document: DocumentDetail, company: Comp
 
 export async function generateDocumentPdf(document: DocumentDetail, company: CompanySettingsRecord) {
   const pdfDoc = await PDFDocument.create()
+  pdfDoc.setTitle(document.documentNumber)
+
   const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
   const logoImage = await embedDataUrlImage(pdfDoc, company.logoDataUrl)
