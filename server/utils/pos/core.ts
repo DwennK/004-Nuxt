@@ -135,7 +135,7 @@ export function calculateDocumentTotals(lines: Array<{
       ...line,
       lineTotal: computedTotal,
       subtotal: taxableBase,
-      taxAmount: Math.max(computedTotal - taxableBase, 0)
+      taxAmount: computedTotal - taxableBase
     }
   })
 

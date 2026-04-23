@@ -135,6 +135,17 @@ type DocumentWriteLineInput = {
   categoryHint?: typeof documentLines.$inferSelect.categoryHint | null
 }
 
+function assertNonNegativeDocumentTotal(total: number) {
+  if (total >= 0) {
+    return
+  }
+
+  throw createError({
+    statusCode: 400,
+    statusMessage: 'Document total cannot be negative'
+  })
+}
+
 export async function listDocuments(filters?: {
   q?: string
   type?: string
@@ -388,6 +399,8 @@ export async function createDocumentRecord(input: {
   const totals = calculateDocumentTotals(input.lines)
   const documentNumber = await generateDocumentNumber(input.type)
 
+  assertNonNegativeDocumentTotal(totals.total)
+
   const insertedRows = await db.insert(documents).values({
     documentNumber,
     type: input.type,
@@ -458,6 +471,8 @@ export async function updateDocumentRecord(id: number, input: {
   const totals = calculateDocumentTotals(input.lines)
   const nextStatus = input.status || 'issued'
   const isPayable = isPayableDocumentType(input.type)
+
+  assertNonNegativeDocumentTotal(totals.total)
 
   if (!isPayable && nextStatus === 'paid') {
     throw createError({

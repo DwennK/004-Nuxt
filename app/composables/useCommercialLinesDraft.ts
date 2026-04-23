@@ -19,6 +19,8 @@ export type CommercialDraftLine = {
   categoryHint: LineCategoryHint | null
 }
 
+export const commercialLineUnitPriceMin = -999_999
+
 type SelectItem<TValue> = {
   label: string
   value: TValue
@@ -103,11 +105,11 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
         ? Math.round(lineTotal / (1 + ((line.vatRate || 0) / 100)))
         : lineTotal
 
-      return sum + Math.max(lineTotal - netTotal, 0)
+      return sum + lineTotal - netTotal
     }, 0)
 
     return {
-      subtotal: Math.max(total - taxAmount, 0),
+      subtotal: total - taxAmount,
       taxAmount,
       total
     }
@@ -268,7 +270,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
     }
 
     detachLineFromCatalog(index)
-    state.lines[index]!.unitPrice = Math.max(parseCurrencyInput(value || 0), 0) / 100
+    state.lines[index]!.unitPrice = parseCurrencyInput(value || 0) / 100
   }
 
   function selectAllOnFocus(event: FocusEvent) {

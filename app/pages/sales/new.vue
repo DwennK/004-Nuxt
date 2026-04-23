@@ -3,6 +3,7 @@ import { documentTypeLabels, paymentMethodLabels, paymentMethods } from '~~/shar
 import type { CatalogItemRecord, CustomerListResponse, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, normalizeSearchText, parseCurrencyInput } from '~~/shared/utils/pos'
+import { commercialLineUnitPriceMin } from '~~/app/composables/useCommercialLinesDraft'
 
 type SaleLine = {
   id: string
@@ -62,19 +63,21 @@ const totals = computed(() => {
 
     const subtotal = line.quantity * line.unitPrice
     const net = Math.round(subtotal / (1 + (line.vatRate / 100)))
-    return sum + Math.max(subtotal - net, 0)
+    return sum + subtotal - net
   }, 0)
 
   return {
     total,
     taxAmount,
-    subtotal: Math.max(total - taxAmount, 0)
+    subtotal: total - taxAmount
   }
 })
 
 const canCharge = computed(() => {
-  return Boolean(lines.value.length)
+  return Boolean(lines.value.length) && totals.value.total >= 0
 })
+
+const hasNegativeTotal = computed(() => totals.value.total < 0)
 
 const lastPaymentMethodLabel = computed(() => {
   return lastCompletedPaymentMethod.value ? paymentMethodLabels[lastCompletedPaymentMethod.value] : ''
@@ -222,7 +225,7 @@ function updateLineUnitPrice(index: number, value: number | null) {
   }
 
   detachLineFromCatalog(line)
-  line.unitPrice = Math.max(parseCurrencyInput(value || 0), 0)
+  line.unitPrice = parseCurrencyInput(value || 0)
 }
 
 function addFirstMatch() {
@@ -343,6 +346,15 @@ async function navigateToCompletedDocument(path: string) {
 
 async function completeSale(method: PaymentMethod) {
   if (!lines.value.length) {
+    return
+  }
+
+  if (hasNegativeTotal.value) {
+    toast.add({
+      title: 'Total négatif',
+      description: 'Ajoutez une ligne positive ou réduisez le rabais avant d’encaisser.',
+      color: 'error'
+    })
     return
   }
 
@@ -706,7 +718,7 @@ function selectAllOnFocus(event: FocusEvent) {
                     <UInputNumber
                       :id="`sale-line-price-${line.id}`"
                       :model-value="line.unitPrice / 100"
-                      :min="0"
+                      :min="commercialLineUnitPriceMin"
                       :step="0.05"
                       :increment="false"
                       :decrement="false"
@@ -845,6 +857,15 @@ function selectAllOnFocus(event: FocusEvent) {
                   <span class="text-xl font-semibold text-highlighted">{{ formatCurrency(totals.total) }}</span>
                 </div>
               </div>
+
+              <UAlert
+                v-if="hasNegativeTotal"
+                color="error"
+                variant="soft"
+                icon="i-lucide-triangle-alert"
+                title="Total négatif"
+                description="Les lignes négatives sont acceptées, mais la vente ne peut pas être encaissée avec un total final négatif."
+              />
 
               <div class="space-y-2">
                 <h3 class="text-sm font-medium text-highlighted">

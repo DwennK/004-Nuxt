@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CatalogItemRecord } from '~~/shared/types/pos'
-import type { CommercialLinesDraftController } from '~~/app/composables/useCommercialLinesDraft'
+import { commercialLineUnitPriceMin, type CommercialLinesDraftController } from '~~/app/composables/useCommercialLinesDraft'
 import { formatCurrency, getCatalogItemTypeLabel } from '~~/shared/utils/pos'
 
 const props = withDefaults(defineProps<{
@@ -16,6 +16,7 @@ const state = props.editor.state
 const totals = props.editor.totals
 const categoryItems = props.editor.categoryItems
 const resolvedMode = computed(() => props.mode || 'document')
+const hasNegativeTotal = computed(() => totals.value.total < 0)
 const {
   search,
   highlightedItemIndex,
@@ -270,7 +271,7 @@ async function handleBarcodeScan(value: string) {
                   <UInputNumber
                     :id="`document-line-price-${line.id}`"
                     :model-value="line.unitPrice"
-                    :min="0"
+                    :min="commercialLineUnitPriceMin"
                     :step="0.05"
                     :increment="false"
                     :decrement="false"
@@ -364,6 +365,16 @@ async function handleBarcodeScan(value: string) {
                 </div>
               </div>
             </div>
+
+            <UAlert
+              v-if="hasNegativeTotal"
+              color="error"
+              variant="soft"
+              icon="i-lucide-triangle-alert"
+              title="Total négatif"
+              description="Les lignes négatives sont autorisées, mais le total final du document doit rester positif ou nul."
+              class="mx-4 mb-4"
+            />
           </div>
         </div>
       </div>

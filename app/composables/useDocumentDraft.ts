@@ -98,7 +98,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     catalogItemId: z.coerce.number().int().positive().optional().nullable(),
     label: z.string().trim().min(1, 'Le libellé est obligatoire'),
     quantity: z.coerce.number().int('La quantité doit être un nombre entier').positive('La quantité doit être supérieure à 0'),
-    unitPrice: z.coerce.number().min(0, 'Le prix unitaire doit être positif'),
+    unitPrice: z.coerce.number(),
     vatRate: z.coerce.number().min(0).max(100),
     categoryHint: z.enum(lineCategoryHints).optional().nullable()
   })
@@ -111,6 +111,18 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     issuedAt: z.string().min(1, 'La date d’émission est obligatoire'),
     notes: z.string().optional().default(''),
     lines: z.array(lineSchema).min(1, 'Au moins une ligne est obligatoire')
+  }).superRefine((value, ctx) => {
+    const total = value.lines.reduce((sum, line) => {
+      return sum + Math.round(line.quantity * line.unitPrice * 100)
+    }, 0)
+
+    if (total < 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['lines'],
+        message: 'Le total du document ne peut pas être négatif'
+      })
+    }
   }))
 
   const state = reactive<DocumentDraftState>({

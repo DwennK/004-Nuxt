@@ -95,9 +95,9 @@ export const commercialLineInputSchema = z.object({
   catalogItemId: z.coerce.number().int().positive().optional().nullable(),
   label: z.string().trim().min(1, 'Le libellé est obligatoire'),
   quantity: z.coerce.number().int().positive(),
-  unitPrice: z.coerce.number().int().min(0),
+  unitPrice: z.coerce.number().int(),
   vatRate: z.coerce.number().min(0).max(100),
-  lineTotal: z.coerce.number().int().min(0).optional(),
+  lineTotal: z.coerce.number().int().optional(),
   categoryHint: z.enum(lineCategoryHints).optional().nullable()
 })
 
