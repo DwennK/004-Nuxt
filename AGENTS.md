@@ -151,6 +151,11 @@ Treat these implementation rules as defaults unless the task explicitly changes 
 - catalog and document pricing is TTC / VAT-inclusive
 - VAT can matter at both line and document level
 - document line quantity is stored as an integer
+- supported payment methods are `cash`, `card_twint`, `bank_transfer`, and `stripe`
+- commercial document and ticket lines may use negative TTC unit prices for discounts or adjustments
+- line quantity must stay positive even when the unit price is negative
+- do not clamp VAT on negative lines to zero; negative TTC lines should produce negative VAT so net TTC totals remain correct
+- do not allow a document or quick sale to end with a negative final total unless a proper credit-note flow is explicitly implemented
 - ticket numbers and document numbers are generated server-side
 
 ## Feature Scope
