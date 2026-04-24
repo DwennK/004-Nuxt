@@ -17,8 +17,11 @@ const id = computed(() => Number(route.params.id))
 const activeTab = ref('lines')
 const isEmailModalOpen = ref(false)
 const isSendingEmail = ref(false)
+const isSavingDocument = ref(false)
 const isContextOpen = ref(false)
+const hasUnsavedDocumentChanges = ref(false)
 const documentFormId = 'document-detail-form'
+const unsavedDocumentMessage = 'Des modifications du document ne sont pas enregistrées. Continuer sans enregistrer ?'
 
 const tabItems = [
   { label: 'Lignes', value: 'lines', icon: 'i-lucide-list' },
@@ -49,17 +52,24 @@ const supportsA4Print = computed(() => document.value ? supportsDocumentPrintPro
 const supportsThermalPrint = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'thermal') : false)
 
 async function saveDocument(payload: DocumentSavePayload) {
-  await $fetch(`/api/documents/${id.value}`, {
-    method: 'PATCH',
-    body: payload
-  })
+  isSavingDocument.value = true
 
-  toast.add({
-    title: 'Document mis à jour',
-    color: 'success'
-  })
+  try {
+    await $fetch(`/api/documents/${id.value}`, {
+      method: 'PATCH',
+      body: payload
+    })
 
-  await refresh()
+    toast.add({
+      title: 'Document mis à jour',
+      color: 'success'
+    })
+
+    await refresh()
+    hasUnsavedDocumentChanges.value = false
+  } finally {
+    isSavingDocument.value = false
+  }
 }
 
 async function openContextEditor() {
@@ -70,6 +80,59 @@ async function openContextEditor() {
 
   isContextOpen.value = true
 }
+
+function shouldConfirmUnsavedDocumentChanges() {
+  return hasUnsavedDocumentChanges.value && !isSavingDocument.value
+}
+
+function confirmDiscardUnsavedDocumentChanges() {
+  if (!shouldConfirmUnsavedDocumentChanges()) {
+    return true
+  }
+
+  const shouldContinue = window.confirm(unsavedDocumentMessage)
+
+  if (shouldContinue) {
+    hasUnsavedDocumentChanges.value = false
+  }
+
+  return shouldContinue
+}
+
+function selectTab(value: string | number) {
+  const nextTab = String(value)
+
+  if (nextTab === activeTab.value) {
+    return
+  }
+
+  if (!confirmDiscardUnsavedDocumentChanges()) {
+    return
+  }
+
+  activeTab.value = nextTab
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!shouldConfirmUnsavedDocumentChanges()) {
+    return
+  }
+
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onBeforeRouteLeave(() => {
+  return confirmDiscardUnsavedDocumentChanges()
+})
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
 
 function fillEmailState() {
   if (!document.value) {
@@ -169,6 +232,7 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
             type="submit"
             icon="i-lucide-save"
             label="Enregistrer"
+            :loading="isSavingDocument"
           />
         </template>
       </UDashboardNavbar>
@@ -185,18 +249,20 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
         />
 
         <UTabs
-          v-model="activeTab"
+          :model-value="activeTab"
           :items="tabItems"
           value-key="value"
           variant="link"
           :content="false"
           class="w-full"
+          @update:model-value="selectTab"
         />
 
         <div v-if="activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)]">
           <PosDocumentEditor
             v-if="customers?.items"
             v-model:context-open="isContextOpen"
+            v-model:dirty="hasUnsavedDocumentChanges"
             :form-id="documentFormId"
             :show-submit-button="false"
             :customers="customers.items"
