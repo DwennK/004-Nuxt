@@ -1,4 +1,4 @@
-import QRCode from 'qrcode'
+import QRCodeCore from 'qrcode/lib/core/qrcode.js'
 import {
   PDFDocument,
   StandardFonts,
@@ -63,6 +63,13 @@ type TextStyle = {
   size?: number
   color?: ReturnType<typeof rgb>
   lineHeight?: number
+}
+
+type QrCodeMatrix = {
+  modules: {
+    size: number
+    data: ArrayLike<boolean>
+  }
 }
 
 function hexToRgb(hex: string) {
@@ -253,6 +260,38 @@ function drawImageCentered(page: PDFPage, image: PDFImage, boxX: number, boxY: n
     width,
     height
   })
+}
+
+function drawQrCode(page: PDFPage, payload: string, x: number, y: number, size: number) {
+  const qrCode = QRCodeCore.create(payload, {
+    errorCorrectionLevel: 'M'
+  }) as QrCodeMatrix
+  const modules = qrCode.modules
+  const cellSize = size / modules.size
+
+  page.drawRectangle({
+    x,
+    y,
+    width: size,
+    height: size,
+    color: COLORS.white
+  })
+
+  for (let row = 0; row < modules.size; row++) {
+    for (let column = 0; column < modules.size; column++) {
+      if (!modules.data[(row * modules.size) + column]) {
+        continue
+      }
+
+      page.drawRectangle({
+        x: x + (column * cellSize),
+        y: y + ((modules.size - row - 1) * cellSize),
+        width: cellSize,
+        height: cellSize,
+        color: COLORS.dark
+      })
+    }
+  }
 }
 
 function formatQrStreet(address: SwissQrAddress) {
@@ -621,17 +660,6 @@ async function drawQrSection(context: PdfContext, document: DocumentDetail, comp
 
   ensureSpace(context, 110 * MM)
 
-  const qrDataUrl = await QRCode.toDataURL(model.qrBill.payload, {
-    errorCorrectionLevel: 'M',
-    margin: 0,
-    width: 220
-  })
-  const qrImage = await embedDataUrlImage(context.pdfDoc, qrDataUrl)
-
-  if (!qrImage) {
-    return false
-  }
-
   const sectionTopLine = context.cursorY
   const topY = sectionTopLine - (3.2 * MM)
   const minHeight = 105 * MM
@@ -703,12 +731,7 @@ async function drawQrSection(context: PdfContext, document: DocumentDetail, comp
 
   const qrBoxSize = 46 * MM
   const qrY = topY - (30 * MM) - qrBoxSize
-  context.page.drawImage(qrImage, {
-    x: paymentX,
-    y: qrY,
-    width: qrBoxSize,
-    height: qrBoxSize
-  })
+  drawQrCode(context.page, model.qrBill.payload, paymentX, qrY, qrBoxSize)
 
   const markSize = 7 * MM
   const markX = paymentX + (qrBoxSize / 2) - (markSize / 2)
