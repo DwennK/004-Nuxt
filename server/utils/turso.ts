@@ -11,8 +11,8 @@ export function useTursoClient() {
   }
 
   const config = useRuntimeConfig()
-  const url = config.tursoUrl
-  const authToken = config.tursoToken
+  const url = config.tursoUrl || process.env.TURSO_URL || process.env.NUXT_TURSO_URL
+  const authToken = config.tursoToken || process.env.TURSO_TOKEN || process.env.NUXT_TURSO_TOKEN
 
   if (!url || !authToken) {
     throw createError({

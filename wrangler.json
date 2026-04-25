@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "nuxt",
+  "compatibility_date": "2026-03-10",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "no_nodejs_compat_v2"
+  ],
+  "routes": [
+    {
+      "pattern": "pos.microwest.ch",
+      "zone_name": "microwest.ch",
+      "custom_domain": true
+    }
+  ],
+  "workers_dev": false,
+  "preview_urls": false
+}
