@@ -165,6 +165,26 @@ export const wooCommerceImportSchema = z.object({
   orderRef: z.string().trim().min(1, 'Le numéro de commande est obligatoire')
 })
 
+export const mobileSentrixOAuthExchangeSchema = z.object({
+  oauthToken: z.string().trim().min(1, 'Le token OAuth est obligatoire'),
+  oauthVerifier: z.string().trim().min(1, 'Le verifier OAuth est obligatoire')
+})
+
+export const mobileSentrixSearchQuerySchema = z.object({
+  q: z.string().trim().min(2, 'La recherche doit contenir au moins 2 caractères'),
+  maxResults: z.coerce.number().int().min(1).max(50).default(20),
+  startIndex: z.coerce.number().int().min(0).default(0)
+})
+
+export const mobileSentrixProductsQuerySchema = z.object({
+  categoryId: optionalText,
+  sku: optionalText,
+  productId: optionalText,
+  deviceProducts: z.coerce.boolean().default(false),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20)
+})
+
 export const ticketStatusUpdateSchema = z.object({
   status: z.enum(ticketStatuses),
   internalNotes: optionalText

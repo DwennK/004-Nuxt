@@ -26,7 +26,13 @@ export default defineNuxtConfig({
     mailReplyTo: process.env.MAIL_REPLY_TO,
     woocommerceStoreUrl: process.env.WOOCOMMERCE_STORE_URL,
     woocommerceConsumerKey: process.env.WOOCOMMERCE_CONSUMER_KEY,
-    woocommerceConsumerSecret: process.env.WOOCOMMERCE_CONSUMER_SECRET
+    woocommerceConsumerSecret: process.env.WOOCOMMERCE_CONSUMER_SECRET,
+    mobilesentrixBaseUrl: process.env.MOBILESENTRIX_BASE_URL,
+    mobilesentrixConsumerName: process.env.MOBILESENTRIX_CONSUMER_NAME,
+    mobilesentrixConsumerKey: process.env.MOBILESENTRIX_CONSUMER_KEY,
+    mobilesentrixConsumerSecret: process.env.MOBILESENTRIX_CONSUMER_SECRET,
+    mobilesentrixAccessToken: process.env.MOBILESENTRIX_ACCESS_TOKEN,
+    mobilesentrixAccessTokenSecret: process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET
   },
 
   compatibilityDate: '2026-03-10',

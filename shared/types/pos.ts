@@ -564,3 +564,71 @@ export interface WooImportResult {
   documentNumber: string
   orderNumber: string
 }
+
+export interface MobileSentrixStatusResponse {
+  baseUrl: string
+  hasConsumerName: boolean
+  hasConsumerKey: boolean
+  hasConsumerSecret: boolean
+  hasAccessToken: boolean
+  hasAccessTokenSecret: boolean
+  readyForOAuth: boolean
+  readyForApi: boolean
+  authorizePath: string
+}
+
+export interface MobileSentrixOAuthExchangeResponse {
+  accessToken: string
+  accessTokenSecret: string
+  oauthVerifier: string | null
+}
+
+export interface MobileSentrixCategorySummary {
+  id: string
+  name: string
+  parentId: string | null
+  isActive: boolean | null
+  productCount: number | null
+  url: string | null
+  imageUrl: string | null
+}
+
+export interface MobileSentrixProductSummary {
+  id: string
+  sku: string | null
+  newSku: string | null
+  name: string
+  price: number | null
+  listPrice: number | null
+  inStock: boolean | null
+  quantity: number | null
+  categoryIds: string[]
+  manufacturer: string | null
+  model: string | null
+  frontPosition: string | null
+  imageUrl: string | null
+  url: string | null
+  tags: string[]
+  raw: Record<string, unknown>
+}
+
+export interface MobileSentrixSearchResponse {
+  query: string
+  startIndex: number
+  maxResults: number
+  totalItems: number
+  items: MobileSentrixProductSummary[]
+  categories: MobileSentrixCategorySummary[]
+}
+
+export interface MobileSentrixProductsResponse {
+  page: number
+  limit: number
+  pageInfo: boolean
+  totalItems: number | null
+  items: MobileSentrixProductSummary[]
+}
+
+export interface MobileSentrixCategoriesResponse {
+  items: MobileSentrixCategorySummary[]
+}

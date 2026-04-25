@@ -76,6 +76,13 @@ const secondaryLinks = [{
   icon: 'i-lucide-folder-cog',
   defaultOpen: toolRoutes.some(prefix => route.path.startsWith(prefix)),
   children: [{
+    label: 'MobileSentrix',
+    icon: 'i-lucide-plug',
+    to: '/tools/mobilesentrix',
+    onSelect: () => {
+      open.value = false
+    }
+  }, {
     label: 'Import Woocommerce',
     icon: 'i-lucide-shopping-cart',
     to: '/tools/woocommerce-import',
