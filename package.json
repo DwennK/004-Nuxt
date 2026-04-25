@@ -11,7 +11,7 @@
     "typecheck": "nuxt typecheck",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "deploy": "npm run build && wrangler --cwd .output deploy",
+    "deploy": "npm run build && wrangler --cwd .output deploy --keep-vars",
     "cf-typegen": "npm run build && wrangler --cwd .output types"
   },
   "dependencies": {
