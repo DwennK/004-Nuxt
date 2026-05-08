@@ -558,11 +558,6 @@ function selectAllOnFocus(event: FocusEvent) {
                       </UBadge>
                     </div>
                   </div>
-
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-toned">
-                    <span>{{ lines.length ? `${lines.length} ligne(s)` : 'Panier vide' }}</span>
-                    <span>{{ formatCurrency(totals.total) }}</span>
-                  </div>
                 </div>
               </template>
 
@@ -824,9 +819,6 @@ function selectAllOnFocus(event: FocusEvent) {
                       Facture immédiate, client éventuel, puis paiement direct.
                     </p>
                   </div>
-                  <UBadge color="primary" variant="soft" size="sm">
-                    {{ lines.length ? `${lines.length} ligne(s)` : 'Panier vide' }}
-                  </UBadge>
                 </div>
               </template>
 
