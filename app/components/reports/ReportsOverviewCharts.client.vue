@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui'
+import { BarChart, DonutChart } from 'vue-chrts'
 import { lineCategoryColors, paymentMethodColors, paymentMethodLabels } from '~~/shared/constants/pos'
 import type { PaymentMethod, ReportsOverview } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'

@@ -4,7 +4,6 @@ export default defineNuxtConfig({
   modules: [
     '@nuxt/eslint',
     '@nuxt/ui',
-    'nuxt-charts',
     '@vueuse/nuxt',
     'nitro-cloudflare-dev',
     'nuxt-auth-utils'
@@ -35,10 +34,16 @@ export default defineNuxtConfig({
     mobilesentrixAccessTokenSecret: process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET
   },
 
+  sourcemap: {
+    client: false,
+    server: false
+  },
+
   compatibilityDate: '2026-03-10',
 
   nitro: {
     preset: 'cloudflare_module',
+    sourceMap: false,
 
     cloudflare: {
       deployConfig: true,

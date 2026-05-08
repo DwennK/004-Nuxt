@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Orientation } from 'vue-chrts'
+import { BarChart, DonutChart } from 'vue-chrts'
+import { Orientation } from 'vue-chrts/enums'
 import { lineCategoryColors, lineCategoryLabels, paymentMethodLabels } from '~~/shared/constants/pos'
 import type { DailySummary } from '~~/shared/types/pos'
 import { formatCurrency, getPaymentMethodLabel } from '~~/shared/utils/pos'

@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, format } from 'date-fns'
-import { VisXYContainer, VisLine, VisAxis, VisArea, VisCrosshair, VisTooltip } from '@unovis/vue'
+import VisXYContainer from '@unovis/vue/containers/xy-container'
+import VisLine from '@unovis/vue/components/line'
+import VisAxis from '@unovis/vue/components/axis'
+import VisArea from '@unovis/vue/components/area'
+import VisCrosshair from '@unovis/vue/components/crosshair'
+import VisTooltip from '@unovis/vue/components/tooltip'
 import type { Period, Range } from '~/types'
 
 const cardRef = useTemplateRef<HTMLElement | null>('cardRef')

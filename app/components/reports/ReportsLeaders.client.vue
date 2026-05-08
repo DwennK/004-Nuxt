@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui'
-import { Orientation } from 'vue-chrts'
+import { BarChart } from 'vue-chrts'
+import { Orientation } from 'vue-chrts/enums'
 import { lineCategoryColors, lineCategoryLabels } from '~~/shared/constants/pos'
 import type { ReportsLeaders } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
