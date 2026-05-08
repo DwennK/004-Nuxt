@@ -21,7 +21,7 @@ useHead({
   style: [
     {
       key: 'ticket-print-page-rule',
-      textContent: '@page { margin: 4mm; }'
+      textContent: '@page { margin: 0; }'
     }
   ]
 })
@@ -88,7 +88,7 @@ function printTicket() {
       <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div>
           <p class="text-xs uppercase tracking-[0.24em] text-toned">
-            Ticket atelier · Thermique 80 mm
+            Ticket atelier · Thermique POS-58
           </p>
           <h1 class="text-lg font-semibold text-highlighted">
             {{ ticket?.ticketNumber || 'Ticket atelier' }}
@@ -201,8 +201,8 @@ function printTicket() {
                   v-if="patternPath"
                   :points="patternPath"
                   fill="none"
-                  stroke="#0f172a"
-                  stroke-width="3"
+                  stroke="#000"
+                  stroke-width="4"
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 />
@@ -218,8 +218,8 @@ function printTicket() {
                       :x="20 + ((point - 1) % 3) * 30"
                       :y="20 + Math.floor((point - 1) / 3) * 30 + 11"
                       text-anchor="middle"
-                      font-size="5"
-                      fill="#64748b"
+                      font-size="6"
+                      fill="#000"
                     >
                       {{ point }}
                     </text>
@@ -284,53 +284,57 @@ body {
 }
 
 .ticket-sheet {
-  width: 72mm;
-  max-width: 72mm;
-  padding: 4mm 3mm;
-  font-size: 11px;
-  line-height: 1.35;
-  color: #334155;
+  box-sizing: border-box;
+  width: 48mm;
+  max-width: 48mm;
+  padding: 2mm 1.8mm 3mm;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.28;
+  font-weight: 600;
+  color: #000;
   font-variant-numeric: tabular-nums;
 }
 
 .ticket-header {
-  border-bottom: 0.3mm dashed #cbd5e1;
-  padding-bottom: 3mm;
+  border-bottom: 0.35mm solid #000;
+  padding-bottom: 2mm;
 }
 
 .ticket-brand-row {
   display: flex;
-  gap: 3mm;
+  gap: 2mm;
   align-items: flex-start;
 }
 
 .ticket-logo {
-  width: 12mm;
-  height: 12mm;
+  width: 10mm;
+  height: 10mm;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 0.2mm solid #d9e1ed;
-  border-radius: 1.6mm;
+  border: 0.25mm solid #000;
+  border-radius: 0;
   overflow: hidden;
   flex-shrink: 0;
 }
 
 .ticket-kicker {
-  margin: 0 0 1mm;
-  font-size: 7.3px;
-  line-height: 1.2;
-  letter-spacing: 0.2em;
+  margin: 0 0 0.8mm;
+  font-size: 8.5px;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #607393;
+  color: #000;
+  font-weight: 800;
 }
 
 .ticket-company {
-  margin: 0 0 1.4mm;
-  font-size: 15px;
+  margin: 0 0 1mm;
+  font-size: 16px;
   line-height: 1.05;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 900;
+  color: #000;
 }
 
 .ticket-brand-copy p,
@@ -341,14 +345,14 @@ body {
 }
 
 .ticket-divider {
-  margin-block: 3mm 2.2mm;
-  border-top: 0.3mm dashed #cbd5e1;
+  margin-block: 2mm 1.6mm;
+  border-top: 0.35mm solid #000;
 }
 
 .ticket-summary-grid {
   display: flex;
   justify-content: space-between;
-  gap: 3mm;
+  gap: 2mm;
 }
 
 .ticket-summary-right {
@@ -356,71 +360,74 @@ body {
 }
 
 .ticket-strong {
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 900;
+  color: #000;
 }
 
 .ticket-block {
-  padding-block: 3mm;
-  border-bottom: 0.3mm dashed #cbd5e1;
+  padding-block: 2.2mm;
+  border-bottom: 0.35mm solid #000;
 }
 
 .ticket-codes {
-  background: #f8fafc;
-  border-radius: 1.6mm;
-  padding-inline: 2mm;
+  background: #fff;
+  border-radius: 0;
+  padding-inline: 0;
 }
 
 .ticket-code-row {
-  display: flex;
-  align-items: center;
-  gap: 3mm;
+  display: block;
   padding-block: 1.4mm;
 }
 
 .ticket-code-row + .ticket-code-row {
-  border-top: 0.2mm dashed #cbd5e1;
+  border-top: 0.3mm solid #000;
 }
 
 .ticket-code-label {
-  flex: 0 0 18mm;
-  font-size: 8.5px;
-  letter-spacing: 0.08em;
+  margin-bottom: 0.8mm;
+  font-size: 9px;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: #475569;
+  color: #000;
+  font-weight: 800;
 }
 
 .ticket-code-value {
-  font-size: 14px;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: 0.06em;
+  font-size: 17px;
+  line-height: 1.1;
+  font-weight: 900;
+  color: #000;
+  letter-spacing: 0.03em;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .ticket-pattern {
   display: flex;
   align-items: center;
-  gap: 3mm;
+  gap: 2mm;
 }
 
 .ticket-pattern-svg {
-  width: 22mm;
-  height: 22mm;
+  width: 20mm;
+  height: 20mm;
   flex-shrink: 0;
 }
 
 .ticket-pattern-sequence {
-  font-size: 11px;
-  font-weight: 600;
-  color: #0f172a;
-  letter-spacing: 0.08em;
+  font-size: 13px;
+  font-weight: 900;
+  color: #000;
+  letter-spacing: 0.03em;
 }
 
 .ticket-footer {
-  padding-top: 3mm;
+  padding-top: 2.4mm;
   text-align: center;
-  font-size: 10px;
+  font-size: 11.5px;
+  color: #000;
+  font-weight: 600;
 }
 
 @media print {
@@ -442,7 +449,7 @@ body {
   }
 
   .ticket-sheet {
-    margin: 0 auto;
+    margin: 0;
     box-shadow: none;
   }
 

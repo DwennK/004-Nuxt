@@ -33,7 +33,7 @@ const canRenderSelectedProfile = computed(() => document.value ? supportsDocumen
 const isThermalProfile = computed(() => profile.value === 'thermal')
 const printPageRule = computed(() => (
   profile.value === 'thermal'
-    ? '@page { margin: 4mm; }'
+    ? '@page { margin: 0; }'
     : '@page { size: A4; margin: 7mm; }'
 ))
 const a4PrintModel = computed(() => {
@@ -607,10 +607,13 @@ body {
 }
 
 .sheet--thermal {
-  width: 72mm;
-  max-width: 72mm;
-  font-size: 11px;
-  line-height: 1.35;
+  box-sizing: border-box;
+  width: 48mm;
+  max-width: 48mm;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.28;
+  font-weight: 600;
 }
 
 .invoice-header,
@@ -662,6 +665,14 @@ body {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: #607393;
+}
+
+.thermal-kicker {
+  font-size: 8.5px;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  color: #000;
+  font-weight: 800;
 }
 
 .invoice-company {
@@ -744,6 +755,11 @@ body {
 .thermal-strong {
   font-weight: 700;
   color: #0f172a;
+}
+
+.thermal-strong {
+  font-weight: 900;
+  color: #000;
 }
 
 .invoice-lines {
@@ -971,29 +987,29 @@ body {
 }
 
 .thermal-sheet {
-  padding: 4mm 3mm;
-  color: #334155;
+  padding: 2mm 1.8mm 3mm;
+  color: #000;
 }
 
 .thermal-header {
-  border-bottom: 0.3mm dashed #cbd5e1;
-  padding-bottom: 3mm;
+  border-bottom: 0.35mm solid #000;
+  padding-bottom: 2mm;
 }
 
 .thermal-brand-row {
   display: flex;
-  gap: 3mm;
+  gap: 2mm;
   align-items: flex-start;
 }
 
 .thermal-logo {
-  width: 12mm;
-  height: 12mm;
+  width: 10mm;
+  height: 10mm;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 0.2mm solid #d9e1ed;
-  border-radius: 1.6mm;
+  border: 0.25mm solid #000;
+  border-radius: 0;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -1006,22 +1022,22 @@ body {
 }
 
 .thermal-company {
-  margin: 0 0 1.4mm;
-  font-size: 15px;
+  margin: 0 0 1mm;
+  font-size: 16px;
   line-height: 1.05;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 900;
+  color: #000;
 }
 
 .thermal-divider {
-  margin-block: 3mm 2.2mm;
-  border-top: 0.3mm dashed #cbd5e1;
+  margin-block: 2mm 1.6mm;
+  border-top: 0.35mm solid #000;
 }
 
 .thermal-meta {
   display: flex;
   justify-content: space-between;
-  gap: 3mm;
+  gap: 2mm;
 }
 
 .thermal-meta-right {
@@ -1029,34 +1045,34 @@ body {
 }
 
 .thermal-block {
-  padding-block: 3mm;
-  border-bottom: 0.3mm dashed #cbd5e1;
+  padding-block: 2.2mm;
+  border-bottom: 0.35mm solid #000;
 }
 
 .thermal-line + .thermal-line {
-  margin-top: 2.4mm;
-  padding-top: 2.4mm;
-  border-top: 0.2mm dashed #e2e8f0;
+  margin-top: 2mm;
+  padding-top: 2mm;
+  border-top: 0.3mm solid #000;
 }
 
 .thermal-line-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 2mm;
+  gap: 1.5mm;
 }
 
 .thermal-line-label {
   margin: 0;
-  font-weight: 600;
-  color: #0f172a;
+  font-weight: 800;
+  color: #000;
   overflow-wrap: anywhere;
 }
 
 .thermal-line-total {
   margin: 0;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 900;
+  color: #000;
   white-space: nowrap;
 }
 
@@ -1065,8 +1081,9 @@ body {
   justify-content: space-between;
   gap: 2mm;
   margin-top: 0.8mm;
-  font-size: 10px;
-  color: #475569;
+  font-size: 11px;
+  color: #000;
+  font-weight: 600;
 }
 
 .thermal-totals {
@@ -1076,29 +1093,37 @@ body {
 .thermal-total-row {
   display: flex;
   justify-content: space-between;
-  gap: 3mm;
+  gap: 2mm;
   padding-block: 0.7mm;
 }
 
 .thermal-total-row--grand {
   margin-top: 1mm;
   padding-top: 1.5mm;
-  border-top: 0.3mm solid #0f172a;
-  font-size: 12px;
+  border-top: 0.45mm solid #000;
+  font-size: 14px;
+  color: #000;
+}
+
+.thermal-total-row strong {
+  color: #000;
+  font-weight: 900;
 }
 
 .thermal-note {
-  margin-top: 2.8mm;
-  padding-top: 2.2mm;
-  border-top: 0.2mm dashed #cbd5e1;
-  font-size: 10px;
-  color: #334155;
+  margin-top: 2.4mm;
+  padding-top: 2mm;
+  border-top: 0.3mm solid #000;
+  font-size: 11.5px;
+  color: #000;
 }
 
 .thermal-footer {
-  padding-top: 3mm;
+  padding-top: 2.4mm;
   text-align: center;
-  font-size: 10px;
+  font-size: 11.5px;
+  color: #000;
+  font-weight: 600;
 }
 
 @media print {
@@ -1131,8 +1156,9 @@ body {
   }
 
   .sheet--thermal {
-    width: 72mm;
-    max-width: 72mm;
+    width: 48mm;
+    max-width: 48mm;
+    margin: 0;
   }
 
   .invoice-window-label {

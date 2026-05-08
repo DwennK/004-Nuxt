@@ -10,7 +10,7 @@ const ticketPrintProfiles: PrintProfile[] = ['thermal']
 
 export const printProfileLabels: Record<PrintProfile, string> = {
   a4: 'A4',
-  thermal: 'Thermique 80 mm'
+  thermal: 'Thermique POS-58'
 }
 
 export function getDocumentPrintProfiles(type: DocumentType | null | undefined) {
