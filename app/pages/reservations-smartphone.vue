@@ -150,8 +150,8 @@ async function deleteSingleReservation(id: number) {
   try {
     await $fetch('/api/smartphone-reservations', {
       method: 'DELETE',
-      body: {
-        ids: [id]
+      query: {
+        ids: String(id)
       }
     })
 

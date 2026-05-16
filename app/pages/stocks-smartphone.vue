@@ -96,8 +96,8 @@ async function deleteSingleStock(id: number) {
   try {
     await $fetch('/api/smartphone-stocks', {
       method: 'DELETE',
-      body: {
-        ids: [id]
+      query: {
+        ids: String(id)
       }
     })
 
