@@ -148,10 +148,10 @@ function openReservationEditor(item: SmartphoneReservationRequest) {
 
 async function deleteSingleReservation(id: number) {
   try {
-    await $fetch('/api/smartphone-reservations', {
-      method: 'DELETE',
-      query: {
-        ids: String(id)
+    await $fetch('/api/smartphone-reservations/bulk-delete', {
+      method: 'POST',
+      body: {
+        ids: [id]
       }
     })
 

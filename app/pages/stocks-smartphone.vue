@@ -94,10 +94,10 @@ async function updateSoldState(row: SmartphoneStock, sold: boolean) {
 
 async function deleteSingleStock(id: number) {
   try {
-    await $fetch('/api/smartphone-stocks', {
-      method: 'DELETE',
-      query: {
-        ids: String(id)
+    await $fetch('/api/smartphone-stocks/bulk-delete', {
+      method: 'POST',
+      body: {
+        ids: [id]
       }
     })
 

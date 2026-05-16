@@ -1,9 +1,7 @@
 import * as z from 'zod'
-import type { H3Event } from 'h3'
 import { normalizeImei } from '../../shared/utils/pos'
 import {
   createSmartphoneStock,
-  deleteSmartphoneStocks,
   listSmartphoneStocks,
   updateSmartphoneStock
 } from '../utils/smartphone-stocks'
@@ -38,22 +36,6 @@ const smartphoneStockSchema = z.object({
 const updateSmartphoneStockSchema = smartphoneStockSchema.extend({
   id: z.coerce.number().int().positive()
 })
-
-const deleteSmartphoneStocksSchema = z.object({
-  ids: z.array(z.coerce.number().int().positive()).min(1)
-})
-
-function parseDeleteIds(event: H3Event) {
-  const query = getQuery(event)
-  const values = [query.ids, query.id]
-    .flatMap(value => Array.isArray(value) ? value : [value])
-    .filter(value => value !== undefined)
-    .flatMap(value => String(value).split(','))
-    .map(value => value.trim())
-    .filter(Boolean)
-
-  return deleteSmartphoneStocksSchema.parse({ ids: values })
-}
 
 export default eventHandler(async (event) => {
   if (event.method === 'GET') {
@@ -92,13 +74,6 @@ export default eventHandler(async (event) => {
 
       throw error
     }
-  }
-
-  if (event.method === 'DELETE') {
-    const { ids } = parseDeleteIds(event)
-    const deleted = await deleteSmartphoneStocks(ids)
-
-    return { deleted }
   }
 
   throw createError({

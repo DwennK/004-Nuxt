@@ -17,10 +17,10 @@ async function onSubmit() {
   }
 
   try {
-    await $fetch('/api/smartphone-reservations', {
-      method: 'DELETE',
-      query: {
-        ids: props.ids.join(',')
+    await $fetch('/api/smartphone-reservations/bulk-delete', {
+      method: 'POST',
+      body: {
+        ids: props.ids
       }
     })
 
