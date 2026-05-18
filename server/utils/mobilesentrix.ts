@@ -16,6 +16,8 @@ type MobileSentrixConfig = {
   consumerSecret: string | null
   accessToken: string | null
   accessTokenSecret: string | null
+  restAuthHeaderName: string | null
+  restAuthHeaderValue: string | null
 }
 
 type MobileSentrixApiQuery = Record<string, string | number | boolean | null | undefined>
@@ -28,16 +30,26 @@ type MobileSentrixSearchPayload = {
   }
 }
 
+function readMobileSentrixConfigValue(value: unknown, envKey: string) {
+  const runtimeValue = typeof value === 'string' ? value : null
+
+  return normalizeOptionalText(runtimeValue)
+    || normalizeOptionalText(process.env[envKey])
+    || normalizeOptionalText(process.env[`NUXT_${envKey}`])
+}
+
 function getMobileSentrixConfig(): MobileSentrixConfig {
   const config = useRuntimeConfig()
 
   return {
-    baseUrl: (normalizeOptionalText(config.mobilesentrixBaseUrl) || 'https://www.mobilesentrix.com').replace(/\/+$/, ''),
-    consumerName: normalizeOptionalText(config.mobilesentrixConsumerName),
-    consumerKey: normalizeOptionalText(config.mobilesentrixConsumerKey),
-    consumerSecret: normalizeOptionalText(config.mobilesentrixConsumerSecret),
-    accessToken: normalizeOptionalText(config.mobilesentrixAccessToken),
-    accessTokenSecret: normalizeOptionalText(config.mobilesentrixAccessTokenSecret)
+    baseUrl: (readMobileSentrixConfigValue(config.mobilesentrixBaseUrl, 'MOBILESENTRIX_BASE_URL') || 'https://www.mobilesentrix.com').replace(/\/+$/, ''),
+    consumerName: readMobileSentrixConfigValue(config.mobilesentrixConsumerName, 'MOBILESENTRIX_CONSUMER_NAME'),
+    consumerKey: readMobileSentrixConfigValue(config.mobilesentrixConsumerKey, 'MOBILESENTRIX_CONSUMER_KEY'),
+    consumerSecret: readMobileSentrixConfigValue(config.mobilesentrixConsumerSecret, 'MOBILESENTRIX_CONSUMER_SECRET'),
+    accessToken: readMobileSentrixConfigValue(config.mobilesentrixAccessToken, 'MOBILESENTRIX_ACCESS_TOKEN'),
+    accessTokenSecret: readMobileSentrixConfigValue(config.mobilesentrixAccessTokenSecret, 'MOBILESENTRIX_ACCESS_TOKEN_SECRET'),
+    restAuthHeaderName: readMobileSentrixConfigValue(config.mobilesentrixRestAuthHeaderName, 'MOBILESENTRIX_REST_AUTH_HEADER_NAME'),
+    restAuthHeaderValue: readMobileSentrixConfigValue(config.mobilesentrixRestAuthHeaderValue, 'MOBILESENTRIX_REST_AUTH_HEADER_VALUE')
   }
 }
 
@@ -60,7 +72,7 @@ function requireApiConfig(config = requireConsumerConfig()) {
   if (!config.accessToken || !config.accessTokenSecret) {
     throw createError({
       statusCode: 500,
-      statusMessage: 'Les tokens OAuth MobileSentrix sont manquants. Connectez le compte puis ajoutez MOBILESENTRIX_ACCESS_TOKEN et MOBILESENTRIX_ACCESS_TOKEN_SECRET dans .env.'
+      statusMessage: 'Les tokens OAuth MobileSentrix sont manquants. Connectez le compte puis ajoutez MOBILESENTRIX_ACCESS_TOKEN et MOBILESENTRIX_ACCESS_TOKEN_SECRET aux variables d’environnement du serveur.'
     })
   }
 
@@ -71,6 +83,35 @@ function requireApiConfig(config = requireConsumerConfig()) {
     accessToken: string
     accessTokenSecret: string
   }
+}
+
+function createMobileSentrixRequestHeaders(config: ReturnType<typeof requireApiConfig>) {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    Authorization: createOAuthHeader(config)
+  }
+
+  if (!config.restAuthHeaderName && !config.restAuthHeaderValue) {
+    return headers
+  }
+
+  if (!config.restAuthHeaderName || !config.restAuthHeaderValue) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'La configuration du header REST MobileSentrix est incomplète.'
+    })
+  }
+
+  if (config.restAuthHeaderName.toLowerCase() === 'authorization') {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Le header REST MobileSentrix ne peut pas remplacer Authorization, déjà utilisé par OAuth.'
+    })
+  }
+
+  headers[config.restAuthHeaderName] = config.restAuthHeaderValue
+
+  return headers
 }
 
 function oauthEncode(value: string) {
@@ -86,7 +127,7 @@ function createOAuthHeader(config: ReturnType<typeof requireApiConfig>) {
     oauth_signature: `${oauthEncode(config.consumerSecret)}&${oauthEncode(config.accessTokenSecret)}`,
     oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
     oauth_nonce: crypto.randomUUID().replace(/-/g, ''),
-    oauth_version: '1.0'
+    oauth_version: '1.0a'
   }
 
   return `OAuth ${Object.entries(params)
@@ -133,16 +174,23 @@ function escapeHtmlAttribute(value: string) {
     .replace(/>/g, '&gt;')
 }
 
+function getNonJsonRequestMessage(response: Response, text: string) {
+  if (response.status === 403 && text.includes('Just a moment')) {
+    return 'Cloudflare bloque l’appel REST MobileSentrix. Configurez la clé de header REST MobileSentrix ou demandez le whitelist de l’origine serveur.'
+  }
+
+  return response.ok
+    ? 'MobileSentrix a renvoyé une réponse non JSON.'
+    : `MobileSentrix a refusé la requête avant de renvoyer du JSON (${response.status}).`
+}
+
 async function mobileSentrixRequest<T>(path: string, query: MobileSentrixApiQuery = {}) {
   const config = requireApiConfig()
   const url = new URL(path.startsWith('/api/rest') ? path : `/api/rest${path.startsWith('/') ? path : `/${path}`}`, config.baseUrl)
   appendQuery(url, query)
 
   const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      Authorization: createOAuthHeader(config)
-    }
+    headers: createMobileSentrixRequestHeaders(config)
   })
 
   const text = await response.text()
@@ -154,9 +202,7 @@ async function mobileSentrixRequest<T>(path: string, query: MobileSentrixApiQuer
     } catch {
       throw createError({
         statusCode: response.status || 502,
-        statusMessage: response.ok
-          ? 'MobileSentrix a renvoyé une réponse non JSON.'
-          : 'MobileSentrix a refusé la requête avant de renvoyer du JSON.'
+        statusMessage: getNonJsonRequestMessage(response, text)
       })
     }
   }
@@ -324,7 +370,6 @@ export async function exchangeMobileSentrixOAuthToken(oauthToken: string, oauthV
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      consumer: config.consumerName,
       consumer_key: config.consumerKey,
       consumer_secret: config.consumerSecret,
       oauth_token: oauthToken,
@@ -376,7 +421,6 @@ export function getMobileSentrixBrowserExchangeHtml(oauthToken: string, oauthVer
   const config = requireConsumerConfig()
   const action = new URL('/oauth/authorize/identifiercallback', config.baseUrl).toString()
   const fields = {
-    consumer: config.consumerName,
     consumer_key: config.consumerKey,
     consumer_secret: config.consumerSecret,
     oauth_token: oauthToken,

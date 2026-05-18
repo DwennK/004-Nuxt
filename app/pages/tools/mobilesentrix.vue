@@ -42,6 +42,7 @@ const oauthToken = computed(() => typeof route.query.oauth_token === 'string' ? 
 const oauthVerifier = computed(() => typeof route.query.oauth_verifier === 'string' ? route.query.oauth_verifier : '')
 const hasOauthCallback = computed(() => Boolean(oauthToken.value && oauthVerifier.value))
 const canUseApi = computed(() => Boolean(status.value?.readyForApi))
+const shouldShowOauthReturn = computed(() => !canUseApi.value && (hasOauthCallback.value || oauthResult.value))
 const browserExchangePath = computed(() => {
   if (!hasOauthCallback.value) {
     return null
@@ -370,7 +371,7 @@ const categoryColumns: TableColumn<MobileSentrixCategorySummary>[] = [
           color="error"
           variant="soft"
           title="Configuration MobileSentrix incomplète"
-          description="Renseignez MOBILESENTRIX_CONSUMER_NAME, MOBILESENTRIX_CONSUMER_KEY et MOBILESENTRIX_CONSUMER_SECRET dans .env."
+          description="Renseignez MOBILESENTRIX_CONSUMER_NAME, MOBILESENTRIX_CONSUMER_KEY et MOBILESENTRIX_CONSUMER_SECRET dans les variables d’environnement du serveur."
         />
 
         <UAlert
@@ -379,7 +380,7 @@ const categoryColumns: TableColumn<MobileSentrixCategorySummary>[] = [
           color="warning"
           variant="soft"
           title="Tokens OAuth requis pour les ressources"
-          description="La recherche, les prix, le stock et les appareils utilisent access_token et access_token_secret. Lancez la connexion MobileSentrix, puis ajoutez les deux variables générées dans .env."
+          description="La recherche, les prix, le stock et les appareils utilisent access_token et access_token_secret. Lancez la connexion MobileSentrix, puis ajoutez les deux variables générées aux variables d’environnement du serveur."
         >
           <template #actions>
             <UButton
@@ -394,7 +395,7 @@ const categoryColumns: TableColumn<MobileSentrixCategorySummary>[] = [
         </UAlert>
 
         <UCard
-          v-if="hasOauthCallback || oauthResult"
+          v-if="shouldShowOauthReturn"
           :ui="{ body: 'space-y-3' }"
         >
           <div class="flex flex-wrap items-center justify-between gap-3">

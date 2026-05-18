@@ -31,7 +31,9 @@ export default defineNuxtConfig({
     mobilesentrixConsumerKey: process.env.MOBILESENTRIX_CONSUMER_KEY,
     mobilesentrixConsumerSecret: process.env.MOBILESENTRIX_CONSUMER_SECRET,
     mobilesentrixAccessToken: process.env.MOBILESENTRIX_ACCESS_TOKEN,
-    mobilesentrixAccessTokenSecret: process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET
+    mobilesentrixAccessTokenSecret: process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET,
+    mobilesentrixRestAuthHeaderName: process.env.MOBILESENTRIX_REST_AUTH_HEADER_NAME,
+    mobilesentrixRestAuthHeaderValue: process.env.MOBILESENTRIX_REST_AUTH_HEADER_VALUE
   },
 
   sourcemap: {

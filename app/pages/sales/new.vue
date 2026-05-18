@@ -54,9 +54,13 @@ const searchPanelTitle = computed(() => {
   return 'Résultats'
 })
 
+const payableLines = computed(() => {
+  return lines.value.filter(line => !isEmptyLine(line))
+})
+
 const totals = computed(() => {
-  const total = lines.value.reduce((sum, line) => sum + (line.quantity * line.unitPrice), 0)
-  const taxAmount = lines.value.reduce((sum, line) => {
+  const total = payableLines.value.reduce((sum, line) => sum + (line.quantity * line.unitPrice), 0)
+  const taxAmount = payableLines.value.reduce((sum, line) => {
     if (!line.vatRate) {
       return sum
     }
@@ -73,8 +77,28 @@ const totals = computed(() => {
   }
 })
 
+const emptyLineCount = computed(() => {
+  return lines.value.length - payableLines.value.length
+})
+
+const cartLineCountLabel = computed(() => {
+  if (!lines.value.length) {
+    return 'Ajoutez un article via la recherche.'
+  }
+
+  if (!emptyLineCount.value) {
+    return `${lines.value.length} ligne(s)`
+  }
+
+  if (!payableLines.value.length) {
+    return `${emptyLineCount.value} ligne(s) vide(s)`
+  }
+
+  return `${payableLines.value.length} ligne(s) à encaisser, ${emptyLineCount.value} vide(s) ignorée(s)`
+})
+
 const canCharge = computed(() => {
-  return Boolean(lines.value.length) && totals.value.total >= 0
+  return Boolean(payableLines.value.length) && totals.value.total >= 0
 })
 
 const hasNegativeTotal = computed(() => totals.value.total < 0)
@@ -96,6 +120,37 @@ function createSaleLine(input: Omit<SaleLine, 'id'>): SaleLine {
     id: `sale-line-${nextSaleLineId++}`,
     ...input
   }
+}
+
+function isEmptyLine(line: SaleLine) {
+  return !line.catalogItemId
+    && !line.label.trim()
+    && line.unitPrice === 0
+}
+
+function getRequestErrorMessage(error: unknown) {
+  if (typeof error !== 'object' || !error) {
+    return null
+  }
+
+  const maybeError = error as {
+    data?: { message?: unknown, statusMessage?: unknown }
+    message?: unknown
+  }
+
+  if (typeof maybeError.data?.message === 'string') {
+    return maybeError.data.message
+  }
+
+  if (typeof maybeError.data?.statusMessage === 'string') {
+    return maybeError.data.statusMessage
+  }
+
+  if (typeof maybeError.message === 'string') {
+    return maybeError.message
+  }
+
+  return null
 }
 
 function addCatalogItem(item: CatalogItemRecord) {
@@ -345,7 +400,21 @@ async function navigateToCompletedDocument(path: string) {
 }
 
 async function completeSale(method: PaymentMethod) {
-  if (!lines.value.length) {
+  const linesToSubmit = payableLines.value.map(({ id: _id, ...line }) => ({
+    ...line,
+    label: line.label.trim()
+  }))
+
+  if (!linesToSubmit.length) {
+    return
+  }
+
+  if (linesToSubmit.some(line => !line.label)) {
+    toast.add({
+      title: 'Ligne incomplète',
+      description: 'Ajoutez un libellé ou supprimez les lignes non vides avant d’encaisser.',
+      color: 'error'
+    })
     return
   }
 
@@ -372,7 +441,7 @@ async function completeSale(method: PaymentMethod) {
         ticketId: null,
         issuedAt: new Date().toISOString(),
         notes: null,
-        lines: lines.value.map(({ id: _id, ...line }) => line)
+        lines: linesToSubmit
       }
     })
 
@@ -388,6 +457,12 @@ async function completeSale(method: PaymentMethod) {
     lastCompletedPaymentMethod.value = method
     saleCompletionOpen.value = true
     resetSaleState()
+  } catch (error) {
+    toast.add({
+      title: 'Encaissement impossible',
+      description: getRequestErrorMessage(error) || 'Vérifiez le panier puis réessayez.',
+      color: 'error'
+    })
   } finally {
     isSaving.value = null
   }
@@ -667,7 +742,7 @@ function selectAllOnFocus(event: FocusEvent) {
                       Panier
                     </h2>
                     <p class="text-sm text-toned">
-                      {{ lines.length ? `${lines.length} ligne(s)` : 'Ajoutez un article via la recherche.' }}
+                      {{ cartLineCountLabel }}
                     </p>
                   </div>
                   <div class="text-right">
