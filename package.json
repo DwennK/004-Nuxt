@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.13.0 <23 || >=24"
+    "node": ">=22.13.0 <23 || >=24.11.0 <25 || >=26"
   },
   "scripts": {
     "build": "NODE_OPTIONS=--max-old-space-size=4096 nuxt build",
@@ -18,8 +18,8 @@
     "cf-typegen": "npm run build && wrangler --cwd .output types"
   },
   "dependencies": {
-    "@iconify-json/lucide": "^1.2.105",
-    "@iconify-json/simple-icons": "^1.2.81",
+    "@iconify-json/lucide": "^1.2.108",
+    "@iconify-json/simple-icons": "^1.2.82",
     "@internationalized/date": "^3.12.0",
     "@libsql/client": "^0.17.3",
     "@nuxt/ui": "^4.7.1",
@@ -29,14 +29,14 @@
     "@vueuse/core": "^14.3.0",
     "@vueuse/nuxt": "^14.3.0",
     "barcode-detector": "^3.1.3",
-    "date-fns": "^4.1.0",
+    "date-fns": "^4.2.1",
     "drizzle-orm": "^0.45.2",
-    "nuxt": "^4.4.4",
+    "nuxt": "^4.4.6",
     "nuxt-auth-utils": "^0.5.29",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "scule": "^1.3.0",
-    "tailwindcss": "^4.2.4",
+    "tailwindcss": "^4.3.0",
     "vue": "^3.5.34",
     "vue-chrts": "^2.1.4",
     "zod": "^4.4.3"
@@ -46,13 +46,13 @@
     "@types/qrcode": "^1.5.6",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.3.0",
+    "eslint": "^10.4.0",
     "nitro-cloudflare-dev": "^0.2.2",
     "patch-package": "^8.0.1",
-    "playwright": "^1.59.1",
+    "playwright": "^1.60.0",
     "typescript": "^6.0.3",
-    "vue-tsc": "^3.2.8",
-    "wrangler": "^4.90.0"
+    "vue-tsc": "^3.3.0",
+    "wrangler": "^4.92.0"
   },
   "packageManager": "npm@10.9.0"
 }
