@@ -20,14 +20,45 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 const toast = useToast()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
+type PeriodPreset = 'today' | 'month' | 'last_7_days' | 'all' | 'custom'
+
+function shiftIsoDate(date: string, days: number) {
+  const [year, month, day] = date.split('-').map(Number)
+  const value = new Date(Date.UTC(year!, month! - 1, day! + days, 12, 0, 0))
+
+  return [
+    value.getUTCFullYear(),
+    String(value.getUTCMonth() + 1).padStart(2, '0'),
+    String(value.getUTCDate()).padStart(2, '0')
+  ].join('-')
+}
+
+function getMonthStartDate(date = new Date()) {
+  const today = toDateInputValue(date)
+  const [year, month] = today.split('-')
+
+  return `${year}-${month}-01`
+}
+
+function getCurrentMonthRange() {
+  const today = toDateInputValue()
+
+  return {
+    from: getMonthStartDate(),
+    to: today
+  }
+}
+
 const search = ref('')
 const methodFilter = ref<'all' | PaymentListItem['method']>('all')
 const statusFilter = ref<'all' | PaymentListItem['status']>('all')
-const dateFrom = ref('')
-const dateTo = ref('')
+const periodPreset = ref<PeriodPreset>('month')
+const currentMonthRange = getCurrentMonthRange()
+const dateFrom = ref(currentMonthRange.from)
+const dateTo = ref(currentMonthRange.to)
 const pagination = ref({
   pageIndex: 0,
-  pageSize: 10
+  pageSize: 50
 })
 const sorting = ref([{ id: 'paidAt', desc: true }])
 const columnVisibility = ref()
@@ -52,7 +83,24 @@ const statusItems = [
   ...Object.entries(paymentStatusLabels).map(([value, label]) => ({ label, value }))
 ]
 
-const { data: payments, status, refresh } = await useFetch<PaymentListItem[]>('/api/payments')
+const periodItems = [
+  { label: 'Ce mois', value: 'month' },
+  { label: 'Aujourd’hui', value: 'today' },
+  { label: '7 derniers jours', value: 'last_7_days' },
+  { label: 'Toutes les dates', value: 'all' },
+  { label: 'Période personnalisée', value: 'custom' }
+]
+
+const paymentQuery = computed(() => ({
+  method: methodFilter.value === 'all' ? undefined : methodFilter.value,
+  status: statusFilter.value === 'all' ? undefined : statusFilter.value,
+  dateFrom: dateFrom.value || undefined,
+  dateTo: dateTo.value || undefined
+}))
+
+const { data: payments, status, refresh } = await useFetch<PaymentListItem[]>('/api/payments', {
+  query: paymentQuery
+})
 
 const filteredPayments = computed(() => {
   const term = search.value.trim().toLowerCase()
@@ -73,6 +121,42 @@ const filteredPayments = computed(() => {
   })
 })
 
+const filteredPaymentTotal = computed(() => filteredPayments.value.reduce((sum, payment) => sum + payment.amount, 0))
+
+watch(periodPreset, (preset) => {
+  const today = toDateInputValue()
+
+  if (preset === 'today') {
+    dateFrom.value = today
+    dateTo.value = today
+  } else if (preset === 'month') {
+    dateFrom.value = getMonthStartDate()
+    dateTo.value = today
+  } else if (preset === 'last_7_days') {
+    dateFrom.value = shiftIsoDate(today, -6)
+    dateTo.value = today
+  } else if (preset === 'all') {
+    dateFrom.value = ''
+    dateTo.value = ''
+  }
+})
+
+watch([dateFrom, dateTo], ([from, to]) => {
+  const today = toDateInputValue()
+
+  if (!from && !to) {
+    periodPreset.value = 'all'
+  } else if (from === today && to === today) {
+    periodPreset.value = 'today'
+  } else if (from === getMonthStartDate() && to === today) {
+    periodPreset.value = 'month'
+  } else if (from === shiftIsoDate(today, -6) && to === today) {
+    periodPreset.value = 'last_7_days'
+  } else {
+    periodPreset.value = 'custom'
+  }
+})
+
 watch([search, methodFilter, statusFilter, dateFrom, dateTo], () => {
   pagination.value.pageIndex = 0
 })
@@ -81,8 +165,9 @@ const hasActiveFilters = computed(() =>
   !!search.value.trim()
   || methodFilter.value !== 'all'
   || statusFilter.value !== 'all'
-  || !!dateFrom.value
-  || !!dateTo.value
+  || periodPreset.value !== 'month'
+  || dateFrom.value !== getMonthStartDate()
+  || dateTo.value !== toDateInputValue()
 )
 
 const filteredPaymentMethodTotals = computed(() => {
@@ -98,9 +183,28 @@ function resetFilters() {
   search.value = ''
   methodFilter.value = 'all'
   statusFilter.value = 'all'
-  dateFrom.value = ''
-  dateTo.value = ''
+  periodPreset.value = 'month'
+  const range = getCurrentMonthRange()
+  dateFrom.value = range.from
+  dateTo.value = range.to
 }
+
+const summaryItems = computed(() => [{
+  key: 'payments',
+  label: 'Paiements',
+  value: String(filteredPayments.value.length),
+  icon: 'i-lucide-wallet'
+}, {
+  key: 'total',
+  label: 'Total encaissé',
+  value: formatCurrency(filteredPaymentTotal.value),
+  icon: 'i-lucide-badge-swiss-franc'
+}, ...filteredPaymentMethodTotals.value.map(item => ({
+  key: item.method,
+  label: getCompactPaymentMethodLabel(item.method),
+  value: formatCurrency(item.total),
+  icon: paymentMethodIcons[item.method]
+}))])
 
 async function removePayment(id: number) {
   await $fetch(`/api/payments/${id}`, { method: 'DELETE' })
@@ -227,7 +331,13 @@ const columns: TableColumn<PaymentListItem>[] = [
             v-model="search"
             icon="i-lucide-search"
             placeholder="Rechercher par client ou document"
-            class="max-w-md"
+            class="w-64"
+          />
+          <USelectMenu
+            v-model="periodPreset"
+            :items="periodItems"
+            value-key="value"
+            class="w-48"
           />
           <USelectMenu
             v-model="methodFilter"
@@ -243,11 +353,11 @@ const columns: TableColumn<PaymentListItem>[] = [
           />
           <div class="flex items-center gap-2">
             <span class="text-xs text-toned">Début</span>
-            <UInput v-model="dateFrom" type="date" class="w-40" />
+            <UInput v-model="dateFrom" type="date" class="w-36" />
           </div>
           <div class="flex items-center gap-2">
             <span class="text-xs text-toned">Fin</span>
-            <UInput v-model="dateTo" type="date" class="w-40" />
+            <UInput v-model="dateTo" type="date" class="w-36" />
           </div>
           <UButton
             v-if="hasActiveFilters"
@@ -296,17 +406,27 @@ const columns: TableColumn<PaymentListItem>[] = [
 
     <template #body>
       <div class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          <PosSummaryCard title="Paiements" :value="String(payments?.length || 0)" icon="i-lucide-wallet" />
-          <PosSummaryCard title="Total encaissé" :value="formatCurrency((filteredPayments || []).reduce((sum, payment) => sum + payment.amount, 0))" icon="i-lucide-wallet-cards" />
-          <PosSummaryCard
-            v-for="item in filteredPaymentMethodTotals"
-            :key="item.method"
-            :title="paymentMethodLabels[item.method]"
-            :value="formatCurrency(item.total)"
-            :icon="paymentMethodIcons[item.method]"
-          />
-          <PosSummaryCard title="Visibles" :value="String(filteredPayments.length)" icon="i-lucide-filter" />
+        <div class="rounded-lg border border-default bg-muted/20 px-3 py-2">
+          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+            <div
+              v-for="item in summaryItems"
+              :key="item.key"
+              class="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5"
+            >
+              <div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary ring ring-primary/15">
+                <UIcon :name="item.icon" class="size-4" />
+              </div>
+
+              <div class="min-w-0">
+                <p class="truncate text-xs font-medium text-toned">
+                  {{ item.label }}
+                </p>
+                <p class="truncate text-base font-semibold leading-5 text-highlighted">
+                  {{ item.value }}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <UTable

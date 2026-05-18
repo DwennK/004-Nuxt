@@ -2,9 +2,22 @@ import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { paymentMethodLabels } from '~~/shared/constants/pos'
 import { customers, documents, payments } from '~~/server/db/schema'
 import type { PaymentListItem, PaymentRecord } from '~~/shared/types/pos'
+import { buildZonedDayRange } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
 import { createTicketEvent, ensurePosSchema, normalizeOptionalText, syncDocumentStatus } from './core'
 import { mapPayment } from './documents'
+
+function normalizePaymentDateFrom(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? buildZonedDayRange(value).start
+    : value
+}
+
+function normalizePaymentDateTo(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? buildZonedDayRange(value).end
+    : value
+}
 
 export async function listPayments(filters?: {
   method?: string
@@ -17,6 +30,8 @@ export async function listPayments(filters?: {
   await ensurePosSchema()
 
   const db = useDb()
+  const dateFrom = filters?.dateFrom ? normalizePaymentDateFrom(filters.dateFrom) : undefined
+  const dateTo = filters?.dateTo ? normalizePaymentDateTo(filters.dateTo) : undefined
   const rows = await db.select({
     payment: payments,
     customer: customers,
@@ -31,8 +46,8 @@ export async function listPayments(filters?: {
       filters?.status ? eq(payments.status, filters.status as typeof payments.$inferSelect.status) : undefined,
       filters?.documentId ? eq(payments.documentId, filters.documentId) : undefined,
       filters?.customerId ? eq(payments.customerId, filters.customerId) : undefined,
-      filters?.dateFrom ? gte(payments.paidAt, filters.dateFrom) : undefined,
-      filters?.dateTo ? lte(payments.paidAt, filters.dateTo) : undefined
+      dateFrom ? gte(payments.paidAt, dateFrom) : undefined,
+      dateTo ? lte(payments.paidAt, dateTo) : undefined
     ))
     .orderBy(desc(payments.paidAt), desc(payments.id))
 
