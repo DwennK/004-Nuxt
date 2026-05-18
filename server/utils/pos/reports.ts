@@ -263,8 +263,9 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
 
   const db = useDb()
   const { start, end } = buildDayRange(date)
+  const customerNameValue = sql<string>`coalesce(nullif(trim(${customers.companyName}), ''), nullif(trim(${customers.firstName} || ' ' || ${customers.lastName}), ''), 'Unknown customer')`
 
-  const [paymentTotalRows, totalsByMethodRows, paidDocumentRows, openTicketRows, openedTodayRows, closedTodayRows] = await Promise.all([
+  const [paymentTotalRows, totalsByMethodRows, paidDocumentRows, unpaidDocumentRows, openTicketRows, openedTodayRows, closedTodayRows] = await Promise.all([
     db.select({ total: sum(payments.amount) })
       .from(payments)
       .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end))),
@@ -282,7 +283,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       documentNumber: documents.documentNumber,
       type: documents.type,
       status: documents.status,
-      customerName: sql<string>`coalesce(${customers.companyName}, ${customers.firstName} || ' ' || ${customers.lastName})`,
+      customerName: customerNameValue,
       total: documents.total,
       paidAmountToday: sum(payments.amount),
       paidAt: sql<string>`max(${payments.paidAt})`
@@ -299,6 +300,24 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       ))
       .groupBy(documents.id, customers.id)
       .orderBy(desc(sql`max(${payments.paidAt})`)),
+    db.select({
+      id: documents.id,
+      documentNumber: documents.documentNumber,
+      customerName: customerNameValue,
+      total: documents.total,
+      paidAmount: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
+    })
+      .from(documents)
+      .innerJoin(customers, eq(documents.customerId, customers.id))
+      .leftJoin(payments, eq(payments.documentId, documents.id))
+      .where(and(
+        eq(documents.type, 'invoice'),
+        sql`${documents.status} != 'cancelled'`,
+        gte(documents.issuedAt, start),
+        lte(documents.issuedAt, end)
+      ))
+      .groupBy(documents.id, customers.id)
+      .orderBy(desc(documents.issuedAt), desc(documents.id)),
     db.select({ count: sql<number>`count(*)` })
       .from(tickets)
       .where(sql`${tickets.status} not in ('closed', 'cancelled')`),
@@ -349,6 +368,21 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       paidAmountToday: Number(row.paidAmountToday || 0),
       paidAt: row.paidAt
     })),
+    unpaidDocuments: unpaidDocumentRows
+      .map((row) => {
+        const paidAmount = Number(row.paidAmount || 0)
+        const balanceDue = Math.max(row.total - paidAmount, 0)
+
+        return {
+          id: row.id,
+          documentNumber: row.documentNumber,
+          customerName: row.customerName,
+          total: row.total,
+          paidAmount,
+          balanceDue
+        }
+      })
+      .filter(document => document.balanceDue > 0),
     totalsByMethod: paymentMethods
       .map(method => ({
         method,

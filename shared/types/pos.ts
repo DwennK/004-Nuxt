@@ -383,6 +383,14 @@ export interface DailySummary {
     paidAmountToday: number
     paidAt: string
   }>
+  unpaidDocuments: Array<{
+    id: number
+    documentNumber: string
+    customerName: string
+    total: number
+    paidAmount: number
+    balanceDue: number
+  }>
   totalsByMethod: Array<{
     method: PaymentMethod
     total: number
