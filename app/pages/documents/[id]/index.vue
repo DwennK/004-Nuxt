@@ -20,6 +20,7 @@ const isSendingEmail = ref(false)
 const isSavingDocument = ref(false)
 const isContextOpen = ref(false)
 const hasUnsavedDocumentChanges = ref(false)
+const hasOpenedInitialEmailModal = ref(false)
 const documentFormId = 'document-detail-form'
 const unsavedDocumentMessage = 'Des modifications du document ne sont pas enregistrées. Continuer sans enregistrer ?'
 
@@ -128,6 +129,11 @@ onBeforeRouteLeave(() => {
 
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
+
+  if (route.query.email === '1' && supportsA4Print.value && !hasOpenedInitialEmailModal.value) {
+    hasOpenedInitialEmailModal.value = true
+    openEmailModal()
+  }
 })
 
 onBeforeUnmount(() => {
