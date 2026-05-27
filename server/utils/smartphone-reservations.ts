@@ -60,6 +60,10 @@ export async function ensureSmartphoneReservationsTable() {
     `
       CREATE INDEX IF NOT EXISTS smartphone_reservation_requests_status_idx
       ON smartphone_reservation_requests(status)
+    `,
+    `
+      CREATE INDEX IF NOT EXISTS smartphone_reservation_requests_requested_at_idx
+      ON smartphone_reservation_requests(requested_at)
     `
   ], 'write')
 }
@@ -68,7 +72,10 @@ export async function listSmartphoneReservations() {
   await ensureSmartphoneReservationsTable()
 
   const db = useDb()
-  const result = await db.select().from(smartphoneReservationRequests).orderBy(asc(smartphoneReservationRequests.id))
+  const result = await db
+    .select()
+    .from(smartphoneReservationRequests)
+    .orderBy(asc(smartphoneReservationRequests.requestedAt), asc(smartphoneReservationRequests.id))
 
   return result.map(mapSmartphoneReservation)
 }
