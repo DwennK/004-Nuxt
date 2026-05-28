@@ -11,11 +11,15 @@ const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
+const route = useRoute()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 const search = ref('')
 const debouncedSearch = refDebounced(search, 250)
-const statusFilter = ref<'all' | TicketListItem['status']>('all')
+const initialStatus = typeof route.query.status === 'string' && route.query.status in ticketStatusLabels
+  ? route.query.status as TicketListItem['status']
+  : 'all'
+const statusFilter = ref<'all' | TicketListItem['status']>(initialStatus)
 const pagination = ref({
   pageIndex: 0,
   pageSize: 50
@@ -48,6 +52,12 @@ const summary = computed(() => ticketsResponse.value?.summary || {
 
 watch([debouncedSearch, statusFilter], () => {
   pagination.value.pageIndex = 0
+})
+
+watch(() => route.query.status, (status) => {
+  statusFilter.value = typeof status === 'string' && status in ticketStatusLabels
+    ? status as TicketListItem['status']
+    : 'all'
 })
 
 watch(totalResults, (total) => {

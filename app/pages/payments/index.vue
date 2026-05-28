@@ -71,13 +71,6 @@ const methodItems = [
   }))
 ]
 
-const paymentMethodIcons: Record<PaymentListItem['method'], string> = {
-  cash: 'i-lucide-banknote',
-  card_twint: 'i-lucide-credit-card',
-  bank_transfer: 'i-lucide-landmark',
-  stripe: 'i-lucide-wallet-cards'
-}
-
 const statusItems = [
   { label: 'Tous les statuts', value: 'all' },
   ...Object.entries(paymentStatusLabels).map(([value, label]) => ({ label, value }))
@@ -120,8 +113,6 @@ const filteredPayments = computed(() => {
     return matchesSearch && matchesMethod && matchesStatus && matchesDateFrom && matchesDateTo
   })
 })
-
-const filteredPaymentTotal = computed(() => filteredPayments.value.reduce((sum, payment) => sum + payment.amount, 0))
 
 watch(periodPreset, (preset) => {
   const today = toDateInputValue()
@@ -170,15 +161,6 @@ const hasActiveFilters = computed(() =>
   || dateTo.value !== toDateInputValue()
 )
 
-const filteredPaymentMethodTotals = computed(() => {
-  return paymentMethods.map(method => ({
-    method,
-    total: filteredPayments.value.reduce((sum, payment) => {
-      return payment.method === method ? sum + payment.amount : sum
-    }, 0)
-  }))
-})
-
 function resetFilters() {
   search.value = ''
   methodFilter.value = 'all'
@@ -188,23 +170,6 @@ function resetFilters() {
   dateFrom.value = range.from
   dateTo.value = range.to
 }
-
-const summaryItems = computed(() => [{
-  key: 'payments',
-  label: 'Paiements',
-  value: String(filteredPayments.value.length),
-  icon: 'i-lucide-wallet'
-}, {
-  key: 'total',
-  label: 'Total encaissé',
-  value: formatCurrency(filteredPaymentTotal.value),
-  icon: 'i-lucide-badge-swiss-franc'
-}, ...filteredPaymentMethodTotals.value.map(item => ({
-  key: item.method,
-  label: getCompactPaymentMethodLabel(item.method),
-  value: formatCurrency(item.total),
-  icon: paymentMethodIcons[item.method]
-}))])
 
 async function removePayment(id: number) {
   await $fetch(`/api/payments/${id}`, { method: 'DELETE' })
@@ -406,29 +371,6 @@ const columns: TableColumn<PaymentListItem>[] = [
 
     <template #body>
       <div class="space-y-4">
-        <div class="rounded-lg border border-default bg-muted/20 px-3 py-2">
-          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-            <div
-              v-for="item in summaryItems"
-              :key="item.key"
-              class="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5"
-            >
-              <div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary ring ring-primary/15">
-                <UIcon :name="item.icon" class="size-4" />
-              </div>
-
-              <div class="min-w-0">
-                <p class="truncate text-xs font-medium text-toned">
-                  {{ item.label }}
-                </p>
-                <p class="truncate text-base font-semibold leading-5 text-highlighted">
-                  {{ item.value }}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <UTable
           ref="table"
           v-model:pagination="pagination"

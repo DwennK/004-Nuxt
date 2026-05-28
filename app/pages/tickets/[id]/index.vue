@@ -30,7 +30,7 @@ import {
   normalizeSmsPhoneNumber,
   resolveSmsTemplateBody
 } from '~~/shared/utils/customer-sms'
-import { supportsTicketPrintProfile } from '~~/shared/utils/print'
+import { supportsDocumentPrintProfile, supportsTicketPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
 type TimelineItem = TicketEvent & {
@@ -51,7 +51,9 @@ const id = computed(() => Number(route.params.id))
 const workflowOpen = ref(false)
 const paymentOpen = ref(false)
 const smsModalOpen = ref(false)
+const createdDocumentActionsOpen = ref(false)
 const selectedWorkflowAction = ref<TicketWorkflowAction | null>(null)
+const createdCommercialDocument = ref<DocumentDetail | null>(null)
 const selectedSmsTemplateId = ref<string>(freeSmsTemplateId)
 const smsQrDataUrl = ref<string | null>(null)
 const smsQrLoading = ref(false)
@@ -107,6 +109,20 @@ const canRecordPayment = computed(() =>
   && Boolean(ticket.value?.commercialSummary.balanceDue)
 )
 const supportsThermalPrint = supportsTicketPrintProfile('thermal')
+const createdDocumentSupportsA4Print = computed(() =>
+  createdCommercialDocument.value
+    ? supportsDocumentPrintProfile(createdCommercialDocument.value.type, 'a4')
+    : false
+)
+const createdDocumentSupportsThermalPrint = computed(() =>
+  createdCommercialDocument.value
+    ? supportsDocumentPrintProfile(createdCommercialDocument.value.type, 'thermal')
+    : false
+)
+const canChargeCreatedDocument = computed(() =>
+  createdCommercialDocument.value?.type === 'invoice'
+  && Boolean(ticket.value?.commercialSummary.balanceDue)
+)
 const normalizedCustomerPhone = computed(() => normalizeSmsPhoneNumber(ticket.value?.customer.phone || ''))
 const canSendSms = computed(() => Boolean(normalizedCustomerPhone.value))
 const smsTemplates = computed(() => customerSmsSettings.value?.templates || [])
@@ -345,6 +361,29 @@ function openWorkflowAction(action: TicketWorkflowAction) {
   workflowOpen.value = true
 }
 
+function showCreatedDocumentActions(document: DocumentDetail) {
+  createdCommercialDocument.value = document
+  createdDocumentActionsOpen.value = true
+}
+
+function closeCreatedDocumentActions() {
+  createdDocumentActionsOpen.value = false
+}
+
+function clearCreatedDocumentActions() {
+  createdCommercialDocument.value = null
+}
+
+async function navigateToCreatedDocument(path: string) {
+  closeCreatedDocumentActions()
+  await navigateTo(path)
+}
+
+function openPaymentForCreatedDocument() {
+  closeCreatedDocumentActions()
+  paymentOpen.value = true
+}
+
 async function changeTicketStatus(status: TicketStatus, internalNotes?: string) {
   if (!ticket.value || ticket.value.status === status) {
     return
@@ -406,6 +445,7 @@ async function createQuote() {
   })
 
   await refreshTicket()
+  showCreatedDocumentActions(document)
 }
 
 async function createOrder() {
@@ -418,6 +458,7 @@ async function createOrder() {
   })
 
   await refreshTicket()
+  showCreatedDocumentActions(document)
 }
 
 async function createInvoice() {
@@ -430,6 +471,7 @@ async function createInvoice() {
   })
 
   await refreshTicket()
+  showCreatedDocumentActions(document)
 }
 
 async function markPaid(payload: {
@@ -1009,6 +1051,101 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
       </div>
     </template>
   </UDashboardPanel>
+
+  <UModal
+    v-if="createdCommercialDocument"
+    v-model:open="createdDocumentActionsOpen"
+    :title="`${documentTypeLabels[createdCommercialDocument.type]} créé`"
+    :description="`${createdCommercialDocument.documentNumber} est lié au ticket ${ticket?.ticketNumber || ''}.`"
+    :ui="{ content: 'sm:max-w-2xl' }"
+    @after:leave="clearCreatedDocumentActions"
+  >
+    <template #body>
+      <div class="space-y-4">
+        <div class="rounded-2xl border border-success/20 bg-success/5 px-4 py-4">
+          <div class="flex items-start gap-3">
+            <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-success/10 text-success">
+              <UIcon name="i-lucide-file-check-2" class="size-5" />
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-highlighted">
+                {{ documentTypeLabels[createdCommercialDocument.type] }} {{ createdCommercialDocument.documentNumber }}
+              </p>
+              <p class="mt-1 text-sm text-toned">
+                {{ createdCommercialDocument.customer.displayName }} · {{ formatCurrency(createdCommercialDocument.total) }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid gap-2 sm:grid-cols-2">
+          <UButton
+            label="Ouvrir le document"
+            icon="i-lucide-arrow-up-right"
+            color="primary"
+            block
+            @click="navigateToCreatedDocument(`/documents/${createdCommercialDocument.id}`)"
+          />
+          <UButton
+            v-if="createdDocumentSupportsA4Print"
+            label="Envoyer par mail"
+            icon="i-lucide-mail"
+            color="neutral"
+            variant="soft"
+            block
+            @click="navigateToCreatedDocument(`/documents/${createdCommercialDocument.id}?email=1`)"
+          />
+          <UButton
+            v-if="createdDocumentSupportsA4Print"
+            label="Imprimer A4"
+            icon="i-lucide-file-text"
+            color="neutral"
+            variant="soft"
+            block
+            @click="navigateToCreatedDocument(`/documents/${createdCommercialDocument.id}/print?profile=a4`)"
+          />
+          <UButton
+            v-if="createdDocumentSupportsThermalPrint"
+            label="Imprimer thermique"
+            icon="i-lucide-printer"
+            color="neutral"
+            variant="soft"
+            block
+            @click="navigateToCreatedDocument(`/documents/${createdCommercialDocument.id}/print?profile=thermal`)"
+          />
+          <UButton
+            v-if="createdCommercialDocument.type !== 'invoice' && canCreateInvoice"
+            label="Créer la facture"
+            icon="i-lucide-file-text"
+            color="neutral"
+            variant="soft"
+            block
+            @click="createInvoice"
+          />
+          <UButton
+            v-if="canChargeCreatedDocument"
+            label="Encaisser"
+            icon="i-lucide-wallet"
+            color="success"
+            variant="soft"
+            block
+            @click="openPaymentForCreatedDocument"
+          />
+        </div>
+      </div>
+    </template>
+
+    <template #footer>
+      <div class="flex w-full justify-end">
+        <UButton
+          label="Rester sur le ticket"
+          color="neutral"
+          variant="ghost"
+          @click="closeCreatedDocumentActions"
+        />
+      </div>
+    </template>
+  </UModal>
 
   <PosTicketWorkflowSlideover
     v-model:open="workflowOpen"

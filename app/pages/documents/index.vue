@@ -14,12 +14,14 @@ const UBadge = resolveComponent('UBadge')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
+const route = useRoute()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 const search = ref('')
 const debouncedSearch = refDebounced(search, 250)
 const typeFilter = ref<'all' | DocumentListItem['type']>('all')
 const statusFilter = ref<'all' | DocumentListItem['status']>('all')
+const paymentStateFilter = ref<'all' | 'due'>(route.query.paymentState === 'due' ? 'due' : 'all')
 const dateFrom = ref('')
 const dateTo = ref('')
 const pagination = ref({
@@ -62,6 +64,8 @@ const query = computed(() => ({
   status: statusFilter.value === 'all' ? undefined : statusFilter.value,
   dateFrom: dateFrom.value || undefined,
   dateTo: dateTo.value || undefined,
+  paymentState: paymentStateFilter.value === 'due' ? 'due' : undefined,
+  sortBy: paymentStateFilter.value === 'due' ? 'balanceDue' : undefined,
   page: pagination.value.pageIndex + 1,
   pageSize: pagination.value.pageSize
 }))
@@ -78,8 +82,12 @@ const summary = computed(() => documentsResponse.value?.summary || {
   totalBalanceDue: 0
 })
 
-watch([debouncedSearch, typeFilter, statusFilter, dateFrom, dateTo], () => {
+watch([debouncedSearch, typeFilter, statusFilter, paymentStateFilter, dateFrom, dateTo], () => {
   pagination.value.pageIndex = 0
+})
+
+watch(() => route.query.paymentState, (paymentState) => {
+  paymentStateFilter.value = paymentState === 'due' ? 'due' : 'all'
 })
 
 watch(totalResults, (total) => {
@@ -94,6 +102,7 @@ const hasActiveFilters = computed(() =>
   !!search.value.trim()
   || typeFilter.value !== 'all'
   || statusFilter.value !== 'all'
+  || paymentStateFilter.value !== 'all'
   || !!dateFrom.value
   || !!dateTo.value
 )
@@ -102,6 +111,7 @@ function resetFilters() {
   search.value = ''
   typeFilter.value = 'all'
   statusFilter.value = 'all'
+  paymentStateFilter.value = 'all'
   dateFrom.value = ''
   dateTo.value = ''
 }
@@ -248,6 +258,13 @@ const columns: TableColumn<DocumentListItem>[] = [
             :items="statusItems"
             value-key="value"
             class="w-48"
+          />
+          <UButton
+            :label="paymentStateFilter === 'due' ? 'À encaisser' : 'Tous les paiements'"
+            :icon="paymentStateFilter === 'due' ? 'i-lucide-wallet-cards' : 'i-lucide-scale'"
+            :color="paymentStateFilter === 'due' ? 'warning' : 'neutral'"
+            :variant="paymentStateFilter === 'due' ? 'soft' : 'outline'"
+            @click="paymentStateFilter = paymentStateFilter === 'due' ? 'all' : 'due'"
           />
           <div class="flex items-center gap-2">
             <span class="text-xs text-toned">Début</span>

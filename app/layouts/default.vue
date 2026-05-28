@@ -7,6 +7,13 @@ const route = useRoute()
 const toolRoutes = ['/tools', '/vacances', '/inbox', '/assistant']
 
 const primaryLinks = [{
+  label: 'Comptoir',
+  icon: 'i-lucide-scan-line',
+  to: '/comptoir',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
   label: 'Documents',
   icon: 'i-lucide-files',
   to: '/documents',

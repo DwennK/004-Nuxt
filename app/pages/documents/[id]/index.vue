@@ -20,6 +20,7 @@ const isSendingEmail = ref(false)
 const isSavingDocument = ref(false)
 const isContextOpen = ref(false)
 const hasUnsavedDocumentChanges = ref(false)
+const hasOpenedInitialEmailModal = ref(false)
 const documentFormId = 'document-detail-form'
 const unsavedDocumentMessage = 'Des modifications du document ne sont pas enregistrées. Continuer sans enregistrer ?'
 
@@ -50,6 +51,8 @@ const isPayableDocument = computed(() => document.value ? isPayableDocumentType(
 const balanceDue = computed(() => isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0)
 const supportsA4Print = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'a4') : false)
 const supportsThermalPrint = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'thermal') : false)
+const documentActionsDisabled = computed(() => hasUnsavedDocumentChanges.value || isSavingDocument.value)
+const saveButtonLabel = computed(() => hasUnsavedDocumentChanges.value ? 'Enregistrer les modifications' : 'Enregistrer')
 
 async function saveDocument(payload: DocumentSavePayload) {
   isSavingDocument.value = true
@@ -106,7 +109,12 @@ function selectTab(value: string | number) {
     return
   }
 
-  if (!confirmDiscardUnsavedDocumentChanges()) {
+  if (hasUnsavedDocumentChanges.value) {
+    toast.add({
+      title: 'Enregistrement requis',
+      description: 'Enregistrez le document avant de consulter ou ajouter des paiements.',
+      color: 'warning'
+    })
     return
   }
 
@@ -128,6 +136,11 @@ onBeforeRouteLeave(() => {
 
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
+
+  if (route.query.email === '1' && supportsA4Print.value && !hasOpenedInitialEmailModal.value) {
+    hasOpenedInitialEmailModal.value = true
+    openEmailModal()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -145,6 +158,15 @@ function fillEmailState() {
 }
 
 function openEmailModal() {
+  if (documentActionsDisabled.value) {
+    toast.add({
+      title: 'Enregistrement requis',
+      description: 'Enregistrez le document avant de l’envoyer par e-mail.',
+      color: 'warning'
+    })
+    return
+  }
+
   fillEmailState()
   isEmailModalOpen.value = true
 }
@@ -210,6 +232,7 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
             label="Envoyer par mail"
             color="neutral"
             variant="subtle"
+            :disabled="documentActionsDisabled"
             @click="openEmailModal"
           />
           <UButton
@@ -219,19 +242,21 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
             label="Imprimer A4"
             color="neutral"
             variant="subtle"
+            :disabled="documentActionsDisabled"
           />
           <UButton
             v-if="supportsThermalPrint"
             :to="`/documents/${id}/print?profile=thermal`"
             icon="i-lucide-printer"
             label="Imprimer thermique"
+            :disabled="documentActionsDisabled"
           />
           <UButton
             v-if="activeTab === 'lines'"
             :form="documentFormId"
             type="submit"
             icon="i-lucide-save"
-            label="Enregistrer"
+            :label="saveButtonLabel"
             :loading="isSavingDocument"
           />
         </template>
@@ -247,6 +272,35 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
           :is-payable-document="isPayableDocument"
           @edit-context="openContextEditor"
         />
+
+        <div
+          v-if="hasUnsavedDocumentChanges"
+          class="flex flex-col gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div class="flex items-start gap-3">
+            <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning">
+              <UIcon name="i-lucide-triangle-alert" class="size-4.5" />
+            </div>
+            <div>
+              <p class="text-sm font-medium text-highlighted">
+                Modifications non enregistrées
+              </p>
+              <p class="text-sm text-toned">
+                Enregistrez avant d’imprimer, d’envoyer par mail ou d’encaisser ce document.
+              </p>
+            </div>
+          </div>
+
+          <UButton
+            :form="documentFormId"
+            type="submit"
+            label="Enregistrer"
+            icon="i-lucide-save"
+            color="warning"
+            :loading="isSavingDocument"
+            class="shrink-0"
+          />
+        </div>
 
         <UTabs
           :model-value="activeTab"

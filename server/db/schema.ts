@@ -288,5 +288,6 @@ export const smartphoneReservationRequests = sqliteTable('smartphone_reservation
   notes: text('notes')
 }, table => ({
   nameIdx: index('smartphone_reservation_requests_name_idx').on(table.name),
+  requestedAtIdx: index('smartphone_reservation_requests_requested_at_idx').on(table.requestedAt),
   statusIdx: index('smartphone_reservation_requests_status_idx').on(table.status)
 }))
