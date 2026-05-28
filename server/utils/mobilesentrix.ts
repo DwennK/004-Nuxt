@@ -174,9 +174,13 @@ function escapeHtmlAttribute(value: string) {
     .replace(/>/g, '&gt;')
 }
 
+function serializeInlineJson(value: unknown) {
+  return JSON.stringify(value).replace(/</g, '\\u003C')
+}
+
 function getNonJsonRequestMessage(response: Response, text: string) {
   if (response.status === 403 && text.includes('Just a moment')) {
-    return 'Cloudflare bloque l’appel REST MobileSentrix. Configurez la clé de header REST MobileSentrix ou demandez le whitelist de l’origine serveur.'
+    return 'Cloudflare bloque l’appel REST MobileSentrix avant la réponse API. Vérifiez le domaine MobileSentrix et demandez comment autoriser l’origine serveur.'
   }
 
   return response.ok
@@ -420,12 +424,17 @@ export async function exchangeMobileSentrixOAuthToken(oauthToken: string, oauthV
 export function getMobileSentrixBrowserExchangeHtml(oauthToken: string, oauthVerifier: string) {
   const config = requireConsumerConfig()
   const action = new URL('/oauth/authorize/identifiercallback', config.baseUrl).toString()
-  const fields = {
+  const payload = {
     consumer_key: config.consumerKey,
     consumer_secret: config.consumerSecret,
     oauth_token: oauthToken,
     oauth_verifier: oauthVerifier
   }
+  const actionJson = serializeInlineJson(action)
+  const payloadJson = serializeInlineJson(payload)
+  const formFields = Object.entries(payload)
+    .map(([key, value]) => `<input type="hidden" name="${escapeHtmlAttribute(key)}" value="${escapeHtmlAttribute(value)}">`)
+    .join('\n        ')
 
   return `<!doctype html>
 <html lang="fr">
@@ -437,18 +446,71 @@ export function getMobileSentrixBrowserExchangeHtml(oauthToken: string, oauthVer
     body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #18181b; }
     main { max-width: 42rem; }
     button { border: 0; border-radius: .5rem; background: #16a34a; color: white; font: inherit; font-weight: 600; padding: .75rem 1rem; }
+    form { margin-top: 1rem; }
+    form[hidden] { display: none; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #d4d4d8; border-radius: .5rem; padding: 1rem; background: #f4f4f5; }
     p { color: #52525b; line-height: 1.5; }
   </style>
 </head>
 <body>
   <main>
     <h1>Échange OAuth MobileSentrix</h1>
-    <p>Le formulaire va être envoyé directement à MobileSentrix depuis ce navigateur. Si la réponse contient access_token et access_token_secret, copiez ces deux valeurs dans .env puis redémarrez Nuxt.</p>
-    <form method="post" action="${escapeHtmlAttribute(action)}">
-      ${Object.entries(fields).map(([key, value]) => `<input type="hidden" name="${escapeHtmlAttribute(key)}" value="${escapeHtmlAttribute(value)}">`).join('\n      ')}
-      <button type="submit">Continuer vers MobileSentrix</button>
+    <p>La requête JSON va être envoyée directement à MobileSentrix depuis ce navigateur. Si la réponse contient access_token et access_token_secret, copiez ces deux valeurs dans .env puis redémarrez Nuxt.</p>
+    <button type="button" id="retry">Relancer l’échange</button>
+    <pre id="result">Échange en cours...</pre>
+    <form id="form-fallback" method="post" action="${escapeHtmlAttribute(action)}" hidden>
+      ${formFields}
+      <p>Si l’échange JSON est bloqué par CORS mais que le navigateur est bien autorisé par MobileSentrix, ce POST navigateur peut permettre d’afficher la réponse MobileSentrix directement.</p>
+      <button type="submit">Essayer le POST navigateur</button>
     </form>
-    <script>document.querySelector('form').submit()</script>
+    <script>
+      const action = ${actionJson}
+      const payload = ${payloadJson}
+      const result = document.querySelector('#result')
+      const retry = document.querySelector('#retry')
+      const formFallback = document.querySelector('#form-fallback')
+
+      async function exchange() {
+        result.textContent = 'Échange en cours...'
+
+        try {
+          const response = await fetch(action, {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          })
+          const text = await response.text()
+          let data = null
+
+          try {
+            data = text ? JSON.parse(text) : null
+          } catch {
+            result.textContent = text || 'MobileSentrix a renvoyé une réponse vide.'
+            return
+          }
+
+          if (!response.ok || !data || data.status === 0) {
+            result.textContent = JSON.stringify(data || { status: response.status }, null, 2)
+            return
+          }
+
+          const tokens = data.data || {}
+          result.textContent = [
+            'MOBILESENTRIX_ACCESS_TOKEN=' + (tokens.access_token || ''),
+            'MOBILESENTRIX_ACCESS_TOKEN_SECRET=' + (tokens.access_token_secret || '')
+          ].join('\\n')
+        } catch (error) {
+          result.textContent = 'Échange navigateur impossible. Le navigateur a probablement bloqué la requête cross-origin vers MobileSentrix.\\n\\n' + (error && error.message ? error.message : String(error))
+          formFallback.hidden = false
+        }
+      }
+
+      retry.addEventListener('click', exchange)
+      exchange()
+    </script>
   </main>
 </body>
 </html>`
