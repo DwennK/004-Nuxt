@@ -77,10 +77,6 @@ const { data: documentsResponse, status, refresh } = await useFetch<DocumentList
 const documents = computed(() => documentsResponse.value?.items || [])
 const totalResults = computed(() => documentsResponse.value?.total || 0)
 const totalPages = computed(() => Math.max(Math.ceil(totalResults.value / pagination.value.pageSize), 1))
-const summary = computed(() => documentsResponse.value?.summary || {
-  paidCount: 0,
-  totalBalanceDue: 0
-})
 
 watch([debouncedSearch, typeFilter, statusFilter, paymentStateFilter, dateFrom, dateTo], () => {
   pagination.value.pageIndex = 0
@@ -322,13 +318,6 @@ const columns: TableColumn<DocumentListItem>[] = [
 
     <template #body>
       <div class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-4">
-          <PosSummaryCard title="Documents" :value="String(totalResults)" icon="i-lucide-files" />
-          <PosSummaryCard title="Payés" :value="String(summary.paidCount)" icon="i-lucide-wallet" />
-          <PosSummaryCard title="Restant à encaisser" :value="formatCurrency(summary.totalBalanceDue)" icon="i-lucide-scale" />
-          <PosSummaryCard title="Sur la page" :value="String(documents.length)" icon="i-lucide-filter" />
-        </div>
-
         <UTable
           ref="table"
           v-model:column-visibility="columnVisibility"
