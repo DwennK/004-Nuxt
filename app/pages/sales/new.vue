@@ -3,7 +3,10 @@ import { documentTypeLabels, paymentMethodLabels, paymentMethods } from '~~/shar
 import type { CatalogItemRecord, CustomerListResponse, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, normalizeSearchText, parseCurrencyInput } from '~~/shared/utils/pos'
-import { commercialLineUnitPriceMin } from '~~/app/composables/useCommercialLinesDraft'
+import {
+  commercialLineUnitPriceInputClass,
+  commercialLineUnitPriceMin
+} from '~~/app/composables/useCommercialLinesDraft'
 
 type SaleLine = {
   id: string
@@ -768,7 +771,7 @@ function selectAllOnFocus(event: FocusEvent) {
                 <div
                   v-for="(line, index) in lines"
                   :key="line.id"
-                  class="grid gap-2 rounded-2xl border border-default bg-default px-3 py-3 md:grid-cols-[minmax(0,1fr)_4.75rem_auto_9rem_auto] md:items-center"
+                  class="grid gap-2 rounded-2xl border border-default bg-default px-3 py-3 md:grid-cols-[minmax(0,1fr)_4.25rem_auto_9rem_auto] md:items-center"
                 >
                   <div class="min-w-0">
                     <UInput
@@ -795,7 +798,7 @@ function selectAllOnFocus(event: FocusEvent) {
                       size="sm"
                       variant="subtle"
                       :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
-                      class="w-[4.75rem]"
+                      :class="commercialLineUnitPriceInputClass"
                       @update:model-value="updateLineUnitPrice(index, $event)"
                       @focus="selectAllOnFocus"
                     />

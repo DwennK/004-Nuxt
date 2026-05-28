@@ -3,14 +3,15 @@ import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import {
   catalogArticleCategories,
-  catalogRepairCategories,
   catalogItemTypeLabels,
   catalogItemTypes,
+  catalogRepairCategories,
   catalogServiceCategories,
   catalogServiceKindSuggestions
 } from '~~/shared/constants/pos'
 import type { CatalogItemInput } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
+import { commercialLineUnitPriceInputClass } from '~~/app/composables/useCommercialLinesDraft'
 
 type FormState = {
   name: string
@@ -315,11 +316,12 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             required
           >
             <UInputNumber
-              v-model="state.defaultPrice"
+              :model-value="state.defaultPrice"
               :min="0"
               :step="0.05"
-              :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
-              class="w-full"
+              :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
+              :class="commercialLineUnitPriceInputClass"
+              @update:model-value="state.defaultPrice = Number($event || 0)"
             />
           </UFormField>
 
@@ -447,11 +449,12 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           required
         >
           <UInputNumber
-            v-model="state.defaultPrice"
+            :model-value="state.defaultPrice"
             :min="0"
             :step="0.05"
-            :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
-            class="w-full"
+            :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
+            :class="commercialLineUnitPriceInputClass"
+            @update:model-value="state.defaultPrice = Number($event || 0)"
           />
         </UFormField>
 

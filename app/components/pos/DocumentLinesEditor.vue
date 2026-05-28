@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { CatalogItemRecord } from '~~/shared/types/pos'
-import { commercialLineUnitPriceMin, type CommercialLinesDraftController } from '~~/app/composables/useCommercialLinesDraft'
+import {
+  commercialLineUnitPriceInputClass,
+  commercialLineUnitPriceMin,
+  type CommercialLinesDraftController
+} from '~~/app/composables/useCommercialLinesDraft'
 import { formatCurrency, getCatalogItemTypeLabel } from '~~/shared/utils/pos'
 
 const props = withDefaults(defineProps<{
@@ -229,7 +233,7 @@ async function handleBarcodeScan(value: string) {
       <div v-else class="pb-0 pt-4">
         <div class="overflow-x-auto">
           <div class="min-w-[54rem]">
-            <div class="grid grid-cols-[minmax(0,1.9fr)_6rem_5rem_10rem_5rem_8.5rem_6rem] gap-2 px-4 pb-2 text-[11px] uppercase tracking-[0.14em] text-toned">
+            <div class="grid grid-cols-[minmax(0,1.9fr)_4.25rem_5rem_10rem_5rem_8.5rem_6rem] gap-2 px-4 pb-2 text-[11px] uppercase tracking-[0.14em] text-toned">
               <span>Libellé</span>
               <span class="text-right">PU TTC</span>
               <span class="text-center">Qté</span>
@@ -243,7 +247,7 @@ async function handleBarcodeScan(value: string) {
               <div
                 v-for="(line, index) in state.lines"
                 :key="line.id"
-                class="grid grid-cols-[minmax(0,1.9fr)_6rem_5rem_10rem_5rem_8.5rem_6rem] items-start gap-2 border-t border-default/70 bg-default px-4 py-3 first:border-t-0"
+                class="grid grid-cols-[minmax(0,1.9fr)_4.25rem_5rem_10rem_5rem_8.5rem_6rem] items-start gap-2 border-t border-default/70 bg-default px-4 py-3 first:border-t-0"
               >
                 <div class="min-w-0">
                   <UFormField :name="`lines.${index}.label`" class="min-w-0">
@@ -278,7 +282,7 @@ async function handleBarcodeScan(value: string) {
                     size="sm"
                     variant="subtle"
                     :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
-                    class="w-full max-w-[6rem]"
+                    :class="commercialLineUnitPriceInputClass"
                     @update:model-value="editor.updateLineUnitPrice(index, $event)"
                     @focus="editor.selectAllOnFocus"
                   />

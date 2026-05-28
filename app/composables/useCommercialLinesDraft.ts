@@ -20,6 +20,7 @@ export type CommercialDraftLine = {
 }
 
 export const commercialLineUnitPriceMin = -999_999
+export const commercialLineUnitPriceInputClass = 'w-[4.25rem]'
 
 type SelectItem<TValue> = {
   label: string
