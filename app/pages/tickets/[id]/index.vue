@@ -80,6 +80,7 @@ const operationalStatuses: TicketStatus[] = [
 const tabItems = computed(() => [
   { label: 'Suivi', icon: 'i-lucide-clock', value: 'suivi' },
   { label: 'Documents', icon: 'i-lucide-files', value: 'documents', badge: ticket.value?.documents.length || 0 },
+  { label: 'Paiements', icon: 'i-lucide-wallet', value: 'payments', badge: ticket.value?.payments.length || 0 },
   { label: 'SMS', icon: 'i-lucide-message-square-share', value: 'sms', badge: smsTimelineItems.value.length || 0 },
   { label: 'Client & Appareil', icon: 'i-lucide-user', value: 'client' }
 ])
@@ -721,7 +722,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
               </div>
 
               <!-- Documents tab -->
-              <div v-else-if="activeTab === 'documents'" class="grid gap-4 xl:h-full xl:grid-cols-[minmax(0,1fr)_18rem]">
+              <div v-else-if="activeTab === 'documents'" class="xl:h-full">
                 <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
                   <template #header>
                     <div class="flex items-center justify-between gap-3">
@@ -746,7 +747,10 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                     </UTable>
                   </div>
                 </UCard>
+              </div>
 
+              <!-- Payments tab -->
+              <div v-else-if="activeTab === 'payments'" class="xl:h-full">
                 <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
                   <template #header>
                     <div class="flex items-center justify-between gap-3">
