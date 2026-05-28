@@ -42,6 +42,11 @@ Before local work, check `.env.example` and confirm the relevant variables exist
 - required only for internal assistant work: `MINIMAX_API_KEY`
 - optional for internal assistant provider selection: `MINIMAX_MODEL`, `MINIMAX_BASE_URL`
 
+## Development Login
+
+The temporary pre-live POS test login is documented in `docs/dev-login.md`.
+Use `npm run seed:test-user` to create or refresh that account in the configured Turso database.
+
 ## Repo Shape
 
 - `app/pages`: route pages
