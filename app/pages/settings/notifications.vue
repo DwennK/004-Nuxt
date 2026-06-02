@@ -38,8 +38,7 @@ const sections = [{
 }]
 
 async function onChange() {
-  // Do something with data
-  console.log(state)
+  // TODO: persister les préférences de notifications côté serveur
 }
 </script>
 

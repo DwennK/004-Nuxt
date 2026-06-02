@@ -2,14 +2,35 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { users } from '~~/server/db/schema'
 import { useDb } from '~~/server/utils/turso'
+import {
+  assertLoginAllowed,
+  clearLoginThrottle,
+  loginThrottleKey,
+  registerLoginFailure
+} from '~~/server/utils/auth/login-throttle'
 
 const bodySchema = z.object({
   email: z.string().email().transform(v => v.trim().toLowerCase()),
   password: z.string().min(1)
 })
 
+// Hash scrypt factice vérifié quand l'utilisateur est introuvable/inactif,
+// afin que le temps de réponse ne révèle pas l'existence d'un compte.
+let dummyHashPromise: Promise<string> | null = null
+function getDummyHash() {
+  if (!dummyHashPromise) {
+    dummyHashPromise = hashPassword('login-timing-equalizer-placeholder')
+  }
+
+  return dummyHashPromise
+}
+
 export default eventHandler(async (event) => {
   const { email, password } = await readValidatedBody(event, bodySchema.parse)
+  const throttleKey = loginThrottleKey(event, email)
+
+  await assertLoginAllowed(event, throttleKey)
+
   const db = useDb()
 
   const [user] = await db
@@ -18,16 +39,19 @@ export default eventHandler(async (event) => {
     .where(eq(users.email, email))
     .limit(1)
 
-  const valid = user && user.isActive
-    ? await verifyPassword(user.passwordHash, password)
-    : false
+  const hashToVerify = user && user.isActive ? user.passwordHash : await getDummyHash()
+  const passwordMatches = await verifyPassword(hashToVerify, password)
+  const valid = Boolean(user) && Boolean(user?.isActive) && passwordMatches
 
   if (!valid || !user) {
+    await registerLoginFailure(throttleKey)
     throw createError({
       statusCode: 401,
       statusMessage: 'Identifiants invalides'
     })
   }
+
+  await clearLoginThrottle(throttleKey)
 
   await setUserSession(event, {
     user: {

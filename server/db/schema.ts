@@ -277,6 +277,14 @@ export const users = sqliteTable('users', {
   emailIdx: uniqueIndex('users_email_idx').on(table.email)
 }))
 
+export const loginAttempts = sqliteTable('login_attempts', {
+  key: text('key').primaryKey(),
+  failCount: integer('fail_count').notNull().default(0),
+  firstFailedAt: integer('first_failed_at').notNull().default(0),
+  lockedUntil: integer('locked_until').notNull().default(0),
+  updatedAt: integer('updated_at').notNull().default(0)
+})
+
 export const smartphoneReservationRequests = sqliteTable('smartphone_reservation_requests', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
