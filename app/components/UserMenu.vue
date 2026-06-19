@@ -8,6 +8,7 @@ defineProps<{
 const colorMode = useColorMode()
 const appConfig = useAppConfig()
 const { user: sessionUser, clear: clearSession } = useUserSession()
+const { dashboardTheme, dashboardThemes, dashboardThemeLabels } = useDashboardTheme()
 
 const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
 const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone']
@@ -80,6 +81,20 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
       }
     }))
   }]
+}, {
+  label: 'Interface comptoir',
+  icon: 'i-lucide-panels-top-left',
+  children: dashboardThemes.map(theme => ({
+    label: dashboardThemeLabels[theme],
+    icon: theme === 'premium' ? 'i-lucide-sparkles' : 'i-lucide-panel-left',
+    type: 'checkbox',
+    checked: dashboardTheme.value === theme,
+    onSelect(e: Event) {
+      e.preventDefault()
+
+      dashboardTheme.value = theme
+    }
+  }))
 }, {
   label: 'Apparence',
   icon: 'i-lucide-sun-moon',

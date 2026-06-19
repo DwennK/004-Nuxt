@@ -16,3 +16,12 @@
   --color-green-900: #0A5331;
   --color-green-950: #052E16;
 }
+
+.counter-premium-sidebar * {
+  scrollbar-width: none;
+}
+
+.counter-premium-sidebar *::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}

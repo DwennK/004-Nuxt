@@ -115,7 +115,7 @@ function getRowItems(customer: CustomerRecord) {
       navigateTo(`/tickets/new?customerId=${customer.id}`)
     }
   }, {
-    label: 'Nouveau document',
+    label: 'Nouveau devis / facture',
     icon: 'i-lucide-file-plus-2',
     onSelect() {
       navigateTo(`/documents/new?customerId=${customer.id}`)

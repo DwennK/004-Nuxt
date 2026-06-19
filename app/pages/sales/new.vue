@@ -495,7 +495,7 @@ function selectAllOnFocus(event: FocusEvent) {
         <template #right>
           <UButton
             to="/documents/new"
-            label="Document avancé"
+            label="Devis / facture"
             icon="i-lucide-file-plus-2"
             variant="ghost"
             color="neutral"

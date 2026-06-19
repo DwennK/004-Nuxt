@@ -7,7 +7,7 @@ import {
   documentStatusLabels,
   documentTypeLabels
 } from '~~/shared/constants/pos'
-import type { DocumentListItem, DocumentListResponse } from '~~/shared/types/pos'
+import type { DocumentListItem, DocumentListResponse, DocumentType } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
@@ -52,6 +52,32 @@ const tabItems: TabsItem[] = [
     value: 'invoice'
   }
 ]
+
+const createDocumentActions: Record<DocumentType, {
+  icon: string
+  label: string
+  to: string
+}> = {
+  quote: {
+    icon: 'i-lucide-scroll-text',
+    label: 'Nouveau devis',
+    to: '/documents/new?type=quote'
+  },
+  customer_order: {
+    icon: 'i-lucide-clipboard-list',
+    label: 'Nouvelle commande',
+    to: '/documents/new?type=customer_order'
+  },
+  invoice: {
+    icon: 'i-lucide-file-text',
+    label: 'Nouvelle facture',
+    to: '/documents/new?type=invoice'
+  }
+}
+
+const createDocumentAction = computed(() => {
+  return typeFilter.value === 'all' ? null : createDocumentActions[typeFilter.value]
+})
 
 const statusItems = [
   { label: 'Tous les statuts', value: 'all' },
@@ -228,7 +254,12 @@ const columns: TableColumn<DocumentListItem>[] = [
         </template>
 
         <template #right>
-          <UButton to="/documents/new" icon="i-lucide-file-plus-2" label="Nouveau document" />
+          <UButton
+            v-if="createDocumentAction"
+            :to="createDocumentAction.to"
+            :icon="createDocumentAction.icon"
+            :label="createDocumentAction.label"
+          />
         </template>
       </UDashboardNavbar>
 

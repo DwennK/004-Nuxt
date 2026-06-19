@@ -156,7 +156,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
             icon="i-lucide-wrench"
             variant="subtle"
           />
-          <UButton :to="`/documents/new?customerId=${id}`" label="Nouveau document" icon="i-lucide-file-plus-2" />
+          <UButton :to="`/documents/new?customerId=${id}`" label="Nouveau devis / facture" icon="i-lucide-file-plus-2" />
         </template>
       </UDashboardNavbar>
     </template>
