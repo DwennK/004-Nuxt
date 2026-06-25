@@ -34,7 +34,7 @@ export function useDb() {
     return db
   }
 
-  db = drizzle(useTursoClient(), { schema })
+  db = drizzle({ client: useTursoClient(), schema })
 
   return db
 }
