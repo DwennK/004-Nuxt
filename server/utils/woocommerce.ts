@@ -573,7 +573,7 @@ export async function importWooOrderToInvoice(orderRef: string): Promise<WooImpo
   ].filter(Boolean).join('\n\n')
   const totals = calculateDocumentTotals(lines)
 
-  let document: { id: number, documentNumber: string } | null = null
+  let document: { id: number, documentNumber: string }
 
   try {
     document = await db.transaction(async (tx) => {
