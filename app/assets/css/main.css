@@ -28,6 +28,42 @@
   --color-excel-900: #0a2b1a;
   --color-excel-950: #061b11;
 
+  --color-onenote-50: #fbf5ff;
+  --color-onenote-100: #f3e6ff;
+  --color-onenote-200: #e6ccff;
+  --color-onenote-300: #d4a6ff;
+  --color-onenote-400: #bd73f2;
+  --color-onenote-500: #7719aa;
+  --color-onenote-600: #681093;
+  --color-onenote-700: #5a0e7f;
+  --color-onenote-800: #441064;
+  --color-onenote-900: #2f0b48;
+  --color-onenote-950: #1e052f;
+
+  --color-powerpoint-50: #fff6f2;
+  --color-powerpoint-100: #ffe5d9;
+  --color-powerpoint-200: #ffc9b7;
+  --color-powerpoint-300: #ff9d7a;
+  --color-powerpoint-400: #f96d43;
+  --color-powerpoint-500: #c43e1c;
+  --color-powerpoint-600: #a92f16;
+  --color-powerpoint-700: #842512;
+  --color-powerpoint-800: #651f12;
+  --color-powerpoint-900: #4a170d;
+  --color-powerpoint-950: #2d0b05;
+
+  --color-sharepoint-50: #effdfd;
+  --color-sharepoint-100: #d2f7f7;
+  --color-sharepoint-200: #a8ecee;
+  --color-sharepoint-300: #6ddade;
+  --color-sharepoint-400: #2bbbc4;
+  --color-sharepoint-500: #03787c;
+  --color-sharepoint-600: #026c70;
+  --color-sharepoint-700: #02575a;
+  --color-sharepoint-800: #064548;
+  --color-sharepoint-900: #07383b;
+  --color-sharepoint-950: #031f21;
+
   --color-green-50: #EFFDF5;
   --color-green-100: #D9FBE8;
   --color-green-200: #B3F5D1;
@@ -74,8 +110,50 @@
     --mw-theme-muted: #536b5c;
   }
 
+  .onenote-app {
+    --mw-theme-primary: #7719aa;
+    --mw-theme-primary-hover: #681093;
+    --mw-theme-primary-dark: #441064;
+    --mw-theme-line: #d9c1e8;
+    --mw-theme-pane: #faf5ff;
+    --mw-theme-pane-strong: #f1e5f8;
+    --mw-theme-page: #f8f4fb;
+    --mw-theme-surface: #ffffff;
+    --mw-theme-text: #24112f;
+    --mw-theme-muted: #65556f;
+  }
+
+  .powerpoint-app {
+    --mw-theme-primary: #c43e1c;
+    --mw-theme-primary-hover: #a92f16;
+    --mw-theme-primary-dark: #651f12;
+    --mw-theme-line: #e8c5ba;
+    --mw-theme-pane: #fff6f2;
+    --mw-theme-pane-strong: #fde8de;
+    --mw-theme-page: #fbf5f1;
+    --mw-theme-surface: #ffffff;
+    --mw-theme-text: #30160f;
+    --mw-theme-muted: #705b53;
+  }
+
+  .sharepoint-app {
+    --mw-theme-primary: #03787c;
+    --mw-theme-primary-hover: #026c70;
+    --mw-theme-primary-dark: #064548;
+    --mw-theme-line: #a8d9dc;
+    --mw-theme-pane: #effdfd;
+    --mw-theme-pane-strong: #dff5f6;
+    --mw-theme-page: #f1f8f8;
+    --mw-theme-surface: #ffffff;
+    --mw-theme-text: #0c2628;
+    --mw-theme-muted: #4d686b;
+  }
+
   .outlook-app,
-  .excel-app {
+  .excel-app,
+  .onenote-app,
+  .powerpoint-app,
+  .sharepoint-app {
     --mw-outlook-blue: var(--mw-theme-primary);
     --mw-outlook-blue-hover: var(--mw-theme-primary-hover);
     --mw-outlook-blue-dark: var(--mw-theme-primary-dark);

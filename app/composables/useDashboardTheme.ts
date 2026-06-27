@@ -1,6 +1,6 @@
 import { createSharedComposable } from '@vueuse/core'
 
-export const dashboardThemes = ['outlook', 'excel'] as const
+export const dashboardThemes = ['outlook', 'excel', 'onenote', 'powerpoint', 'sharepoint'] as const
 
 export type DashboardTheme = typeof dashboardThemes[number]
 
@@ -10,7 +10,7 @@ type DashboardThemeOption = {
   description: string
   icon: string
   appClass: string
-  primaryColor: 'outlook' | 'excel'
+  primaryColor: DashboardTheme
   neutralColor: 'slate' | 'zinc'
   swatch: string
 }
@@ -33,6 +33,33 @@ export const dashboardThemeOptions: DashboardThemeOption[] = [{
   primaryColor: 'excel',
   neutralColor: 'zinc',
   swatch: '#217346'
+}, {
+  value: 'onenote',
+  label: 'OneNote',
+  description: 'Violet Microsoft OneNote pour le shell et les actions principales.',
+  icon: 'i-lucide-notebook-tabs',
+  appClass: 'onenote-app',
+  primaryColor: 'onenote',
+  neutralColor: 'zinc',
+  swatch: '#7719aa'
+}, {
+  value: 'powerpoint',
+  label: 'PowerPoint',
+  description: 'Orange Microsoft PowerPoint pour le shell et les actions principales.',
+  icon: 'i-lucide-presentation',
+  appClass: 'powerpoint-app',
+  primaryColor: 'powerpoint',
+  neutralColor: 'zinc',
+  swatch: '#c43e1c'
+}, {
+  value: 'sharepoint',
+  label: 'SharePoint',
+  description: 'Sarcelle Microsoft SharePoint pour le shell et les actions principales.',
+  icon: 'i-lucide-network',
+  appClass: 'sharepoint-app',
+  primaryColor: 'sharepoint',
+  neutralColor: 'slate',
+  swatch: '#03787c'
 }]
 
 export const dashboardThemeLabels = dashboardThemeOptions.reduce((labels, option) => {
@@ -42,7 +69,7 @@ export const dashboardThemeLabels = dashboardThemeOptions.reduce((labels, option
 }, {} as Record<DashboardTheme, string>)
 
 function normalizeDashboardTheme(value: unknown): DashboardTheme {
-  return value === 'excel' ? 'excel' : 'outlook'
+  return dashboardThemes.includes(value as DashboardTheme) ? value as DashboardTheme : 'outlook'
 }
 
 function getDashboardThemeOption(theme: DashboardTheme) {
@@ -58,7 +85,7 @@ const _useDashboardTheme = () => {
   })
 
   if (themeCookie.value !== normalizeDashboardTheme(themeCookie.value)) {
-    themeCookie.value = 'outlook'
+    themeCookie.value = normalizeDashboardTheme(themeCookie.value)
   }
 
   const dashboardTheme = computed<DashboardTheme>({
