@@ -2,7 +2,7 @@
 type GameTab = 'wordle' | 'higher' | 'tic' | 'aim' | 'reflex' | 'snake' | 'tiles' | 'connect' | 'mines' | 'memory'
 type CellStatus = 'empty' | 'pending' | 'correct' | 'present' | 'absent'
 type Cell = { letter: string, status: CellStatus }
-type GameStatus = 'playing' | 'won' | 'lost'
+type GameStatus = 'playing' | 'won' | 'lost' | 'draw'
 type WordLength = 5 | 6 | 7
 type HigherHint = 'plus' | 'moins' | 'trouve'
 type TicMark = 'X' | 'O'
@@ -14,8 +14,6 @@ type TileDirection = 'up' | 'right' | 'down' | 'left'
 type ConnectDisc = 'player' | 'ai'
 type MineCell = { mine: boolean, revealed: boolean, flagged: boolean, adjacent: number }
 type MemoryCard = { id: number, value: string, revealed: boolean, matched: boolean }
-
-const selectedGame = ref<GameTab>('wordle')
 
 const games = [
   { value: 'wordle', label: 'Mot mystere', short: 'Word', icon: 'i-lucide-spell-check', accent: 'from-emerald-500 to-lime-400' },
@@ -36,6 +34,24 @@ const games = [
   accent: string
 }[]
 
+function isGameTab(value: unknown): value is GameTab {
+  return typeof value === 'string' && games.some(game => game.value === value)
+}
+
+const route = useRoute()
+const routeGameId = computed(() => {
+  const id = route.params.id
+  return Array.isArray(id) ? id[0] : id
+})
+
+if (!isGameTab(routeGameId.value)) {
+  throw createError({
+    statusCode: 404,
+    statusMessage: 'Jeu introuvable'
+  })
+}
+
+const selectedGame = computed<GameTab>(() => isGameTab(routeGameId.value) ? routeGameId.value : 'wordle')
 const selectedGameMeta = computed(() => games.find(game => game.value === selectedGame.value) || games[0]!)
 
 const MAX_GUESSES = 6
@@ -376,7 +392,7 @@ function maybeEndTicRound(board: (TicMark | null)[]) {
   }
 
   if (board.every(Boolean)) {
-    ticStatus.value = 'lost'
+    ticStatus.value = 'draw'
     ticScores.value.draw += 1
     ticMessage.value = 'Match nul.'
     return true
@@ -493,7 +509,6 @@ function missAimTarget() {
 function hitAimTarget() {
   if (aimStatus.value === 'idle') {
     startAimGame()
-    return
   }
 
   if (aimStatus.value !== 'playing') return
@@ -909,7 +924,7 @@ function maybeEndConnect(board: (ConnectDisc | null)[]) {
   }
 
   if (board.every(Boolean)) {
-    connectStatus.value = 'lost'
+    connectStatus.value = 'draw'
     connectScores.value.draw += 1
     connectMessage.value = 'Grille pleine. Egalite.'
     return true
@@ -1075,6 +1090,10 @@ function toggleMineFlag(index: number) {
   if (minesStatus.value !== 'playing') return
   const cell = minesBoard.value[index]!
   if (cell.revealed) return
+  if (!cell.flagged && minesFlagsLeft.value <= 0) {
+    minesMessage.value = 'Tous les drapeaux sont deja poses.'
+    return
+  }
   const next = [...minesBoard.value]
   next[index] = { ...cell, flagged: !cell.flagged }
   minesBoard.value = next
@@ -1356,14 +1375,22 @@ watch(wordLength, () => {
 <template>
   <UDashboardPanel id="games">
     <template #header>
-      <UDashboardNavbar title="Jeux">
+      <UDashboardNavbar :title="selectedGameMeta.label">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
 
         <template #right>
+          <UButton
+            to="/games"
+            icon="i-lucide-list"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            label="Tous les jeux"
+          />
           <UBadge color="primary" variant="subtle">
-            10 mini-jeux
+            Mini-jeu
           </UBadge>
         </template>
       </UDashboardNavbar>
@@ -1371,33 +1398,6 @@ watch(wordLength, () => {
 
     <template #body>
       <div class="flex h-full min-h-0 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(0,193,106,0.14),transparent_28%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.14),transparent_26%)]">
-        <div class="border-b border-default/70 px-4 py-3 md:px-6">
-          <div class="flex items-center gap-3 overflow-x-auto pb-1">
-            <button
-              v-for="game in games"
-              :key="game.value"
-              type="button"
-              class="group grid min-w-[9.4rem] grid-cols-[auto_1fr] items-center gap-3 rounded-lg border px-3 py-2 text-left transition"
-              :class="selectedGame === game.value ? 'border-primary/60 bg-primary/10 shadow-sm' : 'border-default/70 bg-default/75 hover:bg-elevated'"
-              @click="selectedGame = game.value"
-            >
-              <span
-                class="flex size-10 items-center justify-center rounded-md bg-gradient-to-br text-sm font-black text-white shadow-sm"
-                :class="game.accent"
-              >
-                {{ game.short }}
-              </span>
-              <span class="min-w-0">
-                <span class="block truncate text-sm font-semibold text-highlighted">{{ game.label }}</span>
-                <span class="mt-0.5 flex items-center gap-1 text-xs text-toned">
-                  <UIcon :name="game.icon" class="size-3.5" />
-                  Jouer
-                </span>
-              </span>
-            </button>
-          </div>
-        </div>
-
         <div class="min-h-0 flex-1 overflow-auto p-4 md:p-6">
           <div class="mx-auto grid w-full max-w-7xl gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
             <div class="min-h-[34rem] overflow-hidden rounded-lg border border-default bg-default/90 shadow-sm">
@@ -1808,7 +1808,12 @@ watch(wordLength, () => {
                     variant="subtle"
                     :title="tileStatus === 'won' ? '2048 atteint.' : 'Plus aucun mouvement.'"
                     class="w-full max-w-md"
-                    :actions="tileStatus === 'won' ? [{ label: 'Continuer', color: 'primary', variant: 'solid' } as any] : []"
+                  />
+                  <UButton
+                    v-if="tileStatus === 'won'"
+                    label="Continuer"
+                    icon="i-lucide-play"
+                    size="sm"
                     @click="continueTileGame"
                   />
                   <div class="grid w-full max-w-[30rem] grid-cols-4 gap-3 rounded-lg bg-amber-950/20 p-3 ring-1 ring-default">
