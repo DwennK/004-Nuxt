@@ -70,8 +70,14 @@ function getFetchErrorMessage(fetchError: unknown, fallback: string) {
     return fallback
   }
 
-  if ('data' in fetchError && fetchError.data && typeof fetchError.data === 'object' && 'statusMessage' in fetchError.data) {
-    const statusMessage = fetchError.data.statusMessage
+  if ('data' in fetchError && fetchError.data && typeof fetchError.data === 'object') {
+    const data = fetchError.data
+
+    if ('message' in data && typeof data.message === 'string' && data.message.trim()) {
+      return data.message
+    }
+
+    const statusMessage = 'statusMessage' in data ? data.statusMessage : null
 
     if (typeof statusMessage === 'string' && statusMessage.trim()) {
       return statusMessage
@@ -380,7 +386,7 @@ const categoryColumns: TableColumn<MobileSentrixCategorySummary>[] = [
           color="warning"
           variant="soft"
           title="Tokens OAuth requis pour les ressources"
-          description="La recherche, les prix, le stock et les appareils utilisent access_token et access_token_secret. Lancez la connexion MobileSentrix, puis ajoutez les deux variables générées aux variables d’environnement du serveur."
+          description="La doc REST MobileSentrix demande Consumer Key, Consumer Secret, Access Token et Access Token Secret dans l’Authorization. Lancez la connexion MobileSentrix, puis ajoutez les deux tokens générés aux variables d’environnement du serveur."
         >
           <template #actions>
             <UButton
@@ -393,6 +399,15 @@ const categoryColumns: TableColumn<MobileSentrixCategorySummary>[] = [
             />
           </template>
         </UAlert>
+
+        <UAlert
+          v-else-if="status && status.readyForApi && !status.hasRestAuthHeader"
+          icon="i-lucide-shield-alert"
+          color="warning"
+          variant="soft"
+          title="Accès REST MobileSentrix probablement bloqué"
+          description="Les tokens OAuth sont présents, mais le serveur reçoit une page Cloudflare avant l’API JSON. Demandez à MobileSentrix comment autoriser les appels serveur: allowlist, header REST dédié ou endpoint API séparé. Si un header est fourni, renseignez MOBILESENTRIX_REST_AUTH_HEADER_NAME et MOBILESENTRIX_REST_AUTH_HEADER_VALUE."
+        />
 
         <UCard
           v-if="shouldShowOauthReturn"

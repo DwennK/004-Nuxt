@@ -127,7 +127,7 @@ function createOAuthHeader(config: ReturnType<typeof requireApiConfig>) {
     oauth_signature: `${oauthEncode(config.consumerSecret)}&${oauthEncode(config.accessTokenSecret)}`,
     oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
     oauth_nonce: crypto.randomUUID().replace(/-/g, ''),
-    oauth_version: '1.0a'
+    oauth_version: '1.0'
   }
 
   return `OAuth ${Object.entries(params)
@@ -180,12 +180,20 @@ function serializeInlineJson(value: unknown) {
 
 function getNonJsonRequestMessage(response: Response, text: string) {
   if (response.status === 403 && text.includes('Just a moment')) {
-    return 'Cloudflare bloque l’appel REST MobileSentrix avant la réponse API. Vérifiez le domaine MobileSentrix et demandez comment autoriser l’origine serveur.'
+    return 'Cloudflare bloque l’appel REST MobileSentrix avant la réponse API. Demandez à MobileSentrix comment autoriser les appels serveur: allowlist, header REST dédié ou endpoint API séparé.'
   }
 
   return response.ok
     ? 'MobileSentrix a renvoyé une réponse non JSON.'
     : `MobileSentrix a refusé la requête avant de renvoyer du JSON (${response.status}).`
+}
+
+function createMobileSentrixError(statusCode: number, message: string) {
+  return createError({
+    statusCode,
+    statusMessage: 'MobileSentrix request failed',
+    message
+  })
 }
 
 async function mobileSentrixRequest<T>(path: string, query: MobileSentrixApiQuery = {}) {
@@ -204,18 +212,12 @@ async function mobileSentrixRequest<T>(path: string, query: MobileSentrixApiQuer
     try {
       payload = JSON.parse(text) as T
     } catch {
-      throw createError({
-        statusCode: response.status || 502,
-        statusMessage: getNonJsonRequestMessage(response, text)
-      })
+      throw createMobileSentrixError(response.status || 502, getNonJsonRequestMessage(response, text))
     }
   }
 
   if (!response.ok) {
-    throw createError({
-      statusCode: response.status,
-      statusMessage: getRequestMessage(payload, 'MobileSentrix a refusé la requête.')
-    })
+    throw createMobileSentrixError(response.status, getRequestMessage(payload, 'MobileSentrix a refusé la requête.'))
   }
 
   return payload as T
@@ -345,6 +347,7 @@ export function getMobileSentrixStatus(origin: string): MobileSentrixStatusRespo
     hasConsumerSecret: Boolean(config.consumerSecret),
     hasAccessToken: Boolean(config.accessToken),
     hasAccessTokenSecret: Boolean(config.accessTokenSecret),
+    hasRestAuthHeader: Boolean(config.restAuthHeaderName && config.restAuthHeaderValue),
     readyForOAuth,
     readyForApi,
     authorizePath: `${origin.replace(/\/+$/, '')}/api/tools/mobilesentrix/oauth/start`

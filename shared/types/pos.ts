@@ -580,6 +580,7 @@ export interface MobileSentrixStatusResponse {
   hasConsumerSecret: boolean
   hasAccessToken: boolean
   hasAccessTokenSecret: boolean
+  hasRestAuthHeader: boolean
   readyForOAuth: boolean
   readyForApi: boolean
   authorizePath: string
