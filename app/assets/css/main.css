@@ -4,6 +4,30 @@
 @theme static {
   --font-sans: 'Public Sans', sans-serif;
 
+  --color-outlook-50: #eff6fc;
+  --color-outlook-100: #deecf9;
+  --color-outlook-200: #c7e0f4;
+  --color-outlook-300: #71afe5;
+  --color-outlook-400: #2899f5;
+  --color-outlook-500: #0f6cbd;
+  --color-outlook-600: #115ea3;
+  --color-outlook-700: #0b5cab;
+  --color-outlook-800: #084c8d;
+  --color-outlook-900: #0b3a75;
+  --color-outlook-950: #052647;
+
+  --color-excel-50: #f1faf5;
+  --color-excel-100: #d9f2e3;
+  --color-excel-200: #b8e5ca;
+  --color-excel-300: #82d19f;
+  --color-excel-400: #4fb877;
+  --color-excel-500: #217346;
+  --color-excel-600: #185c37;
+  --color-excel-700: #12482c;
+  --color-excel-800: #0e3822;
+  --color-excel-900: #0a2b1a;
+  --color-excel-950: #061b11;
+
   --color-green-50: #EFFDF5;
   --color-green-100: #D9FBE8;
   --color-green-200: #B3F5D1;
@@ -17,11 +41,185 @@
   --color-green-950: #052E16;
 }
 
-.counter-premium-sidebar * {
-  scrollbar-width: none;
+@layer base {
+  body {
+    background: #f3f6fb;
+  }
 }
 
-.counter-premium-sidebar *::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+@layer components {
+  .outlook-app {
+    --mw-theme-primary: #0f6cbd;
+    --mw-theme-primary-hover: #115ea3;
+    --mw-theme-primary-dark: #0b3a75;
+    --mw-theme-line: #c7dbf4;
+    --mw-theme-pane: #f3f8ff;
+    --mw-theme-pane-strong: #e7f1ff;
+    --mw-theme-page: #f3f6fb;
+    --mw-theme-surface: #ffffff;
+    --mw-theme-text: #102033;
+    --mw-theme-muted: #536579;
+  }
+
+  .excel-app {
+    --mw-theme-primary: #217346;
+    --mw-theme-primary-hover: #185c37;
+    --mw-theme-primary-dark: #0e3822;
+    --mw-theme-line: #b7d7c2;
+    --mw-theme-pane: #f2faf5;
+    --mw-theme-pane-strong: #e1f2e7;
+    --mw-theme-page: #f4f8f5;
+    --mw-theme-surface: #ffffff;
+    --mw-theme-text: #11281a;
+    --mw-theme-muted: #536b5c;
+  }
+
+  .outlook-app,
+  .excel-app {
+    --mw-outlook-blue: var(--mw-theme-primary);
+    --mw-outlook-blue-hover: var(--mw-theme-primary-hover);
+    --mw-outlook-blue-dark: var(--mw-theme-primary-dark);
+    --mw-outlook-line: var(--mw-theme-line);
+    --mw-outlook-pane: var(--mw-theme-pane);
+    --mw-outlook-pane-strong: var(--mw-theme-pane-strong);
+    --mw-outlook-surface: var(--mw-theme-surface);
+    --mw-outlook-text: var(--mw-theme-text);
+    --mw-outlook-muted: var(--mw-theme-muted);
+    background: var(--mw-theme-page);
+  }
+
+  .outlook-sidebar {
+    color: var(--mw-outlook-text);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--mw-outlook-pane) 35%, white) 0%, var(--mw-outlook-pane) 100%);
+    border-right: 1px solid var(--mw-outlook-line);
+    box-shadow: none;
+  }
+
+  .outlook-sidebar :is(a, button) {
+    min-height: 2rem;
+    border-radius: 4px;
+  }
+
+  .outlook-sidebar :is(a, button):not([disabled]) {
+    color: #32465d;
+  }
+
+  .outlook-sidebar :is(a, button):not([disabled]):hover {
+    color: #0f172a;
+    background: var(--mw-outlook-pane-strong);
+  }
+
+  .outlook-sidebar [data-slot="link"][data-state="open"],
+  .outlook-sidebar [data-slot="link"][aria-current="page"],
+  .outlook-sidebar [data-slot="childLink"][aria-current="page"],
+  .outlook-sidebar [data-slot="link"].router-link-active,
+  .outlook-sidebar [data-slot="childLink"].router-link-active {
+    color: #0f172a;
+    background: color-mix(in srgb, var(--mw-outlook-blue) 14%, white);
+    box-shadow: inset 3px 0 0 var(--mw-outlook-blue);
+  }
+
+  .outlook-sidebar .text-toned,
+  .outlook-sidebar .text-dimmed,
+  .outlook-sidebar [class*="text-toned"],
+  .outlook-sidebar [class*="text-dimmed"] {
+    color: var(--mw-outlook-muted) !important;
+  }
+
+  .outlook-brand {
+    color: white !important;
+    background: var(--mw-outlook-blue);
+    border: 1px solid var(--mw-outlook-blue);
+    box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.10);
+  }
+
+  .outlook-brand:hover,
+  .outlook-brand[data-state="open"] {
+    background: var(--mw-outlook-blue-hover) !important;
+  }
+
+  .outlook-sidebar-header {
+    border-bottom: 1px solid color-mix(in srgb, var(--mw-outlook-line) 70%, transparent);
+  }
+
+  .outlook-sidebar-footer {
+    border-top: 1px solid color-mix(in srgb, var(--mw-outlook-line) 70%, transparent);
+  }
+
+  .outlook-search-button {
+    color: #334155;
+    background: white;
+    --tw-ring-color: var(--mw-outlook-line);
+  }
+
+  .outlook-search-button:hover {
+    background: var(--mw-outlook-pane-strong);
+  }
+
+  .outlook-user-button {
+    color: #334155;
+  }
+
+  .outlook-user-button:hover,
+  .outlook-user-button[data-state="open"] {
+    background: var(--mw-outlook-pane-strong);
+  }
+
+  .outlook-panel {
+    background: var(--mw-theme-page);
+  }
+
+  .outlook-surface {
+    border: 1px solid var(--mw-outlook-line);
+    background: var(--mw-outlook-surface);
+    box-shadow: none;
+  }
+
+  .outlook-surface-muted {
+    border: 1px solid var(--mw-outlook-line);
+    background: var(--mw-outlook-pane);
+    box-shadow: none;
+  }
+
+  .outlook-commandbar {
+    color: white;
+    background: var(--mw-outlook-blue);
+    border-bottom: 1px solid var(--mw-outlook-blue-dark);
+  }
+
+  .outlook-commandbar :is(a, button) {
+    border-radius: 4px;
+  }
+
+  .outlook-commandbar :is(a, button):hover {
+    background: rgb(255 255 255 / 0.14);
+  }
+
+  .outlook-mail-toolbar {
+    border: 1px solid var(--mw-outlook-line);
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .outlook-kpi {
+    border: 1px solid var(--mw-outlook-line);
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .outlook-kpi:hover,
+  .outlook-row:hover {
+    background: var(--mw-outlook-pane-strong);
+  }
+
+  .outlook-tab-active {
+    color: #0f172a;
+    background: white;
+    box-shadow: none;
+    border: 1px solid var(--mw-outlook-line);
+  }
+
+  .outlook-row {
+    transition: background-color 120ms ease;
+  }
 }

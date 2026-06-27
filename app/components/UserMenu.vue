@@ -6,12 +6,7 @@ defineProps<{
 }>()
 
 const colorMode = useColorMode()
-const appConfig = useAppConfig()
 const { user: sessionUser, clear: clearSession } = useUserSession()
-const { dashboardTheme, dashboardThemes, dashboardThemeLabels } = useDashboardTheme()
-
-const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
-const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone']
 
 const user = computed(() => ({
   name: sessionUser.value?.name || sessionUser.value?.email || 'Utilisateur',
@@ -28,74 +23,10 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
   label: user.value.name,
   avatar: user.value.avatar
 }], [{
-  label: 'Profil',
-  icon: 'i-lucide-user'
-}, {
-  label: 'Facturation',
-  icon: 'i-lucide-credit-card'
-}, {
   label: 'Paramètres',
   icon: 'i-lucide-settings',
   to: '/settings/users'
 }], [{
-  label: 'Thème',
-  icon: 'i-lucide-palette',
-  children: [{
-    label: 'Couleur principale',
-    slot: 'chip',
-    chip: appConfig.ui.colors.primary,
-    content: {
-      align: 'center',
-      collisionPadding: 16
-    },
-    children: colors.map(color => ({
-      label: color,
-      chip: color,
-      slot: 'chip',
-      checked: appConfig.ui.colors.primary === color,
-      type: 'checkbox',
-      onSelect: (e) => {
-        e.preventDefault()
-
-        appConfig.ui.colors.primary = color
-      }
-    }))
-  }, {
-    label: 'Couleur neutre',
-    slot: 'chip',
-    chip: appConfig.ui.colors.neutral === 'neutral' ? 'old-neutral' : appConfig.ui.colors.neutral,
-    content: {
-      align: 'end',
-      collisionPadding: 16
-    },
-    children: neutrals.map(color => ({
-      label: color,
-      chip: color === 'neutral' ? 'old-neutral' : color,
-      slot: 'chip',
-      type: 'checkbox',
-      checked: appConfig.ui.colors.neutral === color,
-      onSelect: (e) => {
-        e.preventDefault()
-
-        appConfig.ui.colors.neutral = color
-      }
-    }))
-  }]
-}, {
-  label: 'Interface comptoir',
-  icon: 'i-lucide-panels-top-left',
-  children: dashboardThemes.map(theme => ({
-    label: dashboardThemeLabels[theme],
-    icon: theme === 'premium' ? 'i-lucide-sparkles' : 'i-lucide-panel-left',
-    type: 'checkbox',
-    checked: dashboardTheme.value === theme,
-    onSelect(e: Event) {
-      e.preventDefault()
-
-      dashboardTheme.value = theme
-    }
-  }))
-}, {
   label: 'Apparence',
   icon: 'i-lucide-sun-moon',
   children: [{
@@ -123,47 +54,6 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
     }
   }]
 }], [{
-  label: 'Modèles',
-  icon: 'i-lucide-layout-template',
-  children: [{
-    label: 'Démarrage',
-    to: 'https://starter-template.nuxt.dev/'
-  }, {
-    label: 'Landing',
-    to: 'https://landing-template.nuxt.dev/'
-  }, {
-    label: 'Documentation',
-    to: 'https://docs-template.nuxt.dev/'
-  }, {
-    label: 'SaaS',
-    to: 'https://saas-template.nuxt.dev/'
-  }, {
-    label: 'Tableau de bord',
-    to: 'https://dashboard-template.nuxt.dev/',
-    color: 'primary',
-    checked: true,
-    type: 'checkbox'
-  }, {
-    label: 'Chat',
-    to: 'https://chat-template.nuxt.dev/'
-  }, {
-    label: 'Portfolio',
-    to: 'https://portfolio-template.nuxt.dev/'
-  }, {
-    label: 'Journal des changements',
-    to: 'https://changelog-template.nuxt.dev/'
-  }]
-}], [{
-  label: 'Documentation',
-  icon: 'i-lucide-book-open',
-  to: 'https://ui.nuxt.com/docs/getting-started/installation/nuxt',
-  target: '_blank'
-}, {
-  label: 'Dépôt GitHub',
-  icon: 'i-simple-icons-github',
-  to: 'https://github.com/nuxt-ui-templates/dashboard',
-  target: '_blank'
-}, {
   label: 'Déconnexion',
   icon: 'i-lucide-log-out',
   onSelect: handleLogout
@@ -186,22 +76,10 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
       variant="ghost"
       block
       :square="collapsed"
-      class="data-[state=open]:bg-elevated"
+      class="outlook-user-button"
       :ui="{
-        trailingIcon: 'text-dimmed'
+        trailingIcon: 'text-slate-500'
       }"
     />
-
-    <template #chip-leading="{ item }">
-      <div class="inline-flex items-center justify-center shrink-0 size-5">
-        <span
-          class="rounded-full ring ring-bg bg-(--chip-light) dark:bg-(--chip-dark) size-2"
-          :style="{
-            '--chip-light': `var(--color-${(item as any).chip}-500)`,
-            '--chip-dark': `var(--color-${(item as any).chip}-400)`
-          }"
-        />
-      </div>
-    </template>
   </UDropdownMenu>
 </template>
