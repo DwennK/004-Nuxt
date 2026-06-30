@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { requireAdminSessionUser } from '~~/server/utils/auth/session'
 import { getMobileSentrixBrowserExchangeHtml } from '~~/server/utils/mobilesentrix'
 
 const querySchema = z.object({
@@ -7,6 +8,7 @@ const querySchema = z.object({
 })
 
 export default eventHandler(async (event) => {
+  await requireAdminSessionUser(event)
   const query = await getValidatedQuery(event, querySchema.parse)
 
   setHeader(event, 'Content-Type', 'text/html; charset=utf-8')

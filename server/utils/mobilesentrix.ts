@@ -255,6 +255,28 @@ function textValue(record: Record<string, unknown>, keys: string[]) {
   return null
 }
 
+function externalMobileSentrixUrlValue(value: string | null) {
+  if (!value) {
+    return null
+  }
+
+  const config = getMobileSentrixConfig()
+  const baseUrl = new URL(config.baseUrl)
+  let candidate: URL
+
+  try {
+    candidate = new URL(value, baseUrl)
+  } catch {
+    return null
+  }
+
+  if (candidate.protocol !== 'https:' || candidate.hostname !== baseUrl.hostname) {
+    return null
+  }
+
+  return candidate.toString()
+}
+
 function numberValue(record: Record<string, unknown>, keys: string[]) {
   const value = textValue(record, keys)
 
@@ -312,8 +334,8 @@ function mapProduct(value: unknown): MobileSentrixProductSummary {
     manufacturer: textValue(record, ['manufacturer_text', 'device_manufacturer_text', 'manufacturer']),
     model: textValue(record, ['model_text', 'device_model_text', 'model']),
     frontPosition: textValue(record, ['front_position', 'front_position_text']),
-    imageUrl: textValue(record, ['image_link', 'default_image', 'image']),
-    url: textValue(record, ['link', 'url']),
+    imageUrl: externalMobileSentrixUrlValue(textValue(record, ['image_link', 'default_image', 'image'])),
+    url: externalMobileSentrixUrlValue(textValue(record, ['link', 'url'])),
     tags: stringArrayValue(record.tags),
     raw: record
   }
@@ -330,8 +352,8 @@ function mapCategory(value: unknown): MobileSentrixCategorySummary {
       ? null
       : textValue(record, ['is_active', 'isActive']) === '1',
     productCount: numberValue(record, ['product_count', 'productCount']),
-    url: textValue(record, ['link', 'url']),
-    imageUrl: textValue(record, ['image_link', 'image'])
+    url: externalMobileSentrixUrlValue(textValue(record, ['link', 'url'])),
+    imageUrl: externalMobileSentrixUrlValue(textValue(record, ['image_link', 'image']))
   }
 }
 
@@ -362,7 +384,6 @@ export function getMobileSentrixAuthorizeUrl(origin: string) {
   url.searchParams.set('authtype', '1')
   url.searchParams.set('flowentry', 'SignIn')
   url.searchParams.set('consumer_key', config.consumerKey)
-  url.searchParams.set('consumer_secret', config.consumerSecret)
   url.searchParams.set('callback', `${origin.replace(/\/+$/, '')}/tools/mobilesentrix`)
 
   return url.toString()
@@ -425,13 +446,10 @@ export async function exchangeMobileSentrixOAuthToken(oauthToken: string, oauthV
 }
 
 export function getMobileSentrixBrowserExchangeHtml(oauthToken: string, oauthVerifier: string) {
-  const config = requireConsumerConfig()
-  const action = new URL('/oauth/authorize/identifiercallback', config.baseUrl).toString()
+  const action = '/api/tools/mobilesentrix/oauth/exchange'
   const payload = {
-    consumer_key: config.consumerKey,
-    consumer_secret: config.consumerSecret,
-    oauth_token: oauthToken,
-    oauth_verifier: oauthVerifier
+    oauthToken,
+    oauthVerifier
   }
   const actionJson = serializeInlineJson(action)
   const payloadJson = serializeInlineJson(payload)
@@ -458,7 +476,7 @@ export function getMobileSentrixBrowserExchangeHtml(oauthToken: string, oauthVer
 <body>
   <main>
     <h1>Échange OAuth MobileSentrix</h1>
-    <p>La requête JSON va être envoyée directement à MobileSentrix depuis ce navigateur. Si la réponse contient access_token et access_token_secret, copiez ces deux valeurs dans .env puis redémarrez Nuxt.</p>
+    <p>La requête JSON va être envoyée au serveur Nuxt, qui garde le secret OAuth hors du navigateur. Si la réponse contient accessToken et accessTokenSecret, copiez ces deux valeurs dans .env puis redémarrez Nuxt.</p>
     <button type="button" id="retry">Relancer l’échange</button>
     <pre id="result">Échange en cours...</pre>
     <form id="form-fallback" method="post" action="${escapeHtmlAttribute(action)}" hidden>
@@ -483,6 +501,7 @@ export function getMobileSentrixBrowserExchangeHtml(oauthToken: string, oauthVer
               Accept: 'application/json',
               'Content-Type': 'application/json'
             },
+            credentials: 'same-origin',
             body: JSON.stringify(payload)
           })
           const text = await response.text()
@@ -500,10 +519,10 @@ export function getMobileSentrixBrowserExchangeHtml(oauthToken: string, oauthVer
             return
           }
 
-          const tokens = data.data || {}
+          const tokens = data.data || data
           result.textContent = [
-            'MOBILESENTRIX_ACCESS_TOKEN=' + (tokens.access_token || ''),
-            'MOBILESENTRIX_ACCESS_TOKEN_SECRET=' + (tokens.access_token_secret || '')
+            'MOBILESENTRIX_ACCESS_TOKEN=' + (tokens.accessToken || tokens.access_token || ''),
+            'MOBILESENTRIX_ACCESS_TOKEN_SECRET=' + (tokens.accessTokenSecret || tokens.access_token_secret || '')
           ].join('\\n')
         } catch (error) {
           result.textContent = 'Échange navigateur impossible. Le navigateur a probablement bloqué la requête cross-origin vers MobileSentrix.\\n\\n' + (error && error.message ? error.message : String(error))
