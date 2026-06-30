@@ -139,11 +139,15 @@ function normalizeStatus(value: string) {
 }
 
 function escapeCsvField(value: string) {
-  if (/[;"\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`
+  const safeValue = /^[\s]*[=+\-@]/.test(value) || /^[\t\r]/.test(value)
+    ? `'${value}`
+    : value
+
+  if (/[;"\n]/.test(safeValue)) {
+    return `"${safeValue.replace(/"/g, '""')}"`
   }
 
-  return value
+  return safeValue
 }
 
 function getCell(row: string[], index: number) {
