@@ -126,7 +126,7 @@ export function calculateDocumentTotals(lines: Array<{
   lineTotal?: number | null
 }>) {
   const normalizedLines = lines.map((line) => {
-    const computedTotal = line.lineTotal ?? Math.round(line.quantity * line.unitPrice)
+    const computedTotal = Math.round(line.quantity * line.unitPrice)
     const taxableBase = line.vatRate > 0
       ? Math.round(computedTotal / (1 + (line.vatRate / 100)))
       : computedTotal
@@ -1478,7 +1478,14 @@ export async function syncDocumentStatus(documentId: number) {
   }
 
   const paidTotal = Number(paymentSummary[0]?.paidTotal || 0)
-  const nextStatus: DocumentStatus = paidTotal >= currentDocument.total ? 'paid' : currentDocument.status === 'cancelled' ? 'cancelled' : 'issued'
+  const isPayable = currentDocument.type === 'invoice'
+  const nextStatus: DocumentStatus = currentDocument.status === 'cancelled'
+    ? 'cancelled'
+    : isPayable && paidTotal >= currentDocument.total && currentDocument.total > 0
+      ? 'paid'
+      : currentDocument.status === 'draft'
+        ? 'draft'
+        : 'issued'
 
   if (nextStatus !== currentDocument.status) {
     await db.update(documents)

@@ -561,6 +561,13 @@ export async function markDocumentAsPaid(id: number, input: {
     })
   }
 
+  if (!isPayableDocumentType(document.type)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'This document type cannot be paid directly'
+    })
+  }
+
   const paidTotal = await getDocumentPaymentTotals(id)
   const balance = Math.max(document.total - paidTotal, 0)
   const amount = input.amount && input.amount > 0 ? input.amount : balance || document.total
