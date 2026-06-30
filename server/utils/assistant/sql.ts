@@ -20,6 +20,8 @@ const withCtePattern = /\bwith\s+([a-z_][a-z0-9_]*)\s+as\s*\(/ig
 const fromJoinPattern = /\b(?:from|join)\s+([a-z_][a-z0-9_]*)(?:\s+(?:as\s+)?([a-z_][a-z0-9_]*))?/ig
 const qualifiedColumnPattern = /\b([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\b/ig
 const blockedColumnPattern = new RegExp(`\\b(${[...assistantBlockedColumns].sort().join('|')})\\b`, 'i')
+const quotedIdentifierPattern = /["`[\]]/
+const qualifiedWildcardPattern = /\b[a-z_][a-z0-9_]*\s*\.\s*\*/i
 
 export type AssistantValidatedQuery = {
   normalizedSql: string
@@ -70,7 +72,11 @@ function assertSingleReadOnlyStatement(sqlText: string) {
     throw new AssistantSqlValidationError('La requête contient un mot-clé SQL interdit pour un accès en lecture seule.')
   }
 
-  if (/\bselect\s+\*/i.test(sqlText) || /,\s*\*/.test(sqlText)) {
+  if (quotedIdentifierPattern.test(sqlText)) {
+    throw new AssistantSqlValidationError('Les identifiants SQL cités ne sont pas autorisés.')
+  }
+
+  if (/\bselect\s+\*/i.test(sqlText) || /,\s*\*/.test(sqlText) || qualifiedWildcardPattern.test(sqlText)) {
     throw new AssistantSqlValidationError('SELECT * est interdit. La requête doit lister explicitement les colonnes.')
   }
 
