@@ -11,6 +11,7 @@
     "preview": "npm run build && wrangler --cwd .output dev",
     "postinstall": "patch-package && nuxt prepare",
     "lint": "eslint .",
+    "security:regression": "node scripts/security-regression.mjs",
     "typecheck": "nuxt typecheck",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
