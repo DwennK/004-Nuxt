@@ -1,3 +1,5 @@
+import { resolveActiveSessionUser } from '~~/server/utils/auth/session'
+
 export default defineEventHandler(async (event) => {
   const path = event.path || ''
 
@@ -9,11 +11,11 @@ export default defineEventHandler(async (event) => {
     return
   }
 
-  const session = await getUserSession(event)
-  if (!session.user) {
+  const user = await resolveActiveSessionUser(event)
+  if (!user) {
     throw createError({
       statusCode: 401,
-      message: 'Non authentifié'
+      message: 'Session invalide'
     })
   }
 })

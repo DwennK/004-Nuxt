@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { users } from '~~/server/db/schema'
+import { requireAdminSessionUser } from '~~/server/utils/auth/session'
 import { getUserById } from '~~/server/utils/users'
 import { useDb } from '~~/server/utils/turso'
 import { changePasswordSchema } from '~~/shared/validation/users'
@@ -10,6 +11,7 @@ const paramsSchema = z.object({
 })
 
 export default eventHandler(async (event) => {
+  await requireAdminSessionUser(event)
   const params = paramsSchema.parse(event.context.params)
   const body = await readValidatedBody(event, changePasswordSchema.parse)
 

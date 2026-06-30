@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { users } from '~~/server/db/schema'
+import { requireAdminSessionUser } from '~~/server/utils/auth/session'
 import { useDb } from '~~/server/utils/turso'
 
 const paramsSchema = z.object({
@@ -8,11 +9,10 @@ const paramsSchema = z.object({
 })
 
 export default eventHandler(async (event) => {
+  const sessionUser = await requireAdminSessionUser(event)
   const params = paramsSchema.parse(event.context.params)
-  const session = await requireUserSession(event)
-  const sessionUserId = (session.user as { id?: number } | undefined)?.id
 
-  if (params.id === sessionUserId) {
+  if (params.id === sessionUser.id) {
     throw createError({
       statusCode: 400,
       message: 'Vous ne pouvez pas supprimer votre propre compte'

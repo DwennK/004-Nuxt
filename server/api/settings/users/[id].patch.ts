@@ -1,6 +1,7 @@
 import { eq, and, ne } from 'drizzle-orm'
 import { z } from 'zod'
 import { users } from '~~/server/db/schema'
+import { requireAdminSessionUser } from '~~/server/utils/auth/session'
 import { getUserById } from '~~/server/utils/users'
 import { useDb } from '~~/server/utils/turso'
 import { updateUserSchema } from '~~/shared/validation/users'
@@ -10,20 +11,26 @@ const paramsSchema = z.object({
 })
 
 export default eventHandler(async (event) => {
+  const sessionUser = await requireAdminSessionUser(event)
   const params = paramsSchema.parse(event.context.params)
   const body = await readValidatedBody(event, updateUserSchema.parse)
-  const session = await requireUserSession(event)
-  const sessionUserId = (session.user as { id?: number } | undefined)?.id
 
   const target = await getUserById(params.id)
   if (!target) {
     throw createError({ statusCode: 404, message: 'Utilisateur introuvable' })
   }
 
-  if (body.isActive === false && params.id === sessionUserId) {
+  if (body.isActive === false && params.id === sessionUser.id) {
     throw createError({
       statusCode: 400,
       message: 'Vous ne pouvez pas désactiver votre propre compte'
+    })
+  }
+
+  if (body.isAdmin === false && params.id === sessionUser.id) {
+    throw createError({
+      statusCode: 400,
+      message: 'Vous ne pouvez pas retirer vos propres droits administrateur'
     })
   }
 
@@ -49,6 +56,7 @@ export default eventHandler(async (event) => {
   if (body.email !== undefined) updates.email = body.email
   if (body.name !== undefined) updates.name = body.name
   if (body.isActive !== undefined) updates.isActive = body.isActive
+  if (body.isAdmin !== undefined) updates.isAdmin = body.isAdmin
 
   await db.update(users).set(updates).where(eq(users.id, params.id))
 

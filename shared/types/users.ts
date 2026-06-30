@@ -3,6 +3,7 @@ export type UserRecord = {
   email: string
   name: string
   isActive: boolean
+  isAdmin: boolean
   createdAt: string
   updatedAt: string
 }

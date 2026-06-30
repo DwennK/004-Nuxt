@@ -36,13 +36,13 @@ const existing = await client.execute({
 
 if (existing.rows.length > 0) {
   await client.execute({
-    sql: 'UPDATE users SET name = ?, password_hash = ?, is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE email = ?',
+    sql: 'UPDATE users SET name = ?, password_hash = ?, is_active = 1, is_admin = 1, updated_at = CURRENT_TIMESTAMP WHERE email = ?',
     args: [name, passwordHash, email]
   })
   console.log(`Utilisateur ${email} mis à jour.`)
 } else {
   await client.execute({
-    sql: 'INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?)',
+    sql: 'INSERT INTO users (email, name, password_hash, is_admin) VALUES (?, ?, ?, 1)',
     args: [email, name, passwordHash]
   })
   console.log(`Utilisateur ${email} créé.`)

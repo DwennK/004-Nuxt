@@ -23,12 +23,13 @@ const client = createClient({ url, authToken })
 try {
   await client.execute({
     sql: `
-      INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, 1, ?, ?)
+      INSERT INTO users (email, name, password_hash, is_active, is_admin, created_at, updated_at)
+      VALUES (?, ?, ?, 1, 1, ?, ?)
       ON CONFLICT(email) DO UPDATE SET
         name = excluded.name,
         password_hash = excluded.password_hash,
         is_active = 1,
+        is_admin = 1,
         updated_at = excluded.updated_at
     `,
     args: [email, name, passwordHash, now, now]

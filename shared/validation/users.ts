@@ -20,13 +20,15 @@ export const userPasswordSchema = z
 export const createUserSchema = z.object({
   email: userEmailSchema,
   name: userNameSchema,
-  password: userPasswordSchema
+  password: userPasswordSchema,
+  isAdmin: z.boolean().optional().default(false)
 })
 
 export const updateUserSchema = z.object({
   email: userEmailSchema.optional(),
   name: userNameSchema.optional(),
-  isActive: z.boolean().optional()
+  isActive: z.boolean().optional(),
+  isAdmin: z.boolean().optional()
 }).refine(
   value => Object.keys(value).length > 0,
   { message: 'Aucune modification fournie' }

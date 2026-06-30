@@ -8,6 +8,7 @@ const userColumns = {
   email: users.email,
   name: users.name,
   isActive: users.isActive,
+  isAdmin: users.isAdmin,
   createdAt: users.createdAt,
   updatedAt: users.updatedAt
 }

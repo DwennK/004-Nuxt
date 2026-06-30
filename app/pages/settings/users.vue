@@ -44,13 +44,14 @@ function isSelf(user: UserRecord) {
 
 // Create modal
 const createOpen = ref(false)
-const createState = reactive({ email: '', name: '', password: '' })
+const createState = reactive({ email: '', name: '', password: '', isAdmin: false })
 const createSchema = createUserSchema
 
 function resetCreate() {
   createState.email = ''
   createState.name = ''
   createState.password = ''
+  createState.isAdmin = false
 }
 
 async function onCreateSubmit(event: FormSubmitEvent<z.output<typeof createSchema>>) {
@@ -80,11 +81,12 @@ async function onCreateSubmit(event: FormSubmitEvent<z.output<typeof createSchem
 // Edit modal
 const editOpen = ref(false)
 const editTarget = ref<UserRecord | null>(null)
-const editState = reactive({ email: '', name: '', isActive: true })
+const editState = reactive({ email: '', name: '', isActive: true, isAdmin: false })
 const editSchema = z.object({
   email: z.string().trim().toLowerCase().email('Email invalide'),
   name: z.string().trim().min(1, 'Nom requis').max(120, 'Nom trop long'),
-  isActive: z.boolean()
+  isActive: z.boolean(),
+  isAdmin: z.boolean()
 })
 
 function openEdit(user: UserRecord) {
@@ -92,6 +94,7 @@ function openEdit(user: UserRecord) {
   editState.email = user.email
   editState.name = user.name
   editState.isActive = user.isActive
+  editState.isAdmin = user.isAdmin
   editOpen.value = true
 }
 
@@ -102,6 +105,7 @@ async function onEditSubmit(event: FormSubmitEvent<z.output<typeof editSchema>>)
     if (event.data.email !== editTarget.value.email) body.email = event.data.email
     if (event.data.name !== editTarget.value.name) body.name = event.data.name
     if (event.data.isActive !== editTarget.value.isActive) body.isActive = event.data.isActive
+    if (event.data.isAdmin !== editTarget.value.isAdmin) body.isAdmin = event.data.isAdmin
     if (Object.keys(body).length === 0) {
       editOpen.value = false
       return
@@ -258,6 +262,13 @@ async function onDeleteConfirm() {
                   variant="subtle"
                   size="sm"
                 />
+                <UBadge
+                  v-if="user.isAdmin"
+                  label="Admin"
+                  color="warning"
+                  variant="subtle"
+                  size="sm"
+                />
               </p>
               <p class="text-muted truncate">
                 {{ user.email }}
@@ -336,6 +347,9 @@ async function onDeleteConfirm() {
               class="w-full"
             />
           </UFormField>
+          <UFormField name="isAdmin" label="Administrateur">
+            <USwitch v-model="createState.isAdmin" />
+          </UFormField>
         </UForm>
       </template>
       <template #footer>
@@ -383,6 +397,15 @@ async function onDeleteConfirm() {
             />
             <template v-if="editTarget && isSelf(editTarget)" #help>
               Vous ne pouvez pas désactiver votre propre compte.
+            </template>
+          </UFormField>
+          <UFormField name="isAdmin" label="Administrateur">
+            <USwitch
+              v-model="editState.isAdmin"
+              :disabled="editTarget ? isSelf(editTarget) : false"
+            />
+            <template v-if="editTarget && isSelf(editTarget)" #help>
+              Vous ne pouvez pas retirer vos propres droits administrateur.
             </template>
           </UFormField>
         </UForm>
