@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { requireAdminSessionUser } from '~~/server/utils/auth/session'
 import { listSentEmails } from '~~/server/utils/sent-emails'
 
 const querySchema = z.object({
@@ -10,6 +11,7 @@ const querySchema = z.object({
 })
 
 export default eventHandler(async (event) => {
+  await requireAdminSessionUser(event)
   const query = querySchema.parse(getQuery(event))
 
   return listSentEmails(query)

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { requireAdminSessionUser } from '~~/server/utils/auth/session'
 import { getSentEmail } from '~~/server/utils/sent-emails'
 
 const paramsSchema = z.object({
@@ -6,6 +7,7 @@ const paramsSchema = z.object({
 })
 
 export default eventHandler(async (event) => {
+  await requireAdminSessionUser(event)
   const params = paramsSchema.parse(event.context.params)
 
   return getSentEmail(params.id)
