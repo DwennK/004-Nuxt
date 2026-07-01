@@ -13,6 +13,15 @@ function assertNotIncludes(source, needle, label) {
   assert.ok(!source.includes(needle), label)
 }
 
+function assertBefore(source, firstNeedle, secondNeedle, label) {
+  const firstIndex = source.indexOf(firstNeedle)
+  const secondIndex = source.indexOf(secondNeedle)
+
+  assert.ok(firstIndex >= 0, `${label}: missing ${firstNeedle}`)
+  assert.ok(secondIndex >= 0, `${label}: missing ${secondNeedle}`)
+  assert.ok(firstIndex < secondIndex, label)
+}
+
 {
   const quotedIdentifierPattern = /["`[\]]/
   const qualifiedWildcardPattern = /\b[a-z_][a-z0-9_]*\s*\.\s*\*/i
@@ -27,8 +36,18 @@ function assertNotIncludes(source, needle, label) {
   )
 
   const source = read('server/utils/assistant/sql.ts')
+  const allowlist = read('server/utils/assistant/allowlist.ts')
+
   assertIncludes(source, 'quotedIdentifierPattern', 'assistant SQL validator keeps quoted identifier guard')
   assertIncludes(source, 'qualifiedWildcardPattern', 'assistant SQL validator keeps qualified wildcard guard')
+  assertIncludes(source, 'extractTableReferences', 'assistant SQL validator enumerates table references')
+  assertIncludes(source, 'tableReferenceBoundaryTokens', 'assistant SQL validator has explicit table-reference boundaries')
+  assertIncludes(source, 'Le qualifiant "${qualifier}" n’est pas une table ou un alias exposé', 'assistant SQL validator rejects unknown table qualifiers')
+  assertIncludes(source, 'La colonne "${token.lower}" n’est pas exposée à l’assistant', 'assistant SQL validator rejects unqualified non-allowlisted columns')
+  assertIncludes(allowlist, '\'password_hash\'', 'assistant SQL denylist blocks password hashes by token')
+  assertIncludes(allowlist, '\'address_line_1\'', 'assistant SQL denylist blocks hidden customer address line 1 by token')
+  assertIncludes(allowlist, '\'address_line_2\'', 'assistant SQL denylist blocks hidden customer address line 2 by token')
+  assertNotIncludes(source, 'const fromJoinPattern', 'assistant SQL table allowlist must not rely on the old single-table FROM/JOIN regex')
 }
 
 {
@@ -37,6 +56,23 @@ function assertNotIncludes(source, needle, label) {
 
   assertIncludes(authMiddleware, 'resolveActiveSessionUser(event)', 'API middleware revalidates active DB user')
   assertIncludes(userRoute, 'requireAdminSessionUser(event)', 'user admin routes require admin session')
+}
+
+{
+  const protectedRoutes = [
+    ['server/api/settings/company.patch.ts', 'readValidatedBody'],
+    ['server/api/settings/customer-sms.patch.ts', 'readValidatedBody'],
+    ['server/api/tools/woocommerce/orders.get.ts', 'getValidatedQuery'],
+    ['server/api/tools/woocommerce/import.post.ts', 'readValidatedBody'],
+    ['server/api/sent-emails/index.get.ts', 'getQuery'],
+    ['server/api/sent-emails/[id].get.ts', 'paramsSchema.parse']
+  ]
+
+  for (const [path, requestRead] of protectedRoutes) {
+    const source = read(path)
+    assertIncludes(source, 'import { requireAdminSessionUser } from \'~~/server/utils/auth/session\'', `${path} imports the admin guard`)
+    assertBefore(source, 'await requireAdminSessionUser(event)', requestRead, `${path} checks admin before reading attacker-controlled request data`)
+  }
 }
 
 {
