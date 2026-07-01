@@ -17,11 +17,98 @@ const forbiddenSqlTokenPattern = /\b(insert|update|delete|alter|drop|truncate|cr
 const commentPattern = /--|\/\*|\*\//
 const limitPattern = /\blimit\s+(\d+)\b/i
 const withCtePattern = /\bwith\s+([a-z_][a-z0-9_]*)\s+as\s*\(/ig
-const fromJoinPattern = /\b(?:from|join)\s+([a-z_][a-z0-9_]*)(?:\s+(?:as\s+)?([a-z_][a-z0-9_]*))?/ig
 const qualifiedColumnPattern = /\b([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\b/ig
 const blockedColumnPattern = new RegExp(`\\b(${[...assistantBlockedColumns].sort().join('|')})\\b`, 'i')
 const quotedIdentifierPattern = /["`[\]]/
 const qualifiedWildcardPattern = /\b[a-z_][a-z0-9_]*\s*\.\s*\*/i
+
+const sqlKeywordTokens = new Set([
+  'as',
+  'asc',
+  'and',
+  'between',
+  'by',
+  'case',
+  'desc',
+  'distinct',
+  'else',
+  'end',
+  'false',
+  'from',
+  'group',
+  'having',
+  'in',
+  'is',
+  'join',
+  'left',
+  'like',
+  'limit',
+  'not',
+  'null',
+  'on',
+  'or',
+  'order',
+  'select',
+  'then',
+  'true',
+  'using',
+  'when',
+  'where',
+  'with'
+])
+const sqlFunctionTokens = new Set([
+  'avg',
+  'cast',
+  'coalesce',
+  'count',
+  'date',
+  'datetime',
+  'ifnull',
+  'lower',
+  'max',
+  'min',
+  'nullif',
+  'round',
+  'strftime',
+  'substr',
+  'substring',
+  'sum',
+  'trim',
+  'upper'
+])
+const tableReferenceBoundaryTokens = new Set([
+  'cross',
+  'except',
+  'full',
+  'group',
+  'having',
+  'inner',
+  'intersect',
+  'join',
+  'left',
+  'limit',
+  'on',
+  'order',
+  'right',
+  'union',
+  'using',
+  'where'
+])
+const tableAliasStopTokens = new Set([
+  ...tableReferenceBoundaryTokens,
+  'as'
+])
+
+type SqlToken = {
+  kind: 'identifier' | 'symbol'
+  value: string
+  lower: string
+}
+
+type TableReference = {
+  tableName: string
+  alias: string | null
+}
 
 export type AssistantValidatedQuery = {
   normalizedSql: string
@@ -49,6 +136,95 @@ function buildCteNameSet(sqlText: string) {
   }
 
   return cteNames
+}
+
+function stripStringLiterals(sqlText: string) {
+  return sqlText.replace(/'(?:''|[^'])*'/g, '\'\'')
+}
+
+function tokenizeSql(sqlText: string) {
+  const tokens: SqlToken[] = []
+  const tokenPattern = /[a-z_][a-z0-9_]*|[(),.]/ig
+
+  for (const match of stripStringLiterals(sqlText).matchAll(tokenPattern)) {
+    const value = match[0]
+    const isIdentifier = /^[a-z_]/i.test(value)
+    tokens.push({
+      kind: isIdentifier ? 'identifier' : 'symbol',
+      value,
+      lower: value.toLowerCase()
+    })
+  }
+
+  return tokens
+}
+
+function isIdentifierToken(token: SqlToken | undefined): token is SqlToken & { kind: 'identifier' } {
+  return token?.kind === 'identifier'
+}
+
+function extractTableReferences(sqlText: string) {
+  const tokens = tokenizeSql(sqlText)
+  const references: TableReference[] = []
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]
+
+    if (!isIdentifierToken(token) || (token.lower !== 'from' && token.lower !== 'join')) {
+      continue
+    }
+
+    for (index += 1; index < tokens.length; index += 1) {
+      const current = tokens[index]
+
+      if (isIdentifierToken(current) && tableReferenceBoundaryTokens.has(current.lower)) {
+        index -= 1
+        break
+      }
+
+      if (current?.kind === 'symbol' && current.value === ',') {
+        continue
+      }
+
+      if (current?.kind === 'symbol' && current.value === '(') {
+        break
+      }
+
+      if (!isIdentifierToken(current)) {
+        continue
+      }
+
+      let alias: string | null = null
+      const next = tokens[index + 1]
+      const afterNext = tokens[index + 2]
+
+      if (isIdentifierToken(next) && next.lower === 'as' && isIdentifierToken(afterNext)) {
+        alias = afterNext.lower
+        index += 2
+      } else if (isIdentifierToken(next) && !tableAliasStopTokens.has(next.lower)) {
+        alias = next.lower
+        index += 1
+      }
+
+      references.push({
+        tableName: current.lower,
+        alias
+      })
+    }
+  }
+
+  return references
+}
+
+function buildOutputAliasSet(sqlText: string) {
+  const aliases = new Set<string>()
+  const aliasPattern = /\bas\s+([a-z_][a-z0-9_]*)\b/ig
+
+  for (const match of stripStringLiterals(sqlText).matchAll(aliasPattern)) {
+    aliases.add(match[1]!.toLowerCase())
+  }
+
+  return aliases
 }
 
 function assertSingleReadOnlyStatement(sqlText: string) {
@@ -88,19 +264,17 @@ function assertSingleReadOnlyStatement(sqlText: string) {
 function assertAllowedTables(sqlText: string) {
   const cteNames = buildCteNameSet(sqlText)
 
-  for (const match of sqlText.matchAll(fromJoinPattern)) {
-    const tableName = match[1]!.toLowerCase()
-
-    if (cteNames.has(tableName)) {
+  for (const reference of extractTableReferences(sqlText)) {
+    if (cteNames.has(reference.tableName)) {
       continue
     }
 
-    if (assistantBlockedTables.has(tableName)) {
-      throw new AssistantSqlValidationError(`La table "${tableName}" est explicitement bloquée.`)
+    if (assistantBlockedTables.has(reference.tableName)) {
+      throw new AssistantSqlValidationError(`La table "${reference.tableName}" est explicitement bloquée.`)
     }
 
-    if (!assistantAllowedTables.has(tableName)) {
-      throw new AssistantSqlValidationError(`La table "${tableName}" n’est pas exposée à l’assistant.`)
+    if (!assistantAllowedTables.has(reference.tableName)) {
+      throw new AssistantSqlValidationError(`La table "${reference.tableName}" n’est pas exposée à l’assistant.`)
     }
   }
 }
@@ -109,22 +283,19 @@ function buildQualifierMap(sqlText: string) {
   const qualifierToTable = new Map<string, string>()
   const cteNames = buildCteNameSet(sqlText)
 
-  for (const match of sqlText.matchAll(fromJoinPattern)) {
-    const tableName = match[1]!.toLowerCase()
-    const alias = match[2]?.toLowerCase()
-
-    if (cteNames.has(tableName)) {
+  for (const reference of extractTableReferences(sqlText)) {
+    if (cteNames.has(reference.tableName)) {
       continue
     }
 
-    if (!assistantAllowedTables.has(tableName)) {
+    if (!assistantAllowedTables.has(reference.tableName)) {
       continue
     }
 
-    qualifierToTable.set(tableName, tableName)
+    qualifierToTable.set(reference.tableName, reference.tableName)
 
-    if (alias) {
-      qualifierToTable.set(alias, tableName)
+    if (reference.alias) {
+      qualifierToTable.set(reference.alias, reference.tableName)
     }
   }
 
@@ -133,14 +304,21 @@ function buildQualifierMap(sqlText: string) {
 
 function assertAllowedColumns(sqlText: string) {
   const qualifierMap = buildQualifierMap(sqlText)
+  const cteNames = buildCteNameSet(sqlText)
 
   for (const match of sqlText.matchAll(qualifiedColumnPattern)) {
     const qualifier = match[1]!.toLowerCase()
     const columnName = match[2]!.toLowerCase()
     const tableName = qualifierMap.get(qualifier)
 
-    if (!tableName) {
+    if (!tableName && cteNames.has(qualifier)) {
       continue
+    }
+
+    if (!tableName) {
+      throw new AssistantSqlValidationError(
+        `Le qualifiant "${qualifier}" n’est pas une table ou un alias exposé à l’assistant.`
+      )
     }
 
     const allowedColumns = assistantAllowedColumnsByTable[tableName]
@@ -148,6 +326,45 @@ function assertAllowedColumns(sqlText: string) {
     if (!allowedColumns?.has(columnName)) {
       throw new AssistantSqlValidationError(
         `La colonne "${qualifier}.${columnName}" n’est pas exposée à l’assistant.`
+      )
+    }
+  }
+
+  const tokens = tokenizeSql(sqlText)
+  const aliases = buildOutputAliasSet(sqlText)
+  const referencedTables = [...new Set(qualifierMap.values())]
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]
+
+    if (!isIdentifierToken(token)) {
+      continue
+    }
+
+    const previous = tokens[index - 1]
+    const next = tokens[index + 1]
+
+    if (
+      previous?.value === '.'
+      || next?.value === '.'
+      || previous?.lower === 'as'
+      || next?.value === '('
+      || sqlKeywordTokens.has(token.lower)
+      || sqlFunctionTokens.has(token.lower)
+      || aliases.has(token.lower)
+      || cteNames.has(token.lower)
+      || qualifierMap.has(token.lower)
+    ) {
+      continue
+    }
+
+    const allowedByReferencedTable = referencedTables.some((tableName) => {
+      return assistantAllowedColumnsByTable[tableName]?.has(token.lower)
+    })
+
+    if (!allowedByReferencedTable) {
+      throw new AssistantSqlValidationError(
+        `La colonne "${token.lower}" n’est pas exposée à l’assistant.`
       )
     }
   }

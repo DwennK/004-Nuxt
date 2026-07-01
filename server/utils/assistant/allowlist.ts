@@ -228,6 +228,7 @@ export const assistantBlockedTables = new Set([
 export const assistantBlockedColumns = new Set([
   'phone',
   'email',
+  'password_hash',
   'notes',
   'serial_number',
   'imei',
@@ -241,6 +242,8 @@ export const assistantBlockedColumns = new Set([
   'logo_data_url',
   'footer_notes',
   'address',
+  'address_line_1',
+  'address_line_2',
   'country_code',
   'website',
   'payment_terms'
