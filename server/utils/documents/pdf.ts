@@ -11,7 +11,7 @@ import { documentStatusLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
-import { formatCurrency, formatDate } from '~~/shared/utils/pos'
+import { calculateIncludedVatAmount, formatCurrency, formatDate } from '~~/shared/utils/pos'
 import type { SwissQrAddress } from '~~/shared/utils/qr-bill'
 
 const MM = 72 / 25.4
@@ -464,6 +464,11 @@ function drawTableHeader(context: PdfContext) {
     size: FONT_LABEL,
     color: COLORS.tableHeadText
   })
+  drawRightAlignedText(context, 'TVA CHF', columns.vatAmount.right - (2 * MM), textY, {
+    font: context.boldFont,
+    size: FONT_LABEL,
+    color: COLORS.tableHeadText
+  })
   drawRightAlignedText(context, 'Total TTC', columns.total.right - (2 * MM), textY, {
     font: context.boldFont,
     size: FONT_LABEL,
@@ -474,23 +479,26 @@ function drawTableHeader(context: PdfContext) {
 }
 
 function getTableColumns() {
-  const descriptionWidth = SECTION_WIDTH * 0.5
+  const descriptionWidth = SECTION_WIDTH * 0.42
   const quantityWidth = SECTION_WIDTH * 0.07
   const unitPriceWidth = SECTION_WIDTH * 0.15
   const vatWidth = SECTION_WIDTH * 0.08
-  const totalWidth = SECTION_WIDTH - descriptionWidth - quantityWidth - unitPriceWidth - vatWidth
+  const vatAmountWidth = SECTION_WIDTH * 0.13
+  const totalWidth = SECTION_WIDTH - descriptionWidth - quantityWidth - unitPriceWidth - vatWidth - vatAmountWidth
 
   const descriptionLeft = SECTION_LEFT
   const quantityLeft = descriptionLeft + descriptionWidth
   const unitPriceLeft = quantityLeft + quantityWidth
   const vatLeft = unitPriceLeft + unitPriceWidth
-  const totalLeft = vatLeft + vatWidth
+  const vatAmountLeft = vatLeft + vatWidth
+  const totalLeft = vatAmountLeft + vatAmountWidth
 
   return {
     description: { left: descriptionLeft, width: descriptionWidth, right: descriptionLeft + descriptionWidth },
     quantity: { left: quantityLeft, width: quantityWidth, right: quantityLeft + quantityWidth },
     unitPrice: { left: unitPriceLeft, width: unitPriceWidth, right: unitPriceLeft + unitPriceWidth },
     vat: { left: vatLeft, width: vatWidth, right: vatLeft + vatWidth },
+    vatAmount: { left: vatAmountLeft, width: vatAmountWidth, right: vatAmountLeft + vatAmountWidth },
     total: { left: totalLeft, width: totalWidth, right: totalLeft + totalWidth }
   }
 }
@@ -529,6 +537,10 @@ function drawDocumentLines(context: PdfContext, document: DocumentDetail) {
       color: COLORS.text
     })
     drawRightAlignedText(context, `${line.vatRate}%`, columns.vat.right - (2 * MM), numberBaseline, {
+      size: FONT_BODY,
+      color: COLORS.text
+    })
+    drawRightAlignedText(context, formatCurrency(calculateIncludedVatAmount(line.lineTotal, line.vatRate)), columns.vatAmount.right - (2 * MM), numberBaseline, {
       size: FONT_BODY,
       color: COLORS.text
     })

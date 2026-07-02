@@ -80,6 +80,16 @@ export function formatDate(value: string | Date, locale = 'fr-CH', timeZone = bu
   }).format(date)
 }
 
+export function calculateIncludedVatAmount(totalWithVat: number, vatRate: number) {
+  if (vatRate <= 0) {
+    return 0
+  }
+
+  const taxableBase = Math.round(totalWithVat / (1 + (vatRate / 100)))
+
+  return totalWithVat - taxableBase
+}
+
 export function buildZonedDayRange(date: string, timeZone = businessTimeZone) {
   const [year, month, day] = date.split('-').map(Number)
   const offsetStart = getTimeZoneOffsetMinutes(new Date(Date.UTC(year!, month! - 1, day!, 0, 0, 0)), timeZone)

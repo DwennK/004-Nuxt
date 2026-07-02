@@ -6,7 +6,7 @@ import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
 import { getDocumentPrintProfiles, printProfileLabels, supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import type { SwissQrAddress } from '~~/shared/utils/qr-bill'
-import { formatCurrency, formatDate, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
+import { calculateIncludedVatAmount, formatCurrency, formatDate, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
 
 definePageMeta({
   layout: false
@@ -256,6 +256,7 @@ useHead(() => ({
                 <th>Qté</th>
                 <th>Prix TTC</th>
                 <th>TVA</th>
+                <th>TVA CHF</th>
                 <th class="text-right">
                   Total TTC
                 </th>
@@ -269,6 +270,7 @@ useHead(() => ({
                 <td>{{ line.quantity }}</td>
                 <td>{{ formatCurrency(line.unitPrice) }}</td>
                 <td>{{ line.vatRate }}%</td>
+                <td>{{ formatCurrency(calculateIncludedVatAmount(line.lineTotal, line.vatRate)) }}</td>
                 <td class="text-right">
                   {{ formatCurrency(line.lineTotal) }}
                 </td>
@@ -514,7 +516,7 @@ useHead(() => ({
             </div>
             <div class="thermal-line-meta">
               <span>{{ line.quantity }} x {{ formatCurrency(line.unitPrice) }}</span>
-              <span>TVA {{ line.vatRate }}%</span>
+              <span>TVA {{ line.vatRate }}% · {{ formatCurrency(calculateIncludedVatAmount(line.lineTotal, line.vatRate)) }}</span>
             </div>
           </div>
         </section>
@@ -794,7 +796,7 @@ body {
 
 .invoice-table th:nth-child(1),
 .invoice-table td:nth-child(1) {
-  width: 50%;
+  width: 42%;
 }
 
 .invoice-table th:nth-child(2),
@@ -814,6 +816,11 @@ body {
 
 .invoice-table th:nth-child(5),
 .invoice-table td:nth-child(5) {
+  width: 13%;
+}
+
+.invoice-table th:nth-child(6),
+.invoice-table td:nth-child(6) {
   width: 20%;
 }
 
