@@ -288,9 +288,10 @@ const columns: TableColumn<PaymentListItem>[] = [
         items: getRowItems(row.original)
       },
       () => h(UButton, {
-        icon: 'i-lucide-ellipsis-vertical',
-        color: 'neutral',
-        variant: 'ghost'
+        'icon': 'i-lucide-ellipsis-vertical',
+        'color': 'neutral',
+        'variant': 'ghost',
+        'aria-label': 'Actions de la ligne'
       })
     ))
   }

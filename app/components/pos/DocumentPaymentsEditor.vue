@@ -312,6 +312,7 @@ async function removePayment(payment: PaymentRecord) {
                 color="neutral"
                 variant="ghost"
                 size="sm"
+                aria-label="Réinitialiser le paiement"
                 :disabled="savingId === payment.id"
                 @click="resetDraft(payment)"
               />
@@ -321,6 +322,7 @@ async function removePayment(payment: PaymentRecord) {
                 color="error"
                 variant="ghost"
                 size="sm"
+                aria-label="Supprimer le paiement"
                 :loading="deletingId === payment.id"
                 @click="removePayment(payment)"
               />

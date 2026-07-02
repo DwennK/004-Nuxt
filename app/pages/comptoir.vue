@@ -414,6 +414,7 @@ useHead({
                   color="neutral"
                   variant="ghost"
                   size="sm"
+                  aria-label="Effacer la recherche"
                   @click="clearSearch"
                 />
               </div>

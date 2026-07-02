@@ -287,9 +287,10 @@ const columns: TableColumn<DocumentListItem>[] = [
         items: getRowItems(row.original)
       },
       () => h(resolveComponent('UButton'), {
-        icon: 'i-lucide-ellipsis-vertical',
-        color: 'neutral',
-        variant: 'ghost'
+        'icon': 'i-lucide-ellipsis-vertical',
+        'color': 'neutral',
+        'variant': 'ghost',
+        'aria-label': 'Actions de la ligne'
       })
     ))
   }

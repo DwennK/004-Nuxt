@@ -326,9 +326,10 @@ const articleColumns: TableColumn<CatalogItemRecord>[] = [
           },
           () =>
             h(UButton, {
-              icon: 'i-lucide-ellipsis-vertical',
-              color: 'neutral',
-              variant: 'ghost'
+              'icon': 'i-lucide-ellipsis-vertical',
+              'color': 'neutral',
+              'variant': 'ghost',
+              'aria-label': 'Actions de la ligne'
             })
         )
       )
@@ -412,9 +413,10 @@ const repairColumns: TableColumn<CatalogItemRecord>[] = [
           },
           () =>
             h(UButton, {
-              icon: 'i-lucide-ellipsis-vertical',
-              color: 'neutral',
-              variant: 'ghost'
+              'icon': 'i-lucide-ellipsis-vertical',
+              'color': 'neutral',
+              'variant': 'ghost',
+              'aria-label': 'Actions de la ligne'
             })
         )
       )
@@ -492,9 +494,10 @@ const serviceColumns: TableColumn<CatalogItemRecord>[] = [
           },
           () =>
             h(UButton, {
-              icon: 'i-lucide-ellipsis-vertical',
-              color: 'neutral',
-              variant: 'ghost'
+              'icon': 'i-lucide-ellipsis-vertical',
+              'color': 'neutral',
+              'variant': 'ghost',
+              'aria-label': 'Actions de la ligne'
             })
         )
       )

@@ -2,7 +2,7 @@
 import type { TableColumn } from '@nuxt/ui'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
-import { ticketStatusColors, ticketStatusLabels, ticketTypeColors, ticketTypeLabels } from '~~/shared/constants/pos'
+import { ticketStatusColors, ticketStatusLabels, ticketTypeLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail, TicketListItem, TicketListResponse } from '~~/shared/types/pos'
 import { formatDateTime } from '~~/shared/utils/pos'
 
@@ -181,9 +181,9 @@ const columns: TableColumn<TicketListItem>[] = [
     header: 'Ticket',
     cell: ({ row }) => h('div', { class: 'space-y-1' }, [
       h('p', { class: 'font-medium text-highlighted' }, row.original.ticketNumber),
-      h('div', { class: 'flex flex-wrap gap-2' }, [
-        h(UBadge, { color: ticketTypeColors[row.original.type], variant: 'subtle' }, () => ticketTypeLabels[row.original.type]),
-        h(UBadge, { color: ticketStatusColors[row.original.status], variant: 'subtle' }, () => ticketStatusLabels[row.original.status])
+      h('div', { class: 'flex flex-wrap items-center gap-2' }, [
+        h(UBadge, { color: ticketStatusColors[row.original.status], variant: 'subtle' }, () => ticketStatusLabels[row.original.status]),
+        h('span', { class: 'text-xs text-toned' }, ticketTypeLabels[row.original.type])
       ])
     ])
   },
@@ -219,9 +219,10 @@ const columns: TableColumn<TicketListItem>[] = [
         items: getRowItems(row.original)
       },
       () => h(UButton, {
-        icon: 'i-lucide-ellipsis-vertical',
-        color: 'neutral',
-        variant: 'ghost'
+        'icon': 'i-lucide-ellipsis-vertical',
+        'color': 'neutral',
+        'variant': 'ghost',
+        'aria-label': 'Actions de la ligne'
       })
     ))
   }
@@ -264,7 +265,14 @@ const columns: TableColumn<TicketListItem>[] = [
               ?.getAllColumns()
               .filter((column: DashboardTableColumn) => column.getCanHide())
               .map((column: DashboardTableColumn) => ({
-                label: upperFirst(column.id),
+                label: ({
+                  ticketNumber: 'Ticket',
+                  customerName: 'Client',
+                  issueDescription: 'Problème',
+                  documentCount: 'Documents',
+                  openedAt: 'Ouvert le',
+                  actions: 'Actions'
+                } as Record<string, string>)[column.id] || upperFirst(column.id),
                 type: 'checkbox' as const,
                 checked: column.getIsVisible(),
                 onUpdateChecked(checked: boolean) {
