@@ -13,25 +13,129 @@ type Direction = 'up' | 'right' | 'down' | 'left'
 type TileDirection = 'up' | 'right' | 'down' | 'left'
 type ConnectDisc = 'player' | 'ai'
 type MineCell = { mine: boolean, revealed: boolean, flagged: boolean, adjacent: number }
-type MemoryCard = { id: number, value: string, revealed: boolean, matched: boolean }
+type MemoryCard = { id: number, value: string, label: string, icon: string, revealed: boolean, matched: boolean }
 
 const games = [
-  { value: 'wordle', label: 'Mot mystere', short: 'Word', icon: 'i-lucide-spell-check', accent: 'from-emerald-500 to-lime-400' },
-  { value: 'higher', label: 'Plus ou moins', short: '100', icon: 'i-lucide-binary', accent: 'from-sky-500 to-cyan-400' },
-  { value: 'tic', label: 'Morpion', short: 'X/O', icon: 'i-lucide-grid-3x3', accent: 'from-amber-500 to-orange-400' },
-  { value: 'aim', label: 'Precision', short: 'Aim', icon: 'i-lucide-crosshair', accent: 'from-rose-500 to-pink-400' },
-  { value: 'reflex', label: 'Reflexe', short: 'ms', icon: 'i-lucide-timer-reset', accent: 'from-violet-500 to-fuchsia-400' },
-  { value: 'snake', label: 'Snake', short: 'S', icon: 'i-lucide-worm', accent: 'from-green-500 to-emerald-300' },
-  { value: 'tiles', label: '2048', short: '2k', icon: 'i-lucide-layout-grid', accent: 'from-orange-500 to-yellow-300' },
-  { value: 'connect', label: 'Puissance 4', short: '4', icon: 'i-lucide-circle-dot', accent: 'from-red-500 to-yellow-400' },
-  { value: 'mines', label: 'Demineur', short: 'M', icon: 'i-lucide-bomb', accent: 'from-zinc-500 to-slate-300' },
-  { value: 'memory', label: 'Memoire', short: 'Mem', icon: 'i-lucide-brain', accent: 'from-indigo-500 to-sky-400' }
+  {
+    value: 'wordle',
+    label: 'Mot mystere',
+    short: 'WORD',
+    icon: 'i-lucide-spell-check',
+    accent: 'from-success to-primary',
+    color: 'success',
+    category: 'Mots',
+    rhythm: '2-4 min',
+    description: 'Six essais pour lire les couleurs, eliminer les lettres et trouver le mot.'
+  },
+  {
+    value: 'higher',
+    label: 'Plus ou moins',
+    short: '100',
+    icon: 'i-lucide-binary',
+    accent: 'from-info to-primary',
+    color: 'info',
+    category: 'Puzzle',
+    rhythm: '1 min',
+    description: 'Resserre la plage de 1 a 100 en huit tentatives maximum.'
+  },
+  {
+    value: 'tic',
+    label: 'Morpion',
+    short: 'X/O',
+    icon: 'i-lucide-grid-3x3',
+    accent: 'from-warning to-primary',
+    color: 'warning',
+    category: 'Strategie',
+    rhythm: '1 min',
+    description: 'Force une ligne de trois avant que l IA ne bloque ou ne gagne.'
+  },
+  {
+    value: 'aim',
+    label: 'Precision',
+    short: 'AIM',
+    icon: 'i-lucide-crosshair',
+    accent: 'from-error to-primary',
+    color: 'error',
+    category: 'Reflexes',
+    rhythm: '30 s',
+    description: 'Clique quinze cibles, limite les rates et baisse ton temps moyen.'
+  },
+  {
+    value: 'reflex',
+    label: 'Reflexe',
+    short: 'MS',
+    icon: 'i-lucide-timer-reset',
+    accent: 'from-primary to-info',
+    color: 'primary',
+    category: 'Reflexes',
+    rhythm: '10 s',
+    description: 'Attends le signal vert, puis clique sans anticiper.'
+  },
+  {
+    value: 'snake',
+    label: 'Snake',
+    short: 'RUN',
+    icon: 'i-lucide-route',
+    accent: 'from-success to-info',
+    color: 'success',
+    category: 'Arcade',
+    rhythm: '3 min',
+    description: 'Mange, grandis, evite les murs et garde la trajectoire propre.'
+  },
+  {
+    value: 'tiles',
+    label: '2048',
+    short: '2K',
+    icon: 'i-lucide-layout-grid',
+    accent: 'from-warning to-success',
+    color: 'warning',
+    category: 'Puzzle',
+    rhythm: '5 min',
+    description: 'Fusionne les tuiles, garde un coin fort et vise 2048.'
+  },
+  {
+    value: 'connect',
+    label: 'Puissance 4',
+    short: '4',
+    icon: 'i-lucide-circle-dot',
+    accent: 'from-error to-warning',
+    color: 'error',
+    category: 'Strategie',
+    rhythm: '2 min',
+    description: 'Depose les disques et aligne quatre cases avant l IA.'
+  },
+  {
+    value: 'mines',
+    label: 'Demineur',
+    short: 'MINE',
+    icon: 'i-lucide-bomb',
+    accent: 'from-muted to-primary',
+    color: 'neutral',
+    category: 'Puzzle',
+    rhythm: '4 min',
+    description: 'Premier clic protege, drapeaux au clic droit, mines a eviter.'
+  },
+  {
+    value: 'memory',
+    label: 'Memoire',
+    short: 'MEM',
+    icon: 'i-lucide-brain',
+    accent: 'from-info to-success',
+    color: 'info',
+    category: 'Memoire',
+    rhythm: '2 min',
+    description: 'Retrouve les paires tech avec le moins de coups possible.'
+  }
 ] satisfies {
   value: GameTab
   label: string
   short: string
   icon: string
   accent: string
+  color: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  category: string
+  rhythm: string
+  description: string
 }[]
 
 function isGameTab(value: unknown): value is GameTab {
@@ -53,6 +157,8 @@ if (!isGameTab(routeGameId.value)) {
 
 const selectedGame = computed<GameTab>(() => isGameTab(routeGameId.value) ? routeGameId.value : 'wordle')
 const selectedGameMeta = computed(() => games.find(game => game.value === selectedGame.value) || games[0]!)
+const clockNow = ref(0)
+let clockTimer: number | undefined
 
 const MAX_GUESSES = 6
 
@@ -249,17 +355,17 @@ function pressKey(key: string) {
 }
 
 function cellClass(status: CellStatus) {
-  if (status === 'correct') return 'bg-emerald-500 text-white border-emerald-400 shadow-[0_0_22px_rgba(16,185,129,0.24)]'
-  if (status === 'present') return 'bg-amber-400 text-white border-amber-300 shadow-[0_0_22px_rgba(251,191,36,0.2)]'
-  if (status === 'absent') return 'bg-neutral-500 text-white border-neutral-500'
+  if (status === 'correct') return 'bg-success text-inverted border-success shadow-sm'
+  if (status === 'present') return 'bg-warning text-inverted border-warning shadow-sm'
+  if (status === 'absent') return 'bg-muted text-muted border-muted'
   if (status === 'pending') return 'bg-default border-primary/40 text-highlighted shadow-sm'
   return 'bg-elevated/50 border-default/70 text-muted'
 }
 
 function keyClass(status: CellStatus | undefined) {
-  if (status === 'correct') return 'bg-emerald-500 text-white hover:bg-emerald-600'
-  if (status === 'present') return 'bg-amber-400 text-white hover:bg-amber-500'
-  if (status === 'absent') return 'bg-neutral-500 text-white hover:bg-neutral-600'
+  if (status === 'correct') return 'bg-success text-inverted hover:bg-success/90'
+  if (status === 'present') return 'bg-warning text-inverted hover:bg-warning/90'
+  if (status === 'absent') return 'bg-muted text-muted hover:bg-muted/90'
   return 'bg-elevated text-default hover:bg-accented'
 }
 
@@ -533,7 +639,7 @@ function hitAimTarget() {
 
 const aimDuration = computed(() => {
   if (aimStartedAt.value === null) return null
-  const end = aimFinishedAt.value ?? performance.now()
+  const end = aimFinishedAt.value ?? clockNow.value
   return Math.round(end - aimStartedAt.value)
 })
 
@@ -545,7 +651,7 @@ const aimAccuracy = computed(() => {
 
 const aimAveragePerTarget = computed(() => {
   if (!aimHits.value || aimStartedAt.value === null) return null
-  const elapsed = (aimFinishedAt.value ?? performance.now()) - aimStartedAt.value
+  const elapsed = (aimFinishedAt.value ?? clockNow.value) - aimStartedAt.value
   return Math.round(elapsed / aimHits.value)
 })
 
@@ -833,12 +939,12 @@ function continueTileGame() {
 
 function tileClass(value: number) {
   if (!value) return 'bg-white/45 dark:bg-white/5 text-transparent'
-  if (value <= 4) return 'bg-amber-100 text-amber-950'
-  if (value <= 16) return 'bg-orange-200 text-orange-950'
-  if (value <= 64) return 'bg-orange-400 text-white'
-  if (value <= 256) return 'bg-yellow-400 text-yellow-950'
-  if (value <= 1024) return 'bg-emerald-400 text-emerald-950'
-  return 'bg-sky-500 text-white'
+  if (value <= 4) return 'bg-elevated text-highlighted'
+  if (value <= 16) return 'bg-warning/25 text-highlighted'
+  if (value <= 64) return 'bg-warning text-inverted'
+  if (value <= 256) return 'bg-primary/35 text-highlighted'
+  if (value <= 1024) return 'bg-success text-inverted'
+  return 'bg-info text-inverted'
 }
 
 const CONNECT_ROWS = 6
@@ -1102,10 +1208,19 @@ function toggleMineFlag(index: number) {
 const minesFlagsLeft = computed(() => MINE_COUNT - minesBoard.value.filter(cell => cell.flagged).length)
 const minesElapsed = computed(() => {
   if (minesStartedAt.value === null) return 0
-  return Math.round(((minesFinishedAt.value ?? performance.now()) - minesStartedAt.value) / 1000)
+  return Math.round(((minesFinishedAt.value ?? clockNow.value) - minesStartedAt.value) / 1000)
 })
 
-const MEMORY_VALUES = ['RAM', 'USB', 'CPU', 'SSD', 'SIM', 'LCD', 'WiFi', 'GPU']
+const MEMORY_VALUES = [
+  { value: 'ram', label: 'RAM', icon: 'i-lucide-memory-stick' },
+  { value: 'usb', label: 'USB', icon: 'i-lucide-usb' },
+  { value: 'cpu', label: 'CPU', icon: 'i-lucide-cpu' },
+  { value: 'ssd', label: 'SSD', icon: 'i-lucide-hard-drive' },
+  { value: 'sim', label: 'SIM', icon: 'i-lucide-sim-card' },
+  { value: 'lcd', label: 'LCD', icon: 'i-lucide-monitor' },
+  { value: 'wifi', label: 'WiFi', icon: 'i-lucide-wifi' },
+  { value: 'gpu', label: 'GPU', icon: 'i-lucide-circuit-board' }
+]
 const memoryCards = ref<MemoryCard[]>([])
 const memoryOpen = ref<number[]>([])
 const memoryMoves = ref(0)
@@ -1125,9 +1240,11 @@ function shuffle<T>(items: T[]) {
 
 function newMemoryGame() {
   if (memoryTimer) window.clearTimeout(memoryTimer)
-  memoryCards.value = shuffle([...MEMORY_VALUES, ...MEMORY_VALUES]).map((value, index) => ({
+  memoryCards.value = shuffle([...MEMORY_VALUES, ...MEMORY_VALUES]).map((item, index) => ({
     id: index,
-    value,
+    value: item.value,
+    label: item.label,
+    icon: item.icon,
     revealed: false,
     matched: false
   }))
@@ -1185,6 +1302,171 @@ const higherTone = computed(() => {
   if (higherStatus.value === 'won') return 'success'
   if (higherStatus.value === 'lost') return 'error'
   return 'neutral'
+})
+
+const gameProgress = computed(() => {
+  if (selectedGame.value === 'wordle') return Math.round((guesses.value.length / MAX_GUESSES) * 100)
+  if (selectedGame.value === 'higher') return Math.round((higherHistory.value.length / HIGHER_MAX_ATTEMPTS) * 100)
+  if (selectedGame.value === 'aim') return Math.round((aimHits.value / AIM_TOTAL_TARGETS) * 100)
+  if (selectedGame.value === 'snake') return Math.min(100, Math.round((snake.value.length / (SNAKE_SIZE * SNAKE_SIZE)) * 100))
+  if (selectedGame.value === 'tiles') return Math.min(100, Math.round((Math.log2(Math.max(...tileBoard.value, 2)) / 11) * 100))
+  if (selectedGame.value === 'connect') return Math.round((connectBoard.value.filter(Boolean).length / connectBoard.value.length) * 100)
+  if (selectedGame.value === 'mines') {
+    const safe = MINE_SIZE * MINE_SIZE - MINE_COUNT
+    return Math.round((minesBoard.value.filter(cell => !cell.mine && cell.revealed).length / safe) * 100)
+  }
+  if (selectedGame.value === 'memory') return Math.round((memoryCards.value.filter(card => card.matched).length / memoryCards.value.length) * 100)
+  return 0
+})
+
+const gameStatus = computed(() => {
+  if (selectedGame.value === 'wordle') return wordleStatus.value
+  if (selectedGame.value === 'higher') return higherStatus.value
+  if (selectedGame.value === 'tic') return ticStatus.value
+  if (selectedGame.value === 'aim') return aimStatus.value === 'done' ? 'won' : 'playing'
+  if (selectedGame.value === 'reflex') return reflexStatus.value === 'done' ? 'won' : reflexStatus.value === 'too-soon' ? 'lost' : 'playing'
+  if (selectedGame.value === 'snake') return snakeStatus.value === 'idle' ? 'playing' : snakeStatus.value
+  if (selectedGame.value === 'tiles') return tileStatus.value
+  if (selectedGame.value === 'connect') return connectStatus.value
+  if (selectedGame.value === 'mines') return minesStatus.value
+  return memoryStatus.value
+})
+
+const gameStatusColor = computed(() => {
+  if (gameStatus.value === 'won') return 'success'
+  if (gameStatus.value === 'lost') return 'error'
+  if (gameStatus.value === 'draw') return 'warning'
+  return selectedGameMeta.value.color
+})
+
+const gameStatusLabel = computed(() => {
+  if (gameStatus.value === 'won') return selectedGame.value === 'aim' || selectedGame.value === 'reflex' ? 'Run termine' : 'Victoire'
+  if (gameStatus.value === 'lost') return 'A retenter'
+  if (gameStatus.value === 'draw') return 'Egalite'
+  if (selectedGame.value === 'snake' && snakeStatus.value === 'idle') return 'Pret'
+  if (selectedGame.value === 'aim' && aimStatus.value === 'idle') return 'Pret'
+  if (selectedGame.value === 'reflex' && reflexStatus.value === 'idle') return 'Pret'
+  return 'En cours'
+})
+
+const gameMessage = computed(() => {
+  if (selectedGame.value === 'wordle') return wordleMessage.value || 'Trouve le mot en six essais. Les couleurs te donnent la position des lettres.'
+  if (selectedGame.value === 'higher') return higherMessage.value
+  if (selectedGame.value === 'tic') return ticMessage.value
+  if (selectedGame.value === 'aim') return aimMessage.value
+  if (selectedGame.value === 'reflex') return reflexMessage.value
+  if (selectedGame.value === 'snake') {
+    if (snakeStatus.value === 'lost') return 'Collision. Relance pour battre ton score.'
+    if (snakeStatus.value === 'won') return 'Plateau complet.'
+    return 'Fleches ou ZQSD. Le premier mouvement lance la partie.'
+  }
+  if (selectedGame.value === 'tiles') return tileStatus.value === 'won' ? '2048 atteint. Tu peux continuer.' : tileStatus.value === 'lost' ? 'Plus aucun mouvement disponible.' : 'Fusionne les tuiles avec les fleches ou ZQSD.'
+  if (selectedGame.value === 'connect') return connectMessage.value
+  if (selectedGame.value === 'mines') return minesMessage.value
+  return memoryMessage.value
+})
+
+const gameStats = computed(() => {
+  if (selectedGame.value === 'wordle') {
+    return [
+      { label: 'Essais', value: `${guesses.value.length}/${MAX_GUESSES}` },
+      { label: 'Winrate', value: `${wordleWinRate.value}%` },
+      { label: 'Serie', value: String(wordleStats.value.streak) },
+      { label: 'Best', value: wordleStats.value.best ? String(wordleStats.value.best) : '-' }
+    ]
+  }
+
+  if (selectedGame.value === 'higher') {
+    return [
+      { label: 'Essais', value: `${higherHistory.value.length}/${HIGHER_MAX_ATTEMPTS}` },
+      { label: 'Plage', value: `${higherLow.value}-${higherHigh.value}` },
+      { label: 'Restants', value: String(higherRemaining.value) },
+      { label: 'Victoires', value: String(higherWins.value) }
+    ]
+  }
+
+  if (selectedGame.value === 'tic') {
+    return [
+      { label: 'Toi', value: String(ticScores.value.player) },
+      { label: 'IA', value: String(ticScores.value.ai) },
+      { label: 'Nuls', value: String(ticScores.value.draw) },
+      { label: 'Tour', value: ticCurrent.value }
+    ]
+  }
+
+  if (selectedGame.value === 'aim') {
+    return [
+      { label: 'Cibles', value: `${aimHits.value}/${AIM_TOTAL_TARGETS}` },
+      { label: 'Precision', value: `${aimAccuracy.value}%` },
+      { label: 'Temps', value: aimDuration.value !== null ? `${aimDuration.value} ms` : '-' },
+      { label: 'Moyenne', value: aimAveragePerTarget.value !== null ? `${aimAveragePerTarget.value} ms` : '-' }
+    ]
+  }
+
+  if (selectedGame.value === 'reflex') {
+    return [
+      { label: 'Dernier', value: reflexResult.value !== null ? `${reflexResult.value} ms` : '-' },
+      { label: 'Best', value: reflexBest.value !== null ? `${reflexBest.value} ms` : '-' },
+      { label: 'Moyenne', value: averageReflex.value !== null ? `${averageReflex.value} ms` : '-' },
+      { label: 'Runs', value: String(reflexHistory.value.length) }
+    ]
+  }
+
+  if (selectedGame.value === 'snake') {
+    return [
+      { label: 'Score', value: String(snakeScore.value) },
+      { label: 'Best', value: String(snakeBest.value) },
+      { label: 'Longueur', value: String(snake.value.length) },
+      { label: 'Etat', value: snakeStatus.value === 'playing' ? 'Live' : snakeStatus.value === 'idle' ? 'Pret' : snakeStatus.value }
+    ]
+  }
+
+  if (selectedGame.value === 'tiles') {
+    return [
+      { label: 'Score', value: String(tileScore.value) },
+      { label: 'Best', value: String(tileBest.value) },
+      { label: 'Max', value: String(Math.max(...tileBoard.value)) },
+      { label: 'Cases libres', value: String(emptyTileIndexes().length) }
+    ]
+  }
+
+  if (selectedGame.value === 'connect') {
+    return [
+      { label: 'Toi', value: String(connectScores.value.player) },
+      { label: 'IA', value: String(connectScores.value.ai) },
+      { label: 'Nuls', value: String(connectScores.value.draw) },
+      { label: 'Disques', value: String(connectBoard.value.filter(Boolean).length) }
+    ]
+  }
+
+  if (selectedGame.value === 'mines') {
+    return [
+      { label: 'Drapeaux', value: String(minesFlagsLeft.value) },
+      { label: 'Temps', value: `${minesElapsed.value} s` },
+      { label: 'Victoires', value: String(minesWins.value) },
+      { label: 'Ouvertes', value: String(minesBoard.value.filter(cell => cell.revealed).length) }
+    ]
+  }
+
+  return [
+    { label: 'Coups', value: String(memoryMoves.value) },
+    { label: 'Paires', value: `${memoryCards.value.filter(card => card.matched).length / 2}/${MEMORY_VALUES.length}` },
+    { label: 'Best', value: memoryBest.value !== null ? String(memoryBest.value) : '-' },
+    { label: 'Ouvertes', value: String(memoryOpen.value.length) }
+  ]
+})
+
+const controlHints = computed(() => {
+  if (selectedGame.value === 'wordle') return ['Clavier physique', 'Entree valide', 'Retour efface']
+  if (selectedGame.value === 'snake') return ['Fleches ou ZQSD', 'Boutons tactiles', 'Start manuel']
+  if (selectedGame.value === 'tiles') return ['Fleches ou ZQSD', 'Boutons tactiles', 'Continuer apres 2048']
+  if (selectedGame.value === 'mines') return ['Clic gauche: ouvrir', 'Clic droit: drapeau', 'Premier clic protege']
+  if (selectedGame.value === 'connect') return ['Clique une colonne', 'L IA repond', 'Centre utile']
+  if (selectedGame.value === 'aim') return ['Clique les cibles', 'Evite les rates', '15 cibles']
+  if (selectedGame.value === 'reflex') return ['Clique pour lancer', 'Attends le vert', 'Faux depart puni']
+  if (selectedGame.value === 'tic') return ['Tu joues X', 'L IA joue O', 'Aligne trois']
+  if (selectedGame.value === 'higher') return ['Entre 1-100', '8 essais', 'Observe la plage']
+  return ['Deux cartes', 'Memorise vite', 'Moins de coups']
 })
 
 function handleKeydown(event: KeyboardEvent) {
@@ -1343,6 +1625,10 @@ function advanceTime(ms: number) {
 }
 
 onMounted(() => {
+  clockNow.value = performance.now()
+  clockTimer = window.setInterval(() => {
+    clockNow.value = performance.now()
+  }, 100)
   newWordleGame()
   newHigherGame()
   newTicGame()
@@ -1360,6 +1646,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
+  if (clockTimer) window.clearInterval(clockTimer)
   if (ticTimer) window.clearTimeout(ticTimer)
   if (connectTimer) window.clearTimeout(connectTimer)
   clearReflexTimer()
@@ -1373,7 +1660,7 @@ watch(wordLength, () => {
 </script>
 
 <template>
-  <UDashboardPanel id="games">
+  <UDashboardPanel id="games-redesign">
     <template #header>
       <UDashboardNavbar :title="selectedGameMeta.label">
         <template #leading>
@@ -1383,83 +1670,136 @@ watch(wordLength, () => {
         <template #right>
           <UButton
             to="/games"
-            icon="i-lucide-list"
+            icon="i-lucide-layout-grid"
             color="neutral"
             variant="ghost"
             size="sm"
-            label="Tous les jeux"
+            label="Arcade"
           />
-          <UBadge color="primary" variant="subtle">
-            Mini-jeu
+          <UBadge :color="gameStatusColor" variant="subtle">
+            {{ gameStatusLabel }}
           </UBadge>
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="flex h-full min-h-0 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(0,193,106,0.14),transparent_28%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.14),transparent_26%)]">
-        <div class="min-h-0 flex-1 overflow-auto p-4 md:p-6">
-          <div class="mx-auto grid w-full max-w-7xl gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <div class="min-h-[34rem] overflow-hidden rounded-lg border border-default bg-default/90 shadow-sm">
-              <div class="border-b border-default/70 px-4 py-3 sm:px-5">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div class="min-w-0">
-                    <div class="flex items-center gap-2">
-                      <span class="flex size-9 items-center justify-center rounded-md bg-gradient-to-br text-white" :class="selectedGameMeta.accent">
-                        <UIcon :name="selectedGameMeta.icon" class="size-5" />
-                      </span>
-                      <div>
-                        <p class="text-base font-semibold text-highlighted">
-                          {{ selectedGameMeta.label }}
-                        </p>
-                        <p class="text-sm text-toned">
-                          <template v-if="selectedGame === 'wordle'">
-                            Un mot cache, six essais, feedback instantane.
-                          </template>
-                          <template v-else-if="selectedGame === 'higher'">
-                            Trouve la cible en resserrant la plage.
-                          </template>
-                          <template v-else-if="selectedGame === 'tic'">
-                            Bats l IA sur une grille 3 par 3.
-                          </template>
-                          <template v-else-if="selectedGame === 'aim'">
-                            Vise vite, rate peu, termine le run.
-                          </template>
-                          <template v-else-if="selectedGame === 'reflex'">
-                            Attends le signal et clique sans anticiper.
-                          </template>
-                          <template v-else-if="selectedGame === 'snake'">
-                            Mange, grandis, evite les murs et ton corps.
-                          </template>
-                          <template v-else-if="selectedGame === 'tiles'">
-                            Fusionne les tuiles jusqu au 2048.
-                          </template>
-                          <template v-else-if="selectedGame === 'connect'">
-                            Aligne quatre disques avant l IA.
-                          </template>
-                          <template v-else-if="selectedGame === 'mines'">
-                            Nettoie la grille sans declencher les mines.
-                          </template>
-                          <template v-else>
-                            Memorise les positions et retrouve les paires.
-                          </template>
-                        </p>
+      <div class="h-full overflow-auto bg-muted/30">
+        <div class="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4 md:p-6">
+          <section class="overflow-hidden rounded-lg border border-default bg-default shadow-sm">
+            <div class="grid lg:grid-cols-[minmax(0,1fr)_22rem]">
+              <div class="bg-gradient-to-br from-primary/15 via-default to-info/10 p-4 sm:p-5">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                  <div class="flex min-w-0 items-start gap-4">
+                    <div class="flex size-14 shrink-0 items-center justify-center rounded-lg bg-primary text-inverted shadow-sm">
+                      <UIcon :name="selectedGameMeta.icon" class="size-7" />
+                    </div>
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <UBadge :color="selectedGameMeta.color" variant="subtle">
+                          {{ selectedGameMeta.category }}
+                        </UBadge>
+                        <UBadge color="neutral" variant="outline">
+                          {{ selectedGameMeta.rhythm }}
+                        </UBadge>
                       </div>
+                      <h1 class="mt-2 text-3xl font-black tracking-tight text-highlighted sm:text-4xl">
+                        {{ selectedGameMeta.label }}
+                      </h1>
+                      <p class="mt-2 max-w-2xl text-sm leading-6 text-toned">
+                        {{ selectedGameMeta.description }}
+                      </p>
                     </div>
                   </div>
 
-                  <div class="flex flex-wrap items-center gap-2">
+                  <div class="grid min-w-64 grid-cols-2 gap-2">
+                    <div
+                      v-for="stat in gameStats.slice(0, 2)"
+                      :key="stat.label"
+                      class="rounded-lg border border-default/70 bg-default/75 p-3"
+                    >
+                      <p class="text-xs font-semibold uppercase text-toned">
+                        {{ stat.label }}
+                      </p>
+                      <p class="mt-1 text-xl font-black text-highlighted">
+                        {{ stat.value }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="border-t border-default bg-elevated p-4 lg:border-l lg:border-t-0">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-xs font-semibold uppercase text-toned">
+                      Progression
+                    </p>
+                    <p class="mt-1 text-2xl font-black text-highlighted">
+                      {{ gameProgress }}%
+                    </p>
+                  </div>
+                  <div class="flex size-12 items-center justify-center rounded-lg border border-default bg-default text-primary">
+                    <UIcon name="i-lucide-activity" class="size-6" />
+                  </div>
+                </div>
+                <div class="mt-4 h-3 overflow-hidden rounded-full bg-muted">
+                  <div
+                    class="h-full rounded-full bg-primary transition-all"
+                    :style="{ width: `${gameProgress}%` }"
+                  />
+                </div>
+                <p class="mt-4 text-sm leading-6 text-toned">
+                  {{ gameMessage }}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <nav class="flex gap-2 overflow-x-auto rounded-lg border border-default bg-default p-2 shadow-sm">
+            <UButton
+              v-for="game in games"
+              :key="game.value"
+              :to="`/games/${game.value}`"
+              :icon="game.icon"
+              :label="game.label"
+              :color="selectedGame === game.value ? game.color : 'neutral'"
+              :variant="selectedGame === game.value ? 'solid' : 'ghost'"
+              size="sm"
+              class="shrink-0"
+            />
+          </nav>
+
+          <div class="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
+            <main class="overflow-hidden rounded-lg border border-default bg-default shadow-sm">
+              <div class="border-b border-default px-4 py-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div class="flex min-w-0 items-center gap-3">
+                    <div class="flex size-10 items-center justify-center rounded-lg bg-elevated text-primary">
+                      <UIcon :name="selectedGameMeta.icon" class="size-5" />
+                    </div>
+                    <div class="min-w-0">
+                      <p class="truncate text-sm font-bold text-highlighted">
+                        Zone de jeu
+                      </p>
+                      <p class="truncate text-xs text-toned">
+                        {{ gameMessage }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2">
                     <UButton
                       v-if="selectedGame === 'wordle'"
                       icon="i-lucide-rotate-ccw"
                       color="neutral"
                       variant="outline"
                       size="sm"
-                      label="Nouvelle partie"
+                      label="Nouveau"
                       @click="newWordleGame"
                     />
                     <UButton
-                      v-if="selectedGame === 'higher'"
+                      v-else-if="selectedGame === 'higher'"
                       icon="i-lucide-rotate-ccw"
                       color="neutral"
                       variant="outline"
@@ -1468,67 +1808,67 @@ watch(wordLength, () => {
                       @click="newHigherGame"
                     />
                     <UButton
-                      v-if="selectedGame === 'tic'"
+                      v-else-if="selectedGame === 'tic'"
                       icon="i-lucide-rotate-ccw"
                       color="neutral"
                       variant="outline"
-                      size="sm"
-                      label="Nouvelle manche"
-                      @click="newTicGame"
-                    />
-                    <UButton
-                      v-if="selectedGame === 'aim'"
-                      icon="i-lucide-play"
-                      color="primary"
-                      size="sm"
-                      label="Lancer"
-                      @click="startAimGame"
-                    />
-                    <UButton
-                      v-if="selectedGame === 'aim'"
-                      icon="i-lucide-rotate-ccw"
-                      color="neutral"
-                      variant="outline"
-                      size="sm"
-                      label="Reset"
-                      @click="newAimGame"
-                    />
-                    <UButton
-                      v-if="selectedGame === 'reflex'"
-                      icon="i-lucide-play"
-                      color="primary"
                       size="sm"
                       label="Manche"
-                      @click="startReflexRound"
+                      @click="newTicGame"
                     />
+                    <template v-else-if="selectedGame === 'aim'">
+                      <UButton
+                        icon="i-lucide-play"
+                        color="primary"
+                        size="sm"
+                        label="Lancer"
+                        @click="startAimGame"
+                      />
+                      <UButton
+                        icon="i-lucide-rotate-ccw"
+                        color="neutral"
+                        variant="outline"
+                        size="sm"
+                        label="Reset"
+                        @click="newAimGame"
+                      />
+                    </template>
+                    <template v-else-if="selectedGame === 'reflex'">
+                      <UButton
+                        icon="i-lucide-play"
+                        color="primary"
+                        size="sm"
+                        label="Manche"
+                        @click="startReflexRound"
+                      />
+                      <UButton
+                        icon="i-lucide-rotate-ccw"
+                        color="neutral"
+                        variant="outline"
+                        size="sm"
+                        label="Reset"
+                        @click="newReflexGame"
+                      />
+                    </template>
+                    <template v-else-if="selectedGame === 'snake'">
+                      <UButton
+                        icon="i-lucide-play"
+                        color="primary"
+                        size="sm"
+                        label="Start"
+                        @click="startSnakeGame"
+                      />
+                      <UButton
+                        icon="i-lucide-rotate-ccw"
+                        color="neutral"
+                        variant="outline"
+                        size="sm"
+                        label="Reset"
+                        @click="newSnakeGame"
+                      />
+                    </template>
                     <UButton
-                      v-if="selectedGame === 'reflex'"
-                      icon="i-lucide-rotate-ccw"
-                      color="neutral"
-                      variant="outline"
-                      size="sm"
-                      label="Reset"
-                      @click="newReflexGame"
-                    />
-                    <UButton
-                      v-if="selectedGame === 'snake'"
-                      icon="i-lucide-play"
-                      color="primary"
-                      size="sm"
-                      label="Start"
-                      @click="startSnakeGame"
-                    />
-                    <UButton
-                      v-if="selectedGame === 'snake'"
-                      icon="i-lucide-rotate-ccw"
-                      color="neutral"
-                      variant="outline"
-                      size="sm"
-                      label="Reset"
-                      @click="newSnakeGame"
-                    />
-                    <UButton
-                      v-if="selectedGame === 'tiles'"
+                      v-else-if="selectedGame === 'tiles'"
                       icon="i-lucide-rotate-ccw"
                       color="neutral"
                       variant="outline"
@@ -1537,16 +1877,16 @@ watch(wordLength, () => {
                       @click="newTileGame"
                     />
                     <UButton
-                      v-if="selectedGame === 'connect'"
+                      v-else-if="selectedGame === 'connect'"
                       icon="i-lucide-rotate-ccw"
                       color="neutral"
                       variant="outline"
                       size="sm"
-                      label="Nouvelle manche"
+                      label="Manche"
                       @click="newConnectGame"
                     />
                     <UButton
-                      v-if="selectedGame === 'mines'"
+                      v-else-if="selectedGame === 'mines'"
                       icon="i-lucide-rotate-ccw"
                       color="neutral"
                       variant="outline"
@@ -1555,8 +1895,8 @@ watch(wordLength, () => {
                       @click="newMinesGame"
                     />
                     <UButton
-                      v-if="selectedGame === 'memory'"
-                      icon="i-lucide-rotate-ccw"
+                      v-else
+                      icon="i-lucide-shuffle"
                       color="neutral"
                       variant="outline"
                       size="sm"
@@ -1568,7 +1908,7 @@ watch(wordLength, () => {
               </div>
 
               <div class="p-4 sm:p-5">
-                <section v-if="selectedGame === 'wordle'" class="flex min-h-[28rem] flex-col items-center justify-center gap-5">
+                <section v-if="selectedGame === 'wordle'" class="mx-auto flex min-h-[34rem] max-w-4xl flex-col items-center justify-center gap-5">
                   <div class="flex flex-wrap items-center justify-center gap-2">
                     <USelect
                       v-model="wordLength"
@@ -1576,33 +1916,27 @@ watch(wordLength, () => {
                       size="sm"
                       class="min-w-32"
                     />
-                    <UBadge :color="wordleStatus === 'won' ? 'success' : wordleStatus === 'lost' ? 'error' : 'neutral'" variant="subtle">
-                      {{ wordleStatus === 'playing' ? `${MAX_GUESSES - guesses.length} essais` : wordleStatus === 'won' ? 'Trouve' : 'Perdu' }}
+                    <UBadge :color="gameStatusColor" variant="subtle">
+                      {{ wordleStatus === 'playing' ? `${MAX_GUESSES - guesses.length} essais restants` : gameStatusLabel }}
                     </UBadge>
                   </div>
 
-                  <UAlert
-                    v-if="wordleMessage"
-                    :color="wordleStatus === 'won' ? 'success' : wordleStatus === 'lost' ? 'error' : 'neutral'"
-                    variant="subtle"
-                    :title="wordleMessage"
-                    class="w-full max-w-md"
-                  />
-
-                  <div class="flex flex-col gap-1.5 rounded-lg bg-elevated/40 p-3 ring-1 ring-default/70" :class="flashInvalid ? 'animate-pulse' : ''">
-                    <div v-for="(row, rowIndex) in board" :key="rowIndex" class="flex gap-1.5">
-                      <div
-                        v-for="(cell, cellIndex) in row"
-                        :key="cellIndex"
-                        :class="['flex size-11 items-center justify-center rounded-md border-2 text-xl font-black uppercase transition sm:size-14 sm:text-2xl', cellClass(cell.status)]"
-                      >
-                        {{ cell.letter }}
+                  <div class="rounded-lg border border-default bg-elevated/50 p-3 shadow-inner" :class="flashInvalid ? 'animate-pulse' : ''">
+                    <div class="flex flex-col gap-1.5">
+                      <div v-for="(row, rowIndex) in board" :key="rowIndex" class="flex justify-center gap-1.5">
+                        <div
+                          v-for="(cell, cellIndex) in row"
+                          :key="cellIndex"
+                          :class="['flex size-11 items-center justify-center rounded-lg border-2 text-xl font-black uppercase transition sm:size-14 sm:text-2xl', cellClass(cell.status)]"
+                        >
+                          {{ cell.letter }}
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div class="flex w-full max-w-xl flex-col gap-1.5">
-                    <div v-for="(row, rowIndex) in KEYBOARD_ROWS" :key="rowIndex" class="flex justify-center gap-1">
+                  <div class="w-full max-w-2xl rounded-lg border border-default bg-default p-3">
+                    <div v-for="(row, rowIndex) in KEYBOARD_ROWS" :key="rowIndex" class="mb-1.5 flex justify-center gap-1 last:mb-0">
                       <button
                         v-for="key in row"
                         :key="key"
@@ -1610,36 +1944,29 @@ watch(wordLength, () => {
                         :class="['flex h-10 items-center justify-center rounded-md text-sm font-bold uppercase transition active:scale-95 sm:h-11', key === 'ENTER' || key === 'BACK' ? 'px-3 text-xs' : 'w-8 sm:w-10', keyClass(keyStatuses[key])]"
                         @click="pressKey(key)"
                       >
-                        <template v-if="key === 'BACK'">
-                          ⌫
-                        </template>
-                        <template v-else-if="key === 'ENTER'">
-                          OK
-                        </template>
-                        <template v-else>
-                          {{ key }}
-                        </template>
+                        <UIcon v-if="key === 'BACK'" name="i-lucide-delete" class="size-4" />
+                        <span v-else-if="key === 'ENTER'">OK</span>
+                        <span v-else>{{ key }}</span>
                       </button>
                     </div>
                   </div>
                 </section>
 
-                <section v-else-if="selectedGame === 'higher'" class="grid min-h-[28rem] place-items-center">
-                  <div class="w-full max-w-2xl space-y-5">
-                    <div class="rounded-lg border border-default bg-elevated/40 p-5">
+                <section v-else-if="selectedGame === 'higher'" class="grid min-h-[34rem] place-items-center">
+                  <div class="w-full max-w-3xl space-y-5">
+                    <div class="rounded-lg border border-default bg-elevated/50 p-5">
                       <div class="mb-4 flex flex-wrap items-center gap-2">
                         <UBadge :color="higherTone" variant="subtle">
-                          {{ higherStatus === 'playing' ? `${higherRemaining} essais restants` : higherStatus === 'won' ? 'Trouve' : 'Perdu' }}
+                          {{ higherStatus === 'playing' ? `${higherRemaining} essais restants` : gameStatusLabel }}
                         </UBadge>
                         <UBadge color="neutral" variant="outline">
                           Plage {{ higherLow }} - {{ higherHigh }}
                         </UBadge>
                       </div>
-                      <div class="relative mb-5 h-4 overflow-hidden rounded-full bg-muted">
-                        <div class="absolute inset-y-0 rounded-full bg-gradient-to-r from-sky-500 to-emerald-400" :style="{ left: `${higherLow - 1}%`, right: `${100 - higherHigh}%` }" />
+                      <div class="relative mb-6 h-5 overflow-hidden rounded-full bg-muted">
+                        <div class="absolute inset-y-0 rounded-full bg-primary transition-all" :style="{ left: `${higherLow - 1}%`, right: `${100 - higherHigh}%` }" />
                       </div>
-                      <UAlert :color="higherTone" variant="subtle" :title="higherMessage" />
-                      <div class="mt-5 flex flex-col gap-3 sm:flex-row">
+                      <div class="flex flex-col gap-3 sm:flex-row">
                         <UInput
                           v-model="higherInput"
                           type="number"
@@ -1659,85 +1986,72 @@ watch(wordLength, () => {
                       </div>
                     </div>
 
-                    <div class="flex flex-wrap gap-2">
-                      <UBadge
+                    <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <div
                         v-for="entry in higherHistory"
                         :key="entry.value"
-                        :color="entry.hint === 'trouve' ? 'success' : 'neutral'"
-                        variant="subtle"
-                        size="lg"
+                        class="rounded-lg border border-default bg-default p-3"
                       >
-                        {{ entry.value }} · {{ entry.hint === 'plus' ? 'plus haut' : entry.hint === 'moins' ? 'plus bas' : 'trouve' }}
-                      </UBadge>
+                        <p class="text-2xl font-black text-highlighted">
+                          {{ entry.value }}
+                        </p>
+                        <p class="text-sm font-semibold text-toned">
+                          {{ entry.hint === 'plus' ? 'Plus haut' : entry.hint === 'moins' ? 'Plus bas' : 'Trouve' }}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </section>
 
-                <section v-else-if="selectedGame === 'tic'" class="flex min-h-[28rem] flex-col items-center justify-center gap-5">
-                  <UAlert
-                    :color="ticStatus === 'won' ? 'success' : ticStatus === 'lost' ? 'error' : 'neutral'"
-                    variant="subtle"
-                    :title="ticMessage"
-                    class="w-full max-w-md"
-                  />
-                  <div class="grid w-full max-w-sm grid-cols-3 gap-2 rounded-lg bg-elevated/50 p-3 ring-1 ring-default/70">
+                <section v-else-if="selectedGame === 'tic'" class="flex min-h-[34rem] flex-col items-center justify-center gap-5">
+                  <div class="grid w-full max-w-md grid-cols-3 gap-2 rounded-lg border border-default bg-elevated/60 p-3">
                     <button
                       v-for="(cell, index) in ticBoard"
                       :key="index"
                       type="button"
-                      class="flex aspect-square items-center justify-center rounded-lg border text-5xl font-black transition hover:-translate-y-0.5 hover:bg-elevated"
-                      :class="ticWinningLine.includes(index) ? 'border-primary bg-primary/15 shadow-[0_0_30px_rgba(0,193,106,0.28)]' : 'border-default bg-default'"
+                      class="flex aspect-square items-center justify-center rounded-lg border text-5xl font-black transition hover:-translate-y-0.5 hover:bg-elevated sm:text-6xl"
+                      :class="ticWinningLine.includes(index) ? 'border-primary bg-primary/15 shadow-sm' : 'border-default bg-default'"
                       @click="playTic(index)"
                     >
-                      <span :class="cell === 'X' ? 'text-primary' : cell === 'O' ? 'text-warning' : 'text-muted/30'">{{ cell || '·' }}</span>
+                      <span :class="cell === 'X' ? 'text-primary' : cell === 'O' ? 'text-warning' : 'text-muted/30'">{{ cell || '' }}</span>
                     </button>
                   </div>
                 </section>
 
                 <section v-else-if="selectedGame === 'aim'" class="space-y-4">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <UBadge :color="aimStatus === 'done' ? 'success' : aimStatus === 'playing' ? 'warning' : 'neutral'" variant="subtle">
-                      {{ aimStatus === 'idle' ? 'Pret' : aimStatus === 'playing' ? `${aimHits}/${AIM_TOTAL_TARGETS}` : 'Termine' }}
-                    </UBadge>
-                    <UBadge color="neutral" variant="outline">
-                      {{ aimDuration !== null ? `${aimDuration} ms` : '0 ms' }}
-                    </UBadge>
-                    <UBadge color="neutral" variant="outline">
-                      {{ aimAccuracy }}% precision
-                    </UBadge>
-                  </div>
-                  <div class="relative h-[30rem] overflow-hidden rounded-lg border border-default bg-[radial-gradient(circle_at_top,rgba(244,63,94,0.16),transparent_28%),linear-gradient(135deg,rgba(14,165,233,0.08),rgba(0,193,106,0.08))]" @click="missAimTarget">
-                    <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:30px_30px]" />
+                  <div class="relative h-[34rem] overflow-hidden rounded-lg border border-default bg-elevated" @click="missAimTarget">
+                    <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:32px_32px]" />
+                    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_38%)]" />
                     <button
                       type="button"
-                      class="absolute flex items-center justify-center rounded-full border-4 border-white/95 bg-rose-500 shadow-[0_16px_45px_rgba(244,63,94,0.38)] transition hover:scale-110 active:scale-95"
+                      class="absolute flex items-center justify-center rounded-full border-4 border-default bg-error text-inverted shadow-lg transition hover:scale-110 active:scale-95"
                       :style="{ left: `${aimTarget.x}%`, top: `${aimTarget.y}%`, width: `${aimTarget.size}px`, height: `${aimTarget.size}px`, transform: 'translate(-50%, -50%)' }"
                       @click.stop="hitAimTarget"
                     >
-                      <span class="flex size-5 rounded-full border-2 border-white bg-white/25" />
+                      <span class="flex size-5 rounded-full border-2 border-inverted/80 bg-inverted/20" />
                     </button>
-                    <div class="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-default/70 px-4 py-3 text-xs font-semibold uppercase text-toned backdrop-blur">
-                      <span>{{ aimMessage }}</span>
-                      <span>{{ AIM_TOTAL_TARGETS - aimHits }} restantes</span>
+                    <div class="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-default/80 px-4 py-3 text-xs font-semibold uppercase text-toned backdrop-blur">
+                      <span>{{ aimHits }}/{{ AIM_TOTAL_TARGETS }} cibles</span>
+                      <span>{{ aimDuration !== null ? `${aimDuration} ms` : 'Pret' }}</span>
                     </div>
                   </div>
                 </section>
 
-                <section v-else-if="selectedGame === 'reflex'" class="grid min-h-[28rem] place-items-center">
+                <section v-else-if="selectedGame === 'reflex'" class="grid min-h-[34rem] place-items-center">
                   <button
                     type="button"
-                    class="group flex min-h-96 w-full max-w-3xl items-center justify-center rounded-lg border text-center transition"
+                    class="group flex min-h-[28rem] w-full max-w-3xl items-center justify-center rounded-lg border text-center transition active:scale-[0.99]"
                     :class="[
-                      reflexStatus === 'ready' ? 'border-emerald-500/70 bg-emerald-500/20 shadow-[0_0_70px_rgba(16,185,129,0.22)]' : '',
-                      reflexStatus === 'waiting' ? 'border-amber-500/50 bg-amber-500/15' : '',
-                      reflexStatus === 'too-soon' ? 'border-rose-500/60 bg-rose-500/15' : '',
-                      reflexStatus === 'done' ? 'border-sky-500/60 bg-sky-500/15' : '',
-                      reflexStatus === 'idle' ? 'border-default bg-elevated/40 hover:bg-elevated' : ''
+                      reflexStatus === 'ready' ? 'border-success bg-success/20 shadow-sm' : '',
+                      reflexStatus === 'waiting' ? 'border-warning bg-warning/15' : '',
+                      reflexStatus === 'too-soon' ? 'border-error bg-error/15' : '',
+                      reflexStatus === 'done' ? 'border-info bg-info/15' : '',
+                      reflexStatus === 'idle' ? 'border-default bg-elevated/60 hover:bg-elevated' : ''
                     ]"
                     @click="handleReflexClick"
                   >
                     <div class="space-y-4 px-6">
-                      <p class="text-sm font-bold uppercase tracking-[0.18em] text-toned">
+                      <p class="text-sm font-bold uppercase text-toned">
                         Zone de clic
                       </p>
                       <p class="text-5xl font-black text-highlighted sm:text-7xl">
@@ -1750,13 +2064,13 @@ watch(wordLength, () => {
                   </button>
                 </section>
 
-                <section v-else-if="selectedGame === 'snake'" class="flex min-h-[28rem] flex-col items-center justify-center gap-4">
-                  <div class="grid w-full max-w-[34rem] grid-cols-12 gap-1 rounded-lg bg-zinc-950 p-3 shadow-inner">
+                <section v-else-if="selectedGame === 'snake'" class="flex min-h-[34rem] flex-col items-center justify-center gap-4">
+                  <div class="grid w-full max-w-[34rem] grid-cols-12 gap-1 rounded-lg border border-default bg-inverted p-3 shadow-inner">
                     <div
                       v-for="cell in snakeCells"
                       :key="`${cell.x}-${cell.y}`"
                       class="aspect-square rounded-sm transition"
-                      :class="cell.head ? 'bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.65)]' : cell.body ? 'bg-emerald-500' : cell.food ? 'bg-rose-400 shadow-[0_0_18px_rgba(251,113,133,0.65)]' : 'bg-zinc-800'"
+                      :class="cell.head ? 'bg-success shadow-sm' : cell.body ? 'bg-success/70' : cell.food ? 'bg-error shadow-sm' : 'bg-default/15'"
                     />
                   </div>
                   <div class="grid grid-cols-3 gap-2">
@@ -1801,14 +2115,7 @@ watch(wordLength, () => {
                   </div>
                 </section>
 
-                <section v-else-if="selectedGame === 'tiles'" class="flex min-h-[28rem] flex-col items-center justify-center gap-4">
-                  <UAlert
-                    v-if="tileStatus !== 'playing'"
-                    :color="tileStatus === 'won' ? 'success' : 'error'"
-                    variant="subtle"
-                    :title="tileStatus === 'won' ? '2048 atteint.' : 'Plus aucun mouvement.'"
-                    class="w-full max-w-md"
-                  />
+                <section v-else-if="selectedGame === 'tiles'" class="flex min-h-[34rem] flex-col items-center justify-center gap-4">
                   <UButton
                     v-if="tileStatus === 'won'"
                     label="Continuer"
@@ -1816,7 +2123,7 @@ watch(wordLength, () => {
                     size="sm"
                     @click="continueTileGame"
                   />
-                  <div class="grid w-full max-w-[30rem] grid-cols-4 gap-3 rounded-lg bg-amber-950/20 p-3 ring-1 ring-default">
+                  <div class="grid w-full max-w-[31rem] grid-cols-4 gap-3 rounded-lg border border-default bg-elevated/70 p-3">
                     <div
                       v-for="(value, index) in tileBoard"
                       :key="index"
@@ -1869,309 +2176,133 @@ watch(wordLength, () => {
                   </div>
                 </section>
 
-                <section v-else-if="selectedGame === 'connect'" class="flex min-h-[28rem] flex-col items-center justify-center gap-4">
-                  <UAlert
-                    :color="connectStatus === 'won' ? 'success' : connectStatus === 'lost' ? 'error' : 'neutral'"
-                    variant="subtle"
-                    :title="connectMessage"
-                    class="w-full max-w-xl"
-                  />
-                  <div class="grid w-full max-w-2xl grid-cols-7 gap-2 rounded-lg bg-sky-700 p-3 shadow-lg">
+                <section v-else-if="selectedGame === 'connect'" class="flex min-h-[34rem] flex-col items-center justify-center gap-4">
+                  <div class="grid w-full max-w-2xl grid-cols-7 gap-2 rounded-lg border border-default bg-info p-3 shadow-sm">
                     <button
                       v-for="col in CONNECT_COLS"
                       :key="`drop-${col}`"
                       type="button"
-                      class="mb-1 rounded-md bg-white/15 py-1 text-xs font-bold text-white transition hover:bg-white/25"
+                      class="mb-1 rounded-md bg-inverted/15 py-2 text-inverted transition hover:bg-inverted/25"
                       @click="playConnect(col - 1)"
                     >
-                      ↓
+                      <UIcon name="i-lucide-chevron-down" class="mx-auto size-4" />
                     </button>
                     <div
                       v-for="(disc, index) in connectBoard"
                       :key="index"
-                      class="aspect-square rounded-full border-4 border-sky-900/40 transition"
+                      class="aspect-square rounded-full border-4 border-inverted/25 transition"
                       :class="[
-                        disc === 'player' ? 'bg-red-500 shadow-inner' : disc === 'ai' ? 'bg-yellow-300 shadow-inner' : 'bg-sky-950/70',
-                        connectWinningLine.includes(index) ? 'ring-4 ring-white' : ''
+                        disc === 'player' ? 'bg-error shadow-inner' : disc === 'ai' ? 'bg-warning shadow-inner' : 'bg-inverted/20',
+                        connectWinningLine.includes(index) ? 'ring-4 ring-inverted' : ''
                       ]"
                     />
                   </div>
                 </section>
 
-                <section v-else-if="selectedGame === 'mines'" class="flex min-h-[28rem] flex-col items-center justify-center gap-4">
-                  <div class="flex flex-wrap items-center justify-center gap-2">
-                    <UBadge :color="minesStatus === 'won' ? 'success' : minesStatus === 'lost' ? 'error' : 'neutral'" variant="subtle">
-                      {{ minesMessage }}
-                    </UBadge>
-                    <UBadge color="neutral" variant="outline">
-                      {{ minesFlagsLeft }} drapeaux
-                    </UBadge>
-                    <UBadge color="neutral" variant="outline">
-                      {{ minesElapsed }} s
-                    </UBadge>
-                  </div>
-                  <div class="grid w-full max-w-[34rem] grid-cols-8 gap-1 rounded-lg bg-elevated/60 p-3 ring-1 ring-default">
+                <section v-else-if="selectedGame === 'mines'" class="flex min-h-[34rem] flex-col items-center justify-center gap-4">
+                  <div class="grid w-full max-w-[34rem] grid-cols-8 gap-1 rounded-lg border border-default bg-elevated/70 p-3">
                     <button
                       v-for="(cell, index) in minesBoard"
                       :key="index"
                       type="button"
                       class="flex aspect-square items-center justify-center rounded-md border text-sm font-black transition sm:text-lg"
-                      :class="cell.revealed ? cell.mine ? 'border-rose-500 bg-rose-500 text-white' : 'border-default bg-default text-highlighted' : cell.flagged ? 'border-amber-500 bg-amber-500/20 text-amber-500' : 'border-default bg-accented hover:-translate-y-0.5 hover:bg-elevated'"
+                      :class="cell.revealed ? cell.mine ? 'border-error bg-error text-inverted' : 'border-default bg-default text-highlighted' : cell.flagged ? 'border-warning bg-warning/20 text-warning' : 'border-default bg-accented hover:-translate-y-0.5 hover:bg-elevated'"
                       @click="revealMine(index)"
                       @contextmenu.prevent="toggleMineFlag(index)"
                     >
-                      <template v-if="cell.revealed && cell.mine">
-                        ✹
-                      </template>
-                      <template v-else-if="cell.revealed && cell.adjacent">
-                        {{ cell.adjacent }}
-                      </template>
-                      <template v-else-if="cell.flagged">
-                        ⚑
-                      </template>
+                      <UIcon v-if="cell.revealed && cell.mine" name="i-lucide-bomb" class="size-5" />
+                      <span v-else-if="cell.revealed && cell.adjacent">{{ cell.adjacent }}</span>
+                      <UIcon v-else-if="cell.flagged" name="i-lucide-flag" class="size-5" />
                     </button>
                   </div>
                 </section>
 
-                <section v-else class="flex min-h-[28rem] flex-col items-center justify-center gap-4">
-                  <UAlert
-                    :color="memoryStatus === 'won' ? 'success' : 'neutral'"
-                    variant="subtle"
-                    :title="memoryMessage"
-                    class="w-full max-w-xl"
-                  />
+                <section v-else class="flex min-h-[34rem] flex-col items-center justify-center gap-4">
                   <div class="grid w-full max-w-[34rem] grid-cols-4 gap-3">
                     <button
                       v-for="(card, index) in memoryCards"
                       :key="card.id"
                       type="button"
-                      class="flex aspect-[1/1.15] items-center justify-center rounded-lg border text-xl font-black transition sm:text-2xl"
-                      :class="card.revealed || card.matched ? 'border-primary/50 bg-primary/10 text-primary shadow-sm' : 'border-default bg-gradient-to-br from-zinc-800 to-zinc-950 text-white hover:-translate-y-1 hover:shadow-md'"
+                      class="flex aspect-[1/1.12] flex-col items-center justify-center gap-2 rounded-lg border text-center font-black transition"
+                      :class="card.revealed || card.matched ? 'border-primary/50 bg-primary/10 text-primary shadow-sm' : 'border-default bg-elevated text-muted hover:-translate-y-1 hover:bg-accented hover:shadow-md'"
                       @click="flipMemoryCard(index)"
                     >
-                      {{ card.revealed || card.matched ? card.value : '?' }}
+                      <template v-if="card.revealed || card.matched">
+                        <UIcon :name="card.icon" class="size-7" />
+                        <span class="text-sm">{{ card.label }}</span>
+                      </template>
+                      <UIcon v-else name="i-lucide-sparkles" class="size-6" />
                     </button>
                   </div>
                 </section>
               </div>
-            </div>
+            </main>
 
             <aside class="space-y-4">
-              <div class="rounded-lg border border-default bg-default/90 p-4 shadow-sm">
-                <p class="text-sm font-semibold text-highlighted">
-                  Tableau de bord
-                </p>
-                <div class="mt-3 grid gap-2">
-                  <div class="rounded-md border border-default/70 px-3 py-2">
-                    <p class="text-xs uppercase tracking-[0.12em] text-toned">
-                      Partie
+              <section class="rounded-lg border border-default bg-default p-4 shadow-sm">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-bold text-highlighted">
+                      Tableau de bord
                     </p>
-                    <p class="text-lg font-semibold text-highlighted">
-                      {{ selectedGameMeta.label }}
+                    <p class="text-xs text-toned">
+                      Stats de la session
                     </p>
                   </div>
-                  <div v-if="selectedGame === 'wordle'" class="grid grid-cols-2 gap-2">
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Winrate
-                      </p><p class="font-semibold text-highlighted">
-                        {{ wordleWinRate }}%
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Serie
-                      </p><p class="font-semibold text-highlighted">
-                        {{ wordleStats.streak }}
-                      </p>
-                    </div>
-                  </div>
-                  <div v-else-if="selectedGame === 'higher'" class="grid grid-cols-2 gap-2">
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Victoires
-                      </p><p class="font-semibold text-highlighted">
-                        {{ higherWins }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Plage
-                      </p><p class="font-semibold text-highlighted">
-                        {{ higherLow }}-{{ higherHigh }}
-                      </p>
-                    </div>
-                  </div>
-                  <div v-else-if="selectedGame === 'tic'" class="grid grid-cols-3 gap-2">
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Toi
-                      </p><p class="font-semibold text-highlighted">
-                        {{ ticScores.player }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        IA
-                      </p><p class="font-semibold text-highlighted">
-                        {{ ticScores.ai }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Nuls
-                      </p><p class="font-semibold text-highlighted">
-                        {{ ticScores.draw }}
-                      </p>
-                    </div>
-                  </div>
-                  <div v-else-if="selectedGame === 'aim'" class="grid grid-cols-2 gap-2">
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Best
-                      </p><p class="font-semibold text-highlighted">
-                        {{ aimBest !== null ? `${aimBest} ms` : '-' }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Moyenne
-                      </p><p class="font-semibold text-highlighted">
-                        {{ aimAveragePerTarget !== null ? `${aimAveragePerTarget} ms` : '-' }}
-                      </p>
-                    </div>
-                  </div>
-                  <div v-else-if="selectedGame === 'reflex'" class="grid grid-cols-2 gap-2">
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Best
-                      </p><p class="font-semibold text-highlighted">
-                        {{ reflexBest !== null ? `${reflexBest} ms` : '-' }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Moyenne
-                      </p><p class="font-semibold text-highlighted">
-                        {{ averageReflex !== null ? `${averageReflex} ms` : '-' }}
-                      </p>
-                    </div>
-                  </div>
-                  <div v-else-if="selectedGame === 'snake'" class="grid grid-cols-2 gap-2">
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Score
-                      </p><p class="font-semibold text-highlighted">
-                        {{ snakeScore }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Best
-                      </p><p class="font-semibold text-highlighted">
-                        {{ snakeBest }}
-                      </p>
-                    </div>
-                  </div>
-                  <div v-else-if="selectedGame === 'tiles'" class="grid grid-cols-2 gap-2">
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Score
-                      </p><p class="font-semibold text-highlighted">
-                        {{ tileScore }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Best
-                      </p><p class="font-semibold text-highlighted">
-                        {{ tileBest }}
-                      </p>
-                    </div>
-                  </div>
-                  <div v-else-if="selectedGame === 'connect'" class="grid grid-cols-3 gap-2">
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Toi
-                      </p><p class="font-semibold text-highlighted">
-                        {{ connectScores.player }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        IA
-                      </p><p class="font-semibold text-highlighted">
-                        {{ connectScores.ai }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Nuls
-                      </p><p class="font-semibold text-highlighted">
-                        {{ connectScores.draw }}
-                      </p>
-                    </div>
-                  </div>
-                  <div v-else-if="selectedGame === 'mines'" class="grid grid-cols-2 gap-2">
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Gagnees
-                      </p><p class="font-semibold text-highlighted">
-                        {{ minesWins }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Temps
-                      </p><p class="font-semibold text-highlighted">
-                        {{ minesElapsed }} s
-                      </p>
-                    </div>
-                  </div>
-                  <div v-else class="grid grid-cols-2 gap-2">
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Coups
-                      </p><p class="font-semibold text-highlighted">
-                        {{ memoryMoves }}
-                      </p>
-                    </div>
-                    <div class="rounded-md border border-default/70 px-3 py-2">
-                      <p class="text-xs text-toned">
-                        Best
-                      </p><p class="font-semibold text-highlighted">
-                        {{ memoryBest ?? '-' }}
-                      </p>
-                    </div>
+                  <UBadge :color="gameStatusColor" variant="subtle">
+                    {{ gameStatusLabel }}
+                  </UBadge>
+                </div>
+                <div class="mt-4 grid grid-cols-2 gap-2">
+                  <div
+                    v-for="stat in gameStats"
+                    :key="stat.label"
+                    class="rounded-lg border border-default/70 bg-elevated/45 p-3"
+                  >
+                    <p class="text-xs font-semibold text-toned">
+                      {{ stat.label }}
+                    </p>
+                    <p class="mt-1 text-lg font-black text-highlighted">
+                      {{ stat.value }}
+                    </p>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              <div class="rounded-lg border border-default bg-default/90 p-4 shadow-sm">
-                <p class="text-sm font-semibold text-highlighted">
+              <section class="rounded-lg border border-default bg-default p-4 shadow-sm">
+                <p class="text-sm font-bold text-highlighted">
                   Commandes
                 </p>
-                <div class="mt-3 space-y-2 text-sm text-toned">
-                  <p v-if="selectedGame === 'wordle'">
-                    Clavier physique ou boutons. Entree valide, retour efface.
-                  </p>
-                  <p v-else-if="selectedGame === 'snake'">
-                    Fleches ou ZQSD. Le premier mouvement lance la partie.
-                  </p>
-                  <p v-else-if="selectedGame === 'tiles'">
-                    Fleches ou ZQSD pour fusionner les tuiles.
-                  </p>
-                  <p v-else-if="selectedGame === 'mines'">
-                    Clic gauche pour reveler, clic droit pour poser un drapeau.
-                  </p>
-                  <p v-else-if="selectedGame === 'connect'">
-                    Clique une colonne pour deposer ton disque.
-                  </p>
-                  <p v-else>
-                    Tout se joue a la souris ou au tactile.
-                  </p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <UBadge
+                    v-for="hint in controlHints"
+                    :key="hint"
+                    color="neutral"
+                    variant="outline"
+                  >
+                    {{ hint }}
+                  </UBadge>
                 </div>
-              </div>
+              </section>
+
+              <section class="rounded-lg border border-default bg-default p-4 shadow-sm">
+                <p class="text-sm font-bold text-highlighted">
+                  Tous les jeux
+                </p>
+                <div class="mt-3 grid gap-2">
+                  <UButton
+                    v-for="game in games"
+                    :key="game.value"
+                    :to="`/games/${game.value}`"
+                    :icon="game.icon"
+                    :label="game.label"
+                    :color="selectedGame === game.value ? game.color : 'neutral'"
+                    :variant="selectedGame === game.value ? 'soft' : 'ghost'"
+                    block
+                    class="justify-start"
+                  />
+                </div>
+              </section>
             </aside>
           </div>
         </div>

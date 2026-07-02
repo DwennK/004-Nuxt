@@ -1,138 +1,330 @@
 <script setup lang="ts">
+type GameCategory = 'Mots' | 'Reflexes' | 'Strategie' | 'Puzzle'
+
 const games = [
   {
     value: 'wordle',
     label: 'Mot mystere',
-    short: 'Word',
+    kicker: 'Deduction',
     icon: 'i-lucide-spell-check',
-    accent: 'from-emerald-500 to-lime-400',
-    description: 'Trouver le mot cache en six essais.'
+    category: 'Mots',
+    difficulty: 'Calme',
+    duration: '2-4 min',
+    description: 'Six essais pour lire les indices, eliminer les lettres et trouver le mot.',
+    color: 'success',
+    surface: 'from-success/18 via-default to-default'
   },
   {
     value: 'higher',
     label: 'Plus ou moins',
-    short: '100',
+    kicker: 'Intervalle',
     icon: 'i-lucide-binary',
-    accent: 'from-sky-500 to-cyan-400',
-    description: 'Resserrer la plage pour trouver le nombre.'
+    category: 'Puzzle',
+    difficulty: 'Rapide',
+    duration: '1 min',
+    description: 'Resserre la plage en huit coups, avec un feedback immediat apres chaque tentative.',
+    color: 'info',
+    surface: 'from-info/18 via-default to-default'
   },
   {
     value: 'tic',
     label: 'Morpion',
-    short: 'X/O',
+    kicker: 'Duel IA',
     icon: 'i-lucide-grid-3x3',
-    accent: 'from-amber-500 to-orange-400',
-    description: 'Aligner trois symboles avant l IA.'
+    category: 'Strategie',
+    difficulty: 'Tactique',
+    duration: '1 min',
+    description: 'Une IA courte mais defendue: force la ligne avant qu elle ne ferme le plateau.',
+    color: 'warning',
+    surface: 'from-warning/18 via-default to-default'
   },
   {
     value: 'aim',
     label: 'Precision',
-    short: 'Aim',
+    kicker: 'Aim trainer',
     icon: 'i-lucide-crosshair',
-    accent: 'from-rose-500 to-pink-400',
-    description: 'Enchainer les cibles avec le moins de rates possible.'
+    category: 'Reflexes',
+    difficulty: 'Nerveux',
+    duration: '30 s',
+    description: 'Enchaine quinze cibles, limite les rates et vise un meilleur temps par cible.',
+    color: 'error',
+    surface: 'from-error/18 via-default to-default'
   },
   {
     value: 'reflex',
     label: 'Reflexe',
-    short: 'ms',
+    kicker: 'Timing',
     icon: 'i-lucide-timer-reset',
-    accent: 'from-violet-500 to-fuchsia-400',
-    description: 'Attendre le signal et cliquer au bon moment.'
+    category: 'Reflexes',
+    difficulty: 'Pur',
+    duration: '10 s',
+    description: 'Attends le signal, evite le faux depart, puis clique au bon millieme.',
+    color: 'primary',
+    surface: 'from-primary/18 via-default to-default'
   },
   {
     value: 'snake',
     label: 'Snake',
-    short: 'S',
-    icon: 'i-lucide-worm',
-    accent: 'from-green-500 to-emerald-300',
-    description: 'Manger, grandir et eviter les collisions.'
+    kicker: 'Arcade',
+    icon: 'i-lucide-route',
+    category: 'Reflexes',
+    difficulty: 'Progressif',
+    duration: '3 min',
+    description: 'Un classique plus lisible, avec controles clavier et commandes tactiles compactes.',
+    color: 'success',
+    surface: 'from-success/18 via-default to-default'
   },
   {
     value: 'tiles',
     label: '2048',
-    short: '2k',
+    kicker: 'Fusion',
     icon: 'i-lucide-layout-grid',
-    accent: 'from-orange-500 to-yellow-300',
-    description: 'Fusionner les tuiles jusqu au 2048.'
+    category: 'Puzzle',
+    difficulty: 'Pose',
+    duration: '5 min',
+    description: 'Fusionne proprement les tuiles, anticipe le plateau et garde un coin fort.',
+    color: 'warning',
+    surface: 'from-warning/18 via-default to-default'
   },
   {
     value: 'connect',
     label: 'Puissance 4',
-    short: '4',
+    kicker: 'Alignement',
     icon: 'i-lucide-circle-dot',
-    accent: 'from-red-500 to-yellow-400',
-    description: 'Deposer les disques et aligner quatre cases.'
+    category: 'Strategie',
+    difficulty: 'Malin',
+    duration: '2 min',
+    description: 'L IA cherche les coups gagnants et bloque tes menaces directes.',
+    color: 'error',
+    surface: 'from-error/18 via-default to-default'
   },
   {
     value: 'mines',
     label: 'Demineur',
-    short: 'M',
+    kicker: 'Risque',
     icon: 'i-lucide-bomb',
-    accent: 'from-zinc-500 to-slate-300',
-    description: 'Nettoyer la grille sans declencher de mine.'
+    category: 'Puzzle',
+    difficulty: 'Tendu',
+    duration: '4 min',
+    description: 'Premier clic protege, drapeaux au clic droit, lecture nette des zones ouvertes.',
+    color: 'neutral',
+    surface: 'from-elevated via-default to-default'
   },
   {
     value: 'memory',
     label: 'Memoire',
-    short: 'Mem',
+    kicker: 'Observation',
     icon: 'i-lucide-brain',
-    accent: 'from-indigo-500 to-sky-400',
-    description: 'Retrouver toutes les paires.'
+    category: 'Puzzle',
+    difficulty: 'Zen',
+    duration: '2 min',
+    description: 'Des cartes tech plus claires, un rythme rapide et un meilleur suivi des coups.',
+    color: 'info',
+    surface: 'from-info/18 via-default to-default'
   }
-]
+] satisfies {
+  value: string
+  label: string
+  kicker: string
+  icon: string
+  category: GameCategory
+  difficulty: string
+  duration: string
+  description: string
+  color: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  surface: string
+}[]
+
+const categories = ['Tous', 'Reflexes', 'Puzzle', 'Strategie', 'Mots'] as const
+const selectedCategory = ref<(typeof categories)[number]>('Tous')
+const search = ref('')
+
+const featuredGame = computed(() => games[3]!)
+
+const filteredGames = computed(() => {
+  const query = normalize(search.value)
+
+  return games.filter((game) => {
+    const matchesCategory = selectedCategory.value === 'Tous' || game.category === selectedCategory.value
+    const haystack = normalize(`${game.label} ${game.kicker} ${game.description} ${game.category}`)
+    return matchesCategory && (!query || haystack.includes(query))
+  })
+})
+
+function normalize(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
 </script>
 
 <template>
   <UDashboardPanel id="games">
     <template #header>
-      <UDashboardNavbar title="Jeux">
+      <UDashboardNavbar title="Arcade">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
 
         <template #right>
           <UBadge color="primary" variant="subtle">
-            {{ games.length }} mini-jeux
+            {{ games.length }} jeux jouables
           </UBadge>
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="h-full overflow-auto bg-[radial-gradient(circle_at_top_left,rgba(0,193,106,0.14),transparent_28%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.14),transparent_26%)] p-4 md:p-6">
-        <div class="mx-auto flex w-full max-w-5xl flex-col gap-3">
-          <NuxtLink
-            v-for="(game, index) in games"
-            :key="game.value"
-            :to="`/games/${game.value}`"
-            class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-default bg-default/90 p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/50 hover:bg-elevated sm:gap-4 sm:p-4"
-          >
-            <span class="w-6 text-right text-xs font-bold text-toned tabular-nums">
-              {{ index + 1 }}
-            </span>
-            <span class="grid min-w-0 grid-cols-[auto_1fr] items-center gap-3">
-              <span
-                class="flex size-12 items-center justify-center rounded-md bg-gradient-to-br text-sm font-black text-white shadow-sm sm:size-14"
-                :class="game.accent"
+      <div class="h-full overflow-auto bg-muted/30">
+        <div class="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 md:p-6">
+          <section class="overflow-hidden rounded-lg border border-default bg-default shadow-sm">
+            <div class="grid min-h-[19rem] lg:grid-cols-[minmax(0,1fr)_25rem]">
+              <div class="flex flex-col justify-between gap-8 bg-gradient-to-br from-primary/15 via-default to-info/10 p-5 sm:p-7">
+                <div class="max-w-2xl">
+                  <UBadge color="primary" variant="subtle" class="mb-4">
+                    Pause jouable
+                  </UBadge>
+                  <h1 class="text-3xl font-black tracking-tight text-highlighted sm:text-4xl">
+                    Mini-jeux plus propres, plus nerveux, plus agreables.
+                  </h1>
+                  <p class="mt-3 max-w-xl text-sm leading-6 text-toned sm:text-base">
+                    Une petite arcade interne pour souffler entre deux tickets: jeux rapides, grilles lisibles, controles directs et scores visibles.
+                  </p>
+                </div>
+
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <div class="rounded-lg border border-default/70 bg-default/75 p-3">
+                    <p class="text-xs font-semibold uppercase text-toned">
+                      Formats
+                    </p>
+                    <p class="mt-1 text-lg font-black text-highlighted">
+                      10 jeux
+                    </p>
+                  </div>
+                  <div class="rounded-lg border border-default/70 bg-default/75 p-3">
+                    <p class="text-xs font-semibold uppercase text-toned">
+                      Session
+                    </p>
+                    <p class="mt-1 text-lg font-black text-highlighted">
+                      30 s - 5 min
+                    </p>
+                  </div>
+                  <div class="rounded-lg border border-default/70 bg-default/75 p-3">
+                    <p class="text-xs font-semibold uppercase text-toned">
+                      Controle
+                    </p>
+                    <p class="mt-1 text-lg font-black text-highlighted">
+                      Souris + clavier
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <NuxtLink
+                :to="`/games/${featuredGame.value}`"
+                class="group flex flex-col justify-between border-t border-default bg-elevated p-5 transition hover:bg-accented lg:border-l lg:border-t-0"
               >
-                {{ game.short }}
-              </span>
-              <span class="min-w-0">
-                <span class="flex items-center gap-2 text-base font-semibold text-highlighted">
-                  <UIcon :name="game.icon" class="size-4 shrink-0 text-primary" />
-                  <span class="truncate">{{ game.label }}</span>
-                </span>
-                <span class="mt-1 block truncate text-sm text-toned">
-                  {{ game.description }}
-                </span>
-              </span>
-            </span>
-            <span class="flex items-center gap-2 text-sm font-semibold text-primary">
-              Jouer
-              <UIcon name="i-lucide-arrow-right" class="size-4 transition group-hover:translate-x-0.5" />
-            </span>
-          </NuxtLink>
+                <div>
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="flex size-14 items-center justify-center rounded-lg bg-primary text-inverted shadow-sm">
+                      <UIcon :name="featuredGame.icon" class="size-7" />
+                    </div>
+                    <UBadge :color="featuredGame.color" variant="subtle">
+                      Selection
+                    </UBadge>
+                  </div>
+                  <p class="mt-6 text-xs font-bold uppercase text-toned">
+                    {{ featuredGame.kicker }}
+                  </p>
+                  <h2 class="mt-1 text-2xl font-black text-highlighted">
+                    {{ featuredGame.label }}
+                  </h2>
+                  <p class="mt-3 text-sm leading-6 text-toned">
+                    {{ featuredGame.description }}
+                  </p>
+                </div>
+                <div class="mt-6 flex items-center justify-between">
+                  <div class="flex gap-2">
+                    <UBadge color="neutral" variant="outline">
+                      {{ featuredGame.duration }}
+                    </UBadge>
+                    <UBadge color="neutral" variant="outline">
+                      {{ featuredGame.difficulty }}
+                    </UBadge>
+                  </div>
+                  <span class="flex items-center gap-1 text-sm font-bold text-primary">
+                    Jouer
+                    <UIcon name="i-lucide-arrow-right" class="size-4 transition group-hover:translate-x-0.5" />
+                  </span>
+                </div>
+              </NuxtLink>
+            </div>
+          </section>
+
+          <div class="flex flex-col gap-3 rounded-lg border border-default bg-default p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+            <UInput
+              v-model="search"
+              icon="i-lucide-search"
+              placeholder="Chercher un jeu"
+              class="lg:max-w-sm"
+            />
+            <div class="flex gap-2 overflow-x-auto">
+              <UButton
+                v-for="category in categories"
+                :key="category"
+                :label="category"
+                :color="selectedCategory === category ? 'primary' : 'neutral'"
+                :variant="selectedCategory === category ? 'solid' : 'outline'"
+                size="sm"
+                @click="selectedCategory = category"
+              />
+            </div>
+          </div>
+
+          <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <NuxtLink
+              v-for="game in filteredGames"
+              :key="game.value"
+              :to="`/games/${game.value}`"
+              class="group overflow-hidden rounded-lg border border-default bg-default shadow-sm transition hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md"
+            >
+              <div class="h-1.5 bg-primary" />
+              <div class="flex min-h-56 flex-col justify-between bg-gradient-to-br p-4" :class="game.surface">
+                <div>
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex size-12 items-center justify-center rounded-lg border border-default/70 bg-default/80 text-primary shadow-sm">
+                      <UIcon :name="game.icon" class="size-6" />
+                    </div>
+                    <UBadge :color="game.color" variant="subtle">
+                      {{ game.category }}
+                    </UBadge>
+                  </div>
+                  <p class="mt-4 text-xs font-bold uppercase text-toned">
+                    {{ game.kicker }}
+                  </p>
+                  <h2 class="mt-1 text-xl font-black text-highlighted">
+                    {{ game.label }}
+                  </h2>
+                  <p class="mt-2 line-clamp-3 text-sm leading-6 text-toned">
+                    {{ game.description }}
+                  </p>
+                </div>
+
+                <div class="mt-5 flex items-end justify-between gap-4">
+                  <div class="flex flex-wrap gap-2">
+                    <UBadge color="neutral" variant="outline">
+                      {{ game.duration }}
+                    </UBadge>
+                    <UBadge color="neutral" variant="outline">
+                      {{ game.difficulty }}
+                    </UBadge>
+                  </div>
+                  <span class="flex shrink-0 items-center gap-1 text-sm font-bold text-primary">
+                    Lancer
+                    <UIcon name="i-lucide-arrow-right" class="size-4 transition group-hover:translate-x-0.5" />
+                  </span>
+                </div>
+              </div>
+            </NuxtLink>
+          </section>
         </div>
       </div>
     </template>
