@@ -118,6 +118,7 @@ const {
   shouldShowSearchPanel,
   minSearchLength,
   searchCatalogItems,
+  setSearchValue,
   openSearchPanel,
   closeSearchPanel,
   scheduleSearchClose,
@@ -337,10 +338,9 @@ function handleImeiScan(value: string) {
 }
 
 function applyCatalogSuggestion(item: CatalogItemRecord) {
-  intakeQuery.value = item.name
+  setSearchValue(item.name, { open: false })
   applySuggestionContext(item, true)
   lineEditor.addCatalogItem(item)
-  closeSearchPanel()
 }
 
 function applyFirstSearchResult() {

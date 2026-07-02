@@ -18,6 +18,7 @@ export function useCatalogItemSearch(options: UseCatalogItemSearchOptions = {}) 
   const filterItem = options.filterItem ?? (() => true)
   let remoteSearchRequestId = 0
   let searchCloseTimeout: ReturnType<typeof setTimeout> | null = null
+  let suppressNextSearchOpen = false
 
   const searchPanelItems = computed(() => {
     return search.value.trim().length >= minSearchLength ? remoteItems.value : []
@@ -40,6 +41,11 @@ export function useCatalogItemSearch(options: UseCatalogItemSearchOptions = {}) 
 
   watch(search, (value) => {
     highlightedItemIndex.value = 0
+
+    if (suppressNextSearchOpen) {
+      suppressNextSearchOpen = false
+      return
+    }
 
     if (value.trim()) {
       openSearchPanel()
@@ -99,6 +105,20 @@ export function useCatalogItemSearch(options: UseCatalogItemSearchOptions = {}) 
     highlightedItemIndex.value = 0
   }
 
+  function setSearchValue(value: string, options: { open?: boolean } = {}) {
+    const shouldKeepClosed = options.open === false
+
+    if (shouldKeepClosed && value !== search.value) {
+      suppressNextSearchOpen = true
+    }
+
+    search.value = value
+
+    if (shouldKeepClosed) {
+      closeSearchPanel()
+    }
+  }
+
   function scheduleSearchClose() {
     cancelSearchClose()
     searchCloseTimeout = setTimeout(() => {
@@ -147,6 +167,7 @@ export function useCatalogItemSearch(options: UseCatalogItemSearchOptions = {}) 
     shouldShowSearchPanel,
     minSearchLength,
     searchCatalogItems,
+    setSearchValue,
     openSearchPanel,
     closeSearchPanel,
     scheduleSearchClose,
