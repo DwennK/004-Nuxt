@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReportsOverviewCharts from '~/components/reports/ReportsOverviewCharts.client.vue'
 import {
   catalogItemTypeColors,
   catalogItemTypeLabels,
@@ -11,6 +12,7 @@ import type {
   CustomerListResponse,
   DocumentListItem,
   DocumentListResponse,
+  ReportsOverview,
   TicketListItem,
   TicketListResponse
 } from '~~/shared/types/pos'
@@ -21,7 +23,7 @@ type CounterAction = {
   description: string
   icon: string
   to: string
-  color: 'primary' | 'warning' | 'neutral'
+  variant: 'solid' | 'soft'
 }
 
 type WorkQueue = {
@@ -71,25 +73,13 @@ const counterActions: CounterAction[] = [{
   description: 'Démarrer une vente',
   icon: 'i-lucide-shopping-cart',
   to: '/sales/new',
-  color: 'primary'
+  variant: 'solid'
 }, {
   label: 'Nouveau ticket',
   description: 'Créer une réparation',
   icon: 'i-lucide-wrench',
   to: '/tickets/new',
-  color: 'warning'
-}, {
-  label: 'Client',
-  description: 'Rechercher un client',
-  icon: 'i-lucide-user-plus',
-  to: '/customers/new',
-  color: 'neutral'
-}, {
-  label: 'Document',
-  description: 'Factures, BL, devis',
-  icon: 'i-lucide-file-plus-2',
-  to: '/documents/new',
-  color: 'neutral'
+  variant: 'soft'
 }]
 
 const [
@@ -125,6 +115,11 @@ const [
     lazy: true
   })
 ])
+
+const { data: reportsOverview, status: reportsOverviewStatus } = await useFetch<ReportsOverview>('/api/reports/overview', {
+  key: 'counter-reports-overview',
+  lazy: true
+})
 
 const searchQuery = computed(() => canSearch.value ? searchTerm.value : '__no_counter_search__')
 
@@ -202,6 +197,13 @@ const totalDueDocuments = computed(() => dueDocuments.value?.total || 0)
 const totalDueAmount = computed(() => dueDocuments.value?.summary.totalBalanceDue || 0)
 const totalBlockedTickets = computed(() => blockedQueues.value.reduce((total, queue) => total + queue.count, 0))
 const totalCounterItems = computed(() => totalReadyTickets.value + totalDueDocuments.value + totalBlockedTickets.value)
+const isCounterInitialLoading = computed(() =>
+  (readyTicketsStatus.value === 'pending' && !readyTickets.value)
+  || (dueDocumentsStatus.value === 'pending' && !dueDocuments.value)
+  || (diagnosisTicketsStatus.value === 'pending' && !diagnosisTickets.value)
+  || (approvalTicketsStatus.value === 'pending' && !approvalTickets.value)
+  || (waitingPartsTicketsStatus.value === 'pending' && !waitingPartsTickets.value)
+)
 const queueFilters = computed<QueueFilterItem[]>(() => [{
   label: 'Tout',
   value: 'all',
@@ -347,7 +349,7 @@ useHead({
             icon="i-lucide-shopping-cart"
             color="neutral"
             variant="solid"
-            class="hidden bg-white text-blue-700 hover:bg-blue-50 sm:inline-flex"
+            class="hidden bg-default text-primary hover:bg-muted sm:inline-flex"
           />
           <UButton
             to="/tickets/new"
@@ -384,18 +386,36 @@ useHead({
                 />
               </div>
 
-              <div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4 2xl:w-[42rem]">
-                <UButton
+              <div class="grid grid-cols-2 gap-2 2xl:w-[34rem]">
+                <NuxtLink
                   v-for="action in counterActions"
                   :key="action.to"
                   :to="action.to"
-                  :label="action.label"
-                  :icon="action.icon"
-                  :color="action.color"
-                  :variant="action.color === 'primary' ? 'solid' : 'soft'"
-                  size="lg"
-                  class="justify-center rounded-[4px] shadow-none"
-                />
+                  class="group flex min-h-16 items-center gap-3 rounded-[6px] border px-3 py-2.5 transition focus-visible:outline-2 focus-visible:outline-offset-2"
+                  :class="action.variant === 'solid'
+                    ? 'border-primary bg-primary text-inverted shadow-sm hover:bg-primary/75 focus-visible:outline-primary/25'
+                    : 'border-primary/25 bg-primary/10 text-primary hover:border-primary/40 hover:bg-primary/15 focus-visible:outline-primary/25'"
+                >
+                  <span
+                    class="flex size-10 shrink-0 items-center justify-center rounded-[5px] ring-1 transition"
+                    :class="action.variant === 'solid'
+                      ? 'bg-default/15 text-inverted ring-default/25 group-hover:bg-default/20'
+                      : 'bg-default text-primary ring-primary/20 group-hover:ring-primary/30'"
+                  >
+                    <UIcon :name="action.icon" class="size-5" />
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block truncate text-sm font-semibold leading-5">
+                      {{ action.label }}
+                    </span>
+                    <span
+                      class="hidden truncate text-xs sm:block"
+                      :class="action.variant === 'solid' ? 'text-inverted/80' : 'text-primary/80'"
+                    >
+                      {{ action.description }}
+                    </span>
+                  </span>
+                </NuxtLink>
               </div>
             </div>
 
@@ -534,7 +554,8 @@ useHead({
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 À traiter
               </p>
-              <p class="mt-1 text-2xl font-semibold leading-none text-highlighted">
+              <USkeleton v-if="isCounterInitialLoading" class="mt-1 h-7 w-10" />
+              <p v-else class="mt-1 text-2xl font-semibold leading-none text-highlighted">
                 {{ totalCounterItems }}
               </p>
             </NuxtLink>
@@ -545,7 +566,8 @@ useHead({
               <p class="text-xs font-semibold uppercase tracking-wide text-blue-700">
                 Restitutions
               </p>
-              <p class="mt-1 text-2xl font-semibold leading-none text-highlighted">
+              <USkeleton v-if="isCounterInitialLoading" class="mt-1 h-7 w-8" />
+              <p v-else class="mt-1 text-2xl font-semibold leading-none text-highlighted">
                 {{ totalReadyTickets }}
               </p>
             </NuxtLink>
@@ -556,7 +578,8 @@ useHead({
               <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">
                 À encaisser
               </p>
-              <p class="mt-1 truncate text-xl font-semibold leading-none text-highlighted">
+              <USkeleton v-if="isCounterInitialLoading" class="mt-1 h-6 w-32" />
+              <p v-else class="mt-1 truncate text-xl font-semibold leading-none text-highlighted">
                 {{ formatCurrency(totalDueAmount) }}
               </p>
             </NuxtLink>
@@ -567,10 +590,27 @@ useHead({
               <p class="text-xs font-semibold uppercase tracking-wide text-sky-700">
                 Bloqués
               </p>
-              <p class="mt-1 text-2xl font-semibold leading-none text-highlighted">
+              <USkeleton v-if="isCounterInitialLoading" class="mt-1 h-7 w-8" />
+              <p v-else class="mt-1 text-2xl font-semibold leading-none text-highlighted">
                 {{ totalBlockedTickets }}
               </p>
             </NuxtLink>
+          </section>
+
+          <section class="overflow-hidden">
+            <div
+              v-if="reportsOverviewStatus === 'pending' && !reportsOverview"
+              class="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]"
+            >
+              <USkeleton class="h-[26rem] rounded-md xl:col-span-2" />
+              <USkeleton class="h-80 rounded-md" />
+              <USkeleton class="h-80 rounded-md" />
+            </div>
+
+            <ReportsOverviewCharts
+              v-if="reportsOverview"
+              :overview="reportsOverview"
+            />
           </section>
 
           <section class="outlook-surface overflow-hidden rounded-md">
@@ -702,21 +742,24 @@ useHead({
                 class="flex items-center justify-between gap-3 py-3 transition hover:text-blue-700"
               >
                 <span class="text-sm text-toned">Retraits prêts</span>
-                <span class="font-semibold text-highlighted">{{ totalReadyTickets }}</span>
+                <USkeleton v-if="isCounterInitialLoading" class="h-5 w-6" />
+                <span v-else class="font-semibold text-highlighted">{{ totalReadyTickets }}</span>
               </NuxtLink>
               <NuxtLink
                 to="/documents?paymentState=due"
                 class="flex items-center justify-between gap-3 py-3 transition hover:text-blue-700"
               >
                 <span class="text-sm text-toned">Factures ouvertes</span>
-                <span class="font-semibold text-highlighted">{{ totalDueDocuments }}</span>
+                <USkeleton v-if="isCounterInitialLoading" class="h-5 w-6" />
+                <span v-else class="font-semibold text-highlighted">{{ totalDueDocuments }}</span>
               </NuxtLink>
               <NuxtLink
                 to="/tickets"
                 class="flex items-center justify-between gap-3 py-3 transition hover:text-blue-700"
               >
                 <span class="text-sm text-toned">Tickets bloqués</span>
-                <span class="font-semibold text-highlighted">{{ totalBlockedTickets }}</span>
+                <USkeleton v-if="isCounterInitialLoading" class="h-5 w-6" />
+                <span v-else class="font-semibold text-highlighted">{{ totalBlockedTickets }}</span>
               </NuxtLink>
             </div>
           </section>
@@ -736,7 +779,17 @@ useHead({
               />
             </div>
 
-            <div v-if="dueDocumentItems.length" class="mt-3 space-y-2">
+            <div v-if="isCounterInitialLoading" class="mt-3 space-y-3">
+              <div v-for="index in 4" :key="index" class="grid grid-cols-[minmax(0,1fr)_5rem] gap-3 px-2 py-2">
+                <div class="space-y-2">
+                  <USkeleton class="h-4 w-20" />
+                  <USkeleton class="h-3 w-28" />
+                </div>
+                <USkeleton class="h-4 w-full" />
+              </div>
+            </div>
+
+            <div v-else-if="dueDocumentItems.length" class="mt-3 space-y-2">
               <NuxtLink
                 v-for="document in dueDocumentItems.slice(0, 4)"
                 :key="document.id"
@@ -780,7 +833,17 @@ useHead({
               />
             </div>
 
-            <div class="mt-3 space-y-2">
+            <div v-if="isCounterInitialLoading" class="mt-3 space-y-3">
+              <div v-for="index in 3" :key="index" class="flex items-center justify-between gap-3 px-2 py-2">
+                <div class="flex items-center gap-2">
+                  <USkeleton class="size-4 rounded-full" />
+                  <USkeleton class="h-4 w-28" />
+                </div>
+                <USkeleton class="h-5 w-7" />
+              </div>
+            </div>
+
+            <div v-else class="mt-3 space-y-2">
               <NuxtLink
                 v-for="queue in blockedQueues"
                 :key="queue.id"

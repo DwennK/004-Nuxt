@@ -207,6 +207,17 @@ const stats = computed(() => {
                 </UCard>
               </div>
 
+              <div
+                v-if="status === 'pending' && !overview"
+                class="space-y-4"
+              >
+                <USkeleton class="h-[28rem] rounded-2xl" />
+                <div class="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                  <USkeleton class="h-80 rounded-2xl" />
+                  <USkeleton class="h-80 rounded-2xl" />
+                </div>
+              </div>
+
               <ReportsOverviewCharts
                 v-if="overview"
                 :overview="overview"
