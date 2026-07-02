@@ -18,6 +18,7 @@ const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
+const confirmDelete = useConfirmDelete()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 type PeriodPreset = 'today' | 'month' | 'last_7_days' | 'all' | 'custom'
@@ -171,8 +172,17 @@ function resetFilters() {
   dateTo.value = range.to
 }
 
-async function removePayment(id: number) {
-  await $fetch(`/api/payments/${id}`, { method: 'DELETE' })
+async function removePayment(payment: PaymentListItem) {
+  const confirmed = await confirmDelete({
+    title: `Supprimer le paiement de ${formatCurrency(payment.amount)} ?`,
+    description: 'Le paiement sera définitivement supprimé et le solde du document recalculé.'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
+  await $fetch(`/api/payments/${payment.id}`, { method: 'DELETE' })
   toast.add({ title: 'Paiement supprimé', color: 'success' })
   await refresh()
 }
@@ -189,7 +199,7 @@ function getRowItems(payment: PaymentListItem) {
     icon: 'i-lucide-trash',
     color: 'error',
     onSelect() {
-      removePayment(payment.id)
+      removePayment(payment)
     }
   }]]
 }

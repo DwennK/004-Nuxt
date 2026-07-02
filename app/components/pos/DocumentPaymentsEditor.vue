@@ -31,6 +31,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const confirmDelete = useConfirmDelete()
 const paymentOpen = ref(false)
 
 const methodItems = paymentMethods.map(method => ({
@@ -157,7 +158,12 @@ async function savePayment(payment: PaymentRecord) {
 }
 
 async function removePayment(payment: PaymentRecord) {
-  if (!window.confirm(`Supprimer le paiement de ${formatCurrency(payment.amount)} ?`)) {
+  const confirmed = await confirmDelete({
+    title: `Supprimer le paiement de ${formatCurrency(payment.amount)} ?`,
+    description: 'Le paiement sera définitivement supprimé et le solde du document recalculé.'
+  })
+
+  if (!confirmed) {
     return
   }
 

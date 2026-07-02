@@ -14,6 +14,7 @@ const UBadge = resolveComponent('UBadge')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
+const confirmDelete = useConfirmDelete()
 const route = useRoute()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
@@ -138,9 +139,18 @@ function resetFilters() {
   dateTo.value = ''
 }
 
-async function removeDocument(id: number) {
+async function removeDocument(document: DocumentListItem) {
+  const confirmed = await confirmDelete({
+    title: `Supprimer ${document.documentNumber} ?`,
+    description: 'Le document sera définitivement supprimé.'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
   try {
-    await $fetch(`/api/documents/${id}`, { method: 'DELETE' })
+    await $fetch(`/api/documents/${document.id}`, { method: 'DELETE' })
     toast.add({ title: 'Document supprimé', color: 'success' })
     await refresh()
   } catch (error) {
@@ -178,7 +188,7 @@ function getRowItems(document: DocumentListItem) {
       icon: 'i-lucide-trash',
       color: 'error',
       onSelect() {
-        removeDocument(document.id)
+        removeDocument(document)
       }
     }])
   }

@@ -8,6 +8,7 @@ const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
+const confirmDelete = useConfirmDelete()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 const search = ref('')
@@ -90,8 +91,17 @@ async function saveCustomer(payload: CustomerFormValue) {
   await refresh()
 }
 
-async function removeCustomer(id: number) {
-  await $fetch(`/api/customers/${id}`, { method: 'DELETE' })
+async function removeCustomer(customer: CustomerRecord) {
+  const confirmed = await confirmDelete({
+    title: `Supprimer ${customer.displayName} ?`,
+    description: 'La fiche client sera définitivement supprimée.'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
+  await $fetch(`/api/customers/${customer.id}`, { method: 'DELETE' })
   toast.add({ title: 'Client supprimé', color: 'success' })
   await refresh()
 }
@@ -131,7 +141,7 @@ function getRowItems(customer: CustomerRecord) {
     icon: 'i-lucide-trash',
     color: 'error',
     onSelect() {
-      removeCustomer(customer.id)
+      removeCustomer(customer)
     }
   }]]
 }

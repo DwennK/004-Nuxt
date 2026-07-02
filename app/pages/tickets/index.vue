@@ -11,6 +11,7 @@ const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
+const confirmDelete = useConfirmDelete()
 const route = useRoute()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
@@ -89,8 +90,17 @@ async function createInvoice(ticketId: number) {
   await navigateTo(`/documents/${document.id}`)
 }
 
-async function removeTicket(id: number) {
-  await $fetch(`/api/tickets/${id}`, { method: 'DELETE' })
+async function removeTicket(ticket: TicketListItem) {
+  const confirmed = await confirmDelete({
+    title: `Supprimer le ticket ${ticket.ticketNumber} ?`,
+    description: 'Le ticket et son suivi seront définitivement supprimés.'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
+  await $fetch(`/api/tickets/${ticket.id}`, { method: 'DELETE' })
   toast.add({ title: 'Ticket supprimé', color: 'success' })
   await refresh()
 }
@@ -125,7 +135,7 @@ function getRowItems(ticket: TicketListItem) {
     icon: 'i-lucide-trash',
     color: 'error',
     onSelect() {
-      removeTicket(ticket.id)
+      removeTicket(ticket)
     }
   }]]
 }

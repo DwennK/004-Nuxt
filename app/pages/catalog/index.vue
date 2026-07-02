@@ -24,6 +24,7 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const confirmDelete = useConfirmDelete()
 
 const activeView = ref<CatalogView>('articles')
 const createOpen = ref(false)
@@ -530,6 +531,15 @@ async function saveItem(payload: CatalogItemInput) {
 }
 
 async function removeItem(item: CatalogItemRecord) {
+  const confirmed = await confirmDelete({
+    title: `Supprimer "${item.name}" ?`,
+    description: 'L’élément sera définitivement retiré du catalogue.'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
   await $fetch(`/api/catalog-items/${item.id}`, { method: 'DELETE' })
   toast.add({
     title: getCreateUpdateTitle(item.type, 'deleted'),
