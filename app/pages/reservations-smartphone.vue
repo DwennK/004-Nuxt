@@ -468,7 +468,19 @@ const pagination = ref({
           separator: 'h-0'
         }"
         @select="(_, row) => openReservationEditor(row.original)"
-      />
+      >
+        <template #empty>
+          <div v-if="status === 'pending'" class="space-y-3 px-4 py-6">
+            <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
+          </div>
+          <UEmpty
+            v-else
+            icon="i-lucide-clipboard-list"
+            title="Aucune réservation trouvée"
+            description="Ajustez les filtres ou créez une nouvelle demande."
+          />
+        </template>
+      </UTable>
 
       <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
         <div class="text-sm text-muted">

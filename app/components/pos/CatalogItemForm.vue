@@ -11,7 +11,6 @@ import {
 } from '~~/shared/constants/pos'
 import type { CatalogItemInput } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
-import { commercialLineUnitPriceInputClass } from '~~/app/composables/useCommercialLinesDraft'
 
 type FormState = {
   name: string
@@ -320,7 +319,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
               :min="0"
               :step="0.05"
               :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
-              :class="commercialLineUnitPriceInputClass"
+              class="w-full"
               @update:model-value="state.defaultPrice = Number($event || 0)"
             />
           </UFormField>
@@ -453,7 +452,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             :min="0"
             :step="0.05"
             :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
-            :class="commercialLineUnitPriceInputClass"
+            class="w-full"
             @update:model-value="state.defaultPrice = Number($event || 0)"
           />
         </UFormField>

@@ -283,12 +283,6 @@ const columns: TableColumn<CustomerRecord>[] = [
 
     <template #body>
       <div class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-3">
-          <PosSummaryCard title="Clients" :value="String(totalResults)" icon="i-lucide-users" />
-          <PosSummaryCard title="Sur la page" :value="String(customers.length)" icon="i-lucide-filter" />
-          <PosSummaryCard title="Mode de recherche" :value="search ? 'Filtré' : 'Tous'" icon="i-lucide-search" />
-        </div>
-
         <UTable
           ref="table"
           v-model:column-visibility="columnVisibility"

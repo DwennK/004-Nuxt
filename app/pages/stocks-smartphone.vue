@@ -423,7 +423,19 @@ function handleImeiScan(value: string) {
           td: 'border-b border-default py-2 align-middle text-sm',
           separator: 'h-0'
         }"
-      />
+      >
+        <template #empty>
+          <div v-if="status === 'pending'" class="space-y-3 px-4 py-6">
+            <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
+          </div>
+          <UEmpty
+            v-else
+            icon="i-lucide-smartphone"
+            title="Aucun téléphone en stock"
+            description="Ajoutez un appareil ou ajustez les filtres."
+          />
+        </template>
+      </UTable>
 
       <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
         <div class="text-sm text-muted">

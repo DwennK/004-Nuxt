@@ -263,12 +263,14 @@ const groups = computed(() => {
       id="default"
       v-model:open="open"
       collapsible
+      resizable
       :default-size="15"
       :min-size="10"
       :max-size="20"
       class="outlook-sidebar"
       :ui="{
         root: 'ring-0',
+        handle: 'w-px bg-[var(--mw-outlook-line)] hover:bg-[var(--mw-outlook-blue)] transition-colors',
         header: 'outlook-sidebar-header px-2 py-2',
         body: 'px-2 pb-2',
         footer: 'outlook-sidebar-footer px-2 py-2'

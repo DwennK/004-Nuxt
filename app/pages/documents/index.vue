@@ -338,13 +338,6 @@ const columns: TableColumn<DocumentListItem>[] = [
             value-key="value"
             class="w-48"
           />
-          <UButton
-            :label="paymentStateFilter === 'due' ? 'À encaisser' : 'Tous les paiements'"
-            :icon="paymentStateFilter === 'due' ? 'i-lucide-wallet-cards' : 'i-lucide-scale'"
-            :color="paymentStateFilter === 'due' ? 'warning' : 'neutral'"
-            :variant="paymentStateFilter === 'due' ? 'soft' : 'outline'"
-            @click="paymentStateFilter = paymentStateFilter === 'due' ? 'all' : 'due'"
-          />
           <div class="flex items-center gap-2">
             <span class="text-xs text-toned">Début</span>
             <UInput v-model="dateFrom" type="date" class="w-40" />
