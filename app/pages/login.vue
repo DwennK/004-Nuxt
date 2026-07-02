@@ -21,12 +21,14 @@ const state = reactive<Partial<Schema>>({
 
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
+const errorDescription = ref<string | null>(null)
 const route = useRoute()
 const { fetch: refreshSession } = useUserSession()
 
 async function onSubmit(event: FormSubmitEvent<Schema>) {
   loading.value = true
   errorMessage.value = null
+  errorDescription.value = null
   try {
     await $fetch('/api/auth/login', {
       method: 'POST',
@@ -37,9 +39,19 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     await navigateTo(redirect)
   } catch (error) {
     const statusCode = (error as { statusCode?: number }).statusCode
-    errorMessage.value = statusCode === 401
-      ? 'Email ou mot de passe incorrect.'
-      : 'Connexion impossible. Réessayez.'
+    if (statusCode === 401) {
+      errorMessage.value = 'Email ou mot de passe incorrect.'
+      errorDescription.value = 'Le compte existe peut-être, mais ces identifiants ne permettent pas de se connecter.'
+    } else if (statusCode === 429) {
+      errorMessage.value = 'Trop de tentatives de connexion.'
+      errorDescription.value = 'Patientez quelques minutes avant de réessayer.'
+    } else if (statusCode && statusCode >= 500) {
+      errorMessage.value = 'Erreur serveur pendant la connexion.'
+      errorDescription.value = 'La base de données ou la configuration live a probablement un souci. Vérifiez les logs serveur.'
+    } else {
+      errorMessage.value = 'Connexion impossible.'
+      errorDescription.value = 'Vérifiez votre connexion internet puis réessayez.'
+    }
   } finally {
     loading.value = false
   }
@@ -94,8 +106,10 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         <UAlert
           v-if="errorMessage"
           color="error"
+          icon="i-lucide-triangle-alert"
           variant="subtle"
           :title="errorMessage"
+          :description="errorDescription || undefined"
         />
 
         <UButton
