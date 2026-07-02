@@ -130,26 +130,29 @@ const footerLinks = [{
   }
 }] satisfies NavigationMenuItem[]
 
-const [{ data: customers }, { data: tickets }, { data: documents }] = await Promise.all([
-  useFetch<CustomerListResponse>('/api/customers', {
-    query: {
-      page: 1,
-      pageSize: 5
-    }
-  }),
-  useFetch<TicketListResponse>('/api/tickets', {
-    query: {
-      page: 1,
-      pageSize: 5
-    }
-  }),
-  useFetch<DocumentListResponse>('/api/documents', {
-    query: {
-      page: 1,
-      pageSize: 5
-    }
-  })
-])
+const { data: customers } = useFetch<CustomerListResponse>('/api/customers', {
+  query: {
+    page: 1,
+    pageSize: 5
+  },
+  lazy: true
+})
+
+const { data: tickets } = useFetch<TicketListResponse>('/api/tickets', {
+  query: {
+    page: 1,
+    pageSize: 5
+  },
+  lazy: true
+})
+
+const { data: documents } = useFetch<DocumentListResponse>('/api/documents', {
+  query: {
+    page: 1,
+    pageSize: 5
+  },
+  lazy: true
+})
 
 const counterActions = [{
   id: 'new-sale',

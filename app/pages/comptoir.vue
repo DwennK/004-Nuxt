@@ -92,26 +92,37 @@ const counterActions: CounterAction[] = [{
   color: 'neutral'
 }]
 
-const [{ data: readyTickets }, { data: dueDocuments }, { data: diagnosisTickets }, { data: approvalTickets }, { data: waitingPartsTickets }] = await Promise.all([
+const [
+  { data: readyTickets, status: readyTicketsStatus },
+  { data: dueDocuments, status: dueDocumentsStatus },
+  { data: diagnosisTickets, status: diagnosisTicketsStatus },
+  { data: approvalTickets, status: approvalTicketsStatus },
+  { data: waitingPartsTickets, status: waitingPartsTicketsStatus }
+] = await Promise.all([
   useFetch<TicketListResponse>('/api/tickets', {
     key: 'counter-ready-tickets',
-    query: { status: 'ready_for_pickup', pageSize: 6 }
+    query: { status: 'ready_for_pickup', pageSize: 6 },
+    lazy: true
   }),
   useFetch<DocumentListResponse>('/api/documents', {
     key: 'counter-due-documents',
-    query: { paymentState: 'due', sortBy: 'balanceDue', pageSize: 6 }
+    query: { paymentState: 'due', sortBy: 'balanceDue', pageSize: 6 },
+    lazy: true
   }),
   useFetch<TicketListResponse>('/api/tickets', {
     key: 'counter-diagnosis-tickets',
-    query: { status: 'diagnosis', pageSize: 4 }
+    query: { status: 'diagnosis', pageSize: 4 },
+    lazy: true
   }),
   useFetch<TicketListResponse>('/api/tickets', {
     key: 'counter-approval-tickets',
-    query: { status: 'awaiting_customer_approval', pageSize: 4 }
+    query: { status: 'awaiting_customer_approval', pageSize: 4 },
+    lazy: true
   }),
   useFetch<TicketListResponse>('/api/tickets', {
     key: 'counter-waiting-parts-tickets',
-    query: { status: 'waiting_parts', pageSize: 4 }
+    query: { status: 'waiting_parts', pageSize: 4 },
+    lazy: true
   })
 ])
 
@@ -122,7 +133,8 @@ const { data: customerResults, status: customerSearchStatus } = await useFetch<C
   query: computed(() => ({
     search: searchQuery.value,
     pageSize: 5
-  }))
+  })),
+  lazy: true
 })
 
 const { data: ticketResults, status: ticketSearchStatus } = await useFetch<TicketListResponse>('/api/tickets', {
@@ -130,7 +142,8 @@ const { data: ticketResults, status: ticketSearchStatus } = await useFetch<Ticke
   query: computed(() => ({
     q: searchQuery.value,
     pageSize: 5
-  }))
+  })),
+  lazy: true
 })
 
 const { data: documentResults, status: documentSearchStatus } = await useFetch<DocumentListResponse>('/api/documents', {
@@ -138,7 +151,8 @@ const { data: documentResults, status: documentSearchStatus } = await useFetch<D
   query: computed(() => ({
     q: searchQuery.value,
     pageSize: 5
-  }))
+  })),
+  lazy: true
 })
 
 const { data: catalogResults, status: catalogSearchStatus } = await useFetch<CatalogItemListResponse>('/api/catalog-items', {
@@ -147,7 +161,8 @@ const { data: catalogResults, status: catalogSearchStatus } = await useFetch<Cat
     search: searchQuery.value,
     activeOnly: true,
     pageSize: 5
-  }))
+  })),
+  lazy: true
 })
 
 const readyTicketItems = computed(() => readyTickets.value?.items || [])
@@ -257,6 +272,16 @@ const filteredWorkItems = computed(() => {
 
   return counterWorkItems.value.filter(item => item.kind === selectedQueueFilter.value)
 })
+const isQueueLoading = computed(() =>
+  !counterWorkItems.value.length
+  && [
+    readyTicketsStatus.value,
+    dueDocumentsStatus.value,
+    diagnosisTicketsStatus.value,
+    approvalTicketsStatus.value,
+    waitingPartsTicketsStatus.value
+  ].some(status => status === 'pending')
+)
 const emptyQueueLabel = computed(() => {
   if (selectedQueueFilter.value === 'pickup') {
     return 'Aucune restitution en attente'
@@ -571,7 +596,15 @@ useHead({
               </div>
             </div>
 
-            <div v-if="filteredWorkItems.length" class="divide-y divide-blue-100 bg-white">
+            <div v-if="isQueueLoading" class="space-y-3 bg-white p-3">
+              <USkeleton
+                v-for="index in 4"
+                :key="index"
+                class="h-14 w-full"
+              />
+            </div>
+
+            <div v-else-if="filteredWorkItems.length" class="divide-y divide-blue-100 bg-white">
               <NuxtLink
                 v-for="item in filteredWorkItems"
                 :key="item.id"

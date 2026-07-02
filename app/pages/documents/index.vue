@@ -98,7 +98,8 @@ const query = computed(() => ({
 }))
 
 const { data: documentsResponse, status, refresh } = await useFetch<DocumentListResponse>('/api/documents', {
-  query
+  query,
+  lazy: true
 })
 
 const documents = computed(() => documentsResponse.value?.items || [])
@@ -398,7 +399,11 @@ const columns: TableColumn<DocumentListItem>[] = [
           @select="(_, row) => navigateTo(`/documents/${row.original.id}`)"
         >
           <template #empty>
+            <div v-if="status === 'pending'" class="space-y-3 px-4 py-6">
+              <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
+            </div>
             <UEmpty
+              v-else
               icon="i-lucide-files"
               title="Aucun document trouvé"
               description="Ajustez la période ou les filtres pour voir des documents."

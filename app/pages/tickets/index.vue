@@ -40,7 +40,8 @@ const query = computed(() => ({
 }))
 
 const { data: ticketsResponse, status, refresh } = await useFetch<TicketListResponse>('/api/tickets', {
-  query
+  query,
+  lazy: true
 })
 
 const tickets = computed(() => ticketsResponse.value?.items || [])
@@ -306,7 +307,11 @@ const columns: TableColumn<TicketListItem>[] = [
           @select="(_, row) => navigateTo(`/tickets/${row.original.id}`)"
         >
           <template #empty>
+            <div v-if="status === 'pending'" class="space-y-3 px-4 py-6">
+              <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
+            </div>
             <UEmpty
+              v-else
               icon="i-lucide-wrench"
               title="Aucun ticket trouvé"
               description="Essayez un autre filtre ou créez un nouveau ticket."

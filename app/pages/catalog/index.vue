@@ -75,9 +75,9 @@ const [
   { data: repairResponse, status: repairStatus, refresh: refreshRepairs },
   { data: serviceResponse, status: serviceStatus, refresh: refreshServices }
 ] = await Promise.all([
-  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: articleQuery, key: 'catalog-articles' }),
-  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: repairQuery, key: 'catalog-repairs' }),
-  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: serviceQuery, key: 'catalog-services' })
+  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: articleQuery, key: 'catalog-articles', lazy: true }),
+  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: repairQuery, key: 'catalog-repairs', lazy: true }),
+  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: serviceQuery, key: 'catalog-services', lazy: true })
 ])
 
 async function refresh() {
@@ -756,7 +756,11 @@ watch(editOpen, (open) => {
                 @select="(_, row) => openEditSlideover(row.original)"
               >
                 <template #empty>
+                  <div v-if="articleStatus === 'pending'" class="space-y-3 px-4 py-6">
+                    <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
+                  </div>
                   <UEmpty
+                    v-else
                     icon="i-lucide-package-search"
                     title="Aucun article trouvé"
                     description="Ajoutez un article ou ajustez les filtres actuels."
@@ -823,7 +827,11 @@ watch(editOpen, (open) => {
                 @select="(_, row) => openEditSlideover(row.original)"
               >
                 <template #empty>
+                  <div v-if="repairStatus === 'pending'" class="space-y-3 px-4 py-6">
+                    <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
+                  </div>
                   <UEmpty
+                    v-else
                     icon="i-lucide-wrench"
                     title="Aucune réparation trouvée"
                     description="Créez une réparation atelier ou ajustez les filtres actuels."
@@ -890,7 +898,11 @@ watch(editOpen, (open) => {
                 @select="(_, row) => openEditSlideover(row.original)"
               >
                 <template #empty>
+                  <div v-if="serviceStatus === 'pending'" class="space-y-3 px-4 py-6">
+                    <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
+                  </div>
                   <UEmpty
+                    v-else
                     icon="i-lucide-briefcase-business"
                     title="Aucun service trouvé"
                     description="Créez un service ou ajustez les filtres actuels."

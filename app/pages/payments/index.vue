@@ -93,7 +93,8 @@ const paymentQuery = computed(() => ({
 }))
 
 const { data: payments, status, refresh } = await useFetch<PaymentListItem[]>('/api/payments', {
-  query: paymentQuery
+  query: paymentQuery,
+  lazy: true
 })
 
 const filteredPayments = computed(() => {
@@ -408,7 +409,11 @@ const columns: TableColumn<PaymentListItem>[] = [
           @select="(_, row) => navigateTo(`/documents/${row.original.documentId}`)"
         >
           <template #empty>
+            <div v-if="status === 'pending'" class="space-y-3 px-4 py-6">
+              <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
+            </div>
             <UEmpty
+              v-else
               icon="i-lucide-wallet"
               title="Aucun paiement trouvé"
               description="Ajustez la période ou les filtres pour voir des résultats."

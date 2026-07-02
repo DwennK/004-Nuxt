@@ -29,7 +29,8 @@ const query = computed(() => ({
 }))
 
 const { data: customersResponse, status, refresh } = await useFetch<CustomerListResponse>('/api/customers', {
-  query
+  query,
+  lazy: true
 })
 
 const customers = computed(() => customersResponse.value?.items || [])
@@ -306,7 +307,11 @@ const columns: TableColumn<CustomerRecord>[] = [
           @select="(_, row) => navigateTo(`/customers/${row.original.id}`)"
         >
           <template #empty>
+            <div v-if="status === 'pending'" class="space-y-3 px-4 py-6">
+              <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
+            </div>
             <UEmpty
+              v-else
               icon="i-lucide-users"
               title="Aucun client trouvé"
               description="Créez un client ou ajustez la recherche pour voir des résultats."
