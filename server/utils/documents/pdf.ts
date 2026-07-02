@@ -477,11 +477,11 @@ function drawTableHeader(context: PdfContext) {
 }
 
 function getTableColumns() {
-  const descriptionWidth = SECTION_WIDTH * 0.42
-  const quantityWidth = SECTION_WIDTH * 0.07
-  const unitPriceWidth = SECTION_WIDTH * 0.15
-  const vatWidth = SECTION_WIDTH * 0.08
-  const vatAmountWidth = SECTION_WIDTH * 0.13
+  const descriptionWidth = SECTION_WIDTH * 0.50
+  const quantityWidth = SECTION_WIDTH * 0.06
+  const unitPriceWidth = SECTION_WIDTH * 0.14
+  const vatWidth = SECTION_WIDTH * 0.07
+  const vatAmountWidth = SECTION_WIDTH * 0.11
   const totalWidth = SECTION_WIDTH - descriptionWidth - quantityWidth - unitPriceWidth - vatWidth - vatAmountWidth
 
   const descriptionLeft = SECTION_LEFT
