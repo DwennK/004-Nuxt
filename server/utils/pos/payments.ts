@@ -36,7 +36,7 @@ async function assertPayablePaymentDocument(documentId: number) {
   if (!isPayableDocumentType(document.type)) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Only invoices can receive payments'
+      statusMessage: 'Only customer orders and invoices can receive payments'
     })
   }
 }

@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { customers, documents, ticketEvents, ticketLines, tickets } from '~~/server/db/schema'
 import {
+  payableDocumentTypes,
   ticketStatusLabels,
   ticketWorkflowStepLabels
 } from '~~/shared/constants/pos'
@@ -374,7 +375,7 @@ function getTicketCommercialSummary(documentRows: DocumentRecord[], paymentRows:
   const latestDocument = documentRows[0] || null
   const payableDocuments = documentRows.filter(document =>
     document.status !== 'cancelled'
-    && document.type === 'invoice'
+    && payableDocumentTypes.includes(document.type as (typeof payableDocumentTypes)[number])
   )
   const payableDocument = invoice || payableDocuments[0] || null
   const totalPaid = paymentRows

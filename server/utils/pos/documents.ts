@@ -6,7 +6,7 @@ import {
   payments,
   tickets
 } from '~~/server/db/schema'
-import { paymentMethodLabels } from '~~/shared/constants/pos'
+import { payableDocumentTypes, paymentMethodLabels } from '~~/shared/constants/pos'
 import type {
   DocumentDetail,
   DocumentLineRecord,
@@ -169,9 +169,10 @@ export async function listDocuments(filters?: {
   const sortBy = filters?.sortBy || 'issuedAt'
   const searchTerm = filters?.q?.trim().toLowerCase()
   const searchPattern = searchTerm ? `%${searchTerm}%` : null
+  const payableTypes = [...payableDocumentTypes]
   const paidAmountValue = sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
   const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
-  const balanceDueValue = sql<number>`case when ${documents.type} = 'invoice' then max(${documents.total} - ${paidAmountValue}, 0) else 0 end`
+  const balanceDueValue = sql<number>`case when ${inArray(documents.type, payableTypes)} then max(${documents.total} - ${paidAmountValue}, 0) else 0 end`
   const paidAmount = paidAmountValue.as('paid_amount')
   const customerName = customerNameValue.as('customer_name')
   const balanceDue = balanceDueValue.as('balance_due')
@@ -184,7 +185,7 @@ export async function listDocuments(filters?: {
     filters?.dateTo ? lte(documents.issuedAt, filters.dateTo) : undefined
   ] as const
   const dueFilter = filters?.paymentState === 'due'
-    ? sql`${documents.type} = 'invoice' and ${documents.total} > ${paidAmountValue}`
+    ? sql`${inArray(documents.type, payableTypes)} and ${documents.total} > ${paidAmountValue}`
     : undefined
   const useAggregateList = !!searchPattern || filters?.paymentState === 'due' || sortBy === 'balanceDue'
 

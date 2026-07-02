@@ -59,7 +59,7 @@ export const documentStatuses = ['draft', 'issued', 'paid', 'cancelled'] as cons
 export const paymentMethods = ['cash', 'card_twint', 'bank_transfer', 'stripe'] as const
 export const paymentStatuses = ['pending', 'paid', 'refunded', 'cancelled'] as const
 export const lineCategoryHints = ['accessory', 'repair', 'service'] as const
-export const payableDocumentTypes = ['invoice'] as const
+export const payableDocumentTypes = ['customer_order', 'invoice'] as const
 export const woocommerceOpenOrderStatuses = ['pending', 'processing', 'on-hold'] as const
 
 export const catalogItemTypeLabels: Record<(typeof catalogItemTypes)[number], string> = {

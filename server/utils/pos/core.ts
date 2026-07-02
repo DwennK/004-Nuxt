@@ -9,7 +9,7 @@ import {
   ticketEvents,
   tickets
 } from '~~/server/db/schema'
-import { documentTypePrefixes, ticketStatusLabels } from '~~/shared/constants/pos'
+import { documentTypePrefixes, payableDocumentTypes, ticketStatusLabels } from '~~/shared/constants/pos'
 import type {
   CustomerRecord,
   DocumentStatus,
@@ -1478,7 +1478,7 @@ export async function syncDocumentStatus(documentId: number) {
   }
 
   const paidTotal = Number(paymentSummary[0]?.paidTotal || 0)
-  const isPayable = currentDocument.type === 'invoice'
+  const isPayable = payableDocumentTypes.includes(currentDocument.type as (typeof payableDocumentTypes)[number])
   const nextStatus: DocumentStatus = currentDocument.status === 'cancelled'
     ? 'cancelled'
     : isPayable && paidTotal >= currentDocument.total && currentDocument.total > 0
