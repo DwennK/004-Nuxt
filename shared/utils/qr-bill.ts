@@ -110,8 +110,12 @@ function buildDebtorAddress(customer: CustomerRecord) {
   })
 }
 
-export function buildSwissQrBill(document: DocumentDetail, company: CompanySettingsRecord) {
+export function buildSwissQrBill(document: DocumentDetail, company: CompanySettingsRecord, amountCents = document.total) {
   if (document.type !== 'invoice') {
+    return null
+  }
+
+  if (amountCents <= 0) {
     return null
   }
 
@@ -144,7 +148,7 @@ export function buildSwissQrBill(document: DocumentDetail, company: CompanySetti
     account,
     ...buildPayloadAddress(creditor),
     ...buildPayloadAddress(null),
-    formatQrAmount(document.total),
+    formatQrAmount(amountCents),
     'CHF',
     ...buildPayloadAddress(debtor),
     'NON',
@@ -158,7 +162,7 @@ export function buildSwissQrBill(document: DocumentDetail, company: CompanySetti
 
   return {
     account,
-    amount: formatQrAmount(document.total),
+    amount: formatQrAmount(amountCents),
     currency: 'CHF',
     creditor,
     debtor,

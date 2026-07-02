@@ -65,8 +65,8 @@ function getCustomerAddress(document: DocumentDetail) {
   ].filter(Boolean) as string[]
 }
 
-function getQrBillNotice(document: DocumentDetail, company: CompanySettingsRecord, qrBill: SwissQrBillData | null) {
-  if (document.type !== 'invoice' || qrBill) {
+function getQrBillNotice(document: DocumentDetail, company: CompanySettingsRecord, qrBill: SwissQrBillData | null, balanceDue: number) {
+  if (document.type !== 'invoice' || qrBill || balanceDue <= 0) {
     return null
   }
 
@@ -89,13 +89,13 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
   const paymentSummary = buildDocumentPaymentSummary(document)
   const companyAddress = getCompanyAddress(company)
   const customerAddress = getCustomerAddress(document)
-  const qrBill = buildSwissQrBill(document, company)
-  const qrBillNotice = getQrBillNotice(document, company, qrBill)
   const paidAmount = document.payments
     .filter(payment => payment.status === 'paid')
     .reduce((total, payment) => total + payment.amount, 0)
   const isPayableDocument = isPayableDocumentType(document.type)
   const balanceDue = isPayableDocument ? Math.max(document.total - paidAmount, 0) : 0
+  const qrBill = buildSwissQrBill(document, company, balanceDue)
+  const qrBillNotice = getQrBillNotice(document, company, qrBill, balanceDue)
   const noteBlocks: DocumentPrintNoteBlock[] = []
 
   if (document.notes) {
