@@ -538,6 +538,29 @@ export async function deleteDocument(id: number) {
   await ensurePosSchema()
 
   const db = useDb()
+  const [document] = await db.select({
+    id: documents.id,
+    status: documents.status
+  }).from(documents).where(eq(documents.id, id)).limit(1)
+
+  if (!document) {
+    return 0
+  }
+
+  const [paymentSummary] = await db.select({
+    count: sql<number>`count(*)`,
+    paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
+  })
+    .from(payments)
+    .where(eq(payments.documentId, id))
+
+  if (document.status === 'paid' || Number(paymentSummary?.count || 0) > 0 || Number(paymentSummary?.paidTotal || 0) > 0) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Documents with payments cannot be deleted. Cancel the document or record a correction instead.'
+    })
+  }
+
   const result = await db.delete(documents).where(eq(documents.id, id))
 
   return result.rowsAffected

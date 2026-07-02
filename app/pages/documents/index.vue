@@ -139,13 +139,26 @@ function resetFilters() {
 }
 
 async function removeDocument(id: number) {
-  await $fetch(`/api/documents/${id}`, { method: 'DELETE' })
-  toast.add({ title: 'Document supprimé', color: 'success' })
-  await refresh()
+  try {
+    await $fetch(`/api/documents/${id}`, { method: 'DELETE' })
+    toast.add({ title: 'Document supprimé', color: 'success' })
+    await refresh()
+  } catch (error) {
+    toast.add({
+      title: 'Suppression impossible',
+      description: getRequestErrorMessage(error) || 'Les documents encaissés doivent être annulés ou corrigés, pas supprimés.',
+      color: 'error'
+    })
+  }
 }
 
 function getRowItems(document: DocumentListItem) {
-  return [[{
+  const groups: Array<Array<{
+    label: string
+    icon: string
+    color?: 'error'
+    onSelect: () => void
+  }>> = [[{
     label: 'Ouvrir le document',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
@@ -157,14 +170,45 @@ function getRowItems(document: DocumentListItem) {
     onSelect() {
       navigateTo(`/documents/${document.id}/print`)
     }
-  }], [{
-    label: 'Supprimer',
-    icon: 'i-lucide-trash',
-    color: 'error',
-    onSelect() {
-      removeDocument(document.id)
-    }
   }]]
+
+  if (document.status !== 'paid' && document.paidAmount <= 0) {
+    groups.push([{
+      label: 'Supprimer',
+      icon: 'i-lucide-trash',
+      color: 'error',
+      onSelect() {
+        removeDocument(document.id)
+      }
+    }])
+  }
+
+  return groups
+}
+
+function getRequestErrorMessage(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return null
+  }
+
+  const maybeError = error as {
+    data?: { message?: unknown, statusMessage?: unknown }
+    message?: unknown
+  }
+
+  if (typeof maybeError.data?.message === 'string') {
+    return maybeError.data.message
+  }
+
+  if (typeof maybeError.data?.statusMessage === 'string') {
+    return maybeError.data.statusMessage
+  }
+
+  if (typeof maybeError.message === 'string') {
+    return maybeError.message
+  }
+
+  return null
 }
 
 function getDocumentStatusBadge(status: DocumentListItem['status']) {
