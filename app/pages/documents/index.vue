@@ -16,15 +16,24 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 const confirmDelete = useConfirmDelete()
 const runApiAction = useApiAction()
 const route = useRoute()
+const router = useRouter()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
-const search = ref('')
+const search = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const debouncedSearch = refDebounced(search, 250)
-const typeFilter = ref<'all' | DocumentListItem['type']>('all')
-const statusFilter = ref<'all' | DocumentListItem['status']>('all')
+const typeFilter = ref<'all' | DocumentListItem['type']>(
+  typeof route.query.type === 'string' && route.query.type in documentTypeLabels
+    ? route.query.type as DocumentListItem['type']
+    : 'all'
+)
+const statusFilter = ref<'all' | DocumentListItem['status']>(
+  typeof route.query.status === 'string' && route.query.status in documentStatusLabels
+    ? route.query.status as DocumentListItem['status']
+    : 'all'
+)
 const paymentStateFilter = ref<'all' | 'due'>(route.query.paymentState === 'due' ? 'due' : 'all')
-const dateFrom = ref('')
-const dateTo = ref('')
+const dateFrom = ref(typeof route.query.dateFrom === 'string' ? route.query.dateFrom : '')
+const dateTo = ref(typeof route.query.dateTo === 'string' ? route.query.dateTo : '')
 const pagination = ref({
   pageIndex: 0,
   pageSize: 50
@@ -108,6 +117,17 @@ const totalPages = computed(() => Math.max(Math.ceil(totalResults.value / pagina
 
 watch([debouncedSearch, typeFilter, statusFilter, paymentStateFilter, dateFrom, dateTo], () => {
   pagination.value.pageIndex = 0
+  router.replace({
+    query: {
+      ...route.query,
+      q: debouncedSearch.value.trim() || undefined,
+      type: typeFilter.value === 'all' ? undefined : typeFilter.value,
+      status: statusFilter.value === 'all' ? undefined : statusFilter.value,
+      paymentState: paymentStateFilter.value === 'due' ? 'due' : undefined,
+      dateFrom: dateFrom.value || undefined,
+      dateTo: dateTo.value || undefined
+    }
+  })
 })
 
 watch(() => route.query.paymentState, (paymentState) => {

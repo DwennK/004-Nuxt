@@ -366,16 +366,23 @@ useHead({
         <main class="min-w-0 space-y-3">
           <section class="outlook-mail-toolbar overflow-hidden rounded-md">
             <div class="grid gap-2 border-b border-blue-100 bg-white p-2 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center">
-              <UInput
-                v-model="search"
-                icon="i-lucide-search"
-                size="xl"
-                autofocus
-                placeholder="Scanner ou rechercher client, ticket, facture, téléphone, IMEI..."
-                :loading="isSearching"
-                class="w-full"
-                :ui="{ base: 'h-10 rounded-[4px] bg-blue-50/80 ring-blue-200 focus-visible:ring-blue-500' }"
-              />
+              <div class="flex items-center gap-2">
+                <UInput
+                  v-model="search"
+                  icon="i-lucide-search"
+                  size="xl"
+                  autofocus
+                  placeholder="Scanner ou rechercher client, ticket, facture, téléphone, IMEI..."
+                  :loading="isSearching"
+                  class="w-full"
+                  :ui="{ base: 'h-10 rounded-[4px] bg-blue-50/80 ring-blue-200 focus-visible:ring-blue-500' }"
+                />
+                <PosBarcodeScanner
+                  trigger-size="xl"
+                  trigger-aria-label="Scanner un code-barres avec la caméra"
+                  @scanned="search = $event"
+                />
+              </div>
 
               <div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4 2xl:w-[42rem]">
                 <UButton

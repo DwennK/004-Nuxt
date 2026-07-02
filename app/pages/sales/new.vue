@@ -46,7 +46,8 @@ const {
 } = useCatalogItemSearch()
 
 const { data: customers } = await useFetch<CustomerListResponse>('/api/customers', {
-  query: { pageSize: 250 }
+  query: { pageSize: 50 },
+  lazy: true
 })
 
 watchEffect(() => {

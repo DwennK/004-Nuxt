@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CustomerFormValue, CustomerRecord } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerListResponse, CustomerRecord } from '~~/shared/types/pos'
 
 type CustomerSelectItem = CustomerRecord & {
   label: string
@@ -30,10 +30,17 @@ const isSaving = ref(false)
 const searchTerm = ref('')
 const createdCustomers = ref<CustomerRecord[]>([])
 
+const remoteCustomers = ref<CustomerRecord[]>([])
+const remoteSearchPending = ref(false)
+
 const customersList = computed(() => {
   const merged = new Map<number, CustomerRecord>()
 
   for (const customer of props.customers) {
+    merged.set(customer.id, customer)
+  }
+
+  for (const customer of remoteCustomers.value) {
     merged.set(customer.id, customer)
   }
 
@@ -61,6 +68,33 @@ const customerItems = computed<CustomerSelectItem[]>(() => customersList.value.m
 }))
 
 const trimmedSearch = computed(() => searchTerm.value.trim())
+const debouncedSearch = refDebounced(trimmedSearch, 250)
+
+watch(debouncedSearch, async (term) => {
+  if (term.length < 2) {
+    return
+  }
+
+  remoteSearchPending.value = true
+
+  try {
+    const response = await $fetch<CustomerListResponse>('/api/customers', {
+      query: { search: term, pageSize: 20 }
+    })
+
+    const merged = new Map(remoteCustomers.value.map(customer => [customer.id, customer]))
+
+    for (const customer of response.items) {
+      merged.set(customer.id, customer)
+    }
+
+    remoteCustomers.value = Array.from(merged.values())
+  } catch {
+    // La recherche serveur est un complément : la liste locale reste utilisable.
+  } finally {
+    remoteSearchPending.value = false
+  }
+})
 
 const createActionLabel = computed(() => {
   return trimmedSearch.value ? `Créer "${trimmedSearch.value}"` : 'Créer un client'
@@ -221,6 +255,7 @@ onBeforeUnmount(() => {
       :filter-fields="['displayName', 'companyName', 'phone', 'email', 'label', 'description']"
       :clear="!disabled"
       :disabled="disabled"
+      :loading="remoteSearchPending"
       icon="i-lucide-user-round-search"
       class="w-full"
       :ui="{

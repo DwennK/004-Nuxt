@@ -13,9 +13,10 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 const confirmDelete = useConfirmDelete()
 const runApiAction = useApiAction()
 const route = useRoute()
+const router = useRouter()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
-const search = ref('')
+const search = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const debouncedSearch = refDebounced(search, 250)
 const initialStatus = typeof route.query.status === 'string' && route.query.status in ticketStatusLabels
   ? route.query.status as TicketListItem['status']
@@ -54,6 +55,13 @@ const summary = computed(() => ticketsResponse.value?.summary || {
 
 watch([debouncedSearch, statusFilter], () => {
   pagination.value.pageIndex = 0
+  router.replace({
+    query: {
+      ...route.query,
+      q: debouncedSearch.value.trim() || undefined,
+      status: statusFilter.value === 'all' ? undefined : statusFilter.value
+    }
+  })
 })
 
 watch(() => route.query.status, (status) => {
