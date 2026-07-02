@@ -111,6 +111,12 @@ async function addPayment(input: {
     })
     paymentOpen.value = false
     emit('refresh')
+  } catch (error) {
+    toast.add({
+      title: 'Encaissement impossible',
+      description: getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.',
+      color: 'error'
+    })
   } finally {
     creatingMethod.value = null
   }
@@ -152,6 +158,12 @@ async function savePayment(payment: PaymentRecord) {
       color: 'success'
     })
     emit('refresh')
+  } catch (error) {
+    toast.add({
+      title: 'Mise à jour impossible',
+      description: getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.',
+      color: 'error'
+    })
   } finally {
     savingId.value = null
   }
@@ -179,6 +191,12 @@ async function removePayment(payment: PaymentRecord) {
       color: 'success'
     })
     emit('refresh')
+  } catch (error) {
+    toast.add({
+      title: 'Suppression impossible',
+      description: getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.',
+      color: 'error'
+    })
   } finally {
     deletingId.value = null
   }

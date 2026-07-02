@@ -13,8 +13,8 @@ import { formatCurrency, formatDateTime, isPayableDocumentType } from '~~/shared
 const UBadge = resolveComponent('UBadge')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
-const toast = useToast()
 const confirmDelete = useConfirmDelete()
+const runApiAction = useApiAction()
 const route = useRoute()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
@@ -149,16 +149,17 @@ async function removeDocument(document: DocumentListItem) {
     return
   }
 
-  try {
-    await $fetch(`/api/documents/${document.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Document supprimé', color: 'success' })
+  const result = await runApiAction(
+    () => $fetch(`/api/documents/${document.id}`, { method: 'DELETE' }),
+    {
+      success: 'Document supprimé',
+      errorTitle: 'Suppression impossible',
+      errorDescription: 'Les documents encaissés doivent être annulés ou corrigés, pas supprimés.'
+    }
+  )
+
+  if (result.ok) {
     await refresh()
-  } catch (error) {
-    toast.add({
-      title: 'Suppression impossible',
-      description: getRequestErrorMessage(error) || 'Les documents encaissés doivent être annulés ou corrigés, pas supprimés.',
-      color: 'error'
-    })
   }
 }
 
@@ -194,31 +195,6 @@ function getRowItems(document: DocumentListItem) {
   }
 
   return groups
-}
-
-function getRequestErrorMessage(error: unknown) {
-  if (!error || typeof error !== 'object') {
-    return null
-  }
-
-  const maybeError = error as {
-    data?: { message?: unknown, statusMessage?: unknown }
-    message?: unknown
-  }
-
-  if (typeof maybeError.data?.message === 'string') {
-    return maybeError.data.message
-  }
-
-  if (typeof maybeError.data?.statusMessage === 'string') {
-    return maybeError.data.statusMessage
-  }
-
-  if (typeof maybeError.message === 'string') {
-    return maybeError.message
-  }
-
-  return null
 }
 
 function getDocumentStatusBadge(status: DocumentListItem['status']) {

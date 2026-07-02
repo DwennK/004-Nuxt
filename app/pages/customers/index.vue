@@ -7,8 +7,8 @@ import type { CustomerFormValue, CustomerListResponse, CustomerRecord } from '~~
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
-const toast = useToast()
 const confirmDelete = useConfirmDelete()
+const runApiAction = useApiAction()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 const search = ref('')
@@ -70,21 +70,33 @@ const editingCustomerForm = computed(() => {
 
 async function saveCustomer(payload: CustomerFormValue) {
   if (editingCustomer.value) {
-    await $fetch(`/api/customers/${editingCustomer.value.id}`, {
-      method: 'PATCH',
-      body: payload
-    })
+    const result = await runApiAction(
+      () => $fetch(`/api/customers/${editingCustomer.value!.id}`, {
+        method: 'PATCH',
+        body: payload
+      }),
+      { success: 'Client mis à jour', errorTitle: 'Mise à jour impossible' }
+    )
 
-    toast.add({ title: 'Client mis à jour', color: 'success' })
+    if (!result.ok) {
+      return
+    }
+
     editOpen.value = false
     editingCustomer.value = null
   } else {
-    await $fetch('/api/customers', {
-      method: 'POST',
-      body: payload
-    })
+    const result = await runApiAction(
+      () => $fetch('/api/customers', {
+        method: 'POST',
+        body: payload
+      }),
+      { success: 'Client créé', errorTitle: 'Création impossible' }
+    )
 
-    toast.add({ title: 'Client créé', color: 'success' })
+    if (!result.ok) {
+      return
+    }
+
     createOpen.value = false
   }
 
@@ -101,9 +113,14 @@ async function removeCustomer(customer: CustomerRecord) {
     return
   }
 
-  await $fetch(`/api/customers/${customer.id}`, { method: 'DELETE' })
-  toast.add({ title: 'Client supprimé', color: 'success' })
-  await refresh()
+  const result = await runApiAction(
+    () => $fetch(`/api/customers/${customer.id}`, { method: 'DELETE' }),
+    { success: 'Client supprimé', errorTitle: 'Suppression impossible' }
+  )
+
+  if (result.ok) {
+    await refresh()
+  }
 }
 
 function openEditor(customer: CustomerRecord) {

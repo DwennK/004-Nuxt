@@ -17,8 +17,8 @@ const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
-const toast = useToast()
 const confirmDelete = useConfirmDelete()
+const runApiAction = useApiAction()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 type PeriodPreset = 'today' | 'month' | 'last_7_days' | 'all' | 'custom'
@@ -182,9 +182,14 @@ async function removePayment(payment: PaymentListItem) {
     return
   }
 
-  await $fetch(`/api/payments/${payment.id}`, { method: 'DELETE' })
-  toast.add({ title: 'Paiement supprimé', color: 'success' })
-  await refresh()
+  const result = await runApiAction(
+    () => $fetch(`/api/payments/${payment.id}`, { method: 'DELETE' }),
+    { success: 'Paiement supprimé', errorTitle: 'Suppression impossible' }
+  )
+
+  if (result.ok) {
+    await refresh()
+  }
 }
 
 function getRowItems(payment: PaymentListItem) {

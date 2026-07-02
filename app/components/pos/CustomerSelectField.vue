@@ -132,6 +132,12 @@ async function createCustomer(payload: CustomerFormValue) {
       title: 'Client créé',
       color: 'success'
     })
+  } catch (error) {
+    toast.add({
+      title: 'Création du client impossible',
+      description: getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.',
+      color: 'error'
+    })
   } finally {
     isSaving.value = false
   }

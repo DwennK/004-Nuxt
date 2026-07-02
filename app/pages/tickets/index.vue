@@ -10,8 +10,8 @@ const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
-const toast = useToast()
 const confirmDelete = useConfirmDelete()
+const runApiAction = useApiAction()
 const route = useRoute()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
@@ -70,24 +70,45 @@ watch(totalResults, (total) => {
 })
 
 async function createQuote(ticketId: number) {
-  const document = await $fetch<DocumentDetail>(`/api/tickets/${ticketId}/quote`, { method: 'POST' })
-  toast.add({ title: 'Devis créé', color: 'success' })
+  const result = await runApiAction(
+    () => $fetch<DocumentDetail>(`/api/tickets/${ticketId}/quote`, { method: 'POST' }),
+    { success: 'Devis créé', errorTitle: 'Création du devis impossible' }
+  )
+
+  if (!result.ok) {
+    return
+  }
+
   await refresh()
-  await navigateTo(`/documents/${document.id}`)
+  await navigateTo(`/documents/${result.data.id}`)
 }
 
 async function createOrder(ticketId: number) {
-  const document = await $fetch<DocumentDetail>(`/api/tickets/${ticketId}/order`, { method: 'POST' })
-  toast.add({ title: 'Commande créée', color: 'success' })
+  const result = await runApiAction(
+    () => $fetch<DocumentDetail>(`/api/tickets/${ticketId}/order`, { method: 'POST' }),
+    { success: 'Commande créée', errorTitle: 'Création de la commande impossible' }
+  )
+
+  if (!result.ok) {
+    return
+  }
+
   await refresh()
-  await navigateTo(`/documents/${document.id}`)
+  await navigateTo(`/documents/${result.data.id}`)
 }
 
 async function createInvoice(ticketId: number) {
-  const document = await $fetch<DocumentDetail>(`/api/tickets/${ticketId}/invoice`, { method: 'POST' })
-  toast.add({ title: 'Facture créée', color: 'success' })
+  const result = await runApiAction(
+    () => $fetch<DocumentDetail>(`/api/tickets/${ticketId}/invoice`, { method: 'POST' }),
+    { success: 'Facture créée', errorTitle: 'Création de la facture impossible' }
+  )
+
+  if (!result.ok) {
+    return
+  }
+
   await refresh()
-  await navigateTo(`/documents/${document.id}`)
+  await navigateTo(`/documents/${result.data.id}`)
 }
 
 async function removeTicket(ticket: TicketListItem) {
@@ -100,9 +121,14 @@ async function removeTicket(ticket: TicketListItem) {
     return
   }
 
-  await $fetch(`/api/tickets/${ticket.id}`, { method: 'DELETE' })
-  toast.add({ title: 'Ticket supprimé', color: 'success' })
-  await refresh()
+  const result = await runApiAction(
+    () => $fetch(`/api/tickets/${ticket.id}`, { method: 'DELETE' }),
+    { success: 'Ticket supprimé', errorTitle: 'Suppression impossible' }
+  )
+
+  if (result.ok) {
+    await refresh()
+  }
 }
 
 function getRowItems(ticket: TicketListItem) {

@@ -131,31 +131,6 @@ function isEmptyLine(line: SaleLine) {
     && line.unitPrice === 0
 }
 
-function getRequestErrorMessage(error: unknown) {
-  if (typeof error !== 'object' || !error) {
-    return null
-  }
-
-  const maybeError = error as {
-    data?: { message?: unknown, statusMessage?: unknown }
-    message?: unknown
-  }
-
-  if (typeof maybeError.data?.message === 'string') {
-    return maybeError.data.message
-  }
-
-  if (typeof maybeError.data?.statusMessage === 'string') {
-    return maybeError.data.statusMessage
-  }
-
-  if (typeof maybeError.message === 'string') {
-    return maybeError.message
-  }
-
-  return null
-}
-
 function addCatalogItem(item: CatalogItemRecord) {
   const existing = lines.value.find(line => line.catalogItemId === item.id)
 

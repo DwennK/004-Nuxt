@@ -23,8 +23,8 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const route = useRoute()
 const router = useRouter()
-const toast = useToast()
 const confirmDelete = useConfirmDelete()
+const runApiAction = useApiAction()
 
 const activeView = ref<CatalogView>('articles')
 const createOpen = ref(false)
@@ -503,27 +503,33 @@ const serviceColumns: TableColumn<CatalogItemRecord>[] = [
 
 async function saveItem(payload: CatalogItemInput) {
   if (editingItem.value) {
-    await $fetch(`/api/catalog-items/${editingItem.value.id}`, {
-      method: 'PATCH',
-      body: payload
-    })
+    const result = await runApiAction(
+      () => $fetch(`/api/catalog-items/${editingItem.value!.id}`, {
+        method: 'PATCH',
+        body: payload
+      }),
+      { success: getCreateUpdateTitle(payload.type, 'updated'), errorTitle: 'Mise à jour impossible' }
+    )
 
-    toast.add({
-      title: getCreateUpdateTitle(payload.type, 'updated'),
-      color: 'success'
-    })
+    if (!result.ok) {
+      return
+    }
+
     editOpen.value = false
     editingItem.value = null
   } else {
-    await $fetch('/api/catalog-items', {
-      method: 'POST',
-      body: payload
-    })
+    const result = await runApiAction(
+      () => $fetch('/api/catalog-items', {
+        method: 'POST',
+        body: payload
+      }),
+      { success: getCreateUpdateTitle(payload.type, 'created'), errorTitle: 'Création impossible' }
+    )
 
-    toast.add({
-      title: getCreateUpdateTitle(payload.type, 'created'),
-      color: 'success'
-    })
+    if (!result.ok) {
+      return
+    }
+
     createOpen.value = false
   }
 
@@ -540,12 +546,14 @@ async function removeItem(item: CatalogItemRecord) {
     return
   }
 
-  await $fetch(`/api/catalog-items/${item.id}`, { method: 'DELETE' })
-  toast.add({
-    title: getCreateUpdateTitle(item.type, 'deleted'),
-    color: 'success'
-  })
-  await refresh()
+  const result = await runApiAction(
+    () => $fetch(`/api/catalog-items/${item.id}`, { method: 'DELETE' }),
+    { success: getCreateUpdateTitle(item.type, 'deleted'), errorTitle: 'Suppression impossible' }
+  )
+
+  if (result.ok) {
+    await refresh()
+  }
 }
 
 function getRowItems(item: CatalogItemRecord) {
