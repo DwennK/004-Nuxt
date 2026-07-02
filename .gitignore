@@ -21,6 +21,7 @@ logs
 .fleet
 .idea
 .playwright-cli
+public/vendor/zxing/*.wasm
 
 # Local env files
 .env

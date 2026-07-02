@@ -78,7 +78,7 @@ watch(open, async (value) => {
             v-if="isScanning"
             class="pointer-events-none absolute inset-0 flex items-center justify-center"
           >
-            <div class="size-48 rounded-2xl border-2 border-white/40" />
+            <div class="h-36 w-4/5 max-w-96 rounded-2xl border-2 border-white/50" />
           </div>
 
           <div

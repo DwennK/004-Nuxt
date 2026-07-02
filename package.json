@@ -6,10 +6,11 @@
     "node": ">=22.18.0 <23 || >=24.11.0 <25 || >=26"
   },
   "scripts": {
-    "build": "NODE_OPTIONS=--max-old-space-size=4096 nuxt build",
-    "dev": "nuxt dev",
+    "build": "npm run scanner:wasm && NODE_OPTIONS=--max-old-space-size=4096 nuxt build",
+    "dev": "npm run scanner:wasm && nuxt dev",
     "preview": "npm run build && wrangler --cwd .output dev",
-    "postinstall": "patch-package && nuxt prepare",
+    "postinstall": "patch-package && npm run scanner:wasm && nuxt prepare",
+    "scanner:wasm": "node scripts/copy-scanner-wasm.mjs",
     "lint": "eslint .",
     "security:regression": "node scripts/security-regression.mjs",
     "typecheck": "nuxt typecheck",
