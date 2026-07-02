@@ -27,6 +27,12 @@ const SHEET_LEFT = OUTER_MARGIN
 const SHEET_RIGHT = PAGE_WIDTH - OUTER_MARGIN
 const TOP_START = PAGE_HEIGHT - OUTER_MARGIN
 const BOTTOM_LIMIT = OUTER_MARGIN
+const SWISS_WINDOW_LEFT = 20 * MM
+const SWISS_WINDOW_TOP = 45 * MM
+const SWISS_WINDOW_WIDTH = 100 * MM
+const SWISS_WINDOW_HEIGHT = 45 * MM
+const SWISS_REFERENCE_LEFT = SWISS_WINDOW_LEFT
+const SWISS_WINDOW_RIGHT_INSET = 14.2 * MM
 
 const FONT_BODY = 8
 const FONT_SMALL = 7
@@ -313,7 +319,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
   const brandTextX = SECTION_LEFT + (logoImage ? logoBoxSize + logoGap : 0)
   const brandTextWidth = leftColumnWidth - (logoImage ? logoBoxSize + logoGap : 0)
 
-  ensureSpace(context, 75 * MM)
+  ensureSpace(context, 100 * MM)
 
   if (logoImage) {
     const logoBoxY = topY - logoBoxSize
@@ -337,7 +343,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     lineHeight: 8
   })
 
-  let brandBottom = drawTextBlock(context, company.name, brandTextX, topY - 10, brandTextWidth, {
+  const brandBottom = drawTextBlock(context, company.name, brandTextX, topY - 10, brandTextWidth, {
     font: context.boldFont,
     size: FONT_COMPANY,
     color: COLORS.strong,
@@ -347,7 +353,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
   const companyMeta = [...model.companyAddress, company.phone, company.email, company.website].filter(Boolean).join('\n')
 
   if (companyMeta) {
-    brandBottom = drawTextBlock(context, companyMeta, brandTextX, brandBottom - 3, brandTextWidth, {
+    drawTextBlock(context, companyMeta, brandTextX, brandBottom - 3, brandTextWidth, {
       size: FONT_SMALL,
       color: COLORS.text,
       lineHeight: 9
@@ -380,35 +386,27 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     metaY -= 10
   })
 
-  const headBottom = Math.min(brandBottom, metaY + 10)
-  const rowTop = headBottom - (15.8 * MM)
-  const windowWidth = 100 * MM
-  const windowInsetRight = 14.2 * MM
-  const referencesGap = 6 * MM
-  const windowX = SECTION_RIGHT - windowInsetRight - windowWidth
-  const referencesWidth = Math.max(windowX - referencesGap - SECTION_LEFT, 36 * MM)
+  const windowTopY = PAGE_HEIGHT - SWISS_WINDOW_TOP
+  const windowBottomY = PAGE_HEIGHT - SWISS_WINDOW_TOP - SWISS_WINDOW_HEIGHT
+  const windowX = SECTION_RIGHT - SWISS_WINDOW_RIGHT_INSET - SWISS_WINDOW_WIDTH
+  const windowContentTop = windowTopY - (10.8 * MM)
+  const windowContentX = windowX + (6 * MM)
+  const windowContentWidth = SWISS_WINDOW_WIDTH - (12 * MM)
+  const referencesWidth = Math.max(windowX - (6 * MM) - SWISS_REFERENCE_LEFT, 36 * MM)
 
-  drawTextBlock(context, 'Références', SECTION_LEFT, rowTop, referencesWidth, {
+  drawTextBlock(context, 'Références', SWISS_REFERENCE_LEFT, windowTopY, referencesWidth, {
     font: context.boldFont,
     size: FONT_LABEL,
     color: COLORS.muted,
     lineHeight: 7.5
   })
-  const referencesBottom = drawTextBlock(context, model.referenceLines.join('\n'), SECTION_LEFT, rowTop - 9, referencesWidth, {
+  const referencesBottom = drawTextBlock(context, model.referenceLines.join('\n'), SWISS_REFERENCE_LEFT, windowTopY - 9, referencesWidth, {
     size: FONT_SMALL,
     color: COLORS.text,
     lineHeight: 8.8
   })
 
-  drawTextBlock(context, 'Adresse destinataire', windowX, rowTop, windowWidth, {
-    font: context.boldFont,
-    size: FONT_LABEL,
-    color: COLORS.muted,
-    lineHeight: 7.5
-  })
-
-  const windowContentTop = rowTop - (9.5 * MM)
-  let windowBottom = drawTextBlock(context, model.windowLines[0] || document.customer.displayName, windowX + (8 * MM), windowContentTop, windowWidth - (14 * MM), {
+  let windowBottom = drawTextBlock(context, model.windowLines[0] || document.customer.displayName, windowContentX, windowContentTop, windowContentWidth, {
     font: context.boldFont,
     size: FONT_BODY,
     color: COLORS.strong,
@@ -416,14 +414,14 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
   })
 
   if (model.windowLines.length > 1) {
-    windowBottom = drawTextBlock(context, model.windowLines.slice(1).join('\n'), windowX + (8 * MM), windowBottom - 2, windowWidth - (14 * MM), {
+    windowBottom = drawTextBlock(context, model.windowLines.slice(1).join('\n'), windowContentX, windowBottom - 2, windowContentWidth, {
       size: FONT_BODY,
       color: COLORS.text,
       lineHeight: 9.8
     })
   }
 
-  const headerBottom = Math.min(referencesBottom, windowBottom, rowTop - (50 * MM))
+  const headerBottom = Math.min(referencesBottom, windowBottom, windowBottomY)
   const ruleY = headerBottom - (3.2 * MM)
   drawHorizontalRule(context, ruleY)
   context.cursorY = ruleY - (3 * MM)

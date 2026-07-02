@@ -603,6 +603,9 @@ body {
 }
 
 .sheet--a4 {
+  --a4-envelope-window-right: 14.2mm;
+  --a4-envelope-window-top: 45mm;
+  --a4-reference-left: 20mm;
   min-height: calc(297mm - 14mm);
   font-size: 10.5px;
   line-height: 1.25;
@@ -627,6 +630,9 @@ body {
 }
 
 .invoice-header {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 96mm;
   padding-top: 4.8mm;
   padding-bottom: 3.2mm;
   border-bottom: 0.2mm solid #dbe4f0;
@@ -723,21 +729,27 @@ body {
 }
 
 .invoice-party-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 100mm;
-  gap: 6mm;
-  margin-top: 15.8mm;
-  align-items: start;
+  display: block;
+  margin-top: 0;
 }
 
 .invoice-party {
   min-height: 0;
 }
 
+.invoice-party--compact {
+  position: absolute;
+  top: var(--a4-envelope-window-top);
+  left: var(--a4-reference-left);
+  width: 62mm;
+}
+
 .invoice-window-wrap {
+  position: absolute;
+  top: var(--a4-envelope-window-top);
+  right: var(--a4-envelope-window-right);
+  width: 100mm;
   min-height: 0;
-  justify-self: end;
-  margin-right: 14.2mm;
 }
 
 .invoice-window-label {
@@ -747,8 +759,8 @@ body {
 
 .invoice-window {
   width: 100mm;
-  min-height: 50mm;
-  padding: 9mm 6mm 0 8mm;
+  min-height: 45mm;
+  padding: 7mm 6mm 0;
   color: #334155;
   overflow: hidden;
 }
@@ -1157,6 +1169,9 @@ body {
   }
 
   .sheet--a4 {
+    --a4-envelope-window-right: 7.2mm;
+    --a4-envelope-window-top: 38mm;
+    --a4-reference-left: 13mm;
     width: 100%;
     min-height: auto;
     max-width: none;
