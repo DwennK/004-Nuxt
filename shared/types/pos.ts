@@ -525,6 +525,15 @@ export interface ReportsOverview {
   }>
 }
 
+export interface CounterOverviewResponse {
+  readyTickets: TicketListResponse
+  dueDocuments: DocumentListResponse
+  diagnosisTickets: TicketListResponse
+  approvalTickets: TicketListResponse
+  waitingPartsTickets: TicketListResponse
+  reportsOverview: ReportsOverview
+}
+
 export interface ReportsTopCustomer {
   customerId: number
   customerName: string

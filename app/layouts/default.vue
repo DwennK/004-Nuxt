@@ -3,6 +3,7 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 import type { CustomerListResponse, DocumentListResponse, TicketListResponse } from '~~/shared/types/pos'
 
 const open = ref(false)
+const dashboardSearchOpen = ref(false)
 const route = useRoute()
 const { currentDashboardTheme } = useDashboardTheme()
 const toolRoutes = ['/tools', '/vacances', '/inbox', '/assistant']
@@ -130,28 +131,60 @@ const footerLinks = [{
   }
 }] satisfies NavigationMenuItem[]
 
-const { data: customers } = useFetch<CustomerListResponse>('/api/customers', {
+const { data: customers, status: customersStatus, refresh: refreshCustomers } = useFetch<CustomerListResponse>('/api/customers', {
   query: {
     page: 1,
     pageSize: 5
   },
-  lazy: true
+  immediate: false,
+  watch: false
 })
 
-const { data: tickets } = useFetch<TicketListResponse>('/api/tickets', {
+const { data: tickets, status: ticketsStatus, refresh: refreshTickets } = useFetch<TicketListResponse>('/api/tickets', {
   query: {
     page: 1,
     pageSize: 5
   },
-  lazy: true
+  immediate: false,
+  watch: false
 })
 
-const { data: documents } = useFetch<DocumentListResponse>('/api/documents', {
+const { data: documents, status: documentsStatus, refresh: refreshDocuments } = useFetch<DocumentListResponse>('/api/documents', {
   query: {
     page: 1,
     pageSize: 5
   },
-  lazy: true
+  immediate: false,
+  watch: false
+})
+
+const hasLoadedDashboardSearchData = ref(false)
+const dashboardSearchLoading = computed(() =>
+  [customersStatus.value, ticketsStatus.value, documentsStatus.value].some(status => status === 'pending')
+)
+
+async function loadDashboardSearchData() {
+  if (hasLoadedDashboardSearchData.value || dashboardSearchLoading.value) {
+    return
+  }
+
+  await Promise.all([
+    refreshCustomers(),
+    refreshTickets(),
+    refreshDocuments()
+  ])
+
+  hasLoadedDashboardSearchData.value = ![
+    customersStatus.value,
+    ticketsStatus.value,
+    documentsStatus.value
+  ].some(status => status === 'error')
+}
+
+watch(dashboardSearchOpen, (isOpen) => {
+  if (isOpen) {
+    void loadDashboardSearchData()
+  }
 })
 
 const counterActions = [{
@@ -319,7 +352,11 @@ const groups = computed(() => {
       </template>
     </UDashboardSidebar>
 
-    <UDashboardSearch :groups="groups" />
+    <UDashboardSearch
+      v-model:open="dashboardSearchOpen"
+      :groups="groups"
+      :loading="dashboardSearchLoading"
+    />
 
     <slot />
 

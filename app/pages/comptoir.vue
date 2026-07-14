@@ -9,10 +9,10 @@ import {
 } from '~~/shared/constants/pos'
 import type {
   CatalogItemListResponse,
+  CounterOverviewResponse,
   CustomerListResponse,
   DocumentListItem,
   DocumentListResponse,
-  ReportsOverview,
   TicketListItem,
   TicketListResponse
 } from '~~/shared/types/pos'
@@ -82,82 +82,70 @@ const counterActions: CounterAction[] = [{
   variant: 'soft'
 }]
 
-const [
-  { data: readyTickets, status: readyTicketsStatus },
-  { data: dueDocuments, status: dueDocumentsStatus },
-  { data: diagnosisTickets, status: diagnosisTicketsStatus },
-  { data: approvalTickets, status: approvalTicketsStatus },
-  { data: waitingPartsTickets, status: waitingPartsTicketsStatus }
-] = await Promise.all([
-  useFetch<TicketListResponse>('/api/tickets', {
-    key: 'counter-ready-tickets',
-    query: { status: 'ready_for_pickup', pageSize: 6 },
-    lazy: true
-  }),
-  useFetch<DocumentListResponse>('/api/documents', {
-    key: 'counter-due-documents',
-    query: { paymentState: 'due', sortBy: 'balanceDue', pageSize: 6 },
-    lazy: true
-  }),
-  useFetch<TicketListResponse>('/api/tickets', {
-    key: 'counter-diagnosis-tickets',
-    query: { status: 'diagnosis', pageSize: 4 },
-    lazy: true
-  }),
-  useFetch<TicketListResponse>('/api/tickets', {
-    key: 'counter-approval-tickets',
-    query: { status: 'awaiting_customer_approval', pageSize: 4 },
-    lazy: true
-  }),
-  useFetch<TicketListResponse>('/api/tickets', {
-    key: 'counter-waiting-parts-tickets',
-    query: { status: 'waiting_parts', pageSize: 4 },
-    lazy: true
-  })
-])
-
-const { data: reportsOverview, status: reportsOverviewStatus } = await useFetch<ReportsOverview>('/api/reports/overview', {
-  key: 'counter-reports-overview',
+const { data: counterOverview, status: counterOverviewStatus } = await useFetch<CounterOverviewResponse>('/api/comptoir', {
+  key: 'counter-overview',
   lazy: true
 })
 
-const searchQuery = computed(() => canSearch.value ? searchTerm.value : '__no_counter_search__')
+const readyTickets = computed(() => counterOverview.value?.readyTickets)
+const dueDocuments = computed(() => counterOverview.value?.dueDocuments)
+const diagnosisTickets = computed(() => counterOverview.value?.diagnosisTickets)
+const approvalTickets = computed(() => counterOverview.value?.approvalTickets)
+const waitingPartsTickets = computed(() => counterOverview.value?.waitingPartsTickets)
+const reportsOverview = computed(() => counterOverview.value?.reportsOverview)
 
-const { data: customerResults, status: customerSearchStatus } = await useFetch<CustomerListResponse>('/api/customers', {
+const { data: customerResults, status: customerSearchStatus, refresh: refreshCustomerResults } = await useFetch<CustomerListResponse>('/api/customers', {
   key: 'counter-search-customers',
   query: computed(() => ({
-    search: searchQuery.value,
+    search: searchTerm.value,
     pageSize: 5
   })),
-  lazy: true
+  immediate: false,
+  watch: false
 })
 
-const { data: ticketResults, status: ticketSearchStatus } = await useFetch<TicketListResponse>('/api/tickets', {
+const { data: ticketResults, status: ticketSearchStatus, refresh: refreshTicketResults } = await useFetch<TicketListResponse>('/api/tickets', {
   key: 'counter-search-tickets',
   query: computed(() => ({
-    q: searchQuery.value,
+    q: searchTerm.value,
     pageSize: 5
   })),
-  lazy: true
+  immediate: false,
+  watch: false
 })
 
-const { data: documentResults, status: documentSearchStatus } = await useFetch<DocumentListResponse>('/api/documents', {
+const { data: documentResults, status: documentSearchStatus, refresh: refreshDocumentResults } = await useFetch<DocumentListResponse>('/api/documents', {
   key: 'counter-search-documents',
   query: computed(() => ({
-    q: searchQuery.value,
+    q: searchTerm.value,
     pageSize: 5
   })),
-  lazy: true
+  immediate: false,
+  watch: false
 })
 
-const { data: catalogResults, status: catalogSearchStatus } = await useFetch<CatalogItemListResponse>('/api/catalog-items', {
+const { data: catalogResults, status: catalogSearchStatus, refresh: refreshCatalogResults } = await useFetch<CatalogItemListResponse>('/api/catalog-items', {
   key: 'counter-search-catalog',
   query: computed(() => ({
-    search: searchQuery.value,
+    search: searchTerm.value,
     activeOnly: true,
     pageSize: 5
   })),
-  lazy: true
+  immediate: false,
+  watch: false
+})
+
+watch(searchTerm, (value) => {
+  if (value.length < minimumSearchLength) {
+    return
+  }
+
+  void Promise.all([
+    refreshCustomerResults(),
+    refreshTicketResults(),
+    refreshDocumentResults(),
+    refreshCatalogResults()
+  ])
 })
 
 const readyTicketItems = computed(() => readyTickets.value?.items || [])
@@ -197,13 +185,7 @@ const totalDueDocuments = computed(() => dueDocuments.value?.total || 0)
 const totalDueAmount = computed(() => dueDocuments.value?.summary.totalBalanceDue || 0)
 const totalBlockedTickets = computed(() => blockedQueues.value.reduce((total, queue) => total + queue.count, 0))
 const totalCounterItems = computed(() => totalReadyTickets.value + totalDueDocuments.value + totalBlockedTickets.value)
-const isCounterInitialLoading = computed(() =>
-  (readyTicketsStatus.value === 'pending' && !readyTickets.value)
-  || (dueDocumentsStatus.value === 'pending' && !dueDocuments.value)
-  || (diagnosisTicketsStatus.value === 'pending' && !diagnosisTickets.value)
-  || (approvalTicketsStatus.value === 'pending' && !approvalTickets.value)
-  || (waitingPartsTicketsStatus.value === 'pending' && !waitingPartsTickets.value)
-)
+const isCounterInitialLoading = computed(() => counterOverviewStatus.value === 'pending' && !counterOverview.value)
 const queueFilters = computed<QueueFilterItem[]>(() => [{
   label: 'Tout',
   value: 'all',
@@ -276,13 +258,7 @@ const filteredWorkItems = computed(() => {
 })
 const isQueueLoading = computed(() =>
   !counterWorkItems.value.length
-  && [
-    readyTicketsStatus.value,
-    dueDocumentsStatus.value,
-    diagnosisTicketsStatus.value,
-    approvalTicketsStatus.value,
-    waitingPartsTicketsStatus.value
-  ].some(status => status === 'pending')
+  && counterOverviewStatus.value === 'pending'
 )
 const emptyQueueLabel = computed(() => {
   if (selectedQueueFilter.value === 'pickup') {
@@ -599,7 +575,7 @@ useHead({
 
           <section class="overflow-hidden">
             <div
-              v-if="reportsOverviewStatus === 'pending' && !reportsOverview"
+              v-if="counterOverviewStatus === 'pending' && !reportsOverview"
               class="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]"
             >
               <USkeleton class="h-[26rem] rounded-md xl:col-span-2" />
