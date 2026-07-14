@@ -19,6 +19,11 @@ const state = reactive<Partial<Schema>>({
   password: ''
 })
 
+const config = useRuntimeConfig()
+const turnstileSiteKey = config.public.turnstileSiteKey
+const turnstileToken = ref<string | null>(null)
+const companyWebsite = ref('')
+const turnstileWidget = ref<{ reset: () => void } | null>(null)
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
 const errorDescription = ref<string | null>(null)
@@ -32,7 +37,11 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   try {
     await $fetch('/api/auth/login', {
       method: 'POST',
-      body: event.data
+      body: {
+        ...event.data,
+        companyWebsite: companyWebsite.value,
+        turnstileToken: turnstileToken.value
+      }
     })
     await refreshSession()
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
@@ -45,6 +54,12 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     } else if (statusCode === 429) {
       errorMessage.value = 'Trop de tentatives de connexion.'
       errorDescription.value = 'Patientez quelques minutes avant de réessayer.'
+    } else if (statusCode === 400 || statusCode === 403) {
+      errorMessage.value = 'Vérification anti-robot échouée.'
+      errorDescription.value = 'Relancez la vérification puis réessayez.'
+    } else if (statusCode === 503) {
+      errorMessage.value = 'Vérification anti-robot indisponible.'
+      errorDescription.value = 'Patientez un instant puis réessayez.'
     } else if (statusCode && statusCode >= 500) {
       errorMessage.value = 'Erreur serveur pendant la connexion.'
       errorDescription.value = 'La base de données ou la configuration live a probablement un souci. Vérifiez les logs serveur.'
@@ -52,9 +67,15 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       errorMessage.value = 'Connexion impossible.'
       errorDescription.value = 'Vérifiez votre connexion internet puis réessayez.'
     }
+    turnstileWidget.value?.reset()
   } finally {
     loading.value = false
   }
+}
+
+function onTurnstileError(message: string) {
+  errorMessage.value = 'Vérification anti-robot indisponible.'
+  errorDescription.value = message
 }
 </script>
 
@@ -103,6 +124,38 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           />
         </UFormField>
 
+        <div
+          class="absolute -left-[10000px] top-auto size-px overflow-hidden"
+          aria-hidden="true"
+        >
+          <label for="company-website">Site internet de l’entreprise</label>
+          <input
+            id="company-website"
+            v-model="companyWebsite"
+            name="companyWebsite"
+            type="text"
+            autocomplete="off"
+            tabindex="-1"
+          >
+        </div>
+
+        <TurnstileWidget
+          v-if="turnstileSiteKey"
+          ref="turnstileWidget"
+          :site-key="turnstileSiteKey"
+          @update:model-value="turnstileToken = $event"
+          @error="onTurnstileError"
+        />
+
+        <UAlert
+          v-else
+          color="error"
+          icon="i-lucide-shield-alert"
+          variant="subtle"
+          title="Vérification anti-robot non configurée"
+          description="La connexion est temporairement indisponible."
+        />
+
         <UAlert
           v-if="errorMessage"
           color="error"
@@ -116,6 +169,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           type="submit"
           block
           :loading="loading"
+          :disabled="!turnstileToken || !turnstileSiteKey"
         >
           Se connecter
         </UButton>

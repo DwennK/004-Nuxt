@@ -10,7 +10,8 @@ const PRODUCTION_CSP = [
   `media-src 'self' blob:`,
   `font-src 'self' data:`,
   `style-src 'self' 'unsafe-inline'`,
-  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval'`,
+  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com`,
+  `frame-src https://challenges.cloudflare.com`,
   `connect-src 'self'`
 ].join('; ')
 

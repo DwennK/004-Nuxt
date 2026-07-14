@@ -1,3 +1,7 @@
+const isProduction = process.env.NODE_ENV === 'production'
+const turnstileTestSiteKey = '1x00000000000000000000AA'
+const turnstileTestSecretKey = '1x0000000000000000000000000000000AA'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
 
@@ -33,7 +37,13 @@ export default defineNuxtConfig({
     mobilesentrixAccessToken: process.env.MOBILESENTRIX_ACCESS_TOKEN,
     mobilesentrixAccessTokenSecret: process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET,
     mobilesentrixRestAuthHeaderName: process.env.MOBILESENTRIX_REST_AUTH_HEADER_NAME,
-    mobilesentrixRestAuthHeaderValue: process.env.MOBILESENTRIX_REST_AUTH_HEADER_VALUE
+    mobilesentrixRestAuthHeaderValue: process.env.MOBILESENTRIX_REST_AUTH_HEADER_VALUE,
+    turnstileSecretKey: process.env.NUXT_TURNSTILE_SECRET_KEY
+      || (isProduction ? '' : turnstileTestSecretKey),
+    public: {
+      turnstileSiteKey: process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY
+        || (isProduction ? '' : turnstileTestSiteKey)
+    }
   },
 
   sourcemap: {

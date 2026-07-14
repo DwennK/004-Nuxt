@@ -8,10 +8,13 @@ import {
   loginThrottleKey,
   registerLoginFailure
 } from '~~/server/utils/auth/login-throttle'
+import { verifyLoginTurnstile } from '~~/server/utils/auth/turnstile'
 
 const bodySchema = z.object({
   email: z.string().email().transform(v => v.trim().toLowerCase()),
-  password: z.string().min(1)
+  password: z.string().min(1),
+  companyWebsite: z.string().max(200).default(''),
+  turnstileToken: z.string().min(1).max(2048)
 })
 
 // Hash scrypt factice vérifié quand l'utilisateur est introuvable/inactif,
@@ -26,10 +29,20 @@ function getDummyHash() {
 }
 
 export default eventHandler(async (event) => {
-  const { email, password } = await readValidatedBody(event, bodySchema.parse)
+  const { email, password, companyWebsite, turnstileToken } = await readValidatedBody(event, bodySchema.parse)
   const throttleKey = loginThrottleKey(event, email)
 
   await assertLoginAllowed(event, throttleKey)
+
+  if (companyWebsite) {
+    await registerLoginFailure(throttleKey)
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Identifiants invalides'
+    })
+  }
+
+  await verifyLoginTurnstile(event, turnstileToken)
 
   const db = useDb()
 
