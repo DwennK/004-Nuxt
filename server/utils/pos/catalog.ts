@@ -114,13 +114,27 @@ export async function listCatalogItems(options: ListCatalogItemsOptions = {}): P
     normalizedCategory ? eq(catalogItems.category, normalizedCategory) : undefined,
     searchClause
   )
+  const relevanceOrder = normalizedSearch
+    ? sql<number>`case
+        when lower(coalesce(${catalogItems.sku}, '')) = ${normalizedSearch} then 0
+        when lower(coalesce(${catalogItems.model}, '')) = ${normalizedSearch} then 1
+        when lower(${catalogItems.name}) like ${`${normalizedSearch}%`} then 2
+        when lower(coalesce(${catalogItems.keywordsJson}, '')) like ${`%${normalizedSearch}%`} then 3
+        else 4
+      end`
+    : undefined
 
   const [totalRows, rows] = await Promise.all([
     db.select({ total: sql<number>`count(*)` }).from(catalogItems).where(whereClause),
     db.select()
       .from(catalogItems)
       .where(whereClause)
-      .orderBy(asc(catalogItems.category), asc(catalogItems.name), asc(catalogItems.id))
+      .orderBy(
+        ...(relevanceOrder ? [relevanceOrder] : []),
+        asc(catalogItems.category),
+        asc(catalogItems.name),
+        asc(catalogItems.id)
+      )
       .limit(pageSize)
       .offset(offset)
   ])
