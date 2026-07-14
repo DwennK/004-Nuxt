@@ -266,6 +266,7 @@ export interface TicketListResponse extends PaginatedResponse<TicketListItem> {
   summary: {
     openCount: number
     readyCount: number
+    staleCount: number
   }
 }
 

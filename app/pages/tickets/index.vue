@@ -50,7 +50,8 @@ const totalResults = computed(() => ticketsResponse.value?.total || 0)
 const totalPages = computed(() => Math.max(Math.ceil(totalResults.value / pagination.value.pageSize), 1))
 const summary = computed(() => ticketsResponse.value?.summary || {
   openCount: 0,
-  readyCount: 0
+  readyCount: 0,
+  staleCount: 0
 })
 
 watch([debouncedSearch, statusFilter], () => {
@@ -297,11 +298,15 @@ const columns: TableColumn<TicketListItem>[] = [
 
     <template #body>
       <div class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-4">
-          <PosSummaryCard title="Tickets" :value="String(totalResults)" icon="i-lucide-wrench" />
+        <div class="grid gap-4 md:grid-cols-3">
           <PosSummaryCard title="Ouverts" :value="String(summary.openCount)" icon="i-lucide-folder-open" />
           <PosSummaryCard title="Prêts" :value="String(summary.readyCount)" icon="i-lucide-package-check" />
-          <PosSummaryCard title="Sur la page" :value="String(tickets.length)" icon="i-lucide-filter" />
+          <PosSummaryCard
+            title="Sans mouvement 7 j"
+            :value="String(summary.staleCount)"
+            description="Tickets ouverts sans mise à jour"
+            icon="i-lucide-clock-alert"
+          />
         </div>
 
         <UTable

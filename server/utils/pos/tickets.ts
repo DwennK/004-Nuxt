@@ -558,6 +558,7 @@ export async function listTickets(filters?: {
   const offset = (page - 1) * pageSize
   const searchTerm = filters?.q?.trim().toLowerCase()
   const searchPattern = searchTerm ? `%${searchTerm}%` : null
+  const staleCutoff = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString()
 
   const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
 
@@ -579,7 +580,8 @@ export async function listTickets(filters?: {
     db.select({
       total: sql<number>`count(*)`,
       openCount: sql<number>`coalesce(sum(case when ${tickets.status} not in ('closed', 'cancelled') then 1 else 0 end), 0)`,
-      readyCount: sql<number>`coalesce(sum(case when ${tickets.status} = 'ready_for_pickup' then 1 else 0 end), 0)`
+      readyCount: sql<number>`coalesce(sum(case when ${tickets.status} = 'ready_for_pickup' then 1 else 0 end), 0)`,
+      staleCount: sql<number>`coalesce(sum(case when ${tickets.status} not in ('closed', 'cancelled') and datetime(${tickets.updatedAt}) < datetime(${staleCutoff}) then 1 else 0 end), 0)`
     })
       .from(tickets)
       .innerJoin(customers, eq(tickets.customerId, customers.id))
@@ -621,7 +623,8 @@ export async function listTickets(filters?: {
     total: Number(summary?.total || 0),
     summary: {
       openCount: Number(summary?.openCount || 0),
-      readyCount: Number(summary?.readyCount || 0)
+      readyCount: Number(summary?.readyCount || 0),
+      staleCount: Number(summary?.staleCount || 0)
     }
   }
 }
