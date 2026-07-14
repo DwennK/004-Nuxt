@@ -18,7 +18,7 @@ const emit = defineEmits<{
 
 const schema = z.object({
   method: z.enum(paymentMethods),
-  amount: z.coerce.number().min(0, 'Le montant doit être positif'),
+  amount: z.coerce.number().positive('Le montant doit être supérieur à zéro'),
   notes: z.string().optional().default('')
 })
 
@@ -84,7 +84,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         <UFormField label="Montant (CHF)" name="amount">
           <UInputNumber
             v-model="state.amount"
-            :min="0"
+            :min="0.05"
+            :max="balanceDue / 100"
             :step="0.05"
             :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
             class="w-full"

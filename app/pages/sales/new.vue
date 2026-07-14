@@ -102,7 +102,7 @@ const cartLineCountLabel = computed(() => {
 })
 
 const canCharge = computed(() => {
-  return Boolean(payableLines.value.length) && totals.value.total >= 0
+  return Boolean(payableLines.value.length) && totals.value.total > 0
 })
 
 const hasNegativeTotal = computed(() => totals.value.total < 0)
@@ -411,24 +411,21 @@ async function completeSale(method: PaymentMethod) {
   try {
     const customerId = selectedCustomerId.value || await ensureCounterCustomer()
 
-    const createdDocument = await $fetch<DocumentDetail>('/api/documents', {
+    const paidDocument = await $fetch<DocumentDetail>('/api/sales/create-and-pay', {
       method: 'POST',
       body: {
-        type: 'invoice',
-        status: 'issued',
-        customerId,
-        ticketId: null,
-        issuedAt: new Date().toISOString(),
-        notes: null,
-        lines: linesToSubmit
-      }
-    })
-
-    const paidDocument = await $fetch<DocumentDetail>(`/api/documents/${createdDocument.id}/mark-paid`, {
-      method: 'POST',
-      body: {
-        method,
-        paidAt: new Date().toISOString()
+        document: {
+          type: 'invoice',
+          customerId,
+          ticketId: null,
+          issuedAt: new Date().toISOString(),
+          notes: null,
+          lines: linesToSubmit
+        },
+        payment: {
+          method,
+          paidAt: new Date().toISOString()
+        }
       }
     })
 

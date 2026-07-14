@@ -5,6 +5,7 @@ import {
   documentStatuses,
   documentTypes,
   lineCategoryHints,
+  payableDocumentTypes,
   paymentMethods,
   paymentStatuses,
   ticketStatuses,
@@ -135,7 +136,7 @@ export const paymentInputSchema = z.object({
   documentId: z.coerce.number().int().positive(),
   method: z.enum(paymentMethods),
   status: z.enum(paymentStatuses).default('paid'),
-  amount: z.coerce.number().int().min(0),
+  amount: z.coerce.number().int().positive('Le montant doit être supérieur à zéro'),
   paidAt: z.string().trim().min(1).default(() => new Date().toISOString()),
   notes: optionalText
 })
@@ -150,9 +151,16 @@ export const deleteManySchema = z.object({
 
 export const markDocumentPaidSchema = z.object({
   method: z.enum(paymentMethods),
-  amount: z.coerce.number().int().min(0).optional(),
+  amount: z.coerce.number().int().positive('Le montant doit être supérieur à zéro').optional(),
   paidAt: z.string().trim().min(1).default(() => new Date().toISOString()),
   notes: optionalText
+})
+
+export const createAndPayDocumentSchema = z.object({
+  document: documentInputSchema.omit({ status: true }).extend({
+    type: z.enum(payableDocumentTypes)
+  }),
+  payment: markDocumentPaidSchema.omit({ amount: true })
 })
 
 export const documentEmailSchema = z.object({

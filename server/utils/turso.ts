@@ -2,8 +2,12 @@ import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../db/schema'
 
+export type PosDatabase = ReturnType<typeof drizzle<typeof schema>>
+export type PosTransaction = Parameters<Parameters<PosDatabase['transaction']>[0]>[0]
+export type PosDatabaseExecutor = PosDatabase | PosTransaction
+
 let client: ReturnType<typeof createClient> | null = null
-let db: ReturnType<typeof drizzle<typeof schema>> | null = null
+let db: PosDatabase | null = null
 
 export function useTursoClient() {
   if (client) {

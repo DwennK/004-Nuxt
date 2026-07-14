@@ -95,12 +95,22 @@ function assertBefore(source, firstNeedle, secondNeedle, label) {
   const core = read('server/utils/pos/core.ts')
   const payments = read('server/utils/pos/payments.ts')
   const documents = read('server/utils/pos/documents.ts')
+  const salePage = read('app/pages/sales/new.vue')
+  const createAndPayRoute = read('server/api/sales/create-and-pay.post.ts')
+  const validation = read('shared/validation/pos.ts')
 
   assertIncludes(core, 'const computedTotal = Math.round(line.quantity * line.unitPrice)', 'document totals are recomputed server-side')
   assertNotIncludes(core, 'line.lineTotal ?? Math.round', 'client lineTotal must not override server pricing')
-  assertIncludes(payments, 'assertPayablePaymentDocument(input.documentId)', 'payment writes validate payable document type')
-  assertIncludes(payments, 'existing.documentId !== row.documentId', 'payment moves resync the previous document')
+  assertIncludes(payments, 'assertPayablePaymentDocument(input.documentId, tx)', 'payment writes validate payable document type inside their transaction')
+  assertIncludes(payments, 'existing.documentId !== updatedPayment.documentId', 'payment moves resync the previous document')
+  assertIncludes(payments, 'syncDocumentStatus(input.documentId, tx)', 'payment creation syncs document status inside its transaction')
   assertIncludes(documents, 'isPayableDocumentType(document.type)', 'mark-paid rejects non-payable document types')
+  assertIncludes(documents, 'insertDocumentWithLines(tx, input, documentNumber)', 'document creation writes header and lines inside one transaction')
+  assertIncludes(documents, 'syncDocumentStatus(createdDocument.id, tx)', 'create-and-pay syncs status inside its transaction')
+  assertIncludes(createAndPayRoute, 'createAndPayDocumentRecord(body.document, body.payment)', 'create-and-pay route delegates to the atomic domain operation')
+  assertIncludes(salePage, '\'/api/sales/create-and-pay\'', 'quick sale uses the atomic create-and-pay endpoint')
+  assertNotIncludes(salePage, '`/api/documents/${createdDocument.id}/mark-paid`', 'quick sale no longer performs a second payment request')
+  assertIncludes(validation, 'positive(\'Le montant doit être supérieur à zéro\')', 'payment validation rejects zero amounts')
 }
 
 {

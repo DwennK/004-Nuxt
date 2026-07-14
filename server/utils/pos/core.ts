@@ -19,6 +19,7 @@ import type {
   TicketStatus
 } from '~~/shared/types/pos'
 import { buildZonedDayRange, formatCustomerName, sumMoney, toIsoDateTime } from '~~/shared/utils/pos'
+import type { PosDatabaseExecutor } from '../turso'
 import { useDb, useTursoClient } from '../turso'
 import { buildRepairCatalogSeedItems } from './repair-service-seed'
 
@@ -1440,10 +1441,10 @@ export async function createTicketEvent(input: {
   note?: string | null
   metadata?: Record<string, unknown> | null
   occurredAt?: string | null
-}) {
+}, executor?: PosDatabaseExecutor) {
   await ensurePosSchema()
 
-  const db = useDb()
+  const db = executor || useDb()
   const now = toIsoDateTime()
 
   await db.insert(ticketEvents).values({
@@ -1457,10 +1458,10 @@ export async function createTicketEvent(input: {
   })
 }
 
-export async function syncDocumentStatus(documentId: number) {
+export async function syncDocumentStatus(documentId: number, executor?: PosDatabaseExecutor) {
   await ensurePosSchema()
 
-  const db = useDb()
+  const db = executor || useDb()
   const paymentSummary = await db.select({
     paidTotal: sum(payments.amount)
   })
@@ -1621,10 +1622,14 @@ export async function getTicketPayments(ticketId: number) {
     .orderBy(desc(payments.paidAt), desc(payments.id))
 }
 
-export async function getDocumentPaymentTotals(documentId: number, status: PaymentStatus = 'paid') {
+export async function getDocumentPaymentTotals(
+  documentId: number,
+  status: PaymentStatus = 'paid',
+  executor?: PosDatabaseExecutor
+) {
   await ensurePosSchema()
 
-  const db = useDb()
+  const db = executor || useDb()
   const totals = await db.select({
     total: sum(payments.amount)
   })

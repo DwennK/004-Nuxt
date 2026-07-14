@@ -3,6 +3,7 @@ import { paymentMethodLabels } from '~~/shared/constants/pos'
 import { customers, documents, payments } from '~~/server/db/schema'
 import type { PaymentListItem, PaymentRecord } from '~~/shared/types/pos'
 import { buildZonedDayRange, isPayableDocumentType } from '~~/shared/utils/pos'
+import type { PosDatabaseExecutor } from '../turso'
 import { useDb } from '../turso'
 import { createTicketEvent, ensurePosSchema, normalizeOptionalText, syncDocumentStatus } from './core'
 import { mapPayment } from './documents'
@@ -19,11 +20,13 @@ function normalizePaymentDateTo(value: string) {
     : value
 }
 
-async function assertPayablePaymentDocument(documentId: number) {
-  const db = useDb()
+async function assertPayablePaymentDocument(documentId: number, executor?: PosDatabaseExecutor) {
+  const db = executor || useDb()
   const [document] = await db.select({
     id: documents.id,
-    type: documents.type
+    type: documents.type,
+    ticketId: documents.ticketId,
+    documentNumber: documents.documentNumber
   }).from(documents).where(eq(documents.id, documentId)).limit(1)
 
   if (!document) {
@@ -39,6 +42,19 @@ async function assertPayablePaymentDocument(documentId: number) {
       statusMessage: 'Only customer orders and invoices can receive payments'
     })
   }
+
+  return document
+}
+
+function assertPositivePaymentAmount(amount: number) {
+  if (amount > 0) {
+    return
+  }
+
+  throw createError({
+    statusCode: 400,
+    statusMessage: 'Payment amount must be greater than zero'
+  })
 }
 
 export async function listPayments(filters?: {
@@ -101,75 +117,13 @@ export async function getPaymentById(id: number) {
 export async function createPaymentRecord(input: Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt'>) {
   await ensurePosSchema()
 
-  await assertPayablePaymentDocument(input.documentId)
+  assertPositivePaymentAmount(input.amount)
 
   const db = useDb()
-  const now = new Date().toISOString()
-  const rows = await db.insert(payments).values({
-    customerId: input.customerId,
-    documentId: input.documentId,
-    method: input.method,
-    status: input.status,
-    amount: input.amount,
-    paidAt: input.paidAt,
-    notes: normalizeOptionalText(input.notes),
-    createdAt: now,
-    updatedAt: now
-  }).returning()
-
-  await syncDocumentStatus(input.documentId)
-
-  const documentRows = await db.select({
-    id: documents.id,
-    ticketId: documents.ticketId,
-    documentNumber: documents.documentNumber,
-    type: documents.type
-  }).from(documents).where(eq(documents.id, input.documentId)).limit(1)
-  const document = documentRows[0]
-  const payment = rows[0]
-
-  if (document?.ticketId && payment && input.status === 'paid') {
-    await createTicketEvent({
-      ticketId: document.ticketId,
-      kind: 'payment_recorded',
-      label: 'Paiement enregistré',
-      note: input.notes,
-      metadata: {
-        paymentId: payment.id,
-        documentId: document.id,
-        documentNumber: document.documentNumber,
-        documentType: document.type,
-        amount: input.amount,
-        method: input.method,
-        methodLabel: paymentMethodLabels[input.method]
-      },
-      occurredAt: input.paidAt
-    })
-  }
-
-  return mapPayment(rows[0]!)
-}
-
-export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt'>) {
-  await ensurePosSchema()
-
-  const db = useDb()
-  const [existing] = await db.select({
-    id: payments.id,
-    documentId: payments.documentId
-  }).from(payments).where(eq(payments.id, id)).limit(1)
-
-  if (!existing) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Payment not found'
-    })
-  }
-
-  await assertPayablePaymentDocument(input.documentId)
-
-  const rows = await db.update(payments)
-    .set({
+  const payment = await db.transaction(async (tx) => {
+    const document = await assertPayablePaymentDocument(input.documentId, tx)
+    const now = new Date().toISOString()
+    const rows = await tx.insert(payments).values({
       customerId: input.customerId,
       documentId: input.documentId,
       method: input.method,
@@ -177,25 +131,96 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
       amount: input.amount,
       paidAt: input.paidAt,
       notes: normalizeOptionalText(input.notes),
-      updatedAt: new Date().toISOString()
-    })
-    .where(eq(payments.id, id))
-    .returning()
+      createdAt: now,
+      updatedAt: now
+    }).returning()
+    const createdPayment = rows[0]
 
-  const row = rows[0]
+    if (!createdPayment) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Could not create payment'
+      })
+    }
 
-  if (!row) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Payment not found'
-    })
-  }
+    await syncDocumentStatus(input.documentId, tx)
 
-  await syncDocumentStatus(row.documentId)
+    if (document.ticketId && input.status === 'paid') {
+      await createTicketEvent({
+        ticketId: document.ticketId,
+        kind: 'payment_recorded',
+        label: 'Paiement enregistré',
+        note: input.notes,
+        metadata: {
+          paymentId: createdPayment.id,
+          documentId: document.id,
+          documentNumber: document.documentNumber,
+          documentType: document.type,
+          amount: input.amount,
+          method: input.method,
+          methodLabel: paymentMethodLabels[input.method]
+        },
+        occurredAt: input.paidAt
+      }, tx)
+    }
 
-  if (existing.documentId !== row.documentId) {
-    await syncDocumentStatus(existing.documentId)
-  }
+    return createdPayment
+  })
+
+  return mapPayment(payment)
+}
+
+export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt'>) {
+  await ensurePosSchema()
+
+  assertPositivePaymentAmount(input.amount)
+
+  const db = useDb()
+  const row = await db.transaction(async (tx) => {
+    const [existing] = await tx.select({
+      id: payments.id,
+      documentId: payments.documentId
+    }).from(payments).where(eq(payments.id, id)).limit(1)
+
+    if (!existing) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Payment not found'
+      })
+    }
+
+    await assertPayablePaymentDocument(input.documentId, tx)
+
+    const rows = await tx.update(payments)
+      .set({
+        customerId: input.customerId,
+        documentId: input.documentId,
+        method: input.method,
+        status: input.status,
+        amount: input.amount,
+        paidAt: input.paidAt,
+        notes: normalizeOptionalText(input.notes),
+        updatedAt: new Date().toISOString()
+      })
+      .where(eq(payments.id, id))
+      .returning()
+    const updatedPayment = rows[0]
+
+    if (!updatedPayment) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Payment not found'
+      })
+    }
+
+    await syncDocumentStatus(updatedPayment.documentId, tx)
+
+    if (existing.documentId !== updatedPayment.documentId) {
+      await syncDocumentStatus(existing.documentId, tx)
+    }
+
+    return updatedPayment
+  })
 
   return mapPayment(row)
 }
@@ -204,15 +229,17 @@ export async function deletePayment(id: number) {
   await ensurePosSchema()
 
   const db = useDb()
-  const existing = await db.select().from(payments).where(eq(payments.id, id)).limit(1)
-  const row = existing[0]
+  return db.transaction(async (tx) => {
+    const existing = await tx.select().from(payments).where(eq(payments.id, id)).limit(1)
+    const row = existing[0]
 
-  if (!row) {
-    return 0
-  }
+    if (!row) {
+      return 0
+    }
 
-  const result = await db.delete(payments).where(eq(payments.id, id))
-  await syncDocumentStatus(row.documentId)
+    const result = await tx.delete(payments).where(eq(payments.id, id))
+    await syncDocumentStatus(row.documentId, tx)
 
-  return result.rowsAffected
+    return result.rowsAffected
+  })
 }

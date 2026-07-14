@@ -16,6 +16,7 @@ import type {
   PaymentRecord
 } from '~~/shared/types/pos'
 import { isPayableDocumentType } from '~~/shared/utils/pos'
+import type { PosDatabaseExecutor } from '../turso'
 import { useDb } from '../turso'
 import {
   calculateDocumentTotals,
@@ -135,6 +136,23 @@ type DocumentWriteLineInput = {
   categoryHint?: typeof documentLines.$inferSelect.categoryHint | null
 }
 
+type DocumentWriteInput = {
+  type: typeof documents.$inferSelect.type
+  status?: typeof documents.$inferSelect.status
+  customerId: number
+  ticketId?: number | null
+  issuedAt: string
+  notes?: string | null
+  lines: DocumentWriteLineInput[]
+}
+
+type DocumentPaymentInput = {
+  method: typeof payments.$inferSelect.method
+  amount?: number
+  paidAt: string
+  notes?: string | null
+}
+
 function assertNonNegativeDocumentTotal(total: number) {
   if (total >= 0) {
     return
@@ -144,6 +162,103 @@ function assertNonNegativeDocumentTotal(total: number) {
     statusCode: 400,
     statusMessage: 'Document total cannot be negative'
   })
+}
+
+async function insertDocumentWithLines(
+  executor: PosDatabaseExecutor,
+  input: DocumentWriteInput,
+  documentNumber: string
+) {
+  const now = new Date().toISOString()
+  const totals = calculateDocumentTotals(input.lines)
+
+  assertNonNegativeDocumentTotal(totals.total)
+
+  const insertedRows = await executor.insert(documents).values({
+    documentNumber,
+    type: input.type,
+    status: input.status || 'issued',
+    customerId: input.customerId,
+    ticketId: input.ticketId ?? null,
+    issuedAt: input.issuedAt,
+    subtotal: totals.subtotal,
+    taxAmount: totals.taxAmount,
+    total: totals.total,
+    notes: normalizeOptionalText(input.notes),
+    createdAt: now,
+    updatedAt: now
+  }).returning()
+
+  const document = insertedRows[0]
+
+  if (!document) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Could not create document'
+    })
+  }
+
+  await executor.insert(documentLines).values(totals.lines.map((line, index) => ({
+    documentId: document.id,
+    catalogItemId: input.lines[index]?.catalogItemId ?? null,
+    label: input.lines[index]!.label,
+    quantity: input.lines[index]!.quantity,
+    unitPrice: input.lines[index]!.unitPrice,
+    vatRate: input.lines[index]!.vatRate,
+    lineTotal: line.lineTotal,
+    categoryHint: input.lines[index]!.categoryHint ?? null
+  })))
+
+  return document
+}
+
+async function createDocumentCreatedEvent(
+  executor: PosDatabaseExecutor,
+  document: typeof documents.$inferSelect
+) {
+  if (!document.ticketId) {
+    return
+  }
+
+  await createTicketEvent({
+    ticketId: document.ticketId,
+    kind: 'document_created',
+    label: getDocumentCreatedLabel(document.type),
+    metadata: {
+      documentId: document.id,
+      documentNumber: document.documentNumber,
+      documentType: document.type,
+      documentStatus: document.status
+    },
+    occurredAt: document.issuedAt
+  }, executor)
+}
+
+async function createPaymentRecordedEvent(
+  executor: PosDatabaseExecutor,
+  document: typeof documents.$inferSelect,
+  payment: typeof payments.$inferSelect
+) {
+  if (!document.ticketId) {
+    return
+  }
+
+  await createTicketEvent({
+    ticketId: document.ticketId,
+    kind: 'payment_recorded',
+    label: 'Paiement enregistré',
+    note: payment.notes,
+    metadata: {
+      paymentId: payment.id,
+      documentId: document.id,
+      documentNumber: document.documentNumber,
+      documentType: document.type,
+      amount: payment.amount,
+      method: payment.method,
+      methodLabel: paymentMethodLabels[payment.method]
+    },
+    occurredAt: payment.paidAt
+  }, executor)
 }
 
 export async function listDocuments(filters?: {
@@ -384,88 +499,85 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
   }
 }
 
-export async function createDocumentRecord(input: {
-  type: typeof documents.$inferSelect.type
-  status?: typeof documents.$inferSelect.status
-  customerId: number
-  ticketId?: number | null
-  issuedAt: string
-  notes?: string | null
-  lines: DocumentWriteLineInput[]
-}) {
+export async function createDocumentRecord(input: DocumentWriteInput) {
   await ensurePosSchema()
 
   const db = useDb()
-  const now = new Date().toISOString()
-  const totals = calculateDocumentTotals(input.lines)
   const documentNumber = await generateDocumentNumber(input.type)
+  const document = await db.transaction(async (tx) => {
+    const createdDocument = await insertDocumentWithLines(tx, input, documentNumber)
+    await createDocumentCreatedEvent(tx, createdDocument)
+    return createdDocument
+  })
+
+  return getDocumentById(document.id)
+}
+
+export async function createAndPayDocumentRecord(
+  input: DocumentWriteInput,
+  paymentInput: Omit<DocumentPaymentInput, 'amount'>
+) {
+  await ensurePosSchema()
+
+  if (!isPayableDocumentType(input.type)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Only customer orders and invoices can be created and paid'
+    })
+  }
+
+  const totals = calculateDocumentTotals(input.lines)
 
   assertNonNegativeDocumentTotal(totals.total)
 
-  const insertedRows = await db.insert(documents).values({
-    documentNumber,
-    type: input.type,
-    status: input.status || 'issued',
-    customerId: input.customerId,
-    ticketId: input.ticketId ?? null,
-    issuedAt: input.issuedAt,
-    subtotal: totals.subtotal,
-    taxAmount: totals.taxAmount,
-    total: totals.total,
-    notes: normalizeOptionalText(input.notes),
-    createdAt: now,
-    updatedAt: now
-  }).returning()
-
-  const document = insertedRows[0]
-
-  if (!document) {
+  if (totals.total <= 0) {
     throw createError({
-      statusCode: 500,
-      statusMessage: 'Could not create document'
+      statusCode: 400,
+      statusMessage: 'A paid sale total must be greater than zero'
     })
   }
 
-  await db.insert(documentLines).values(totals.lines.map((line, index) => ({
-    documentId: document.id,
-    catalogItemId: input.lines[index]?.catalogItemId ?? null,
-    label: input.lines[index]!.label,
-    quantity: input.lines[index]!.quantity,
-    unitPrice: input.lines[index]!.unitPrice,
-    vatRate: input.lines[index]!.vatRate,
-    lineTotal: line.lineTotal,
-    categoryHint: input.lines[index]!.categoryHint ?? null
-  })))
+  const db = useDb()
+  const documentNumber = await generateDocumentNumber(input.type)
+  const document = await db.transaction(async (tx) => {
+    const createdDocument = await insertDocumentWithLines(tx, {
+      ...input,
+      status: 'issued'
+    }, documentNumber)
 
-  const detail = await getDocumentById(document.id)
+    await createDocumentCreatedEvent(tx, createdDocument)
 
-  if (detail.ticketId && (detail.type === 'quote' || detail.type === 'customer_order' || detail.type === 'invoice')) {
-    await createTicketEvent({
-      ticketId: detail.ticketId,
-      kind: 'document_created',
-      label: getDocumentCreatedLabel(detail.type),
-      metadata: {
-        documentId: detail.id,
-        documentNumber: detail.documentNumber,
-        documentType: detail.type,
-        documentStatus: detail.status
-      },
-      occurredAt: detail.issuedAt
-    })
-  }
+    const now = new Date().toISOString()
+    const paymentRows = await tx.insert(payments).values({
+      customerId: createdDocument.customerId,
+      documentId: createdDocument.id,
+      method: paymentInput.method,
+      status: 'paid',
+      amount: createdDocument.total,
+      paidAt: paymentInput.paidAt,
+      notes: normalizeOptionalText(paymentInput.notes),
+      createdAt: now,
+      updatedAt: now
+    }).returning()
+    const payment = paymentRows[0]
 
-  return detail
+    if (!payment) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Could not create payment'
+      })
+    }
+
+    await syncDocumentStatus(createdDocument.id, tx)
+    await createPaymentRecordedEvent(tx, createdDocument, payment)
+
+    return createdDocument
+  })
+
+  return getDocumentById(document.id)
 }
 
-export async function updateDocumentRecord(id: number, input: {
-  type: typeof documents.$inferSelect.type
-  status?: typeof documents.$inferSelect.status
-  customerId: number
-  ticketId?: number | null
-  issuedAt: string
-  notes?: string | null
-  lines: DocumentWriteLineInput[]
-}) {
+export async function updateDocumentRecord(id: number, input: DocumentWriteInput) {
   await ensurePosSchema()
 
   const db = useDb()
@@ -482,54 +594,53 @@ export async function updateDocumentRecord(id: number, input: {
     })
   }
 
-  const paidTotal = isPayable ? await getDocumentPaymentTotals(id) : 0
+  await db.transaction(async (tx) => {
+    const paidTotal = isPayable ? await getDocumentPaymentTotals(id, 'paid', tx) : 0
+    let resolvedStatus = nextStatus
 
-  let resolvedStatus = nextStatus
-
-  if (nextStatus !== 'cancelled' && isPayable) {
-    if (paidTotal >= totals.total && totals.total > 0) {
-      resolvedStatus = 'paid'
-    } else if (nextStatus !== 'draft') {
-      resolvedStatus = 'issued'
+    if (nextStatus !== 'cancelled' && isPayable) {
+      if (paidTotal >= totals.total && totals.total > 0) {
+        resolvedStatus = 'paid'
+      } else if (nextStatus !== 'draft') {
+        resolvedStatus = 'issued'
+      }
     }
-  }
 
-  const updatedRows = await db.update(documents)
-    .set({
-      type: input.type,
-      status: resolvedStatus,
-      customerId: input.customerId,
-      ticketId: input.ticketId ?? null,
-      issuedAt: input.issuedAt,
-      subtotal: totals.subtotal,
-      taxAmount: totals.taxAmount,
-      total: totals.total,
-      notes: normalizeOptionalText(input.notes),
-      updatedAt: new Date().toISOString()
-    })
-    .where(eq(documents.id, id))
-    .returning()
+    const updatedRows = await tx.update(documents)
+      .set({
+        type: input.type,
+        status: resolvedStatus,
+        customerId: input.customerId,
+        ticketId: input.ticketId ?? null,
+        issuedAt: input.issuedAt,
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        total: totals.total,
+        notes: normalizeOptionalText(input.notes),
+        updatedAt: new Date().toISOString()
+      })
+      .where(eq(documents.id, id))
+      .returning()
 
-  const document = updatedRows[0]
+    if (!updatedRows[0]) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Document not found'
+      })
+    }
 
-  if (!document) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Document not found'
-    })
-  }
-
-  await db.delete(documentLines).where(eq(documentLines.documentId, id))
-  await db.insert(documentLines).values(totals.lines.map((line, index) => ({
-    documentId: id,
-    catalogItemId: input.lines[index]?.catalogItemId ?? null,
-    label: input.lines[index]!.label,
-    quantity: input.lines[index]!.quantity,
-    unitPrice: input.lines[index]!.unitPrice,
-    vatRate: input.lines[index]!.vatRate,
-    lineTotal: line.lineTotal,
-    categoryHint: input.lines[index]!.categoryHint ?? null
-  })))
+    await tx.delete(documentLines).where(eq(documentLines.documentId, id))
+    await tx.insert(documentLines).values(totals.lines.map((line, index) => ({
+      documentId: id,
+      catalogItemId: input.lines[index]?.catalogItemId ?? null,
+      label: input.lines[index]!.label,
+      quantity: input.lines[index]!.quantity,
+      unitPrice: input.lines[index]!.unitPrice,
+      vatRate: input.lines[index]!.vatRate,
+      lineTotal: line.lineTotal,
+      categoryHint: input.lines[index]!.categoryHint ?? null
+    })))
+  })
 
   return getDocumentById(id)
 }
@@ -538,102 +649,103 @@ export async function deleteDocument(id: number) {
   await ensurePosSchema()
 
   const db = useDb()
-  const [document] = await db.select({
-    id: documents.id,
-    status: documents.status
-  }).from(documents).where(eq(documents.id, id)).limit(1)
+  return db.transaction(async (tx) => {
+    const [document] = await tx.select({
+      id: documents.id,
+      status: documents.status
+    }).from(documents).where(eq(documents.id, id)).limit(1)
 
-  if (!document) {
-    return 0
-  }
+    if (!document) {
+      return 0
+    }
 
-  const [paymentSummary] = await db.select({
-    count: sql<number>`count(*)`,
-    paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
-  })
-    .from(payments)
-    .where(eq(payments.documentId, id))
-
-  if (document.status === 'paid' || Number(paymentSummary?.count || 0) > 0 || Number(paymentSummary?.paidTotal || 0) > 0) {
-    throw createError({
-      statusCode: 409,
-      statusMessage: 'Documents with payments cannot be deleted. Cancel the document or record a correction instead.'
+    const [paymentSummary] = await tx.select({
+      count: sql<number>`count(*)`,
+      paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
     })
-  }
+      .from(payments)
+      .where(eq(payments.documentId, id))
 
-  const result = await db.delete(documents).where(eq(documents.id, id))
+    if (document.status === 'paid' || Number(paymentSummary?.count || 0) > 0 || Number(paymentSummary?.paidTotal || 0) > 0) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Documents with payments cannot be deleted. Cancel the document or record a correction instead.'
+      })
+    }
 
-  return result.rowsAffected
+    const result = await tx.delete(documents).where(eq(documents.id, id))
+
+    return result.rowsAffected
+  })
 }
 
-export async function markDocumentAsPaid(id: number, input: {
-  method: typeof payments.$inferSelect.method
-  amount?: number
-  paidAt: string
-  notes?: string | null
-}) {
+export async function markDocumentAsPaid(id: number, input: DocumentPaymentInput) {
   await ensurePosSchema()
 
   const db = useDb()
-  const documentRows = await db.select().from(documents).where(eq(documents.id, id)).limit(1)
-  const document = documentRows[0]
+  await db.transaction(async (tx) => {
+    const documentRows = await tx.select().from(documents).where(eq(documents.id, id)).limit(1)
+    const document = documentRows[0]
 
-  if (!document) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Document not found'
-    })
-  }
+    if (!document) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Document not found'
+      })
+    }
 
-  if (!isPayableDocumentType(document.type)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'This document type cannot be paid directly'
-    })
-  }
+    if (!isPayableDocumentType(document.type)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'This document type cannot be paid directly'
+      })
+    }
 
-  const paidTotal = await getDocumentPaymentTotals(id)
-  const balance = Math.max(document.total - paidTotal, 0)
-  const amount = input.amount && input.amount > 0 ? input.amount : balance || document.total
-  const now = new Date().toISOString()
+    const paidTotal = await getDocumentPaymentTotals(id, 'paid', tx)
+    const balance = Math.max(document.total - paidTotal, 0)
 
-  const rows = await db.insert(payments).values({
-    customerId: document.customerId,
-    documentId: document.id,
-    method: input.method,
-    status: 'paid',
-    amount,
-    paidAt: input.paidAt,
-    notes: normalizeOptionalText(input.notes),
-    createdAt: now,
-    updatedAt: now
-  }).returning()
+    if (balance <= 0) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Document is already fully paid'
+      })
+    }
 
-  await syncDocumentStatus(id)
+    const amount = input.amount ?? balance
 
-  const detail = await getDocumentById(id)
-  const payment = rows[0]
+    if (amount <= 0 || amount > balance) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Payment amount must be positive and cannot exceed the remaining balance'
+      })
+    }
 
-  if (detail.ticketId && payment) {
-    await createTicketEvent({
-      ticketId: detail.ticketId,
-      kind: 'payment_recorded',
-      label: 'Paiement enregistré',
-      note: input.notes,
-      metadata: {
-        paymentId: payment.id,
-        documentId: detail.id,
-        documentNumber: detail.documentNumber,
-        documentType: detail.type,
-        amount,
-        method: input.method,
-        methodLabel: paymentMethodLabels[input.method]
-      },
-      occurredAt: payment.paidAt
-    })
-  }
+    const now = new Date().toISOString()
+    const rows = await tx.insert(payments).values({
+      customerId: document.customerId,
+      documentId: document.id,
+      method: input.method,
+      status: 'paid',
+      amount,
+      paidAt: input.paidAt,
+      notes: normalizeOptionalText(input.notes),
+      createdAt: now,
+      updatedAt: now
+    }).returning()
+    const payment = rows[0]
 
-  return detail
+    if (!payment) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Could not create payment'
+      })
+    }
+
+    await syncDocumentStatus(id, tx)
+    await createPaymentRecordedEvent(tx, document, payment)
+  })
+
+  return getDocumentById(id)
 }
 
 export async function cloneDocumentLinesFromLatest(ticketId: number, preferredType?: typeof documents.$inferSelect.type) {
