@@ -1,13 +1,13 @@
-import { z } from 'zod'
 import { markDocumentPaidSchema } from '~~/shared/validation/pos'
 import { markDocumentAsPaid } from '~~/server/utils/pos/documents'
-
-const paramsSchema = z.object({
-  id: z.coerce.number().int().positive()
-})
+import { numericIdParamsSchema } from '~~/shared/validation/api'
+import { requireCapability } from '~~/server/utils/auth/session'
+import { requireIdempotencyKey } from '~~/server/utils/idempotency'
 
 export default eventHandler(async (event) => {
-  const params = paramsSchema.parse(event.context.params)
+  await requireCapability(event, 'financial:record')
+  const idempotencyKey = requireIdempotencyKey(event)
+  const params = await getValidatedRouterParams(event, numericIdParamsSchema.parse)
   const body = await readValidatedBody(event, markDocumentPaidSchema.parse)
-  return markDocumentAsPaid(params.id, body)
+  return markDocumentAsPaid(params.id, body, idempotencyKey)
 })

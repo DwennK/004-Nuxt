@@ -1,13 +1,9 @@
-import { z } from 'zod'
 import { ticketStatusUpdateSchema } from '~~/shared/validation/pos'
 import { updateTicketStatus } from '~~/server/utils/pos/tickets'
-
-const paramsSchema = z.object({
-  id: z.coerce.number().int().positive()
-})
+import { numericIdParamsSchema } from '~~/shared/validation/api'
 
 export default eventHandler(async (event) => {
-  const params = paramsSchema.parse(event.context.params)
+  const params = await getValidatedRouterParams(event, numericIdParamsSchema.parse)
   const body = await readValidatedBody(event, ticketStatusUpdateSchema.parse)
   return updateTicketStatus(params.id, body.status, body.internalNotes)
 })

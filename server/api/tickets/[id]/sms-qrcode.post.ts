@@ -1,9 +1,6 @@
 import { z } from 'zod'
 import { logTicketSmsQrOpened } from '~~/server/utils/customer-sms-settings'
-
-const paramsSchema = z.object({
-  id: z.coerce.number().int().positive()
-})
+import { numericIdParamsSchema } from '~~/shared/validation/api'
 
 const bodySchema = z.object({
   templateId: z.string().trim().min(1).nullable(),
@@ -12,7 +9,7 @@ const bodySchema = z.object({
 })
 
 export default eventHandler(async (event) => {
-  const params = paramsSchema.parse(event.context.params)
+  const params = await getValidatedRouterParams(event, numericIdParamsSchema.parse)
   const body = await readValidatedBody(event, bodySchema.parse)
 
   await logTicketSmsQrOpened(params.id, body)

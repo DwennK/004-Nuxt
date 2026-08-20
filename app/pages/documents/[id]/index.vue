@@ -9,12 +9,13 @@ import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { documentEmailSchema } from '~~/shared/validation/pos'
 import { getDocumentEmailMessage, getDocumentEmailSubject } from '~~/shared/utils/document-email'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
-import { isPayableDocumentType } from '~~/shared/utils/pos'
+import { formatCurrency, isPayableDocumentType } from '~~/shared/utils/pos'
 
 const route = useRoute()
 const toast = useToast()
+const { can } = useCapabilities()
 const id = computed(() => Number(route.params.id))
-const activeTab = ref('lines')
+const activeTab = ref(route.query.tab === 'payments' ? 'payments' : 'lines')
 const isEmailModalOpen = ref(false)
 const isSendingEmail = ref(false)
 const isSavingDocument = ref(false)
@@ -48,6 +49,10 @@ const paidAmount = computed(() => document.value?.payments
   .reduce((total: number, payment) => total + payment.amount, 0) || 0)
 
 const isPayableDocument = computed(() => document.value ? isPayableDocumentType(document.value.type) : false)
+const canAdjustFinancialRecords = computed(() => can('financial:adjust'))
+const canEditDocument = computed(() => canAdjustFinancialRecords.value)
+const documentLockTitle = 'Modification réservée aux administrateurs'
+const documentLockDescription = 'Les opérateurs peuvent consulter, envoyer, imprimer et encaisser ce document sans modifier son écriture commerciale.'
 const balanceDue = computed(() => isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0)
 const supportsA4Print = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'a4') : false)
 const supportsThermalPrint = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'thermal') : false)
@@ -55,6 +60,15 @@ const documentActionsDisabled = computed(() => hasUnsavedDocumentChanges.value |
 const saveButtonLabel = computed(() => hasUnsavedDocumentChanges.value ? 'Enregistrer les modifications' : 'Enregistrer')
 
 async function saveDocument(payload: DocumentSavePayload) {
+  if (!canEditDocument.value) {
+    toast.add({
+      title: documentLockTitle,
+      description: documentLockDescription,
+      color: 'warning'
+    })
+    return
+  }
+
   isSavingDocument.value = true
 
   try {
@@ -76,6 +90,10 @@ async function saveDocument(payload: DocumentSavePayload) {
 }
 
 async function openContextEditor() {
+  if (!canEditDocument.value) {
+    return
+  }
+
   if (activeTab.value !== 'lines') {
     activeTab.value = 'lines'
     await nextTick()
@@ -230,9 +248,11 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
             v-if="supportsA4Print"
             icon="i-lucide-mail"
             label="Envoyer par mail"
+            aria-label="Envoyer par mail"
             color="neutral"
             variant="subtle"
             :disabled="documentActionsDisabled"
+            :ui="{ label: 'hidden sm:inline' }"
             @click="openEmailModal"
           />
           <UButton
@@ -240,19 +260,23 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
             :to="`/documents/${id}/print?profile=a4`"
             icon="i-lucide-file-text"
             label="Imprimer A4"
+            aria-label="Imprimer A4"
             color="neutral"
             variant="subtle"
             :disabled="documentActionsDisabled"
+            :ui="{ label: 'hidden sm:inline' }"
           />
           <UButton
             v-if="supportsThermalPrint"
             :to="`/documents/${id}/print?profile=thermal`"
             icon="i-lucide-printer"
             label="Imprimer thermique"
+            aria-label="Imprimer thermique"
             :disabled="documentActionsDisabled"
+            :ui="{ label: 'hidden sm:inline' }"
           />
           <UButton
-            v-if="activeTab === 'lines'"
+            v-if="activeTab === 'lines' && canEditDocument"
             :form="documentFormId"
             type="submit"
             icon="i-lucide-save"
@@ -270,11 +294,12 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
           :paid-amount="paidAmount"
           :balance-due="balanceDue"
           :is-payable-document="isPayableDocument"
+          :editable="canEditDocument"
           @edit-context="openContextEditor"
         />
 
         <div
-          v-if="hasUnsavedDocumentChanges"
+          v-if="canEditDocument && hasUnsavedDocumentChanges"
           class="flex flex-col gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
         >
           <div class="flex items-start gap-3">
@@ -314,7 +339,7 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
 
         <div v-if="activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)]">
           <PosDocumentEditor
-            v-if="customers?.items"
+            v-if="customers?.items && canEditDocument"
             v-model:context-open="isContextOpen"
             v-model:dirty="hasUnsavedDocumentChanges"
             :form-id="documentFormId"
@@ -325,6 +350,52 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
             submit-label="Enregistrer le document"
             @save="saveDocument"
           />
+
+          <div v-else class="space-y-3">
+            <UAlert
+              icon="i-lucide-lock-keyhole"
+              color="neutral"
+              variant="subtle"
+              :title="documentLockTitle"
+              :description="documentLockDescription"
+            />
+
+            <UCard :ui="{ body: 'p-0 sm:p-0' }">
+              <div class="divide-y divide-default">
+                <div
+                  v-for="line in document.lines"
+                  :key="line.id"
+                  class="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+                >
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-medium text-highlighted">
+                      {{ line.label }}
+                    </p>
+                    <p class="text-xs text-toned">
+                      {{ line.quantity }} × {{ formatCurrency(line.unitPrice) }} · TVA {{ line.vatRate }}%
+                    </p>
+                  </div>
+                  <span class="text-xs text-toned sm:text-right">
+                    Qté {{ line.quantity }}
+                  </span>
+                  <span class="text-sm font-semibold tabular-nums text-highlighted sm:min-w-28 sm:text-right">
+                    {{ formatCurrency(line.lineTotal) }}
+                  </span>
+                </div>
+              </div>
+
+              <template #footer>
+                <div class="ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm">
+                  <span class="text-toned">Sous-total TTC</span>
+                  <span class="text-right tabular-nums">{{ formatCurrency(document.subtotal) }}</span>
+                  <span class="text-toned">TVA incluse</span>
+                  <span class="text-right tabular-nums">{{ formatCurrency(document.taxAmount) }}</span>
+                  <span class="font-semibold text-highlighted">Total TTC</span>
+                  <span class="text-right font-semibold tabular-nums text-highlighted">{{ formatCurrency(document.total) }}</span>
+                </div>
+              </template>
+            </UCard>
+          </div>
         </div>
 
         <div v-else-if="activeTab === 'payments'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)] xl:grid-cols-[minmax(0,1fr)_18rem]">

@@ -13,6 +13,7 @@ import {
   vacationEntryStatuses,
   vacationEntryTypes
 } from '../constants/pos'
+import { isoDateSchema, paginationQuerySchema } from './api'
 
 const optionalText = z.string().trim().optional().nullable().transform((value) => {
   if (!value) {
@@ -119,6 +120,11 @@ export const ticketInputSchema = z.object({
   lines: z.array(commercialLineInputSchema).default([])
 })
 
+export const ticketCreateInputSchema = ticketInputSchema.extend({
+  status: z.literal('new').default('new'),
+  closedAt: optionalText.refine(value => value === null, 'Un nouveau ticket ne peut pas être déjà clôturé')
+})
+
 export const documentLineInputSchema = commercialLineInputSchema
 
 export const documentInputSchema = z.object({
@@ -126,7 +132,7 @@ export const documentInputSchema = z.object({
   status: z.enum(documentStatuses).default('issued'),
   customerId: z.coerce.number().int().positive(),
   ticketId: z.coerce.number().int().positive().optional().nullable(),
-  issuedAt: z.string().trim().min(1).default(() => new Date().toISOString()),
+  issuedAt: z.string().trim().min(1),
   notes: optionalText,
   lines: z.array(commercialLineInputSchema).min(1, 'Au moins une ligne est obligatoire')
 })
@@ -137,9 +143,24 @@ export const paymentInputSchema = z.object({
   method: z.enum(paymentMethods),
   status: z.enum(paymentStatuses).default('paid'),
   amount: z.coerce.number().int().positive('Le montant doit être supérieur à zéro'),
-  paidAt: z.string().trim().min(1).default(() => new Date().toISOString()),
+  paidAt: z.string().trim().min(1),
   notes: optionalText
 })
+
+export const paymentListQuerySchema = paginationQuerySchema.extend({
+  search: z.string().trim().max(200).optional(),
+  method: z.enum(paymentMethods).optional(),
+  status: z.enum(paymentStatuses).optional(),
+  dateFrom: isoDateSchema.optional(),
+  dateTo: isoDateSchema.optional(),
+  documentId: z.coerce.number().int().positive().optional(),
+  customerId: z.coerce.number().int().positive().optional(),
+  sortBy: z.enum(['paidAt', 'amount']).default('paidAt'),
+  sortDirection: z.enum(['asc', 'desc']).default('desc')
+}).refine(
+  value => !value.dateFrom || !value.dateTo || value.dateFrom <= value.dateTo,
+  { message: 'La date de fin doit être après la date de début', path: ['dateTo'] }
+)
 
 export const updateIdSchema = z.object({
   id: z.coerce.number().int().positive()
@@ -152,7 +173,7 @@ export const deleteManySchema = z.object({
 export const markDocumentPaidSchema = z.object({
   method: z.enum(paymentMethods),
   amount: z.coerce.number().int().positive('Le montant doit être supérieur à zéro').optional(),
-  paidAt: z.string().trim().min(1).default(() => new Date().toISOString()),
+  paidAt: z.string().trim().min(1),
   notes: optionalText
 })
 

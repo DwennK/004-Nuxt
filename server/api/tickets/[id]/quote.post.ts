@@ -1,11 +1,11 @@
-import { z } from 'zod'
 import { createQuoteFromTicket } from '~~/server/utils/pos/tickets'
-
-const paramsSchema = z.object({
-  id: z.coerce.number().int().positive()
-})
+import { numericIdParamsSchema } from '~~/shared/validation/api'
+import { requireCapability } from '~~/server/utils/auth/session'
+import { requireIdempotencyKey } from '~~/server/utils/idempotency'
 
 export default eventHandler(async (event) => {
-  const params = paramsSchema.parse(event.context.params)
-  return createQuoteFromTicket(params.id)
+  await requireCapability(event, 'financial:record')
+  const idempotencyKey = requireIdempotencyKey(event)
+  const params = await getValidatedRouterParams(event, numericIdParamsSchema.parse)
+  return createQuoteFromTicket(params.id, idempotencyKey)
 })

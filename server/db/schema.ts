@@ -172,7 +172,15 @@ export const documentLines = sqliteTable('document_lines', {
 export const documentImports = sqliteTable('document_imports', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   documentId: integer('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
-  source: text('source', { enum: ['woocommerce_order'] }).notNull(),
+  source: text('source', {
+    enum: [
+      'woocommerce_order',
+      'api_document_create',
+      'api_sale_create_and_pay',
+      'api_document_mark_paid',
+      'api_payment_create'
+    ]
+  }).notNull(),
   externalId: text('external_id').notNull(),
   externalNumber: text('external_number').notNull(),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)

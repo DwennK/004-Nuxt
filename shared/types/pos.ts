@@ -280,6 +280,8 @@ export interface PaymentListItem extends PaymentRecord {
   documentType: DocumentType
 }
 
+export type PaymentListResponse = PaginatedResponse<PaymentListItem>
+
 export interface DocumentEmailInput {
   to: string
   subject: string

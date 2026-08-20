@@ -13,7 +13,6 @@ import type {
   DocumentStatus,
   DocumentType
 } from '~~/shared/types/pos'
-import { isPayableDocumentType } from '~~/shared/utils/pos'
 import {
   useCommercialLinesDraft,
   type CommercialLinesDraftController,
@@ -87,6 +86,7 @@ function toDateTimeLocal(value?: string | null) {
 }
 
 export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraftController {
+  const isExistingPaidDocument = computed(() => options.initialValue.value?.status === 'paid')
   const lineEditor = useCommercialLinesDraft({
     initialLines: computed(() => options.initialValue.value?.lines),
     catalogItems: options.catalogItems,
@@ -105,7 +105,10 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
 
   const schema = computed(() => z.object({
     type: z.enum(documentTypes).refine(value => options.allowedTypes.value.includes(value), 'Ce type de document n’est pas autorisé'),
-    status: z.enum(documentStatuses),
+    status: z.enum(documentStatuses).refine(
+      status => status !== 'paid' || isExistingPaidDocument.value,
+      'Le statut payé est dérivé des encaissements'
+    ),
     customerId: z.coerce.number().int().positive('Le client est obligatoire'),
     ticketId: z.coerce.number().int().positive().optional().nullable(),
     issuedAt: z.string().min(1, 'La date d’émission est obligatoire'),
@@ -141,7 +144,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
   })))
 
   const documentStatusItems = computed(() => documentStatuses
-    .filter(status => isPayableDocumentType(state.type) || status !== 'paid')
+    .filter(status => isExistingPaidDocument.value ? status === 'paid' : status !== 'paid')
     .map(status => ({
       label: documentStatusLabels[status],
       value: status
@@ -157,12 +160,6 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     state.issuedAt = toDateTimeLocal(initialValue?.issuedAt)
     state.notes = initialValue?.notes || ''
     state.lines = lineEditor.state.lines
-  })
-
-  watch(() => state.type, (type) => {
-    if (!isPayableDocumentType(type) && state.status === 'paid') {
-      state.status = 'issued'
-    }
   })
 
   function serialize(): DocumentSavePayload {

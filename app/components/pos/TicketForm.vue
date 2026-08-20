@@ -2,6 +2,7 @@
 import { z } from 'zod'
 import type { FormSubmitEvent, TabsItem } from '@nuxt/ui'
 import { ticketStatusLabels, ticketStatuses, ticketTypeLabels, ticketTypes } from '~~/shared/constants/pos'
+import { ticketStatusTransitions } from '~~/shared/domain/tickets/workflow'
 import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
 import { formatCurrency, formatImei, getImeiWarning, normalizeImei, normalizeSearchText } from '~~/shared/utils/pos'
 import { useCommercialLinesDraft, type EditableCommercialLinePayload } from '~~/app/composables/useCommercialLinesDraft'
@@ -96,10 +97,17 @@ const ticketTypeItems = ticketTypes.map(type => ({
   value: type
 }))
 
-const statusItems = ticketStatuses.map(status => ({
-  label: ticketStatusLabels[status],
-  value: status
-}))
+const statusItems = computed(() => {
+  const initialStatus = props.initialValue.status
+  const allowedStatuses: Array<(typeof ticketStatuses)[number]> = initialStatus
+    ? [initialStatus, ...ticketStatusTransitions[initialStatus]]
+    : ['new']
+
+  return allowedStatuses.map(status => ({
+    label: ticketStatusLabels[status],
+    value: status
+  }))
+})
 
 const intakeSection = ref<'lines' | 'details'>('lines')
 const intakeSectionTabs: TabsItem[] = [
@@ -307,13 +315,22 @@ watch(intakeQuery, (value) => {
 })
 
 function onSubmit(event: FormSubmitEvent<Schema>) {
+  const lines = lineEditor.serializeLines().filter((line) => {
+    return line.catalogItemId !== null
+      || Boolean(line.label.trim())
+      || line.quantity !== 1
+      || line.unitPrice !== 0
+      || line.vatRate !== 8.1
+      || line.categoryHint !== null
+  })
+
   emit('save', {
     ...event.data,
     type: event.data.type,
     imei: normalizeImei(event.data.imei) || '',
     openedAt: new Date(event.data.openedAt).toISOString(),
     closedAt: event.data.closedAt ? new Date(event.data.closedAt).toISOString() : '',
-    lines: lineEditor.serializeLines()
+    lines
   })
 }
 

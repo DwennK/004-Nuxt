@@ -1,12 +1,16 @@
-import { and, asc, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lte, ne, or, sql } from 'drizzle-orm'
+import { createError } from 'h3'
 import {
   customers,
+  documentImports,
   documentLines,
   documents,
   payments,
   tickets
 } from '~~/server/db/schema'
 import { payableDocumentTypes, paymentMethodLabels } from '~~/shared/constants/pos'
+import { evaluateDocumentRevision } from '~~/shared/domain/documents/revision'
+import { canCreateTicketDocument } from '~~/shared/domain/tickets/document-policy'
 import type {
   DocumentDetail,
   DocumentLineRecord,
@@ -15,9 +19,10 @@ import type {
   DocumentRecord,
   PaymentRecord
 } from '~~/shared/types/pos'
-import { isPayableDocumentType } from '~~/shared/utils/pos'
+import { buildZonedDayRange, isPayableDocumentType } from '~~/shared/utils/pos'
 import type { PosDatabaseExecutor } from '../turso'
 import { useDb } from '../turso'
+import { runIdempotentDocumentOperation } from '../idempotency'
 import {
   calculateDocumentTotals,
   createTicketEvent,
@@ -153,6 +158,81 @@ type DocumentPaymentInput = {
   notes?: string | null
 }
 
+export function normalizeDocumentDateFrom(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? buildZonedDayRange(value).start
+    : value
+}
+
+export function normalizeDocumentDateTo(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? buildZonedDayRange(value).end
+    : value
+}
+
+export async function assertTicketDocumentCreationAllowed(
+  executor: PosDatabaseExecutor,
+  input: {
+    ticketId: number
+    documentType: DocumentRecord['type']
+    customerId: number
+    excludeDocumentId?: number
+  }
+) {
+  const [[ticket], existingDocuments] = await Promise.all([
+    executor.select({
+      status: tickets.status,
+      customerId: tickets.customerId
+    })
+      .from(tickets)
+      .where(eq(tickets.id, input.ticketId))
+      .limit(1),
+    executor.select({ type: documents.type })
+      .from(documents)
+      .where(and(
+        eq(documents.ticketId, input.ticketId),
+        eq(documents.type, input.documentType),
+        input.excludeDocumentId ? ne(documents.id, input.excludeDocumentId) : undefined
+      ))
+      .limit(1)
+  ])
+
+  if (!ticket) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Ticket not found'
+    })
+  }
+
+  if (ticket.customerId !== input.customerId) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Document customer must match the ticket customer',
+      data: { code: 'TICKET_DOCUMENT_CUSTOMER_MISMATCH' }
+    })
+  }
+
+  if (canCreateTicketDocument({
+    ticketStatus: ticket.status,
+    existingDocumentTypes: existingDocuments.map(document => document.type)
+  }, input.documentType)) {
+    return
+  }
+
+  const isFinalized = ticket.status === 'closed' || ticket.status === 'cancelled'
+
+  throw createError({
+    statusCode: 409,
+    statusMessage: isFinalized
+      ? 'Finalized tickets cannot receive new commercial documents'
+      : 'This ticket already has a document of this type',
+    data: {
+      code: isFinalized ? 'TICKET_FINALIZED' : 'TICKET_DOCUMENT_ALREADY_EXISTS',
+      documentType: input.documentType
+    }
+  })
+}
+
 function assertNonNegativeDocumentTotal(total: number) {
   if (total >= 0) {
     return
@@ -173,6 +253,14 @@ async function insertDocumentWithLines(
   const totals = calculateDocumentTotals(input.lines)
 
   assertNonNegativeDocumentTotal(totals.total)
+
+  if (input.status === 'paid') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Paid status is derived from recorded payments',
+      data: { code: 'DOCUMENT_PAID_STATUS_DERIVED' }
+    })
+  }
 
   const insertedRows = await executor.insert(documents).values({
     documentNumber,
@@ -284,6 +372,8 @@ export async function listDocuments(filters?: {
   const sortBy = filters?.sortBy || 'issuedAt'
   const searchTerm = filters?.q?.trim().toLowerCase()
   const searchPattern = searchTerm ? `%${searchTerm}%` : null
+  const dateFrom = filters?.dateFrom ? normalizeDocumentDateFrom(filters.dateFrom) : undefined
+  const dateTo = filters?.dateTo ? normalizeDocumentDateTo(filters.dateTo) : undefined
   const payableTypes = [...payableDocumentTypes]
   const paidAmountValue = sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
   const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
@@ -296,8 +386,8 @@ export async function listDocuments(filters?: {
     filters?.status ? eq(documents.status, filters.status as typeof documents.$inferSelect.status) : undefined,
     filters?.customerId ? eq(documents.customerId, filters.customerId) : undefined,
     filters?.ticketId ? eq(documents.ticketId, filters.ticketId) : undefined,
-    filters?.dateFrom ? gte(documents.issuedAt, filters.dateFrom) : undefined,
-    filters?.dateTo ? lte(documents.issuedAt, filters.dateTo) : undefined
+    dateFrom ? gte(documents.issuedAt, dateFrom) : undefined,
+    dateTo ? lte(documents.issuedAt, dateTo) : undefined
   ] as const
   const dueFilter = filters?.paymentState === 'due'
     ? sql`${inArray(documents.type, payableTypes)} and ${documents.total} > ${paidAmountValue}`
@@ -499,23 +589,62 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
   }
 }
 
-export async function createDocumentRecord(input: DocumentWriteInput) {
+export async function createDocumentRecord(input: DocumentWriteInput, idempotency: {
+  key: string
+  payload?: unknown
+}) {
   await ensurePosSchema()
 
   const db = useDb()
-  const documentNumber = await generateDocumentNumber(input.type)
-  const document = await db.transaction(async (tx) => {
-    const createdDocument = await insertDocumentWithLines(tx, input, documentNumber)
-    await createDocumentCreatedEvent(tx, createdDocument)
-    return createdDocument
+  const result = await runIdempotentDocumentOperation({
+    database: db,
+    source: 'api_document_create',
+    key: idempotency.key,
+    payload: idempotency.payload ?? input,
+    async execute(tx) {
+      if (input.ticketId) {
+        await assertTicketDocumentCreationAllowed(tx, {
+          ticketId: input.ticketId,
+          documentType: input.type,
+          customerId: input.customerId
+        })
+      }
+
+      const documentNumber = await generateDocumentNumber(input.type, tx)
+      const createdDocument = await insertDocumentWithLines(tx, input, documentNumber)
+      await createDocumentCreatedEvent(tx, createdDocument)
+
+      return {
+        value: createdDocument.id,
+        documentId: createdDocument.id,
+        resourceId: createdDocument.id
+      }
+    },
+    async replay(tx, receipt) {
+      const [existing] = await tx.select({ id: documents.id })
+        .from(documents)
+        .where(eq(documents.id, receipt.documentId))
+        .limit(1)
+
+      if (!existing) {
+        throw createError({
+          statusCode: 409,
+          statusMessage: 'The result of this idempotent operation no longer exists',
+          data: { code: 'IDEMPOTENCY_RESOURCE_MISSING' }
+        })
+      }
+
+      return existing.id
+    }
   })
 
-  return getDocumentById(document.id)
+  return getDocumentById(result.value)
 }
 
 export async function createAndPayDocumentRecord(
   input: DocumentWriteInput,
-  paymentInput: Omit<DocumentPaymentInput, 'amount'>
+  paymentInput: Omit<DocumentPaymentInput, 'amount'>,
+  idempotencyKey: string
 ) {
   await ensurePosSchema()
 
@@ -538,43 +667,77 @@ export async function createAndPayDocumentRecord(
   }
 
   const db = useDb()
-  const documentNumber = await generateDocumentNumber(input.type)
-  const document = await db.transaction(async (tx) => {
-    const createdDocument = await insertDocumentWithLines(tx, {
-      ...input,
-      status: 'issued'
-    }, documentNumber)
+  const result = await runIdempotentDocumentOperation({
+    database: db,
+    source: 'api_sale_create_and_pay',
+    key: idempotencyKey,
+    payload: { document: input, payment: paymentInput },
+    async execute(tx) {
+      if (input.ticketId) {
+        await assertTicketDocumentCreationAllowed(tx, {
+          ticketId: input.ticketId,
+          documentType: input.type,
+          customerId: input.customerId
+        })
+      }
 
-    await createDocumentCreatedEvent(tx, createdDocument)
+      const documentNumber = await generateDocumentNumber(input.type, tx)
+      const createdDocument = await insertDocumentWithLines(tx, {
+        ...input,
+        status: 'issued'
+      }, documentNumber)
 
-    const now = new Date().toISOString()
-    const paymentRows = await tx.insert(payments).values({
-      customerId: createdDocument.customerId,
-      documentId: createdDocument.id,
-      method: paymentInput.method,
-      status: 'paid',
-      amount: createdDocument.total,
-      paidAt: paymentInput.paidAt,
-      notes: normalizeOptionalText(paymentInput.notes),
-      createdAt: now,
-      updatedAt: now
-    }).returning()
-    const payment = paymentRows[0]
+      await createDocumentCreatedEvent(tx, createdDocument)
 
-    if (!payment) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Could not create payment'
-      })
+      const now = new Date().toISOString()
+      const paymentRows = await tx.insert(payments).values({
+        customerId: createdDocument.customerId,
+        documentId: createdDocument.id,
+        method: paymentInput.method,
+        status: 'paid',
+        amount: createdDocument.total,
+        paidAt: paymentInput.paidAt,
+        notes: normalizeOptionalText(paymentInput.notes),
+        createdAt: now,
+        updatedAt: now
+      }).returning()
+      const payment = paymentRows[0]
+
+      if (!payment) {
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Could not create payment'
+        })
+      }
+
+      await syncDocumentStatus(createdDocument.id, tx)
+      await createPaymentRecordedEvent(tx, createdDocument, payment)
+
+      return {
+        value: createdDocument.id,
+        documentId: createdDocument.id,
+        resourceId: payment.id
+      }
+    },
+    async replay(tx, receipt) {
+      const [existing] = await tx.select({ id: documents.id })
+        .from(documents)
+        .where(eq(documents.id, receipt.documentId))
+        .limit(1)
+
+      if (!existing) {
+        throw createError({
+          statusCode: 409,
+          statusMessage: 'The result of this idempotent operation no longer exists',
+          data: { code: 'IDEMPOTENCY_RESOURCE_MISSING' }
+        })
+      }
+
+      return existing.id
     }
-
-    await syncDocumentStatus(createdDocument.id, tx)
-    await createPaymentRecordedEvent(tx, createdDocument, payment)
-
-    return createdDocument
   })
 
-  return getDocumentById(document.id)
+  return getDocumentById(result.value)
 }
 
 export async function updateDocumentRecord(id: number, input: DocumentWriteInput) {
@@ -595,21 +758,63 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
   }
 
   await db.transaction(async (tx) => {
-    const paidTotal = isPayable ? await getDocumentPaymentTotals(id, 'paid', tx) : 0
-    let resolvedStatus = nextStatus
+    const [existingDocument] = await tx.select({
+      id: documents.id,
+      type: documents.type
+    }).from(documents).where(eq(documents.id, id)).limit(1)
 
-    if (nextStatus !== 'cancelled' && isPayable) {
-      if (paidTotal >= totals.total && totals.total > 0) {
-        resolvedStatus = 'paid'
-      } else if (nextStatus !== 'draft') {
-        resolvedStatus = 'issued'
-      }
+    if (!existingDocument) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Document not found'
+      })
+    }
+
+    const [paymentSummary] = await tx.select({
+      count: sql<number>`count(*)`,
+      paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
+    }).from(payments).where(eq(payments.documentId, id))
+
+    if (input.ticketId) {
+      await assertTicketDocumentCreationAllowed(tx, {
+        ticketId: input.ticketId,
+        documentType: input.type,
+        customerId: input.customerId,
+        excludeDocumentId: id
+      })
+    }
+
+    const revision = evaluateDocumentRevision({
+      currentType: existingDocument.type,
+      nextType: input.type,
+      requestedStatus: nextStatus,
+      nextTotal: totals.total,
+      paymentCount: Number(paymentSummary?.count || 0),
+      paidTotal: Number(paymentSummary?.paidTotal || 0),
+      nextTypeIsPayable: isPayable
+    })
+
+    if (!revision.ok) {
+      const messages = {
+        DOCUMENT_TOTAL_BELOW_PAID: 'Document total cannot be lower than the amount already paid',
+        DOCUMENT_TYPE_WITH_PAYMENTS_IMMUTABLE: 'A document with payments cannot change commercial type',
+        PAID_DOCUMENT_CANNOT_BE_CANCELLED: 'A paid document cannot be cancelled without a correction or refund'
+      } satisfies Record<typeof revision.code, string>
+
+      throw createError({
+        statusCode: 409,
+        statusMessage: messages[revision.code],
+        data: {
+          code: revision.code,
+          paidTotal: Number(paymentSummary?.paidTotal || 0)
+        }
+      })
     }
 
     const updatedRows = await tx.update(documents)
       .set({
         type: input.type,
-        status: resolvedStatus,
+        status: revision.status,
         customerId: input.customerId,
         ticketId: input.ticketId ?? null,
         issuedAt: input.issuedAt,
@@ -629,6 +834,15 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
       })
     }
 
+    if (Number(paymentSummary?.count || 0) > 0) {
+      await tx.update(payments)
+        .set({
+          customerId: input.customerId,
+          updatedAt: new Date().toISOString()
+        })
+        .where(eq(payments.documentId, id))
+    }
+
     await tx.delete(documentLines).where(eq(documentLines.documentId, id))
     await tx.insert(documentLines).values(totals.lines.map((line, index) => ({
       documentId: id,
@@ -645,32 +859,52 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
   return getDocumentById(id)
 }
 
+export async function assertDocumentDeletionAllowed(executor: PosDatabaseExecutor, id: number) {
+  const [[document], [paymentSummary], [receiptSummary]] = await Promise.all([
+    executor.select({
+      id: documents.id,
+      status: documents.status
+    }).from(documents).where(eq(documents.id, id)).limit(1),
+    executor.select({
+      count: sql<number>`count(*)`,
+      paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
+    }).from(payments).where(eq(payments.documentId, id)),
+    executor.select({ count: sql<number>`count(*)` })
+      .from(documentImports)
+      .where(eq(documentImports.documentId, id))
+  ])
+
+  if (!document) {
+    return null
+  }
+
+  if (Number(receiptSummary?.count || 0) > 0) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Documents protected by an idempotency receipt cannot be deleted. Cancel them instead.',
+      data: { code: 'DOCUMENT_IDEMPOTENCY_PROTECTED' }
+    })
+  }
+
+  if (document.status === 'paid' || Number(paymentSummary?.count || 0) > 0 || Number(paymentSummary?.paidTotal || 0) > 0) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Documents with payments cannot be deleted. Cancel the document or record a correction instead.'
+    })
+  }
+
+  return document
+}
+
 export async function deleteDocument(id: number) {
   await ensurePosSchema()
 
   const db = useDb()
   return db.transaction(async (tx) => {
-    const [document] = await tx.select({
-      id: documents.id,
-      status: documents.status
-    }).from(documents).where(eq(documents.id, id)).limit(1)
+    const document = await assertDocumentDeletionAllowed(tx, id)
 
     if (!document) {
       return 0
-    }
-
-    const [paymentSummary] = await tx.select({
-      count: sql<number>`count(*)`,
-      paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
-    })
-      .from(payments)
-      .where(eq(payments.documentId, id))
-
-    if (document.status === 'paid' || Number(paymentSummary?.count || 0) > 0 || Number(paymentSummary?.paidTotal || 0) > 0) {
-      throw createError({
-        statusCode: 409,
-        statusMessage: 'Documents with payments cannot be deleted. Cancel the document or record a correction instead.'
-      })
     }
 
     const result = await tx.delete(documents).where(eq(documents.id, id))
@@ -679,70 +913,109 @@ export async function deleteDocument(id: number) {
   })
 }
 
-export async function markDocumentAsPaid(id: number, input: DocumentPaymentInput) {
+export async function markDocumentAsPaid(id: number, input: DocumentPaymentInput, idempotencyKey: string) {
   await ensurePosSchema()
 
   const db = useDb()
-  await db.transaction(async (tx) => {
-    const documentRows = await tx.select().from(documents).where(eq(documents.id, id)).limit(1)
-    const document = documentRows[0]
+  await runIdempotentDocumentOperation({
+    database: db,
+    source: 'api_document_mark_paid',
+    key: `${id}:${idempotencyKey}`,
+    payload: { documentId: id, payment: input },
+    async execute(tx) {
+      const documentRows = await tx.select().from(documents).where(eq(documents.id, id)).limit(1)
+      const document = documentRows[0]
 
-    if (!document) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Document not found'
-      })
+      if (!document) {
+        throw createError({
+          statusCode: 404,
+          statusMessage: 'Document not found'
+        })
+      }
+
+      if (!isPayableDocumentType(document.type)) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'This document type cannot be paid directly'
+        })
+      }
+
+      if (document.status === 'cancelled') {
+        throw createError({
+          statusCode: 409,
+          statusMessage: 'Cancelled documents cannot receive payments',
+          data: { code: 'DOCUMENT_CANCELLED' }
+        })
+      }
+
+      const paidTotal = await getDocumentPaymentTotals(id, 'paid', tx)
+      const balance = Math.max(document.total - paidTotal, 0)
+
+      if (balance <= 0) {
+        throw createError({
+          statusCode: 409,
+          statusMessage: 'Document is already fully paid'
+        })
+      }
+
+      const amount = input.amount ?? balance
+
+      if (amount <= 0 || amount > balance) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Payment amount must be positive and cannot exceed the remaining balance'
+        })
+      }
+
+      const now = new Date().toISOString()
+      const rows = await tx.insert(payments).values({
+        customerId: document.customerId,
+        documentId: document.id,
+        method: input.method,
+        status: 'paid',
+        amount,
+        paidAt: input.paidAt,
+        notes: normalizeOptionalText(input.notes),
+        createdAt: now,
+        updatedAt: now
+      }).returning()
+      const payment = rows[0]
+
+      if (!payment) {
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Could not create payment'
+        })
+      }
+
+      await syncDocumentStatus(id, tx)
+      await createPaymentRecordedEvent(tx, document, payment)
+
+      return {
+        value: document.id,
+        documentId: document.id,
+        resourceId: payment.id
+      }
+    },
+    async replay(tx, receipt) {
+      const [payment] = await tx.select({ id: payments.id })
+        .from(payments)
+        .where(and(
+          eq(payments.id, receipt.resourceId),
+          eq(payments.documentId, receipt.documentId)
+        ))
+        .limit(1)
+
+      if (!payment) {
+        throw createError({
+          statusCode: 409,
+          statusMessage: 'The result of this idempotent operation no longer exists',
+          data: { code: 'IDEMPOTENCY_RESOURCE_MISSING' }
+        })
+      }
+
+      return receipt.documentId
     }
-
-    if (!isPayableDocumentType(document.type)) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'This document type cannot be paid directly'
-      })
-    }
-
-    const paidTotal = await getDocumentPaymentTotals(id, 'paid', tx)
-    const balance = Math.max(document.total - paidTotal, 0)
-
-    if (balance <= 0) {
-      throw createError({
-        statusCode: 409,
-        statusMessage: 'Document is already fully paid'
-      })
-    }
-
-    const amount = input.amount ?? balance
-
-    if (amount <= 0 || amount > balance) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Payment amount must be positive and cannot exceed the remaining balance'
-      })
-    }
-
-    const now = new Date().toISOString()
-    const rows = await tx.insert(payments).values({
-      customerId: document.customerId,
-      documentId: document.id,
-      method: input.method,
-      status: 'paid',
-      amount,
-      paidAt: input.paidAt,
-      notes: normalizeOptionalText(input.notes),
-      createdAt: now,
-      updatedAt: now
-    }).returning()
-    const payment = rows[0]
-
-    if (!payment) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Could not create payment'
-      })
-    }
-
-    await syncDocumentStatus(id, tx)
-    await createPaymentRecordedEvent(tx, document, payment)
   })
 
   return getDocumentById(id)

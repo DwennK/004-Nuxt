@@ -8,12 +8,15 @@ import {
 import type { DocumentDetail } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   document: DocumentDetail
   paidAmount: number
   balanceDue: number
   isPayableDocument: boolean
-}>()
+  editable?: boolean
+}>(), {
+  editable: true
+})
 
 const emit = defineEmits<{
   editContext: []
@@ -35,6 +38,7 @@ const emit = defineEmits<{
             {{ props.document.customer.displayName }}
           </span>
           <UButton
+            v-if="props.editable"
             type="button"
             icon="i-lucide-sliders-horizontal"
             label="Modifier le contexte"

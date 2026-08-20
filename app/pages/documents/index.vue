@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn, TabsItem } from '@nuxt/ui'
+import type { DropdownMenuItem, TableColumn, TabsItem } from '@nuxt/ui'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
 import {
@@ -13,8 +13,6 @@ import { formatCurrency, formatDateTime, isPayableDocumentType } from '~~/shared
 const UBadge = resolveComponent('UBadge')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
-const confirmDelete = useConfirmDelete()
-const runApiAction = useApiAction()
 const route = useRoute()
 const router = useRouter()
 const table = useTemplateRef<DashboardTableInstance>('table')
@@ -106,7 +104,7 @@ const query = computed(() => ({
   pageSize: pagination.value.pageSize
 }))
 
-const { data: documentsResponse, status, refresh } = await useFetch<DocumentListResponse>('/api/documents', {
+const { data: documentsResponse, status } = await useFetch<DocumentListResponse>('/api/documents', {
   query,
   lazy: true
 })
@@ -160,37 +158,8 @@ function resetFilters() {
   dateTo.value = ''
 }
 
-async function removeDocument(document: DocumentListItem) {
-  const confirmed = await confirmDelete({
-    title: `Supprimer ${document.documentNumber} ?`,
-    description: 'Le document sera définitivement supprimé.'
-  })
-
-  if (!confirmed) {
-    return
-  }
-
-  const result = await runApiAction(
-    () => $fetch(`/api/documents/${document.id}`, { method: 'DELETE' }),
-    {
-      success: 'Document supprimé',
-      errorTitle: 'Suppression impossible',
-      errorDescription: 'Les documents encaissés doivent être annulés ou corrigés, pas supprimés.'
-    }
-  )
-
-  if (result.ok) {
-    await refresh()
-  }
-}
-
 function getRowItems(document: DocumentListItem) {
-  const groups: Array<Array<{
-    label: string
-    icon: string
-    color?: 'error'
-    onSelect: () => void
-  }>> = [[{
+  const groups: DropdownMenuItem[][] = [[{
     label: 'Ouvrir le document',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
@@ -203,17 +172,6 @@ function getRowItems(document: DocumentListItem) {
       navigateTo(`/documents/${document.id}/print`)
     }
   }]]
-
-  if (document.status !== 'paid' && document.paidAmount <= 0) {
-    groups.push([{
-      label: 'Supprimer',
-      icon: 'i-lucide-trash',
-      color: 'error',
-      onSelect() {
-        removeDocument(document)
-      }
-    }])
-  }
 
   return groups
 }

@@ -1,5 +1,6 @@
 import type { ComputedRef, Ref } from 'vue'
 import { lineCategoryHints, lineCategoryLabels } from '~~/shared/constants/pos'
+import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
 import type {
   CatalogItemRecord,
   CommercialLineRecord,
@@ -97,23 +98,11 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
   })
 
   const totals = computed(() => {
-    const total = state.lines.reduce((sum, line) => {
-      return sum + Math.round((line.quantity || 0) * (line.unitPrice || 0) * 100)
-    }, 0)
-    const taxAmount = state.lines.reduce((sum, line) => {
-      const lineTotal = Math.round((line.quantity || 0) * (line.unitPrice || 0) * 100)
-      const netTotal = line.vatRate
-        ? Math.round(lineTotal / (1 + ((line.vatRate || 0) / 100)))
-        : lineTotal
-
-      return sum + lineTotal - netTotal
-    }, 0)
-
-    return {
-      subtotal: total - taxAmount,
-      taxAmount,
-      total
-    }
+    return calculateCommercialTotals(state.lines.map(line => ({
+      quantity: line.quantity || 0,
+      unitPrice: Math.round((line.unitPrice || 0) * 100),
+      vatRate: line.vatRate || 0
+    })))
   })
 
   function addEmptyLine() {

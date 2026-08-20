@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { documentTypeLabels, paymentMethodLabels, paymentMethods } from '~~/shared/constants/pos'
+import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
 import type { CatalogItemRecord, CustomerListResponse, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, normalizeSearchText, parseCurrencyInput } from '~~/shared/utils/pos'
@@ -19,6 +20,7 @@ type SaleLine = {
 }
 
 const toast = useToast()
+const saleMutation = useIdempotentMutation()
 
 const selectedCustomerId = ref<number | null>(null)
 const lines = ref<SaleLine[]>([])
@@ -63,22 +65,7 @@ const payableLines = computed(() => {
 })
 
 const totals = computed(() => {
-  const total = payableLines.value.reduce((sum, line) => sum + (line.quantity * line.unitPrice), 0)
-  const taxAmount = payableLines.value.reduce((sum, line) => {
-    if (!line.vatRate) {
-      return sum
-    }
-
-    const subtotal = line.quantity * line.unitPrice
-    const net = Math.round(subtotal / (1 + (line.vatRate / 100)))
-    return sum + subtotal - net
-  }, 0)
-
-  return {
-    total,
-    taxAmount,
-    subtotal: total - taxAmount
-  }
+  return calculateCommercialTotals(payableLines.value)
 })
 
 const emptyLineCount = computed(() => {
@@ -410,25 +397,32 @@ async function completeSale(method: PaymentMethod) {
 
   try {
     const customerId = selectedCustomerId.value || await ensureCounterCustomer()
+    const attempt = saleMutation.getAttempt('complete-sale', {
+      customerId,
+      method,
+      lines: linesToSubmit
+    }, () => ({
+      document: {
+        type: 'invoice' as const,
+        customerId,
+        ticketId: null,
+        issuedAt: new Date().toISOString(),
+        notes: null,
+        lines: linesToSubmit
+      },
+      payment: {
+        method,
+        paidAt: new Date().toISOString()
+      }
+    }))
 
     const paidDocument = await $fetch<DocumentDetail>('/api/sales/create-and-pay', {
       method: 'POST',
-      body: {
-        document: {
-          type: 'invoice',
-          customerId,
-          ticketId: null,
-          issuedAt: new Date().toISOString(),
-          notes: null,
-          lines: linesToSubmit
-        },
-        payment: {
-          method,
-          paidAt: new Date().toISOString()
-        }
-      }
+      headers: { 'Idempotency-Key': attempt.key },
+      body: attempt.payload
     })
 
+    saleMutation.complete('complete-sale')
     lastCreatedDocument.value = paidDocument
     lastCompletedPaymentMethod.value = method
     saleCompletionOpen.value = true

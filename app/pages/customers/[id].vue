@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import { documentStatusColors, documentStatusLabels, documentTypeColors, documentTypeLabels, paymentMethodColors, paymentMethodLabels, ticketStatusColors, ticketStatusLabels } from '~~/shared/constants/pos'
-import type { CustomerFormValue, CustomerRecord, DocumentListItem, DocumentListResponse, PaymentListItem, TicketListItem, TicketListResponse } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerRecord, DocumentListItem, DocumentListResponse, PaymentListItem, PaymentListResponse, TicketListItem, TicketListResponse } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
@@ -12,6 +12,10 @@ const toast = useToast()
 const id = computed(() => Number(route.params.id))
 const activeTab = ref('tickets')
 const editOpen = ref(false)
+const paymentPagination = ref({
+  pageIndex: 0,
+  pageSize: 50
+})
 
 const tabItems = [
   { label: 'Tickets', value: 'tickets', icon: 'i-lucide-wrench' },
@@ -31,10 +35,29 @@ const [{ data: customer, refresh: refreshCustomer }, { data: tickets, refresh: r
       pageSize: 100
     }))
   }),
-  useFetch<PaymentListItem[]>('/api/payments', {
-    query: computed(() => ({ customerId: id.value }))
+  useFetch<PaymentListResponse>('/api/payments', {
+    query: computed(() => ({
+      customerId: id.value,
+      page: paymentPagination.value.pageIndex + 1,
+      pageSize: paymentPagination.value.pageSize
+    }))
   })
 ])
+
+const paymentItems = computed(() => payments.value?.items || [])
+const paymentTotal = computed(() => payments.value?.total || 0)
+const paymentTotalPages = computed(() => Math.max(Math.ceil(paymentTotal.value / paymentPagination.value.pageSize), 1))
+const displayedPaymentTotal = computed(() => paymentItems.value
+  .filter(payment => payment.status === 'paid')
+  .reduce((sum, payment) => sum + payment.amount, 0))
+
+watch(paymentTotal, (total) => {
+  const lastPageIndex = Math.max(Math.ceil(total / paymentPagination.value.pageSize) - 1, 0)
+
+  if (paymentPagination.value.pageIndex > lastPageIndex) {
+    paymentPagination.value.pageIndex = lastPageIndex
+  }
+})
 
 const customerAddressLine = computed(() => {
   if (!customer.value) {
@@ -203,15 +226,15 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
                   Paiements
                 </p>
                 <p class="text-sm font-semibold text-highlighted">
-                  {{ payments?.length || 0 }}
+                  {{ paymentTotal }}
                 </p>
               </div>
               <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
                 <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                  Chiffre d’affaires
+                  Encaissements affichés
                 </p>
                 <p class="text-sm font-semibold text-highlighted">
-                  {{ formatCurrency((payments || []).reduce((sum, payment) => sum + payment.amount, 0)) }}
+                  {{ formatCurrency(displayedPaymentTotal) }}
                 </p>
               </div>
             </div>
@@ -341,7 +364,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
 
               <UTable
                 v-else
-                :data="payments || []"
+                :data="paymentItems"
                 :columns="paymentColumns"
                 sticky="header"
               >
@@ -349,6 +372,21 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
                   <UEmpty icon="i-lucide-wallet" title="Aucun paiement" description="Les paiements enregistrés pour ce client apparaîtront ici." />
                 </template>
               </UTable>
+
+              <div
+                v-if="activeTab === 'payments' && paymentTotal > 0"
+                class="flex items-center justify-between gap-3 border-t border-default pt-3"
+              >
+                <p class="text-sm text-toned">
+                  {{ paymentTotal }} paiement(s) · page {{ paymentPagination.pageIndex + 1 }} / {{ paymentTotalPages }}
+                </p>
+                <UPagination
+                  :page="paymentPagination.pageIndex + 1"
+                  :items-per-page="paymentPagination.pageSize"
+                  :total="paymentTotal"
+                  @update:page="(page: number) => { paymentPagination.pageIndex = page - 1 }"
+                />
+              </div>
             </div>
           </UCard>
         </div>

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
+import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
 import { ticketStatusColors, ticketStatusLabels, ticketTypeLabels } from '~~/shared/constants/pos'
-import type { DocumentDetail, TicketListItem, TicketListResponse } from '~~/shared/types/pos'
+import type { TicketListItem, TicketListResponse } from '~~/shared/types/pos'
 import { formatDateTime } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
@@ -12,6 +12,7 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const confirmDelete = useConfirmDelete()
 const runApiAction = useApiAction()
+const { can } = useCapabilities()
 const route = useRoute()
 const router = useRouter()
 const table = useTemplateRef<DashboardTableInstance>('table')
@@ -79,49 +80,11 @@ watch(totalResults, (total) => {
   }
 })
 
-async function createQuote(ticketId: number) {
-  const result = await runApiAction(
-    () => $fetch<DocumentDetail>(`/api/tickets/${ticketId}/quote`, { method: 'POST' }),
-    { success: 'Devis créé', errorTitle: 'Création du devis impossible' }
-  )
-
-  if (!result.ok) {
-    return
-  }
-
-  await refresh()
-  await navigateTo(`/documents/${result.data.id}`)
-}
-
-async function createOrder(ticketId: number) {
-  const result = await runApiAction(
-    () => $fetch<DocumentDetail>(`/api/tickets/${ticketId}/order`, { method: 'POST' }),
-    { success: 'Commande créée', errorTitle: 'Création de la commande impossible' }
-  )
-
-  if (!result.ok) {
-    return
-  }
-
-  await refresh()
-  await navigateTo(`/documents/${result.data.id}`)
-}
-
-async function createInvoice(ticketId: number) {
-  const result = await runApiAction(
-    () => $fetch<DocumentDetail>(`/api/tickets/${ticketId}/invoice`, { method: 'POST' }),
-    { success: 'Facture créée', errorTitle: 'Création de la facture impossible' }
-  )
-
-  if (!result.ok) {
-    return
-  }
-
-  await refresh()
-  await navigateTo(`/documents/${result.data.id}`)
-}
-
 async function removeTicket(ticket: TicketListItem) {
+  if (!can('records:delete')) {
+    return
+  }
+
   const confirmed = await confirmDelete({
     title: `Supprimer le ticket ${ticket.ticketNumber} ?`,
     description: 'Le ticket et son suivi seront définitivement supprimés.'
@@ -142,38 +105,27 @@ async function removeTicket(ticket: TicketListItem) {
 }
 
 function getRowItems(ticket: TicketListItem) {
-  return [[{
+  const primaryItems: DropdownMenuItem[] = [{
     label: 'Ouvrir le ticket',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
       navigateTo(`/tickets/${ticket.id}`)
     }
-  }, {
-    label: 'Créer un devis',
-    icon: 'i-lucide-scroll-text',
-    onSelect() {
-      createQuote(ticket.id)
-    }
-  }, {
-    label: 'Créer une commande',
-    icon: 'i-lucide-clipboard-plus',
-    onSelect() {
-      createOrder(ticket.id)
-    }
-  }, {
-    label: 'Créer une facture',
-    icon: 'i-lucide-file-text',
-    onSelect() {
-      createInvoice(ticket.id)
-    }
-  }], [{
-    label: 'Supprimer',
-    icon: 'i-lucide-trash',
-    color: 'error',
-    onSelect() {
-      removeTicket(ticket)
-    }
-  }]]
+  }]
+  const groups = [primaryItems]
+
+  if (can('records:delete')) {
+    groups.push([{
+      label: 'Supprimer',
+      icon: 'i-lucide-trash',
+      color: 'error',
+      onSelect() {
+        removeTicket(ticket)
+      }
+    }])
+  }
+
+  return groups
 }
 
 const columns: TableColumn<TicketListItem>[] = [

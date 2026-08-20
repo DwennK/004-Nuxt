@@ -4,9 +4,9 @@ import {
   paymentMethodLabels,
   paymentMethods,
   paymentStatusColors,
-  paymentStatusLabels,
-  paymentStatuses
+  paymentStatusLabels
 } from '~~/shared/constants/pos'
+import { canDeletePayment, canEditPayment } from '~~/shared/domain/payments/rules'
 import type { PaymentMethod, PaymentRecord, PaymentStatus } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
 
@@ -32,6 +32,8 @@ const emit = defineEmits<{
 
 const toast = useToast()
 const confirmDelete = useConfirmDelete()
+const { can } = useCapabilities()
+const paymentMutation = useIdempotentMutation()
 const paymentOpen = ref(false)
 
 const methodItems = paymentMethods.map(method => ({
@@ -39,7 +41,8 @@ const methodItems = paymentMethods.map(method => ({
   value: method
 }))
 
-const statusItems = paymentStatuses.map(status => ({
+const editablePaymentStatuses: PaymentStatus[] = ['pending', 'paid', 'cancelled']
+const statusItems = editablePaymentStatuses.map(status => ({
   label: paymentStatusLabels[status],
   value: status
 }))
@@ -78,6 +81,20 @@ const paidTotal = computed(() => props.payments
   .filter(payment => payment.status === 'paid')
   .reduce((sum, payment) => sum + payment.amount, 0))
 const canCreatePayment = computed(() => props.isPayableDocument && props.balanceDue > 0)
+const canAdjustPayments = computed(() => can('financial:adjust'))
+const canDeletePayments = computed(() => canAdjustPayments.value && can('records:delete'))
+
+function isPaymentEditable(payment: PaymentRecord) {
+  return canAdjustPayments.value && canEditPayment(payment.status)
+}
+
+function isPaymentStatusEditable(payment: PaymentRecord) {
+  return isPaymentEditable(payment)
+}
+
+function isPaymentDeletable(payment: PaymentRecord) {
+  return canDeletePayments.value && canDeletePayment(payment.status)
+}
 
 watchEffect(() => {
   const nextDrafts: Record<number, PaymentDraft> = {}
@@ -97,14 +114,19 @@ async function addPayment(input: {
   creatingMethod.value = source
 
   try {
+    const scope = `document-payment:${props.documentId}`
+    const attempt = paymentMutation.getAttempt(scope, input, () => ({
+      ...input,
+      paidAt: new Date().toISOString()
+    }))
+
     await $fetch(`/api/documents/${props.documentId}/mark-paid`, {
       method: 'POST',
-      body: {
-        ...input,
-        paidAt: new Date().toISOString()
-      }
+      headers: { 'Idempotency-Key': attempt.key },
+      body: attempt.payload
     })
 
+    paymentMutation.complete(scope)
     toast.add({
       title: 'Paiement ajouté',
       color: 'success'
@@ -127,10 +149,18 @@ function createQuickPayment(method: PaymentMethod) {
 }
 
 function resetDraft(payment: PaymentRecord) {
+  if (!isPaymentEditable(payment)) {
+    return
+  }
+
   paymentDrafts.value[payment.id] = createPaymentDraft(payment)
 }
 
 async function savePayment(payment: PaymentRecord) {
+  if (!isPaymentEditable(payment)) {
+    return
+  }
+
   const draft = paymentDrafts.value[payment.id]
 
   if (!draft) {
@@ -170,6 +200,10 @@ async function savePayment(payment: PaymentRecord) {
 }
 
 async function removePayment(payment: PaymentRecord) {
+  if (!isPaymentDeletable(payment)) {
+    return
+  }
+
   const confirmed = await confirmDelete({
     title: `Supprimer le paiement de ${formatCurrency(payment.amount)} ?`,
     description: 'Le paiement sera définitivement supprimé et le solde du document recalculé.'
@@ -249,6 +283,7 @@ async function removePayment(payment: PaymentRecord) {
                   value-key="value"
                   size="sm"
                   class="w-full"
+                  :disabled="!isPaymentEditable(payment)"
                 />
               </UFormField>
 
@@ -259,6 +294,7 @@ async function removePayment(payment: PaymentRecord) {
                   value-key="value"
                   size="sm"
                   class="w-full"
+                  :disabled="!isPaymentStatusEditable(payment)"
                 />
               </UFormField>
 
@@ -269,6 +305,7 @@ async function removePayment(payment: PaymentRecord) {
                   :step="0.05"
                   size="sm"
                   class="w-full"
+                  :disabled="!isPaymentEditable(payment)"
                   :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
                 />
               </UFormField>
@@ -279,6 +316,7 @@ async function removePayment(payment: PaymentRecord) {
                   type="datetime-local"
                   size="sm"
                   class="w-full"
+                  :disabled="!isPaymentEditable(payment)"
                 />
               </UFormField>
             </div>
@@ -302,10 +340,11 @@ async function removePayment(payment: PaymentRecord) {
                 size="sm"
                 class="w-full"
                 placeholder="Note de paiement optionnelle"
+                :disabled="!isPaymentEditable(payment)"
               />
             </UFormField>
 
-            <div class="flex items-end justify-end gap-2">
+            <div v-if="isPaymentEditable(payment)" class="flex items-end justify-end gap-2">
               <UButton
                 type="button"
                 icon="i-lucide-rotate-ccw"
@@ -317,6 +356,7 @@ async function removePayment(payment: PaymentRecord) {
                 @click="resetDraft(payment)"
               />
               <UButton
+                v-if="isPaymentDeletable(payment)"
                 type="button"
                 icon="i-lucide-trash-2"
                 color="error"
@@ -334,6 +374,11 @@ async function removePayment(payment: PaymentRecord) {
                 :loading="savingId === payment.id"
                 @click="savePayment(payment)"
               />
+            </div>
+            <div v-else class="flex items-end justify-end pb-2">
+              <p class="max-w-64 text-right text-xs text-toned">
+                Paiement annulé ou remboursé : utilisez une écriture de correction dédiée.
+              </p>
             </div>
           </div>
         </div>

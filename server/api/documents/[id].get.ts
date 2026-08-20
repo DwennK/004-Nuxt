@@ -1,11 +1,9 @@
-import { z } from 'zod'
 import { getDocumentById } from '~~/server/utils/pos/documents'
-
-const paramsSchema = z.object({
-  id: z.coerce.number().int().positive()
-})
+import { numericIdParamsSchema } from '~~/shared/validation/api'
+import { requireCapability } from '~~/server/utils/auth/session'
 
 export default eventHandler(async (event) => {
-  const params = paramsSchema.parse(event.context.params)
+  await requireCapability(event, 'financial:read')
+  const params = await getValidatedRouterParams(event, numericIdParamsSchema.parse)
   return getDocumentById(params.id)
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import QRCode from 'qrcode'
-import type { TableColumn } from '@nuxt/ui'
+import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import {
   documentStatusColors,
   documentStatusLabels,
@@ -30,6 +30,8 @@ import {
   normalizeSmsPhoneNumber,
   resolveSmsTemplateBody
 } from '~~/shared/utils/customer-sms'
+import { ticketStatusTransitions } from '~~/shared/domain/tickets/workflow'
+import { canCreateTicketDocument } from '~~/shared/domain/tickets/document-policy'
 import { supportsDocumentPrintProfile, supportsTicketPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
@@ -46,6 +48,8 @@ const NuxtLink = resolveComponent('NuxtLink')
 
 const route = useRoute()
 const toast = useToast()
+const paymentMutation = useIdempotentMutation()
+const documentMutation = useIdempotentMutation()
 const id = computed(() => Number(route.params.id))
 
 const workflowOpen = ref(false)
@@ -65,17 +69,6 @@ const [{ data: ticket, refresh: refreshTicket }, { data: customerSmsSettings }] 
 ])
 
 const activeTab = ref('suivi')
-
-const operationalStatuses: TicketStatus[] = [
-  'new',
-  'diagnosis',
-  'awaiting_customer_approval',
-  'approved',
-  'in_progress',
-  'waiting_parts',
-  'ready_for_pickup',
-  'delivered'
-]
 
 const tabItems = computed(() => [
   { label: 'Suivi', icon: 'i-lucide-clock', value: 'suivi' },
@@ -100,9 +93,13 @@ const workflowStepItems = computed(() => ticketWorkflowSteps.map(step => ({
 })))
 
 const isTicketMutable = computed(() => ticket.value ? !['closed', 'cancelled'].includes(ticket.value.status) : false)
-const canCreateQuote = computed(() => isTicketMutable.value && !ticket.value?.commercialSummary.quote)
-const canCreateCustomerOrder = computed(() => isTicketMutable.value && !ticket.value?.commercialSummary.customerOrder)
-const canCreateInvoice = computed(() => isTicketMutable.value && !ticket.value?.commercialSummary.invoice)
+const ticketDocumentEligibility = computed(() => ({
+  ticketStatus: ticket.value?.status || 'closed',
+  existingDocumentTypes: ticket.value?.documents.map(document => document.type) || []
+}))
+const canCreateQuote = computed(() => canCreateTicketDocument(ticketDocumentEligibility.value, 'quote'))
+const canCreateCustomerOrder = computed(() => canCreateTicketDocument(ticketDocumentEligibility.value, 'customer_order'))
+const canCreateInvoice = computed(() => canCreateTicketDocument(ticketDocumentEligibility.value, 'invoice'))
 const payableDocument = computed(() => ticket.value?.commercialSummary.payableDocument || null)
 const canRecordPayment = computed(() =>
   isTicketMutable.value
@@ -156,8 +153,9 @@ const statusMenuItems = computed(() => {
     return []
   }
 
-  const statusItems = operationalStatuses
-    .filter(status => status !== ticket.value?.status)
+  const allowedStatuses = ticketStatusTransitions[ticket.value.status] as readonly TicketStatus[]
+  const statusItems = allowedStatuses
+    .filter(status => status !== 'cancelled' && status !== 'closed')
     .map(status => ({
       label: ticketStatusLabels[status],
       color: ticketStatusColors[status],
@@ -171,24 +169,28 @@ const statusMenuItems = computed(() => {
     icon: string
     color: 'success' | 'error'
     onSelect: () => void
-  }> = [{
-    label: 'Annuler le ticket',
-    icon: 'i-lucide-circle-x',
-    color: 'error',
-    onSelect() {
-      openWorkflowAction({
-        id: 'cancel-ticket-inline',
-        kind: 'status',
-        label: 'Annuler le ticket',
-        description: 'Le dossier est abandonné. Une confirmation explicite est requise.',
-        icon: 'i-lucide-circle-x',
-        color: 'error',
-        targetStatus: 'cancelled'
-      })
-    }
-  }]
+  }> = []
 
-  if (ticket.value.status === 'delivered') {
+  if (allowedStatuses.includes('cancelled')) {
+    finalItems.push({
+      label: 'Annuler le ticket',
+      icon: 'i-lucide-circle-x',
+      color: 'error',
+      onSelect() {
+        openWorkflowAction({
+          id: 'cancel-ticket-inline',
+          kind: 'status',
+          label: 'Annuler le ticket',
+          description: 'Le dossier est abandonné. Une confirmation explicite est requise.',
+          icon: 'i-lucide-circle-x',
+          color: 'error',
+          targetStatus: 'cancelled'
+        })
+      }
+    })
+  }
+
+  if (allowedStatuses.includes('closed')) {
     finalItems.push({
       label: 'Clôturer le ticket',
       icon: 'i-lucide-check-check',
@@ -207,10 +209,35 @@ const statusMenuItems = computed(() => {
     })
   }
 
-  return [
-    statusItems,
-    finalItems
-  ]
+  return [statusItems, finalItems].filter(group => group.length > 0)
+})
+
+const mobileActionItems = computed<DropdownMenuItem[]>(() => {
+  const items: DropdownMenuItem[] = [{
+    label: 'SMS client',
+    icon: 'i-lucide-message-square-share',
+    disabled: !canSendSms.value,
+    onSelect() {
+      openSmsModal()
+    }
+  }]
+
+  if (supportsThermalPrint) {
+    items.push({
+      label: 'Imprimer ticket atelier',
+      icon: 'i-lucide-printer',
+      to: `/tickets/${id.value}/print`
+    })
+  }
+
+  items.push({
+    label: 'Modifier le ticket',
+    icon: 'i-lucide-pencil',
+    to: `/tickets/${id.value}/edit`,
+    disabled: !isTicketMutable.value
+  })
+
+  return items
 })
 
 const documentColumns: TableColumn<TicketDetail['documents'][number]>[] = [
@@ -437,7 +464,12 @@ async function handleWorkflowSubmit(payload: {
 }
 
 async function createQuote() {
-  const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/quote`, { method: 'POST' })
+  const scope = `ticket-document:${id.value}:quote`
+  const attempt = documentMutation.getAttempt(scope, { ticketId: id.value, type: 'quote' }, () => null)
+  const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/quote`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': attempt.key }
+  })
 
   toast.add({
     title: 'Devis créé',
@@ -447,10 +479,16 @@ async function createQuote() {
 
   await refreshTicket()
   showCreatedDocumentActions(document)
+  documentMutation.complete(scope)
 }
 
 async function createOrder() {
-  const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/order`, { method: 'POST' })
+  const scope = `ticket-document:${id.value}:customer-order`
+  const attempt = documentMutation.getAttempt(scope, { ticketId: id.value, type: 'customer_order' }, () => null)
+  const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/order`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': attempt.key }
+  })
 
   toast.add({
     title: 'Commande créée',
@@ -460,10 +498,16 @@ async function createOrder() {
 
   await refreshTicket()
   showCreatedDocumentActions(document)
+  documentMutation.complete(scope)
 }
 
 async function createInvoice() {
-  const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/invoice`, { method: 'POST' })
+  const scope = `ticket-document:${id.value}:invoice`
+  const attempt = documentMutation.getAttempt(scope, { ticketId: id.value, type: 'invoice' }, () => null)
+  const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/invoice`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': attempt.key }
+  })
 
   toast.add({
     title: 'Facture créée',
@@ -473,6 +517,7 @@ async function createInvoice() {
 
   await refreshTicket()
   showCreatedDocumentActions(document)
+  documentMutation.complete(scope)
 }
 
 async function markPaid(payload: {
@@ -484,12 +529,16 @@ async function markPaid(payload: {
     return
   }
 
-  await $fetch(`/api/documents/${payableDocument.value.id}/mark-paid`, {
+  const documentId = payableDocument.value.id
+  const attempt = paymentMutation.getAttempt(`ticket-payment:${documentId}`, payload, () => ({
+    ...payload,
+    paidAt: new Date().toISOString()
+  }))
+
+  await $fetch(`/api/documents/${documentId}/mark-paid`, {
     method: 'POST',
-    body: {
-      ...payload,
-      paidAt: new Date().toISOString()
-    }
+    headers: { 'Idempotency-Key': attempt.key },
+    body: attempt.payload
   })
 
   paymentOpen.value = false
@@ -498,6 +547,7 @@ async function markPaid(payload: {
     color: 'success'
   })
   await refreshTicket()
+  paymentMutation.complete(`ticket-payment:${documentId}`)
 }
 
 function openSmsModal() {
@@ -567,28 +617,50 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
 
           <UButton
             label="SMS client"
+            aria-label="SMS client"
             icon="i-lucide-message-square-share"
             color="neutral"
             variant="subtle"
             :disabled="!canSendSms"
+            class="hidden sm:inline-flex"
+            :ui="{ label: 'hidden sm:inline' }"
             @click="openSmsModal"
           />
           <UButton
             v-if="supportsThermalPrint"
             :to="`/tickets/${id}/print`"
             label="Imprimer ticket atelier"
+            aria-label="Imprimer ticket atelier"
             icon="i-lucide-printer"
             color="neutral"
             variant="subtle"
+            class="hidden sm:inline-flex"
+            :ui="{ label: 'hidden sm:inline' }"
           />
           <UButton
             label="Modifier le ticket"
+            aria-label="Modifier le ticket"
             icon="i-lucide-pencil"
             color="neutral"
             variant="ghost"
             :to="`/tickets/${id}/edit`"
             :disabled="!isTicketMutable"
+            class="hidden sm:inline-flex"
+            :ui="{ label: 'hidden sm:inline' }"
           />
+
+          <UDropdownMenu
+            :items="mobileActionItems"
+            :content="{ align: 'end', side: 'bottom' }"
+            class="sm:hidden"
+          >
+            <UButton
+              icon="i-lucide-ellipsis"
+              aria-label="Actions du ticket"
+              color="neutral"
+              variant="ghost"
+            />
+          </UDropdownMenu>
         </template>
       </UDashboardNavbar>
     </template>

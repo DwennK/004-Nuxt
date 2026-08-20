@@ -9,6 +9,7 @@ import {
   ticketStatusLabels,
   ticketTypeLabels
 } from '../constants/pos'
+import { calculateIncludedVatAmount as calculateIncludedVatAmountFromTtc } from '../domain/commercial/money'
 import type {
   CatalogItemType,
   DocumentStatus,
@@ -81,13 +82,7 @@ export function formatDate(value: string | Date, locale = 'fr-CH', timeZone = bu
 }
 
 export function calculateIncludedVatAmount(totalWithVat: number, vatRate: number) {
-  if (vatRate <= 0) {
-    return 0
-  }
-
-  const taxableBase = Math.round(totalWithVat / (1 + (vatRate / 100)))
-
-  return totalWithVat - taxableBase
+  return calculateIncludedVatAmountFromTtc(totalWithVat, vatRate)
 }
 
 export function buildZonedDayRange(date: string, timeZone = businessTimeZone) {

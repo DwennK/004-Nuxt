@@ -64,21 +64,28 @@ async function saveTicket(payload: {
               v-if="ticket"
               :to="`/tickets/${id}/print`"
               label="Imprimer"
+              aria-label="Imprimer"
               icon="i-lucide-printer"
               color="neutral"
               variant="subtle"
+              :ui="{ label: 'hidden sm:inline' }"
             />
             <UButton
               :to="`/tickets/${id}`"
               label="Annuler"
+              aria-label="Annuler"
+              icon="i-lucide-x"
               color="neutral"
               variant="ghost"
+              :ui="{ label: 'hidden sm:inline' }"
             />
             <UButton
               :form="formId"
               type="submit"
               label="Valider"
+              aria-label="Valider"
               icon="i-lucide-check"
+              :ui="{ label: 'hidden sm:inline' }"
             />
           </div>
         </template>

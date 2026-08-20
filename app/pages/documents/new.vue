@@ -4,6 +4,7 @@ import type { CustomerListResponse, DocumentDetail, DocumentStatus, DocumentType
 
 const route = useRoute()
 const toast = useToast()
+const documentMutation = useIdempotentMutation()
 const customerId = computed(() => Number(route.query.customerId || 0) || null)
 const ticketId = computed(() => Number(route.query.ticketId || 0) || null)
 const requestedDocumentType = computed<DocumentType | null>(() => {
@@ -43,9 +44,11 @@ async function saveDocument(payload: {
     categoryHint: 'accessory' | 'repair' | 'service' | null
   }>
 }) {
+  const attempt = documentMutation.getAttempt('create-document', payload, () => payload)
   const document = await $fetch<DocumentDetail>('/api/documents', {
     method: 'POST',
-    body: payload
+    headers: { 'Idempotency-Key': attempt.key },
+    body: attempt.payload
   })
 
   toast.add({
@@ -54,6 +57,7 @@ async function saveDocument(payload: {
   })
 
   await navigateTo(`/documents/${document.id}`)
+  documentMutation.complete('create-document')
 }
 </script>
 

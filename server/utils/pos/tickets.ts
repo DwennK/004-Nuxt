@@ -5,6 +5,7 @@ import {
   ticketStatusLabels,
   ticketWorkflowStepLabels
 } from '~~/shared/constants/pos'
+import { canTransitionTicketStatus } from '~~/shared/domain/tickets/workflow'
 import type {
   DocumentRecord,
   LineCategoryHint,
@@ -20,6 +21,7 @@ import type {
   TicketWorkflowAction,
   TicketWorkflowSummary
 } from '~~/shared/types/pos'
+import type { PosDatabaseExecutor } from '../turso'
 import { useDb } from '../turso'
 import {
   calculateDocumentTotals,
@@ -71,6 +73,22 @@ function mapTicketLine(row: typeof ticketLines.$inferSelect): TicketLineRecord {
   }
 }
 
+function assertTicketStatusTransition(from: TicketStatus, to: TicketStatus) {
+  if (canTransitionTicketStatus(from, to)) {
+    return
+  }
+
+  throw createError({
+    statusCode: 409,
+    statusMessage: `Ticket cannot transition from ${ticketStatusLabels[from]} to ${ticketStatusLabels[to]}`,
+    data: {
+      code: 'TICKET_TRANSITION_NOT_ALLOWED',
+      from,
+      to
+    }
+  })
+}
+
 type TicketLineInput = {
   catalogItemId?: number | null
   label: string
@@ -81,8 +99,8 @@ type TicketLineInput = {
   categoryHint?: LineCategoryHint | null
 }
 
-async function getTicketLines(ticketId: number) {
-  const db = useDb()
+async function getTicketLines(ticketId: number, executor?: PosDatabaseExecutor) {
+  const db = executor || useDb()
   const rows = await db.select()
     .from(ticketLines)
     .where(eq(ticketLines.ticketId, ticketId))
@@ -91,8 +109,8 @@ async function getTicketLines(ticketId: number) {
   return rows.map(mapTicketLine)
 }
 
-async function replaceTicketLines(ticketId: number, lines: TicketLineInput[]) {
-  const db = useDb()
+async function replaceTicketLines(ticketId: number, lines: TicketLineInput[], executor?: PosDatabaseExecutor) {
+  const db = executor || useDb()
   const totals = calculateDocumentTotals(lines)
 
   await db.delete(ticketLines).where(eq(ticketLines.ticketId, ticketId))
@@ -112,7 +130,7 @@ async function replaceTicketLines(ticketId: number, lines: TicketLineInput[]) {
     categoryHint: lines[index]!.categoryHint ?? null
   })))
 
-  return getTicketLines(ticketId)
+  return getTicketLines(ticketId, db)
 }
 
 export async function cloneTicketLines(ticketId: number) {
@@ -682,56 +700,13 @@ export async function createTicket(input: Omit<TicketRecord, 'id' | 'ticketNumbe
 
   const db = useDb()
   const now = new Date().toISOString()
-  const ticketNumber = await generateTicketNumber()
-  const rows = await db.insert(tickets).values({
-    ticketNumber,
-    customerId: input.customerId,
-    type: input.type,
-    status: input.status,
-    brand: normalizeOptionalText(input.brand),
-    model: normalizeOptionalText(input.model),
-    serialNumber: normalizeOptionalText(input.serialNumber),
-    imei: normalizeOptionalText(input.imei),
-    accessCode: normalizeOptionalText(input.accessCode),
-    simCode: normalizeOptionalText(input.simCode),
-    issueDescription: input.issueDescription.trim(),
-    internalNotes: normalizeOptionalText(input.internalNotes),
-    openedAt: input.openedAt,
-    closedAt: normalizeOptionalText(input.closedAt),
-    createdAt: now,
-    updatedAt: now
-  }).returning()
-
-  const ticket = mapTicket(rows[0]!)
-
-  await replaceTicketLines(ticket.id, input.lines || [])
-
-  await createTicketEvent({
-    ticketId: ticket.id,
-    kind: 'ticket_created',
-    label: 'Ticket ouvert',
-    note: input.internalNotes,
-    metadata: {
-      status: ticket.status,
-      ticketNumber: ticket.ticketNumber
-    },
-    occurredAt: input.openedAt
-  })
-
-  return ticket
-}
-
-export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'> & {
-  lines?: TicketLineInput[]
-}) {
-  await ensurePosSchema()
-
-  const db = useDb()
-  const rows = await db.update(tickets)
-    .set({
+  return db.transaction(async (tx) => {
+    const ticketNumber = await generateTicketNumber(tx)
+    const rows = await tx.insert(tickets).values({
+      ticketNumber,
       customerId: input.customerId,
       type: input.type,
-      status: input.status,
+      status: 'new',
       brand: normalizeOptionalText(input.brand),
       model: normalizeOptionalText(input.model),
       serialNumber: normalizeOptionalText(input.serialNumber),
@@ -741,24 +716,104 @@ export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 
       issueDescription: input.issueDescription.trim(),
       internalNotes: normalizeOptionalText(input.internalNotes),
       openedAt: input.openedAt,
-      closedAt: normalizeOptionalText(input.closedAt),
-      updatedAt: new Date().toISOString()
-    })
-    .where(eq(tickets.id, id))
-    .returning()
+      closedAt: null,
+      createdAt: now,
+      updatedAt: now
+    }).returning()
+    const row = rows[0]
 
-  const row = rows[0]
+    if (!row) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Could not create ticket'
+      })
+    }
 
-  if (!row) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Ticket not found'
-    })
-  }
+    const ticket = mapTicket(row)
 
-  await replaceTicketLines(id, input.lines || [])
+    await replaceTicketLines(ticket.id, input.lines || [], tx)
+    await createTicketEvent({
+      ticketId: ticket.id,
+      kind: 'ticket_created',
+      label: 'Ticket ouvert',
+      note: input.internalNotes,
+      metadata: {
+        status: ticket.status,
+        ticketNumber: ticket.ticketNumber
+      },
+      occurredAt: input.openedAt
+    }, tx)
 
-  return mapTicket(row)
+    return ticket
+  })
+}
+
+export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'> & {
+  lines?: TicketLineInput[]
+}) {
+  await ensurePosSchema()
+
+  const db = useDb()
+  return db.transaction(async (tx) => {
+    const [existing] = await tx.select({
+      status: tickets.status
+    }).from(tickets).where(eq(tickets.id, id)).limit(1)
+
+    if (!existing) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Ticket not found'
+      })
+    }
+
+    assertTicketStatusTransition(existing.status, input.status)
+
+    const rows = await tx.update(tickets)
+      .set({
+        customerId: input.customerId,
+        type: input.type,
+        status: input.status,
+        brand: normalizeOptionalText(input.brand),
+        model: normalizeOptionalText(input.model),
+        serialNumber: normalizeOptionalText(input.serialNumber),
+        imei: normalizeOptionalText(input.imei),
+        accessCode: normalizeOptionalText(input.accessCode),
+        simCode: normalizeOptionalText(input.simCode),
+        issueDescription: input.issueDescription.trim(),
+        internalNotes: normalizeOptionalText(input.internalNotes),
+        openedAt: input.openedAt,
+        closedAt: input.status === 'closed' ? (normalizeOptionalText(input.closedAt) || new Date().toISOString()) : null,
+        updatedAt: new Date().toISOString()
+      })
+      .where(eq(tickets.id, id))
+      .returning()
+    const row = rows[0]
+
+    if (!row) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Ticket not found'
+      })
+    }
+
+    await replaceTicketLines(id, input.lines || [], tx)
+
+    if (existing.status !== row.status) {
+      await createTicketEvent({
+        ticketId: id,
+        kind: row.status === 'closed' ? 'ticket_closed' : 'ticket_status_changed',
+        label: row.status === 'closed' ? 'Ticket clôturé' : `Statut mis à jour · ${ticketStatusLabels[row.status]}`,
+        note: input.internalNotes,
+        metadata: {
+          previousStatus: existing.status,
+          nextStatus: row.status
+        },
+        occurredAt: row.status === 'closed' ? row.closedAt : row.updatedAt
+      }, tx)
+    }
+
+    return mapTicket(row)
+  })
 }
 
 export async function deleteTicket(id: number) {
@@ -786,7 +841,7 @@ function buildFallbackLines(ticket: TicketRecord): Array<{
   }]
 }
 
-export async function createQuoteFromTicket(ticketId: number) {
+export async function createQuoteFromTicket(ticketId: number, idempotencyKey: string) {
   const ticket = await getTicketById(ticketId)
   const ticketLines = await cloneTicketLines(ticketId)
   const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
@@ -799,10 +854,13 @@ export async function createQuoteFromTicket(ticketId: number) {
     issuedAt: new Date().toISOString(),
     notes: `Quote created from ${ticket.ticketNumber}.`,
     lines: ticketLines.length ? ticketLines : existingLines.length ? existingLines : buildFallbackLines(ticket)
+  }, {
+    key: `ticket:${ticketId}:quote:${idempotencyKey}`,
+    payload: { ticketId, documentType: 'quote' }
   })
 }
 
-export async function createCustomerOrderFromTicket(ticketId: number) {
+export async function createCustomerOrderFromTicket(ticketId: number, idempotencyKey: string) {
   const ticket = await getTicketById(ticketId)
   const ticketLines = await cloneTicketLines(ticketId)
   const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
@@ -815,10 +873,13 @@ export async function createCustomerOrderFromTicket(ticketId: number) {
     issuedAt: new Date().toISOString(),
     notes: `Commande créée depuis ${ticket.ticketNumber}.`,
     lines: ticketLines.length ? ticketLines : existingLines.length ? existingLines : buildFallbackLines(ticket)
+  }, {
+    key: `ticket:${ticketId}:customer-order:${idempotencyKey}`,
+    payload: { ticketId, documentType: 'customer_order' }
   })
 }
 
-export async function createInvoiceFromTicket(ticketId: number) {
+export async function createInvoiceFromTicket(ticketId: number, idempotencyKey: string) {
   const ticket = await getTicketById(ticketId)
   const ticketLines = await cloneTicketLines(ticketId)
   const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
@@ -830,6 +891,9 @@ export async function createInvoiceFromTicket(ticketId: number) {
     issuedAt: new Date().toISOString(),
     notes: `Invoice created from ${ticket.ticketNumber}.`,
     lines: ticketLines.length ? ticketLines : existingLines.length ? existingLines : buildFallbackLines(ticket)
+  }, {
+    key: `ticket:${ticketId}:invoice:${idempotencyKey}`,
+    payload: { ticketId, documentType: 'invoice' }
   })
 
   await syncDocumentStatus(invoice.id)

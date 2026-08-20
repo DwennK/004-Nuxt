@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
-import { getPaginationRowModel } from '@tanstack/table-core'
+import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
 import {
@@ -10,7 +9,8 @@ import {
   paymentStatusColors,
   paymentStatusLabels
 } from '~~/shared/constants/pos'
-import type { PaymentListItem } from '~~/shared/types/pos'
+import { canDeletePayment, canEditPayment } from '~~/shared/domain/payments/rules'
+import type { PaymentListItem, PaymentListResponse } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime, toDateInputValue } from '~~/shared/utils/pos'
 
 const UBadge = resolveComponent('UBadge')
@@ -19,6 +19,8 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const confirmDelete = useConfirmDelete()
 const runApiAction = useApiAction()
+const { can } = useCapabilities()
+const toast = useToast()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 type PeriodPreset = 'today' | 'month' | 'last_7_days' | 'all' | 'custom'
@@ -51,6 +53,7 @@ function getCurrentMonthRange() {
 }
 
 const search = ref('')
+const debouncedSearch = refDebounced(search, 250)
 const methodFilter = ref<'all' | PaymentListItem['method']>('all')
 const statusFilter = ref<'all' | PaymentListItem['status']>('all')
 const periodPreset = ref<PeriodPreset>('month')
@@ -86,35 +89,25 @@ const periodItems = [
 ]
 
 const paymentQuery = computed(() => ({
+  search: debouncedSearch.value.trim() || undefined,
   method: methodFilter.value === 'all' ? undefined : methodFilter.value,
   status: statusFilter.value === 'all' ? undefined : statusFilter.value,
   dateFrom: dateFrom.value || undefined,
-  dateTo: dateTo.value || undefined
+  dateTo: dateTo.value || undefined,
+  page: pagination.value.pageIndex + 1,
+  pageSize: pagination.value.pageSize,
+  sortBy: sorting.value[0]?.id === 'amount' ? 'amount' as const : 'paidAt' as const,
+  sortDirection: sorting.value[0]?.desc === false ? 'asc' as const : 'desc' as const
 }))
 
-const { data: payments, status, refresh } = await useFetch<PaymentListItem[]>('/api/payments', {
+const { data: paymentsResponse, status, refresh } = await useFetch<PaymentListResponse>('/api/payments', {
   query: paymentQuery,
   lazy: true
 })
 
-const filteredPayments = computed(() => {
-  const term = search.value.trim().toLowerCase()
-
-  return (payments.value || []).filter((payment) => {
-    const matchesSearch = !term || [
-      payment.customerName,
-      payment.documentNumber
-    ].some(value => value?.toLowerCase().includes(term))
-
-    const matchesMethod = methodFilter.value === 'all' || payment.method === methodFilter.value
-    const matchesStatus = statusFilter.value === 'all' || payment.status === statusFilter.value
-    const paymentDate = toDateInputValue(new Date(payment.paidAt))
-    const matchesDateFrom = !dateFrom.value || paymentDate >= dateFrom.value
-    const matchesDateTo = !dateTo.value || paymentDate <= dateTo.value
-
-    return matchesSearch && matchesMethod && matchesStatus && matchesDateFrom && matchesDateTo
-  })
-})
+const payments = computed(() => paymentsResponse.value?.items || [])
+const totalResults = computed(() => paymentsResponse.value?.total || 0)
+const totalPages = computed(() => Math.max(Math.ceil(totalResults.value / pagination.value.pageSize), 1))
 
 watch(periodPreset, (preset) => {
   const today = toDateInputValue()
@@ -150,8 +143,16 @@ watch([dateFrom, dateTo], ([from, to]) => {
   }
 })
 
-watch([search, methodFilter, statusFilter, dateFrom, dateTo], () => {
+watch([debouncedSearch, methodFilter, statusFilter, dateFrom, dateTo], () => {
   pagination.value.pageIndex = 0
+})
+
+watch(totalResults, (total) => {
+  const lastPageIndex = Math.max(Math.ceil(total / pagination.value.pageSize) - 1, 0)
+
+  if (pagination.value.pageIndex > lastPageIndex) {
+    pagination.value.pageIndex = lastPageIndex
+  }
 })
 
 const hasActiveFilters = computed(() =>
@@ -174,6 +175,19 @@ function resetFilters() {
 }
 
 async function removePayment(payment: PaymentListItem) {
+  if (!can('financial:adjust') || !can('records:delete')) {
+    return
+  }
+
+  if (!canDeletePayment(payment.status)) {
+    toast.add({
+      title: 'Suppression impossible',
+      description: 'Un paiement enregistré doit être corrigé ou remboursé, pas supprimé.',
+      color: 'warning'
+    })
+    return
+  }
+
   const confirmed = await confirmDelete({
     title: `Supprimer le paiement de ${formatCurrency(payment.amount)} ?`,
     description: 'Le paiement sera définitivement supprimé et le solde du document recalculé.'
@@ -194,20 +208,40 @@ async function removePayment(payment: PaymentListItem) {
 }
 
 function getRowItems(payment: PaymentListItem) {
-  return [[{
+  const groups: DropdownMenuItem[][] = [[{
     label: 'Ouvrir le document',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
       navigateTo(`/documents/${payment.documentId}`)
     }
-  }], [{
-    label: 'Supprimer',
-    icon: 'i-lucide-trash',
-    color: 'error',
-    onSelect() {
-      removePayment(payment)
-    }
   }]]
+
+  if (can('financial:adjust') && canEditPayment(payment.status)) {
+    groups[0]!.push({
+      label: 'Modifier le paiement',
+      icon: 'i-lucide-pencil',
+      onSelect() {
+        navigateTo(`/documents/${payment.documentId}?tab=payments`)
+      }
+    })
+  }
+
+  if (
+    can('financial:adjust')
+    && can('records:delete')
+    && canDeletePayment(payment.status)
+  ) {
+    groups.push([{
+      label: 'Supprimer',
+      icon: 'i-lucide-trash',
+      color: 'error',
+      onSelect() {
+        removePayment(payment)
+      }
+    }])
+  }
+
+  return groups
 }
 
 function getCompactPaymentMethodLabel(method: PaymentListItem['method']) {
@@ -390,11 +424,10 @@ const columns: TableColumn<PaymentListItem>[] = [
       <div class="space-y-4">
         <UTable
           ref="table"
-          v-model:pagination="pagination"
           v-model:sorting="sorting"
           v-model:column-visibility="columnVisibility"
-          :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-          :data="filteredPayments"
+          :sorting-options="{ manualSorting: true }"
+          :data="payments"
           :columns="columns"
           sticky="header"
           :loading="status === 'pending'"
@@ -424,14 +457,14 @@ const columns: TableColumn<PaymentListItem>[] = [
 
         <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
           <p class="text-sm text-toned">
-            {{ table?.tableApi?.getFilteredRowModel().rows.length || filteredPayments.length }} paiement(s)
+            {{ totalResults }} paiement(s) · page {{ pagination.pageIndex + 1 }} / {{ totalPages }}
           </p>
 
           <UPagination
-            :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-            :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-            :total="table?.tableApi?.getFilteredRowModel().rows.length || filteredPayments.length"
-            @update:page="(page: number) => table?.tableApi?.setPageIndex(page - 1)"
+            :page="pagination.pageIndex + 1"
+            :items-per-page="pagination.pageSize"
+            :total="totalResults"
+            @update:page="(page: number) => { pagination.pageIndex = page - 1 }"
           />
         </div>
       </div>

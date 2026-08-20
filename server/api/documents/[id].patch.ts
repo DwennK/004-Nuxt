@@ -1,13 +1,11 @@
-import { z } from 'zod'
 import { documentInputSchema } from '~~/shared/validation/pos'
 import { updateDocumentRecord } from '~~/server/utils/pos/documents'
-
-const paramsSchema = z.object({
-  id: z.coerce.number().int().positive()
-})
+import { numericIdParamsSchema } from '~~/shared/validation/api'
+import { requireCapability } from '~~/server/utils/auth/session'
 
 export default eventHandler(async (event) => {
-  const params = paramsSchema.parse(event.context.params)
+  await requireCapability(event, 'financial:adjust')
+  const params = await getValidatedRouterParams(event, numericIdParamsSchema.parse)
   const body = await readValidatedBody(event, documentInputSchema.parse)
   return updateDocumentRecord(params.id, body)
 })

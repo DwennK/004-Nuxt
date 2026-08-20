@@ -1,21 +1,23 @@
 import { z } from 'zod'
+import { documentStatuses, documentTypes } from '~~/shared/constants/pos'
 import { listDocuments } from '~~/server/utils/pos/documents'
+import { isoDateSchema, paginationQuerySchema } from '~~/shared/validation/api'
+import { requireCapability } from '~~/server/utils/auth/session'
 
-const querySchema = z.object({
+const querySchema = paginationQuerySchema.extend({
   q: z.string().trim().optional(),
-  type: z.string().optional(),
-  status: z.string().optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
+  type: z.enum(documentTypes).optional(),
+  status: z.enum(documentStatuses).optional(),
+  dateFrom: isoDateSchema.optional(),
+  dateTo: isoDateSchema.optional(),
   customerId: z.coerce.number().int().positive().optional(),
   ticketId: z.coerce.number().int().positive().optional(),
   paymentState: z.enum(['all', 'due']).optional(),
-  sortBy: z.enum(['issuedAt', 'balanceDue']).optional(),
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(250).default(50)
+  sortBy: z.enum(['issuedAt', 'balanceDue']).optional()
 })
 
 export default eventHandler(async (event) => {
-  const query = querySchema.parse(getQuery(event))
+  await requireCapability(event, 'financial:read')
+  const query = await getValidatedQuery(event, querySchema.parse)
   return listDocuments(query)
 })

@@ -1,10 +1,17 @@
-import { and, desc, eq, gte, lte } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, lte, or, sql } from 'drizzle-orm'
 import { paymentMethodLabels } from '~~/shared/constants/pos'
 import { customers, documents, payments } from '~~/server/db/schema'
-import type { PaymentListItem, PaymentRecord } from '~~/shared/types/pos'
+import {
+  canChangePaymentStatus,
+  canDeletePayment,
+  canEditPayment,
+  evaluateDocumentPayment
+} from '~~/shared/domain/payments/rules'
+import type { PaymentListItem, PaymentListResponse, PaymentRecord } from '~~/shared/types/pos'
 import { buildZonedDayRange, isPayableDocumentType } from '~~/shared/utils/pos'
 import type { PosDatabaseExecutor } from '../turso'
 import { useDb } from '../turso'
+import { runIdempotentDocumentOperation } from '../idempotency'
 import { createTicketEvent, ensurePosSchema, normalizeOptionalText, syncDocumentStatus } from './core'
 import { mapPayment } from './documents'
 
@@ -25,6 +32,9 @@ async function assertPayablePaymentDocument(documentId: number, executor?: PosDa
   const [document] = await db.select({
     id: documents.id,
     type: documents.type,
+    status: documents.status,
+    customerId: documents.customerId,
+    total: documents.total,
     ticketId: documents.ticketId,
     documentNumber: documents.documentNumber
   }).from(documents).where(eq(documents.id, documentId)).limit(1)
@@ -46,6 +56,49 @@ async function assertPayablePaymentDocument(documentId: number, executor?: PosDa
   return document
 }
 
+async function assertPaymentFitsDocument(
+  document: Awaited<ReturnType<typeof assertPayablePaymentDocument>>,
+  amount: number,
+  executor: PosDatabaseExecutor,
+  excludedPaymentId?: number
+) {
+  const [summary] = await executor.select({
+    paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
+  })
+    .from(payments)
+    .where(and(
+      eq(payments.documentId, document.id),
+      excludedPaymentId ? sql`${payments.id} <> ${excludedPaymentId}` : undefined
+    ))
+
+  const result = evaluateDocumentPayment({
+    documentStatus: document.status,
+    documentTotal: document.total,
+    paidTotal: Number(summary?.paidTotal || 0),
+    amount
+  })
+
+  if (result.ok) {
+    return result
+  }
+
+  const messages = {
+    DOCUMENT_CANCELLED: 'Cancelled documents cannot receive payments',
+    DOCUMENT_ALREADY_PAID: 'Document is already fully paid',
+    PAYMENT_AMOUNT_INVALID: 'Payment amount must be a positive integer number of cents',
+    PAYMENT_EXCEEDS_BALANCE: 'Payment amount cannot exceed the remaining balance'
+  } satisfies Record<typeof result.code, string>
+
+  throw createError({
+    statusCode: result.code === 'DOCUMENT_CANCELLED' || result.code === 'DOCUMENT_ALREADY_PAID' ? 409 : 400,
+    statusMessage: messages[result.code],
+    data: {
+      code: result.code,
+      remainingBalance: result.balanceBeforePayment
+    }
+  })
+}
+
 function assertPositivePaymentAmount(amount: number) {
   if (amount > 0) {
     return
@@ -58,43 +111,83 @@ function assertPositivePaymentAmount(amount: number) {
 }
 
 export async function listPayments(filters?: {
-  method?: string
-  status?: string
+  search?: string
+  method?: PaymentRecord['method']
+  status?: PaymentRecord['status']
   dateFrom?: string
   dateTo?: string
   documentId?: number
   customerId?: number
-}) {
+  page?: number
+  pageSize?: number
+  sortBy?: 'paidAt' | 'amount'
+  sortDirection?: 'asc' | 'desc'
+}): Promise<PaymentListResponse> {
   await ensurePosSchema()
 
   const db = useDb()
   const dateFrom = filters?.dateFrom ? normalizePaymentDateFrom(filters.dateFrom) : undefined
   const dateTo = filters?.dateTo ? normalizePaymentDateTo(filters.dateTo) : undefined
-  const rows = await db.select({
-    payment: payments,
-    customer: customers,
-    documentNumber: documents.documentNumber,
-    documentType: documents.type
-  })
-    .from(payments)
-    .innerJoin(documents, eq(payments.documentId, documents.id))
-    .leftJoin(customers, eq(payments.customerId, customers.id))
-    .where(and(
-      filters?.method ? eq(payments.method, filters.method as typeof payments.$inferSelect.method) : undefined,
-      filters?.status ? eq(payments.status, filters.status as typeof payments.$inferSelect.status) : undefined,
-      filters?.documentId ? eq(payments.documentId, filters.documentId) : undefined,
-      filters?.customerId ? eq(payments.customerId, filters.customerId) : undefined,
-      dateFrom ? gte(payments.paidAt, dateFrom) : undefined,
-      dateTo ? lte(payments.paidAt, dateTo) : undefined
-    ))
-    .orderBy(desc(payments.paidAt), desc(payments.id))
+  const normalizedSearch = filters?.search?.trim().toLowerCase()
+  const searchPattern = normalizedSearch ? `%${normalizedSearch}%` : undefined
+  const page = Math.max(filters?.page || 1, 1)
+  const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
+  const offset = (page - 1) * pageSize
+  const whereClause = and(
+    filters?.method ? eq(payments.method, filters.method) : undefined,
+    filters?.status ? eq(payments.status, filters.status) : undefined,
+    filters?.documentId ? eq(payments.documentId, filters.documentId) : undefined,
+    filters?.customerId ? eq(payments.customerId, filters.customerId) : undefined,
+    dateFrom ? gte(payments.paidAt, dateFrom) : undefined,
+    dateTo ? lte(payments.paidAt, dateTo) : undefined,
+    searchPattern
+      ? or(
+          sql`lower(coalesce(${customers.companyName}, '')) like ${searchPattern}`,
+          sql`lower(trim(${customers.firstName} || ' ' || ${customers.lastName})) like ${searchPattern}`,
+          sql`lower(${documents.documentNumber}) like ${searchPattern}`
+        )
+      : undefined
+  )
+  const orderBy = filters?.sortBy === 'amount'
+    ? filters.sortDirection === 'asc'
+      ? [asc(payments.amount), asc(payments.id)]
+      : [desc(payments.amount), desc(payments.id)]
+    : filters?.sortDirection === 'asc'
+      ? [asc(payments.paidAt), asc(payments.id)]
+      : [desc(payments.paidAt), desc(payments.id)]
 
-  return rows.map((row): PaymentListItem => ({
-    ...mapPayment(row.payment),
-    customerName: row.customer ? (row.customer.companyName || `${row.customer.firstName} ${row.customer.lastName}`) : null,
-    documentNumber: row.documentNumber,
-    documentType: row.documentType
-  }))
+  const [totalRows, rows] = await Promise.all([
+    db.select({ total: sql<number>`count(*)` })
+      .from(payments)
+      .innerJoin(documents, eq(payments.documentId, documents.id))
+      .leftJoin(customers, eq(payments.customerId, customers.id))
+      .where(whereClause),
+    db.select({
+      payment: payments,
+      customer: customers,
+      documentNumber: documents.documentNumber,
+      documentType: documents.type
+    })
+      .from(payments)
+      .innerJoin(documents, eq(payments.documentId, documents.id))
+      .leftJoin(customers, eq(payments.customerId, customers.id))
+      .where(whereClause)
+      .orderBy(...orderBy)
+      .limit(pageSize)
+      .offset(offset)
+  ])
+
+  return {
+    items: rows.map((row): PaymentListItem => ({
+      ...mapPayment(row.payment),
+      customerName: row.customer ? (row.customer.companyName || `${row.customer.firstName} ${row.customer.lastName}`) : null,
+      documentNumber: row.documentNumber,
+      documentType: row.documentType
+    })),
+    page,
+    pageSize,
+    total: Number(totalRows[0]?.total || 0)
+  }
 }
 
 export async function getPaymentById(id: number) {
@@ -114,60 +207,111 @@ export async function getPaymentById(id: number) {
   return mapPayment(row)
 }
 
-export async function createPaymentRecord(input: Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt'>) {
+export async function createPaymentRecord(
+  input: Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt'>,
+  idempotencyKey: string
+) {
   await ensurePosSchema()
 
   assertPositivePaymentAmount(input.amount)
 
+  if (input.status === 'refunded' || input.status === 'cancelled') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Refunds and cancellations require a dedicated correction flow',
+      data: { code: 'PAYMENT_CORRECTION_FLOW_REQUIRED' }
+    })
+  }
+
   const db = useDb()
-  const payment = await db.transaction(async (tx) => {
-    const document = await assertPayablePaymentDocument(input.documentId, tx)
-    const now = new Date().toISOString()
-    const rows = await tx.insert(payments).values({
-      customerId: input.customerId,
-      documentId: input.documentId,
-      method: input.method,
-      status: input.status,
-      amount: input.amount,
-      paidAt: input.paidAt,
-      notes: normalizeOptionalText(input.notes),
-      createdAt: now,
-      updatedAt: now
-    }).returning()
-    const createdPayment = rows[0]
+  const result = await runIdempotentDocumentOperation({
+    database: db,
+    source: 'api_payment_create',
+    key: idempotencyKey,
+    payload: input,
+    async execute(tx) {
+      const document = await assertPayablePaymentDocument(input.documentId, tx)
 
-    if (!createdPayment) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Could not create payment'
-      })
+      if (input.customerId !== null && input.customerId !== document.customerId) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Payment customer must match the document customer',
+          data: { code: 'PAYMENT_CUSTOMER_MISMATCH' }
+        })
+      }
+
+      await assertPaymentFitsDocument(document, input.amount, tx)
+
+      const now = new Date().toISOString()
+      const rows = await tx.insert(payments).values({
+        customerId: document.customerId,
+        documentId: input.documentId,
+        method: input.method,
+        status: input.status,
+        amount: input.amount,
+        paidAt: input.paidAt,
+        notes: normalizeOptionalText(input.notes),
+        createdAt: now,
+        updatedAt: now
+      }).returning()
+      const createdPayment = rows[0]
+
+      if (!createdPayment) {
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Could not create payment'
+        })
+      }
+
+      await syncDocumentStatus(input.documentId, tx)
+
+      if (document.ticketId && input.status === 'paid') {
+        await createTicketEvent({
+          ticketId: document.ticketId,
+          kind: 'payment_recorded',
+          label: 'Paiement enregistré',
+          note: input.notes,
+          metadata: {
+            paymentId: createdPayment.id,
+            documentId: document.id,
+            documentNumber: document.documentNumber,
+            documentType: document.type,
+            amount: input.amount,
+            method: input.method,
+            methodLabel: paymentMethodLabels[input.method]
+          },
+          occurredAt: input.paidAt
+        }, tx)
+      }
+
+      return {
+        value: createdPayment,
+        documentId: document.id,
+        resourceId: createdPayment.id
+      }
+    },
+    async replay(tx, receipt) {
+      const [existingPayment] = await tx.select()
+        .from(payments)
+        .where(and(
+          eq(payments.id, receipt.resourceId),
+          eq(payments.documentId, receipt.documentId)
+        ))
+        .limit(1)
+
+      if (!existingPayment) {
+        throw createError({
+          statusCode: 409,
+          statusMessage: 'The result of this idempotent operation no longer exists',
+          data: { code: 'IDEMPOTENCY_RESOURCE_MISSING' }
+        })
+      }
+
+      return existingPayment
     }
-
-    await syncDocumentStatus(input.documentId, tx)
-
-    if (document.ticketId && input.status === 'paid') {
-      await createTicketEvent({
-        ticketId: document.ticketId,
-        kind: 'payment_recorded',
-        label: 'Paiement enregistré',
-        note: input.notes,
-        metadata: {
-          paymentId: createdPayment.id,
-          documentId: document.id,
-          documentNumber: document.documentNumber,
-          documentType: document.type,
-          amount: input.amount,
-          method: input.method,
-          methodLabel: paymentMethodLabels[input.method]
-        },
-        occurredAt: input.paidAt
-      }, tx)
-    }
-
-    return createdPayment
   })
 
-  return mapPayment(payment)
+  return mapPayment(result.value)
 }
 
 export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -179,7 +323,9 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
   const row = await db.transaction(async (tx) => {
     const [existing] = await tx.select({
       id: payments.id,
-      documentId: payments.documentId
+      documentId: payments.documentId,
+      status: payments.status,
+      amount: payments.amount
     }).from(payments).where(eq(payments.id, id)).limit(1)
 
     if (!existing) {
@@ -189,11 +335,58 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
       })
     }
 
-    await assertPayablePaymentDocument(input.documentId, tx)
+    if (!canEditPayment(existing.status)) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Cancelled or refunded payments require a dedicated correction flow.',
+        data: { code: 'PAYMENT_IMMUTABLE' }
+      })
+    }
+
+    if (existing.documentId !== input.documentId) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'A payment cannot be moved to another document',
+        data: { code: 'PAYMENT_DOCUMENT_IMMUTABLE' }
+      })
+    }
+
+    if (input.status === 'refunded') {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Refunds require a dedicated correction flow',
+        data: { code: 'PAYMENT_CORRECTION_FLOW_REQUIRED' }
+      })
+    }
+
+    if (!canChangePaymentStatus(existing.status, input.status)) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'This payment status change requires a correction or refund',
+        data: { code: 'PAYMENT_STATUS_CORRECTION_REQUIRED' }
+      })
+    }
+
+    const document = await assertPayablePaymentDocument(input.documentId, tx)
+
+    if (input.customerId !== null && input.customerId !== document.customerId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Payment customer must match the document customer',
+        data: { code: 'PAYMENT_CUSTOMER_MISMATCH' }
+      })
+    }
+
+    if (
+      (existing.status === 'paid' && input.amount !== existing.amount)
+      || (existing.status === 'pending' && (input.status === 'paid' || input.status === 'pending'))
+    ) {
+      await assertPaymentFitsDocument(document, input.amount, tx, existing.id)
+    }
 
     const rows = await tx.update(payments)
       .set({
-        customerId: input.customerId,
+        customerId: document.customerId,
         documentId: input.documentId,
         method: input.method,
         status: input.status,
@@ -215,8 +408,23 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
 
     await syncDocumentStatus(updatedPayment.documentId, tx)
 
-    if (existing.documentId !== updatedPayment.documentId) {
-      await syncDocumentStatus(existing.documentId, tx)
+    if (existing.status === 'pending' && updatedPayment.status === 'paid' && document.ticketId) {
+      await createTicketEvent({
+        ticketId: document.ticketId,
+        kind: 'payment_recorded',
+        label: 'Paiement enregistré',
+        note: updatedPayment.notes,
+        metadata: {
+          paymentId: updatedPayment.id,
+          documentId: document.id,
+          documentNumber: document.documentNumber,
+          documentType: document.type,
+          amount: updatedPayment.amount,
+          method: updatedPayment.method,
+          methodLabel: paymentMethodLabels[updatedPayment.method]
+        },
+        occurredAt: updatedPayment.paidAt
+      }, tx)
     }
 
     return updatedPayment
@@ -235,6 +443,14 @@ export async function deletePayment(id: number) {
 
     if (!row) {
       return 0
+    }
+
+    if (!canDeletePayment(row.status)) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Recorded payments cannot be deleted. Use a correction or refund instead.',
+        data: { code: 'PAYMENT_IMMUTABLE' }
+      })
     }
 
     const result = await tx.delete(payments).where(eq(payments.id, id))

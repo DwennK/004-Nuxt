@@ -1,11 +1,9 @@
-import { z } from 'zod'
 import { deleteTicket } from '~~/server/utils/pos/tickets'
-
-const paramsSchema = z.object({
-  id: z.coerce.number().int().positive()
-})
+import { numericIdParamsSchema } from '~~/shared/validation/api'
+import { requireCapability } from '~~/server/utils/auth/session'
 
 export default eventHandler(async (event) => {
-  const params = paramsSchema.parse(event.context.params)
+  await requireCapability(event, 'records:delete')
+  const params = await getValidatedRouterParams(event, numericIdParamsSchema.parse)
   return { deleted: await deleteTicket(params.id) }
 })
