@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
+import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
 import type { CustomerFormValue, CustomerListResponse, CustomerRecord } from '~~/shared/types/pos'
@@ -9,6 +9,7 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const confirmDelete = useConfirmDelete()
 const runApiAction = useApiAction()
+const { can } = useCapabilities()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 const search = ref('')
@@ -28,7 +29,7 @@ const query = computed(() => ({
   pageSize: pagination.value.pageSize
 }))
 
-const { data: customersResponse, status, refresh } = await useFetch<CustomerListResponse>('/api/customers', {
+const { data: customersResponse, status, error, refresh } = await useFetch<CustomerListResponse>('/api/customers', {
   query,
   lazy: true
 })
@@ -36,6 +37,25 @@ const { data: customersResponse, status, refresh } = await useFetch<CustomerList
 const customers = computed(() => customersResponse.value?.items || [])
 const totalResults = computed(() => customersResponse.value?.total || 0)
 const totalPages = computed(() => Math.max(Math.ceil(totalResults.value / pagination.value.pageSize), 1))
+const customersErrorMessage = computed(() => {
+  const fetchError = error.value
+
+  if (!fetchError) {
+    return null
+  }
+
+  const responseData = fetchError.data
+  const responseStatusMessage = responseData
+    && typeof responseData === 'object'
+    && 'statusMessage' in responseData
+    ? responseData.statusMessage
+    : null
+  const statusMessage = responseStatusMessage || fetchError.statusMessage
+
+  return typeof statusMessage === 'string' && statusMessage.trim()
+    ? statusMessage
+    : 'Impossible de charger les clients. Vérifiez la connexion puis réessayez.'
+})
 
 watch(debouncedSearch, () => {
   pagination.value.pageIndex = 0
@@ -105,6 +125,10 @@ async function saveCustomer(payload: CustomerFormValue) {
 }
 
 async function removeCustomer(customer: CustomerRecord) {
+  if (!can('records:delete')) {
+    return
+  }
+
   const confirmed = await confirmDelete({
     title: `Supprimer ${customer.displayName} ?`,
     description: 'La fiche client sera définitivement supprimée.'
@@ -130,7 +154,7 @@ function openEditor(customer: CustomerRecord) {
 }
 
 function getRowItems(customer: CustomerRecord) {
-  return [[{
+  const primaryItems: DropdownMenuItem[] = [{
     label: 'Ouvrir le client',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
@@ -148,20 +172,27 @@ function getRowItems(customer: CustomerRecord) {
     onSelect() {
       navigateTo(`/documents/new?customerId=${customer.id}`)
     }
-  }], [{
+  }]
+  const editItems: DropdownMenuItem[] = [{
     label: 'Modification rapide',
     icon: 'i-lucide-pencil',
     onSelect() {
       openEditor(customer)
     }
-  }, {
-    label: 'Supprimer',
-    icon: 'i-lucide-trash',
-    color: 'error',
-    onSelect() {
-      removeCustomer(customer)
-    }
-  }]]
+  }]
+
+  if (can('records:delete')) {
+    editItems.push({
+      label: 'Supprimer',
+      icon: 'i-lucide-trash',
+      color: 'error',
+      onSelect() {
+        removeCustomer(customer)
+      }
+    })
+  }
+
+  return [primaryItems, editItems]
 }
 
 const columns: TableColumn<CustomerRecord>[] = [
@@ -283,7 +314,29 @@ const columns: TableColumn<CustomerRecord>[] = [
 
     <template #body>
       <div class="space-y-4">
+        <UAlert
+          v-if="customersErrorMessage"
+          icon="i-lucide-triangle-alert"
+          color="error"
+          variant="soft"
+          title="Chargement impossible"
+          :description="customersErrorMessage"
+        >
+          <template #actions>
+            <UButton
+              type="button"
+              label="Réessayer"
+              icon="i-lucide-refresh-cw"
+              color="error"
+              variant="soft"
+              size="xs"
+              @click="refresh()"
+            />
+          </template>
+        </UAlert>
+
         <UTable
+          v-else
           ref="table"
           v-model:column-visibility="columnVisibility"
           :data="customers"
@@ -314,7 +367,7 @@ const columns: TableColumn<CustomerRecord>[] = [
           </template>
         </UTable>
 
-        <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
+        <div v-if="!customersErrorMessage" class="flex items-center justify-between gap-3 border-t border-default pt-4">
           <p class="text-sm text-toned">
             {{ totalResults }} client(s) · page {{ pagination.pageIndex + 1 }} / {{ totalPages }}
           </p>

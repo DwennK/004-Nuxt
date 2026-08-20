@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn, TabsItem } from '@nuxt/ui'
+import type { DropdownMenuItem, TableColumn, TabsItem } from '@nuxt/ui'
 import type { LocationQueryValue } from 'vue-router'
 import type {
   CatalogItemInput,
@@ -25,6 +25,7 @@ const route = useRoute()
 const router = useRouter()
 const confirmDelete = useConfirmDelete()
 const runApiAction = useApiAction()
+const { can } = useCapabilities()
 
 const activeView = ref<CatalogView>('articles')
 const createOpen = ref(false)
@@ -71,9 +72,9 @@ const repairQuery = computed(() => buildQuery('repair', debouncedRepairSearch.va
 const serviceQuery = computed(() => buildQuery('service', debouncedServiceSearch.value, serviceCategory.value, serviceActiveOnly.value, servicePagination.value))
 
 const [
-  { data: articleResponse, status: articleStatus, refresh: refreshArticles },
-  { data: repairResponse, status: repairStatus, refresh: refreshRepairs },
-  { data: serviceResponse, status: serviceStatus, refresh: refreshServices }
+  { data: articleResponse, status: articleStatus, error: articleError, refresh: refreshArticles },
+  { data: repairResponse, status: repairStatus, error: repairError, refresh: refreshRepairs },
+  { data: serviceResponse, status: serviceStatus, error: serviceError, refresh: refreshServices }
 ] = await Promise.all([
   useFetch<CatalogItemListResponse>('/api/catalog-items', { query: articleQuery, key: 'catalog-articles', lazy: true }),
   useFetch<CatalogItemListResponse>('/api/catalog-items', { query: repairQuery, key: 'catalog-repairs', lazy: true }),
@@ -93,6 +94,9 @@ const serviceTotal = computed(() => serviceResponse.value?.total || 0)
 const articleTotalPages = computed(() => Math.max(Math.ceil(articleTotal.value / articlePagination.value.pageSize), 1))
 const repairTotalPages = computed(() => Math.max(Math.ceil(repairTotal.value / repairPagination.value.pageSize), 1))
 const serviceTotalPages = computed(() => Math.max(Math.ceil(serviceTotal.value / servicePagination.value.pageSize), 1))
+const articleInitialLoading = computed(() => articleStatus.value === 'idle' || (articleStatus.value === 'pending' && !articleItems.value.length))
+const repairInitialLoading = computed(() => repairStatus.value === 'idle' || (repairStatus.value === 'pending' && !repairItems.value.length))
+const serviceInitialLoading = computed(() => serviceStatus.value === 'idle' || (serviceStatus.value === 'pending' && !serviceItems.value.length))
 
 const tabItems: TabsItem[] = [
   {
@@ -540,6 +544,10 @@ async function saveItem(payload: CatalogItemInput) {
 }
 
 async function removeItem(item: CatalogItemRecord) {
+  if (!can('records:delete')) {
+    return
+  }
+
   const confirmed = await confirmDelete({
     title: `Supprimer "${item.name}" ?`,
     description: 'L’élément sera définitivement retiré du catalogue.'
@@ -566,25 +574,26 @@ function getRowItems(item: CatalogItemRecord) {
       ? 'la réparation'
       : 'le service'
 
-  return [
-    [
-      {
-        label: `Modifier ${label}`,
-        icon: 'i-lucide-pencil',
-        onSelect() {
-          openEditSlideover(item)
-        }
-      },
-      {
-        label: 'Supprimer',
-        icon: 'i-lucide-trash',
-        color: 'error',
-        onSelect() {
-          removeItem(item)
-        }
+  const items: DropdownMenuItem[] = [{
+    label: `Modifier ${label}`,
+    icon: 'i-lucide-pencil',
+    onSelect() {
+      openEditSlideover(item)
+    }
+  }]
+
+  if (can('records:delete')) {
+    items.push({
+      label: 'Supprimer',
+      icon: 'i-lucide-trash',
+      color: 'error',
+      onSelect() {
+        removeItem(item)
       }
-    ]
-  ]
+    })
+  }
+
+  return [items]
 }
 
 watch([debouncedArticleSearch, articleCategory, articleActiveOnly], () => {
@@ -742,36 +751,37 @@ watch(editOpen, (open) => {
                 </div>
               </UDashboardToolbar>
 
-              <UTable
-                :data="articleItems"
-                :columns="articleColumns"
-                sticky="header"
-                :loading="articleStatus === 'pending'"
-                class="shrink-0"
-                :ui="{
-                  base: 'table-fixed border-separate border-spacing-0',
-                  thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
-                  tbody: '[&>tr]:last:[&>td]:border-b-0',
-                  th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
-                  td: 'border-b border-default py-2 align-middle text-sm',
-                  separator: 'h-0'
-                }"
-                @select="(_, row) => openEditSlideover(row.original)"
+              <PosAsyncState
+                :loading="articleInitialLoading"
+                :error="articleError"
+                :empty="articleItems.length === 0"
+                loading-label="Chargement des articles"
+                error-description="Impossible de charger les articles. Vérifiez la connexion puis réessayez."
+                empty-icon="i-lucide-package-search"
+                empty-title="Aucun article trouvé"
+                empty-description="Ajoutez un article ou ajustez les filtres actuels."
+                @retry="refreshArticles"
               >
-                <template #empty>
-                  <div v-if="articleStatus === 'pending'" class="space-y-3 px-4 py-6">
-                    <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
-                  </div>
-                  <UEmpty
-                    v-else
-                    icon="i-lucide-package-search"
-                    title="Aucun article trouvé"
-                    description="Ajoutez un article ou ajustez les filtres actuels."
-                  />
-                </template>
-              </UTable>
+                <UTable
+                  :data="articleItems"
+                  :columns="articleColumns"
+                  sticky="header"
+                  :loading="articleStatus === 'pending'"
+                  class="shrink-0"
+                  :ui="{
+                    base: 'table-fixed border-separate border-spacing-0',
+                    thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
+                    tbody: '[&>tr]:last:[&>td]:border-b-0',
+                    th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
+                    td: 'border-b border-default py-2 align-middle text-sm',
+                    separator: 'h-0'
+                  }"
+                  @select="(_, row) => openEditSlideover(row.original)"
+                />
+              </PosAsyncState>
 
               <div
+                v-if="!articleError && !articleInitialLoading"
                 class="flex items-center justify-between gap-3 border-t border-default pt-4"
               >
                 <p class="text-sm text-toned">
@@ -813,36 +823,37 @@ watch(editOpen, (open) => {
                 </div>
               </UDashboardToolbar>
 
-              <UTable
-                :data="repairItems"
-                :columns="repairColumns"
-                sticky="header"
-                :loading="repairStatus === 'pending'"
-                class="shrink-0"
-                :ui="{
-                  base: 'table-fixed border-separate border-spacing-0',
-                  thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
-                  tbody: '[&>tr]:last:[&>td]:border-b-0',
-                  th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
-                  td: 'border-b border-default py-2 align-middle text-sm',
-                  separator: 'h-0'
-                }"
-                @select="(_, row) => openEditSlideover(row.original)"
+              <PosAsyncState
+                :loading="repairInitialLoading"
+                :error="repairError"
+                :empty="repairItems.length === 0"
+                loading-label="Chargement des réparations"
+                error-description="Impossible de charger les réparations. Vérifiez la connexion puis réessayez."
+                empty-icon="i-lucide-wrench"
+                empty-title="Aucune réparation trouvée"
+                empty-description="Créez une réparation atelier ou ajustez les filtres actuels."
+                @retry="refreshRepairs"
               >
-                <template #empty>
-                  <div v-if="repairStatus === 'pending'" class="space-y-3 px-4 py-6">
-                    <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
-                  </div>
-                  <UEmpty
-                    v-else
-                    icon="i-lucide-wrench"
-                    title="Aucune réparation trouvée"
-                    description="Créez une réparation atelier ou ajustez les filtres actuels."
-                  />
-                </template>
-              </UTable>
+                <UTable
+                  :data="repairItems"
+                  :columns="repairColumns"
+                  sticky="header"
+                  :loading="repairStatus === 'pending'"
+                  class="shrink-0"
+                  :ui="{
+                    base: 'table-fixed border-separate border-spacing-0',
+                    thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
+                    tbody: '[&>tr]:last:[&>td]:border-b-0',
+                    th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
+                    td: 'border-b border-default py-2 align-middle text-sm',
+                    separator: 'h-0'
+                  }"
+                  @select="(_, row) => openEditSlideover(row.original)"
+                />
+              </PosAsyncState>
 
               <div
+                v-if="!repairError && !repairInitialLoading"
                 class="flex items-center justify-between gap-3 border-t border-default pt-4"
               >
                 <p class="text-sm text-toned">
@@ -884,36 +895,37 @@ watch(editOpen, (open) => {
                 </div>
               </UDashboardToolbar>
 
-              <UTable
-                :data="serviceItems"
-                :columns="serviceColumns"
-                sticky="header"
-                :loading="serviceStatus === 'pending'"
-                class="shrink-0"
-                :ui="{
-                  base: 'table-fixed border-separate border-spacing-0',
-                  thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
-                  tbody: '[&>tr]:last:[&>td]:border-b-0',
-                  th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
-                  td: 'border-b border-default py-2 align-middle text-sm',
-                  separator: 'h-0'
-                }"
-                @select="(_, row) => openEditSlideover(row.original)"
+              <PosAsyncState
+                :loading="serviceInitialLoading"
+                :error="serviceError"
+                :empty="serviceItems.length === 0"
+                loading-label="Chargement des services"
+                error-description="Impossible de charger les services. Vérifiez la connexion puis réessayez."
+                empty-icon="i-lucide-briefcase-business"
+                empty-title="Aucun service trouvé"
+                empty-description="Créez un service ou ajustez les filtres actuels."
+                @retry="refreshServices"
               >
-                <template #empty>
-                  <div v-if="serviceStatus === 'pending'" class="space-y-3 px-4 py-6">
-                    <USkeleton v-for="index in 5" :key="index" class="h-10 w-full" />
-                  </div>
-                  <UEmpty
-                    v-else
-                    icon="i-lucide-briefcase-business"
-                    title="Aucun service trouvé"
-                    description="Créez un service ou ajustez les filtres actuels."
-                  />
-                </template>
-              </UTable>
+                <UTable
+                  :data="serviceItems"
+                  :columns="serviceColumns"
+                  sticky="header"
+                  :loading="serviceStatus === 'pending'"
+                  class="shrink-0"
+                  :ui="{
+                    base: 'table-fixed border-separate border-spacing-0',
+                    thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
+                    tbody: '[&>tr]:last:[&>td]:border-b-0',
+                    th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
+                    td: 'border-b border-default py-2 align-middle text-sm',
+                    separator: 'h-0'
+                  }"
+                  @select="(_, row) => openEditSlideover(row.original)"
+                />
+              </PosAsyncState>
 
               <div
+                v-if="!serviceError && !serviceInitialLoading"
                 class="flex items-center justify-between gap-3 border-t border-default pt-4"
               >
                 <p class="text-sm text-toned">

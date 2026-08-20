@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn, TabsItem } from '@nuxt/ui'
+import type { DropdownMenuItem, TableColumn, TabsItem } from '@nuxt/ui'
 import type { Row } from '@tanstack/table-core'
 import { getPaginationRowModel } from '@tanstack/table-core'
 import { format, isValid, parseISO } from 'date-fns'
@@ -36,6 +36,7 @@ const UCheckbox = resolveComponent('UCheckbox')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
+const { can } = useCapabilities()
 const table = useTemplateRef<ReservationTableInstance>('table')
 const editModalOpen = ref(false)
 const editingItem = ref<SmartphoneReservationRequest | null>(null)
@@ -147,6 +148,10 @@ function openReservationEditor(item: SmartphoneReservationRequest) {
 }
 
 async function deleteSingleReservation(id: number) {
+  if (!can('records:delete')) {
+    return
+  }
+
   try {
     await $fetch('/api/smartphone-reservations/bulk-delete', {
       method: 'POST',
@@ -171,7 +176,7 @@ async function deleteSingleReservation(id: number) {
 }
 
 function getRowItems(row: Row<SmartphoneReservationRequest>) {
-  return [
+  const items: DropdownMenuItem[] = [
     {
       type: 'label',
       label: 'Actions'
@@ -196,19 +201,21 @@ function getRowItems(row: Row<SmartphoneReservationRequest>) {
       onSelect() {
         openReservationEditor(row.original)
       }
-    },
-    {
-      type: 'separator'
-    },
-    {
+    }
+  ]
+
+  if (can('records:delete')) {
+    items.push({ type: 'separator' }, {
       label: 'Supprimer',
       icon: 'i-lucide-trash',
       color: 'error',
       onSelect() {
         deleteSingleReservation(row.original.id)
       }
-    }
-  ]
+    })
+  }
+
+  return items
 }
 
 const selectedReservationIds = computed<number[]>(() => {
@@ -390,6 +397,7 @@ const pagination = ref({
 
           <div class="flex flex-wrap items-center gap-1.5">
             <ReservationsDeleteModal
+              v-if="can('records:delete')"
               :count="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
               :ids="selectedReservationIds"
             >

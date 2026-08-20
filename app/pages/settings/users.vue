@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import * as z from 'zod'
-import type { FormSubmitEvent } from '@nuxt/ui'
+import type { DropdownMenuItem, FormSubmitEvent } from '@nuxt/ui'
 import type { UserRecord } from '~~/shared/types/users'
 import {
   createUserSchema,
@@ -9,6 +9,7 @@ import {
 
 const toast = useToast()
 const { user: sessionUser } = useUserSession()
+const { can } = useCapabilities()
 
 const { data: users, refresh, pending } = await useFetch<UserRecord[]>(
   '/api/settings/users',
@@ -169,12 +170,16 @@ const deleteOpen = ref(false)
 const deleteTarget = ref<UserRecord | null>(null)
 
 function openDelete(user: UserRecord) {
+  if (!can('administration:manage')) {
+    return
+  }
+
   deleteTarget.value = user
   deleteOpen.value = true
 }
 
 async function onDeleteConfirm() {
-  if (!deleteTarget.value) return
+  if (!can('administration:manage') || !deleteTarget.value) return
   try {
     await $fetch(`/api/settings/users/${deleteTarget.value.id}`, {
       method: 'DELETE'
@@ -193,6 +198,25 @@ async function onDeleteConfirm() {
       color: 'error'
     })
   }
+}
+
+function getUserRowItems(user: UserRecord): DropdownMenuItem[] {
+  const items: DropdownMenuItem[] = [
+    { label: 'Modifier', icon: 'i-lucide-pencil', onSelect: () => openEdit(user) },
+    { label: 'Changer mot de passe', icon: 'i-lucide-key-round', onSelect: () => openPassword(user) }
+  ]
+
+  if (can('administration:manage')) {
+    items.push({
+      label: 'Supprimer',
+      icon: 'i-lucide-trash-2',
+      color: 'error',
+      disabled: isSelf(user),
+      onSelect: () => openDelete(user)
+    })
+  }
+
+  return items
 }
 </script>
 
@@ -287,11 +311,7 @@ async function onDeleteConfirm() {
             />
 
             <UDropdownMenu
-              :items="[
-                { label: 'Modifier', icon: 'i-lucide-pencil', onSelect: () => openEdit(user) },
-                { label: 'Changer mot de passe', icon: 'i-lucide-key-round', onSelect: () => openPassword(user) },
-                { label: 'Supprimer', icon: 'i-lucide-trash-2', color: 'error' as const, disabled: isSelf(user), onSelect: () => openDelete(user) }
-              ]"
+              :items="getUserRowItems(user)"
               :content="{ align: 'end' }"
             >
               <UButton
@@ -479,6 +499,7 @@ async function onDeleteConfirm() {
 
     <!-- Delete -->
     <UModal
+      v-if="can('administration:manage')"
       v-model:open="deleteOpen"
       :title="deleteTarget ? `Supprimer ${deleteTarget.name} ?` : 'Supprimer'"
       description="Cette action est définitive."

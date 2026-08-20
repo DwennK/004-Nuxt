@@ -1,18 +1,17 @@
 import { catalogItemTypes } from '~~/shared/constants/pos'
 import { z } from 'zod'
 import { listCatalogItems } from '~~/server/utils/pos/catalog'
+import { paginationQuerySchema, queryBooleanSchema } from '~~/shared/validation/api'
 
-const querySchema = z.object({
+const querySchema = paginationQuerySchema.extend({
   search: z.string().optional(),
-  activeOnly: z.coerce.boolean().optional(),
+  activeOnly: queryBooleanSchema.optional(),
   type: z.enum(catalogItemTypes).optional(),
-  category: z.string().optional(),
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(250).default(50)
+  category: z.string().optional()
 })
 
 export default eventHandler(async (event) => {
-  const query = querySchema.parse(getQuery(event))
+  const query = await getValidatedQuery(event, querySchema.parse)
   return listCatalogItems({
     search: query.search,
     activeOnly: query.activeOnly ?? false,

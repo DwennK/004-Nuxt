@@ -9,9 +9,11 @@ const props = withDefaults(defineProps<{
 
 const open = ref(false)
 const toast = useToast()
+const { can } = useCapabilities()
+const canDeleteRecords = computed(() => can('records:delete'))
 
 async function onSubmit() {
-  if (!props.ids.length) {
+  if (!canDeleteRecords.value || !props.ids.length) {
     open.value = false
     return
   }
@@ -44,6 +46,7 @@ async function onSubmit() {
 
 <template>
   <UModal
+    v-if="canDeleteRecords"
     v-model:open="open"
     :title="`Supprimer ${props.count} demande${props.count > 1 ? 's' : ''}`"
     description="Cette action est définitive."

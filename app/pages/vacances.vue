@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn, TabsItem } from '@nuxt/ui'
+import type { DropdownMenuItem, TableColumn, TabsItem } from '@nuxt/ui'
 import { getPaginationRowModel } from '@tanstack/table-core'
 import { CalendarDate } from '@internationalized/date'
 import type {
@@ -17,6 +17,7 @@ const UBadge = resolveComponent('UBadge')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
+const { can } = useCapabilities()
 
 type EmployeeFormPayload = Pick<EmployeeRecord, 'firstName' | 'lastName' | 'color' | 'vacationDaysPerYear' | 'isActive'> & {
   email: string
@@ -91,12 +92,16 @@ async function saveEmployee(payload: EmployeeFormPayload) {
 }
 
 function confirmDeleteEmployee(emp: EmployeeRecord) {
+  if (!can('records:delete')) {
+    return
+  }
+
   employeeToDelete.value = emp
   deleteConfirmOpen.value = true
 }
 
 async function removeEmployee() {
-  if (!employeeToDelete.value) return
+  if (!can('records:delete') || !employeeToDelete.value) return
   await $fetch(`/api/employees/${employeeToDelete.value.id}`, { method: 'DELETE' })
   toast.add({ title: 'Employe supprime', color: 'success' })
   deleteConfirmOpen.value = false
@@ -114,21 +119,27 @@ const summaryByEmployeeId = computed(() => {
 })
 
 function getEmployeeRowItems(emp: EmployeeRecord) {
-  return [[{
+  const items: DropdownMenuItem[] = [{
     label: 'Modifier',
     icon: 'i-lucide-pencil',
     onSelect() {
       editingEmployee.value = emp
       editEmployeeOpen.value = true
     }
-  }, {
-    label: 'Supprimer',
-    icon: 'i-lucide-trash',
-    color: 'error' as const,
-    onSelect() {
-      confirmDeleteEmployee(emp)
-    }
-  }]]
+  }]
+
+  if (can('records:delete')) {
+    items.push({
+      label: 'Supprimer',
+      icon: 'i-lucide-trash',
+      color: 'error',
+      onSelect() {
+        confirmDeleteEmployee(emp)
+      }
+    })
+  }
+
+  return [items]
 }
 
 const employeeColumns: TableColumn<EmployeeRecord>[] = [
@@ -223,9 +234,32 @@ async function saveVacationEntry(payload: VacationEntryPayload) {
 }
 
 async function removeVacationEntry(id: number) {
+  if (!can('records:delete')) {
+    return
+  }
+
   await $fetch(`/api/vacations/${id}`, { method: 'DELETE' })
   toast.add({ title: 'Absence supprimee', color: 'success' })
   await refreshAll()
+}
+
+function getVacationRowItems(entry: VacationEntryListItem) {
+  const items: DropdownMenuItem[] = [{
+    label: 'Modifier',
+    icon: 'i-lucide-pencil',
+    onSelect: () => openEditVacation(entry)
+  }]
+
+  if (can('records:delete')) {
+    items.push({
+      label: 'Supprimer',
+      icon: 'i-lucide-trash',
+      color: 'error',
+      onSelect: () => removeVacationEntry(entry.id)
+    })
+  }
+
+  return [items]
 }
 
 // --- Calendar ---
@@ -629,10 +663,7 @@ const calendarRef = ref()
                     />
                     <UDropdownMenu
                       :content="{ align: 'end' }"
-                      :items="[[
-                        { label: 'Modifier', icon: 'i-lucide-pencil', onSelect: () => openEditVacation(entry) },
-                        { label: 'Supprimer', icon: 'i-lucide-trash', color: 'error', onSelect: () => removeVacationEntry(entry.id) }
-                      ]]"
+                      :items="getVacationRowItems(entry)"
                     >
                       <UButton
                         icon="i-lucide-ellipsis-vertical"
@@ -899,7 +930,7 @@ const calendarRef = ref()
   </UModal>
 
   <!-- Delete confirmation modal -->
-  <UModal v-model:open="deleteConfirmOpen" title="Supprimer l'employe ?">
+  <UModal v-if="can('records:delete')" v-model:open="deleteConfirmOpen" title="Supprimer l'employe ?">
     <template #body>
       <p class="text-sm text-toned">
         Etes-vous sur de vouloir supprimer <strong>{{ employeeToDelete?.displayName }}</strong> ?

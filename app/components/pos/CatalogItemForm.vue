@@ -399,8 +399,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         />
       </div>
 
-      <template v-if="isService">
-        <div class="grid gap-4 md:grid-cols-2">
+      <template v-if="isCatalogService">
+        <div v-if="isRepair" class="grid gap-4 md:grid-cols-2">
           <UFormField label="Marque" name="brand" hint="Recommandé">
             <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
           </UFormField>
@@ -410,8 +410,12 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           </UFormField>
         </div>
 
-        <UFormField label="Type d’intervention" name="serviceKind" required>
-          <UInput v-model="state.serviceKind" class="w-full" placeholder="Remplacement écran" />
+        <UFormField :label="isRepair ? 'Type d’intervention' : 'Nature du service'" name="serviceKind" required>
+          <UInput
+            v-model="state.serviceKind"
+            class="w-full"
+            :placeholder="isRepair ? 'Remplacement écran' : 'Diagnostic, configuration, support...'"
+          />
         </UFormField>
 
         <div class="flex flex-wrap gap-2">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
+import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { Row } from '@tanstack/table-core'
 import { getPaginationRowModel } from '@tanstack/table-core'
 import { format, isValid, parseISO } from 'date-fns'
@@ -37,6 +37,7 @@ const UCheckbox = resolveComponent('UCheckbox')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const toast = useToast()
+const { can } = useCapabilities()
 const table = useTemplateRef<SmartphoneTableInstance>('table')
 const editModalOpen = ref(false)
 const editingItem = ref<SmartphoneStock | null>(null)
@@ -93,6 +94,10 @@ async function updateSoldState(row: SmartphoneStock, sold: boolean) {
 }
 
 async function deleteSingleStock(id: number) {
+  if (!can('records:delete')) {
+    return
+  }
+
   try {
     await $fetch('/api/smartphone-stocks/bulk-delete', {
       method: 'POST',
@@ -117,7 +122,7 @@ async function deleteSingleStock(id: number) {
 }
 
 function getRowItems(row: Row<SmartphoneStock>) {
-  return [
+  const items: DropdownMenuItem[] = [
     {
       type: 'label',
       label: 'Actions'
@@ -143,19 +148,21 @@ function getRowItems(row: Row<SmartphoneStock>) {
         editingItem.value = row.original
         editModalOpen.value = true
       }
-    },
-    {
-      type: 'separator'
-    },
-    {
+    }
+  ]
+
+  if (can('records:delete')) {
+    items.push({ type: 'separator' }, {
       label: 'Supprimer',
       icon: 'i-lucide-trash',
       color: 'error',
       onSelect() {
         deleteSingleStock(row.original.id)
       }
-    }
-  ]
+    })
+  }
+
+  return items
 }
 
 const selectedSmartphoneIds = computed<number[]>(() => {
@@ -336,6 +343,7 @@ function handleImeiScan(value: string) {
 
         <div class="flex flex-wrap items-center gap-1.5">
           <SmartphonesDeleteModal
+            v-if="can('records:delete')"
             :count="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
             :ids="selectedSmartphoneIds"
           >
