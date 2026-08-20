@@ -21,6 +21,8 @@ export default defineNuxtConfig({
   runtimeConfig: {
     tursoUrl: process.env.TURSO_URL,
     tursoToken: process.env.TURSO_TOKEN,
+    posAllowRuntimeSchemaBootstrap: process.env.POS_ALLOW_RUNTIME_SCHEMA_BOOTSTRAP === 'true',
+    posAllowRuntimeDemoSeed: process.env.POS_ALLOW_RUNTIME_DEMO_SEED === 'true',
     minimaxApiKey: process.env.MINIMAX_API_KEY,
     minimaxModel: process.env.MINIMAX_MODEL,
     minimaxBaseUrl: process.env.MINIMAX_BASE_URL,

@@ -1,5 +1,11 @@
 import type { AvatarProps } from '@nuxt/ui'
 
+export type {
+  SmartphoneReservationRequest,
+  SmartphoneReservationStatus,
+  SmartphoneStock
+} from '~~/shared/types/smartphones'
+
 export type UserStatus = 'subscribed' | 'unsubscribed' | 'bounced'
 export type SaleStatus = 'paid' | 'failed' | 'refunded'
 
@@ -21,29 +27,6 @@ export interface Customer {
   postalCode: string
   city: string
   comment: string
-}
-
-export interface SmartphoneStock {
-  id: number
-  model: string
-  imei: string
-  sku: string
-  capacity: string
-  stockedAt: string
-  sold: boolean
-}
-
-export type SmartphoneReservationStatus = 'pending' | 'contacted' | 'sold'
-
-export interface SmartphoneReservationRequest {
-  id: number
-  name: string
-  phone: string
-  model: string
-  storage: string
-  requestedAt: string
-  status: SmartphoneReservationStatus
-  notes: string
 }
 
 export interface Mail {

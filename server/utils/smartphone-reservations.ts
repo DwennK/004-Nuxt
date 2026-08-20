@@ -1,5 +1,5 @@
 import { asc, eq, inArray } from 'drizzle-orm'
-import type { SmartphoneReservationRequest, SmartphoneReservationStatus } from '~/types'
+import type { SmartphoneReservationRequest, SmartphoneReservationStatus } from '~~/shared/types/smartphones'
 import { smartphoneReservationRequests } from '../db/schema'
 import { useDb, useTursoClient } from './turso'
 
@@ -23,7 +23,9 @@ function mapSmartphoneReservation(row: SmartphoneReservationRow): SmartphoneRese
   }
 }
 
-export async function ensureSmartphoneReservationsTable() {
+let smartphoneReservationsSchemaPromise: Promise<void> | null = null
+
+async function bootstrapSmartphoneReservationsTable() {
   const client = useTursoClient()
 
   await client.execute(`
@@ -66,6 +68,21 @@ export async function ensureSmartphoneReservationsTable() {
       ON smartphone_reservation_requests(requested_at)
     `
   ], 'write')
+}
+
+export function ensureSmartphoneReservationsTable() {
+  if (useRuntimeConfig().posAllowRuntimeSchemaBootstrap !== true) {
+    return Promise.resolve()
+  }
+
+  if (!smartphoneReservationsSchemaPromise) {
+    smartphoneReservationsSchemaPromise = bootstrapSmartphoneReservationsTable().catch((error) => {
+      smartphoneReservationsSchemaPromise = null
+      throw error
+    })
+  }
+
+  return smartphoneReservationsSchemaPromise
 }
 
 export async function listSmartphoneReservations() {

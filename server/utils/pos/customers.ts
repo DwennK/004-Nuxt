@@ -1,8 +1,10 @@
 import { and, asc, eq, or, sql } from 'drizzle-orm'
 import { customers } from '~~/server/db/schema'
+import { mapCustomer } from '~~/server/modules/customers/mapper'
+import { normalizeOptionalText, normalizeRequiredText, splitLegacyName } from '~~/shared/lib/text'
 import type { CustomerListResponse, CustomerUpsertInput } from '~~/shared/types/pos'
 import { useDb } from '../turso'
-import { ensurePosSchema, mapCustomer, normalizeOptionalText, normalizeRequiredText, splitLegacyName } from './core'
+import { ensurePosSchema } from './core'
 
 export async function listCustomers(filters?: {
   search?: string

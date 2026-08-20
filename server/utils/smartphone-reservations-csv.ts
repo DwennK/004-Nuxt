@@ -1,4 +1,4 @@
-import type { SmartphoneReservationRequest, SmartphoneReservationStatus } from '~/types'
+import type { SmartphoneReservationRequest, SmartphoneReservationStatus } from '~~/shared/types/smartphones'
 
 type ParsedReservationInput = Omit<SmartphoneReservationRequest, 'id'>
 

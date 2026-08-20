@@ -5,38 +5,32 @@ import {
   customers,
   documentLines,
   documents,
+  numberSequences,
   payments,
   ticketEvents,
   tickets
 } from '~~/server/db/schema'
 import { documentTypePrefixes, payableDocumentTypes, ticketStatusLabels } from '~~/shared/constants/pos'
+import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
+import { canTransitionTicketStatus } from '~~/shared/domain/tickets/workflow'
+import { normalizeOptionalText, splitLegacyName } from '~~/shared/lib/text'
 import type {
-  CustomerRecord,
   DocumentStatus,
   DocumentType,
   PaymentStatus,
   TicketEventKind,
   TicketStatus
 } from '~~/shared/types/pos'
-import { buildZonedDayRange, formatCustomerName, sumMoney, toIsoDateTime } from '~~/shared/utils/pos'
+import { buildZonedDayRange, toIsoDateTime } from '~~/shared/utils/pos'
 import type { PosDatabaseExecutor } from '../turso'
 import { useDb, useTursoClient } from '../turso'
 import { buildRepairCatalogSeedItems } from './repair-service-seed'
 
 let posSchemaPromise: Promise<void> | null = null
 
-export function normalizeOptionalText(value: string | null | undefined) {
-  if (typeof value !== 'string') {
-    return null
-  }
-
-  const normalized = value.trim()
-  return normalized ? normalized : null
-}
-
-export function normalizeRequiredText(value: string) {
-  return value.trim()
-}
+// Temporary compatibility exports while remaining POS callers migrate to their owning modules.
+export { mapCustomer } from '~~/server/modules/customers/mapper'
+export { normalizeOptionalText, normalizeRequiredText, splitLegacyName } from '~~/shared/lib/text'
 
 function serializeEventMetadata(metadata?: Record<string, unknown> | null) {
   if (!metadata) {
@@ -47,42 +41,6 @@ function serializeEventMetadata(metadata?: Record<string, unknown> | null) {
     return JSON.stringify(metadata)
   } catch {
     return null
-  }
-}
-
-export function splitLegacyName(name: string | null | undefined) {
-  const normalized = normalizeOptionalText(name) || 'Customer'
-  const parts = normalized.split(/\s+/)
-
-  if (parts.length === 1) {
-    return {
-      firstName: '',
-      lastName: parts[0] || 'Customer'
-    }
-  }
-
-  return {
-    firstName: parts.slice(0, -1).join(' ') || parts[0] || 'Customer',
-    lastName: parts[parts.length - 1] || 'Customer'
-  }
-}
-
-export function mapCustomer(row: typeof customers.$inferSelect): CustomerRecord {
-  return {
-    id: row.id,
-    firstName: row.firstName,
-    lastName: row.lastName,
-    companyName: row.companyName,
-    phone: row.phone,
-    email: row.email,
-    addressLine1: row.addressLine1,
-    addressLine2: row.addressLine2,
-    postalCode: row.postalCode,
-    city: row.city,
-    notes: row.notes,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    displayName: formatCustomerName(row)
   }
 }
 
@@ -120,74 +78,8 @@ async function ensureCompanySettingsRow() {
   })
 }
 
-export function calculateDocumentTotals(lines: Array<{
-  quantity: number
-  unitPrice: number
-  vatRate: number
-  lineTotal?: number | null
-}>) {
-  const normalizedLines = lines.map((line) => {
-    const computedTotal = Math.round(line.quantity * line.unitPrice)
-    const taxableBase = line.vatRate > 0
-      ? Math.round(computedTotal / (1 + (line.vatRate / 100)))
-      : computedTotal
-
-    return {
-      ...line,
-      lineTotal: computedTotal,
-      subtotal: taxableBase,
-      taxAmount: computedTotal - taxableBase
-    }
-  })
-
-  return {
-    lines: normalizedLines,
-    subtotal: sumMoney(normalizedLines.map(line => line.subtotal)),
-    taxAmount: sumMoney(normalizedLines.map(line => line.taxAmount)),
-    total: sumMoney(normalizedLines.map(line => line.lineTotal))
-  }
-}
-
-async function refreshStoredDocumentTotals() {
-  const client = useTursoClient()
-
-  await client.execute(`
-    UPDATE documents
-    SET
-      subtotal = COALESCE((
-        SELECT CAST(SUM(
-          CASE
-            WHEN document_lines.vat_rate > 0 THEN ROUND(document_lines.line_total / (1 + (document_lines.vat_rate / 100.0)))
-            ELSE document_lines.line_total
-          END
-        ) AS INTEGER)
-        FROM document_lines
-        WHERE document_lines.document_id = documents.id
-      ), subtotal),
-      tax_amount = COALESCE((
-        SELECT CAST(SUM(
-          document_lines.line_total - (
-            CASE
-              WHEN document_lines.vat_rate > 0 THEN ROUND(document_lines.line_total / (1 + (document_lines.vat_rate / 100.0)))
-              ELSE document_lines.line_total
-            END
-          )
-        ) AS INTEGER)
-        FROM document_lines
-        WHERE document_lines.document_id = documents.id
-      ), tax_amount),
-      total = COALESCE((
-        SELECT CAST(SUM(document_lines.line_total) AS INTEGER)
-        FROM document_lines
-        WHERE document_lines.document_id = documents.id
-      ), total)
-    WHERE EXISTS (
-      SELECT 1
-      FROM document_lines
-      WHERE document_lines.document_id = documents.id
-    )
-  `)
-}
+// Compatibility export while callers move to the shared commercial kernel.
+export const calculateDocumentTotals = calculateCommercialTotals
 
 async function createPosTables() {
   const client = useTursoClient()
@@ -1341,6 +1233,12 @@ async function createVacationTables() {
 export async function ensurePosSchema() {
   if (!posSchemaPromise) {
     posSchemaPromise = (async () => {
+      const config = useRuntimeConfig()
+
+      if (config.posAllowRuntimeSchemaBootstrap !== true) {
+        return
+      }
+
       await migrateLegacyCustomersTable()
       await createPosTables()
       await ensureDocumentImportsTable()
@@ -1351,8 +1249,9 @@ export async function ensurePosSchema() {
       await migrateTicketLinesQuantityToInteger()
       await ensureUniqueNumberIndexes()
       await ensureCompanySettingsRow()
-      await refreshStoredDocumentTotals()
-      await seedPosData()
+      if (config.posAllowRuntimeDemoSeed === true) {
+        await seedPosData()
+      }
       await createVacationTables()
     })().catch((error) => {
       posSchemaPromise = null
@@ -1363,30 +1262,26 @@ export async function ensurePosSchema() {
   return posSchemaPromise
 }
 
-export async function generateTicketNumber() {
-  await ensurePosSchema()
+export async function generateTicketNumber(executor?: PosDatabaseExecutor) {
+  if (!executor) {
+    await ensurePosSchema()
+  }
 
   const prefix = 'TIC-'
-  const client = useTursoClient()
-  const result = await client.execute({
-    sql: `
-      INSERT INTO number_sequences (scope, last_value)
-      VALUES (
-        ?,
-        COALESCE((
-          SELECT MAX(CAST(SUBSTR(ticket_number, LENGTH(?) + 1) AS INTEGER))
-          FROM tickets
-          WHERE ticket_number LIKE ?
-        ), 0) + 1
-      )
-      ON CONFLICT(scope) DO UPDATE
-      SET last_value = number_sequences.last_value + 1
-      RETURNING last_value
-    `,
-    args: ['ticket', prefix, `${prefix}%`]
-  })
+  const db = executor || useDb()
+  const [result] = await db.insert(numberSequences).values({
+    scope: 'ticket',
+    lastValue: sql<number>`coalesce((
+      select max(cast(substr(${tickets.ticketNumber}, length(${prefix}) + 1) as integer))
+      from ${tickets}
+      where ${tickets.ticketNumber} like ${`${prefix}%`}
+    ), 0) + 1`
+  }).onConflictDoUpdate({
+    target: numberSequences.scope,
+    set: { lastValue: sql`${numberSequences.lastValue} + 1` }
+  }).returning({ lastValue: numberSequences.lastValue })
 
-  const sequence = Number(result.rows[0]?.last_value || 0)
+  const sequence = Number(result?.lastValue || 0)
 
   if (!sequence) {
     throw createError({
@@ -1398,31 +1293,27 @@ export async function generateTicketNumber() {
   return `${prefix}${sequence}`
 }
 
-export async function generateDocumentNumber(type: DocumentType) {
-  await ensurePosSchema()
+export async function generateDocumentNumber(type: DocumentType, executor?: PosDatabaseExecutor) {
+  if (!executor) {
+    await ensurePosSchema()
+  }
 
   const prefix = `${documentTypePrefixes[type]}-`
-  const client = useTursoClient()
-  const result = await client.execute({
-    sql: `
-      INSERT INTO number_sequences (scope, last_value)
-      VALUES (
-        ?,
-        COALESCE((
-          SELECT MAX(CAST(SUBSTR(document_number, LENGTH(?) + 1) AS INTEGER))
-          FROM documents
-          WHERE type = ?
-            AND document_number LIKE ?
-        ), 0) + 1
-      )
-      ON CONFLICT(scope) DO UPDATE
-      SET last_value = number_sequences.last_value + 1
-      RETURNING last_value
-    `,
-    args: [`document:${type}`, prefix, type, `${prefix}%`]
-  })
+  const db = executor || useDb()
+  const [result] = await db.insert(numberSequences).values({
+    scope: `document:${type}`,
+    lastValue: sql<number>`coalesce((
+      select max(cast(substr(${documents.documentNumber}, length(${prefix}) + 1) as integer))
+      from ${documents}
+      where ${documents.type} = ${type}
+        and ${documents.documentNumber} like ${`${prefix}%`}
+    ), 0) + 1`
+  }).onConflictDoUpdate({
+    target: numberSequences.scope,
+    set: { lastValue: sql`${numberSequences.lastValue} + 1` }
+  }).returning({ lastValue: numberSequences.lastValue })
 
-  const sequence = Number(result.rows[0]?.last_value || 0)
+  const sequence = Number(result?.lastValue || 0)
 
   if (!sequence) {
     throw createError({
@@ -1504,100 +1395,126 @@ export async function closeTicketRecord(ticketId: number, internalNotes?: string
   await ensurePosSchema()
 
   const db = useDb()
-  const existingRows = await db.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1)
-  const existing = existingRows[0]
+  return db.transaction(async (tx) => {
+    const existingRows = await tx.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1)
+    const existing = existingRows[0]
 
-  if (!existing) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Ticket not found'
-    })
-  }
+    if (!existing) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Ticket not found'
+      })
+    }
 
-  const result = await db.update(tickets)
-    .set({
-      status: 'closed',
-      closedAt: toIsoDateTime(),
-      internalNotes: normalizeOptionalText(internalNotes) ?? undefined,
-      updatedAt: toIsoDateTime()
-    })
-    .where(eq(tickets.id, ticketId))
-    .returning()
+    if (!canTransitionTicketStatus(existing.status, 'closed')) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: `Ticket cannot transition from ${ticketStatusLabels[existing.status]} to ${ticketStatusLabels.closed}`,
+        data: {
+          code: 'TICKET_TRANSITION_NOT_ALLOWED',
+          from: existing.status,
+          to: 'closed'
+        }
+      })
+    }
 
-  const row = result[0]
+    const result = await tx.update(tickets)
+      .set({
+        status: 'closed',
+        closedAt: toIsoDateTime(),
+        internalNotes: normalizeOptionalText(internalNotes) ?? undefined,
+        updatedAt: toIsoDateTime()
+      })
+      .where(eq(tickets.id, ticketId))
+      .returning()
+    const row = result[0]
 
-  if (!row) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Ticket not found'
-    })
-  }
+    if (!row) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Ticket not found'
+      })
+    }
 
-  if (existing.status !== 'closed') {
-    await createTicketEvent({
-      ticketId,
-      kind: 'ticket_closed',
-      label: 'Ticket clôturé',
-      note: internalNotes,
-      metadata: {
-        previousStatus: existing.status,
-        nextStatus: 'closed'
-      },
-      occurredAt: row.closedAt
-    })
-  }
+    if (existing.status !== 'closed') {
+      await createTicketEvent({
+        ticketId,
+        kind: 'ticket_closed',
+        label: 'Ticket clôturé',
+        note: internalNotes,
+        metadata: {
+          previousStatus: existing.status,
+          nextStatus: 'closed'
+        },
+        occurredAt: row.closedAt
+      }, tx)
+    }
 
-  return row
+    return row
+  })
 }
 
 export async function updateTicketStatusRecord(ticketId: number, status: TicketStatus, internalNotes?: string | null) {
   await ensurePosSchema()
 
   const db = useDb()
-  const existingRows = await db.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1)
-  const existing = existingRows[0]
+  return db.transaction(async (tx) => {
+    const existingRows = await tx.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1)
+    const existing = existingRows[0]
 
-  if (!existing) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Ticket not found'
-    })
-  }
+    if (!existing) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Ticket not found'
+      })
+    }
 
-  const result = await db.update(tickets)
-    .set({
-      status,
-      closedAt: status === 'closed' ? toIsoDateTime() : null,
-      internalNotes: normalizeOptionalText(internalNotes) ?? undefined,
-      updatedAt: toIsoDateTime()
-    })
-    .where(eq(tickets.id, ticketId))
-    .returning()
+    if (!canTransitionTicketStatus(existing.status, status)) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: `Ticket cannot transition from ${ticketStatusLabels[existing.status]} to ${ticketStatusLabels[status]}`,
+        data: {
+          code: 'TICKET_TRANSITION_NOT_ALLOWED',
+          from: existing.status,
+          to: status
+        }
+      })
+    }
 
-  const row = result[0]
+    const result = await tx.update(tickets)
+      .set({
+        status,
+        closedAt: status === 'closed' ? toIsoDateTime() : null,
+        internalNotes: normalizeOptionalText(internalNotes) ?? undefined,
+        updatedAt: toIsoDateTime()
+      })
+      .where(eq(tickets.id, ticketId))
+      .returning()
+    const row = result[0]
 
-  if (!row) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Ticket not found'
-    })
-  }
+    if (!row) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Ticket not found'
+      })
+    }
 
-  if (existing.status !== status) {
-    await createTicketEvent({
-      ticketId,
-      kind: status === 'closed' ? 'ticket_closed' : 'ticket_status_changed',
-      label: status === 'closed' ? 'Ticket clôturé' : `Statut mis à jour · ${ticketStatusLabels[status]}`,
-      note: internalNotes,
-      metadata: {
-        previousStatus: existing.status,
-        nextStatus: status
-      },
-      occurredAt: status === 'closed' ? row.closedAt : row.updatedAt
-    })
-  }
+    if (existing.status !== status) {
+      await createTicketEvent({
+        ticketId,
+        kind: status === 'closed' ? 'ticket_closed' : 'ticket_status_changed',
+        label: status === 'closed' ? 'Ticket clôturé' : `Statut mis à jour · ${ticketStatusLabels[status]}`,
+        note: internalNotes,
+        metadata: {
+          previousStatus: existing.status,
+          nextStatus: status
+        },
+        occurredAt: status === 'closed' ? row.closedAt : row.updatedAt
+      }, tx)
+    }
 
-  return row
+    return row
+  })
 }
 
 export async function getTicketPayments(ticketId: number) {

@@ -1,5 +1,5 @@
 import { asc, eq, inArray, sql } from 'drizzle-orm'
-import type { SmartphoneStock } from '~/types'
+import type { SmartphoneStock } from '~~/shared/types/smartphones'
 import { smartphoneStocks } from '../db/schema'
 import { useDb, useTursoClient } from './turso'
 
@@ -88,7 +88,9 @@ function mapSmartphoneStock(row: SmartphoneStockRow): SmartphoneStock {
   }
 }
 
-export async function ensureSmartphoneStocksTable() {
+let smartphoneStocksSchemaPromise: Promise<void> | null = null
+
+async function bootstrapSmartphoneStocksTable() {
   const client = useTursoClient()
 
   await client.execute(`
@@ -194,6 +196,10 @@ export async function ensureSmartphoneStocksTable() {
     `
   ], 'write')
 
+  if (useRuntimeConfig().posAllowRuntimeDemoSeed !== true) {
+    return
+  }
+
   const db = useDb()
   const result = await db.select({ count: sql<number>`count(*)` }).from(smartphoneStocks)
   const count = Number(result[0]?.count || 0)
@@ -203,6 +209,21 @@ export async function ensureSmartphoneStocksTable() {
   }
 
   await db.insert(smartphoneStocks).values(seedSmartphoneStocks)
+}
+
+export function ensureSmartphoneStocksTable() {
+  if (useRuntimeConfig().posAllowRuntimeSchemaBootstrap !== true) {
+    return Promise.resolve()
+  }
+
+  if (!smartphoneStocksSchemaPromise) {
+    smartphoneStocksSchemaPromise = bootstrapSmartphoneStocksTable().catch((error) => {
+      smartphoneStocksSchemaPromise = null
+      throw error
+    })
+  }
+
+  return smartphoneStocksSchemaPromise
 }
 
 export async function listSmartphoneStocks() {
