@@ -190,6 +190,38 @@ function normalizeDateRange(startDate: string, endDate: string) {
     : { startDate: endDate, endDate: startDate }
 }
 
+export function projectReportsLeaders(topCustomerRows: TopCustomerRow[], topItemRows: TopItemRow[]) {
+  return {
+    topCustomers: topCustomerRows
+      .map(row => ({
+        customerId: row.customerId,
+        customerName: row.customerName,
+        total: Number(row.total || 0),
+        documentCount: Number(row.documentCount || 0)
+      }))
+      .sort((left, right) =>
+        right.total - left.total
+        || right.documentCount - left.documentCount
+        || left.customerName.localeCompare(right.customerName, 'fr-CH')
+      )
+      .slice(0, 8),
+    topItems: topItemRows
+      .map(row => ({
+        key: `${row.category || 'uncategorized'}:${row.label}`,
+        label: row.label,
+        category: row.category,
+        total: Number(row.total || 0),
+        quantity: Number(row.quantity || 0)
+      }))
+      .sort((left, right) =>
+        right.total - left.total
+        || right.quantity - left.quantity
+        || left.label.localeCompare(right.label, 'fr-CH')
+      )
+      .slice(0, 8)
+  }
+}
+
 async function getTopLeaders(
   db: ReturnType<typeof useDb>,
   paidDocumentIds: number[]
@@ -227,35 +259,7 @@ async function getTopLeaders(
       )
   ])
 
-  return {
-    topCustomers: topCustomerRows
-      .map(row => ({
-        customerId: row.customerId,
-        customerName: row.customerName,
-        total: Number(row.total || 0),
-        documentCount: Number(row.documentCount || 0)
-      }))
-      .sort((left, right) =>
-        right.total - left.total
-        || right.documentCount - left.documentCount
-        || left.customerName.localeCompare(right.customerName, 'fr-CH')
-      )
-      .slice(0, 8),
-    topItems: topItemRows
-      .map(row => ({
-        key: `${row.category || 'uncategorized'}:${row.label}`,
-        label: row.label,
-        category: row.category,
-        total: Number(row.total || 0),
-        quantity: Number(row.quantity || 0)
-      }))
-      .sort((left, right) =>
-        right.total - left.total
-        || right.quantity - left.quantity
-        || left.label.localeCompare(right.label, 'fr-CH')
-      )
-      .slice(0, 8)
-  }
+  return projectReportsLeaders(topCustomerRows, topItemRows)
 }
 
 export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
@@ -404,6 +408,139 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
   }
 }
 
+type ReportsOverviewProjectionInput = {
+  date: string
+  weeklyPaymentRows: Array<{
+    amount: number
+    method: (typeof paymentMethods)[number]
+    paidAt: string
+  }>
+  monthlyPaymentRows: Array<{
+    bucket: string
+    method: (typeof paymentMethods)[number]
+    total: number | string | null
+  }>
+  yearlyPaymentRows: Array<{
+    bucket: string
+    method: (typeof paymentMethods)[number]
+    total: number | string | null
+  }>
+  openTicketCount: number | string | null
+  openedRows: Array<{ openedAt: string }>
+  closedRows: Array<{ closedAt: string | null }>
+  topCustomers: ReportsLeaders['topCustomers']
+  topItems: ReportsLeaders['topItems']
+  turnoverRows: TurnoverRow[]
+}
+
+export function projectReportsOverview(input: ReportsOverviewProjectionInput): ReportsOverview {
+  const rangeDates = Array.from({ length: 7 }, (_, index) => shiftIsoDate(input.date, index - 6))
+  const startDate = rangeDates[0]!
+  const endDate = rangeDates[rangeDates.length - 1]!
+  const weeklyBuckets = buildDailyPaymentBuckets(startDate, endDate, formatDayLabel, formatDetailedDayLabel)
+  const monthlyBuckets = buildMonthlyPaymentBuckets(input.date)
+  const yearlyBuckets = buildAnnualPaymentBuckets(input.date)
+  const weeklyBucketsMap = new Map(weeklyBuckets.map(item => [item.date, item]))
+  const monthlyBucketsMap = new Map(monthlyBuckets.map(item => [item.date, item]))
+  const yearlyBucketsMap = new Map(yearlyBuckets.map(item => [item.date, item]))
+
+  for (const payment of input.weeklyPaymentRows) {
+    const dayKey = toDateInputValue(new Date(payment.paidAt), businessTimeZone)
+    applyPaymentAmount(weeklyBucketsMap.get(dayKey), payment.method, Number(payment.amount || 0))
+  }
+
+  for (const payment of input.monthlyPaymentRows) {
+    applyPaymentAmount(monthlyBucketsMap.get(payment.bucket), payment.method, Number(payment.total || 0))
+  }
+
+  for (const payment of input.yearlyPaymentRows) {
+    applyPaymentAmount(yearlyBucketsMap.get(payment.bucket), payment.method, Number(payment.total || 0))
+  }
+
+  const ticketFlowByDay = rangeDates.map(day => ({
+    date: day,
+    label: formatDayLabel(day),
+    opened: 0,
+    closed: 0
+  }))
+  const ticketFlowByDayMap = new Map(ticketFlowByDay.map(item => [item.date, item]))
+
+  for (const ticket of input.openedRows) {
+    const dayKey = toDateInputValue(new Date(ticket.openedAt), businessTimeZone)
+    const bucket = ticketFlowByDayMap.get(dayKey)
+
+    if (bucket) {
+      bucket.opened += 1
+    }
+  }
+
+  for (const ticket of input.closedRows) {
+    if (!ticket.closedAt) {
+      continue
+    }
+
+    const dayKey = toDateInputValue(new Date(ticket.closedAt), businessTimeZone)
+    const bucket = ticketFlowByDayMap.get(dayKey)
+
+    if (bucket) {
+      bucket.closed += 1
+    }
+  }
+
+  const paymentsByDay = weeklyBuckets.map(({ date: bucketDate, label, total, cash, cardTwint, bankTransfer, stripe }) => ({
+    date: bucketDate,
+    label,
+    total,
+    cash,
+    cardTwint,
+    bankTransfer,
+    stripe
+  }))
+  const totalPaid = weeklyBuckets.reduce((sum, item) => sum + item.total, 0)
+  const paidToday = weeklyBucketsMap.get(input.date)?.total || 0
+
+  return {
+    range: {
+      startDate,
+      endDate,
+      labels: paymentsByDay.map(item => item.label)
+    },
+    kpis: {
+      totalPaid,
+      paidToday,
+      averagePerDay: Math.round(totalPaid / paymentsByDay.length),
+      openTickets: Number(input.openTicketCount || 0)
+    },
+    paymentsByDay,
+    paymentPeriods: [{
+      key: 'week',
+      label: '7 jours',
+      description: 'Vue glissante quotidienne sur les 7 derniers jours encaissés.',
+      buckets: weeklyBuckets
+    }, {
+      key: 'month',
+      label: 'Mois',
+      description: 'Total mensuel de janvier à décembre pour l’année sélectionnée.',
+      buckets: monthlyBuckets
+    }, {
+      key: 'years',
+      label: 'Années',
+      description: 'Total annuel sur les 5 dernières années.',
+      buckets: yearlyBuckets
+    }],
+    turnoverByCategory: input.turnoverRows
+      .filter((row): row is typeof row & { category: NonNullable<typeof row.category> } => Boolean(row.category))
+      .map(row => ({
+        category: row.category,
+        label: lineCategoryLabels[row.category],
+        total: Number(row.total || 0)
+      })),
+    topCustomers: input.topCustomers,
+    topItems: input.topItems,
+    ticketFlowByDay
+  }
+}
+
 export async function getReportsOverview(date: string): Promise<ReportsOverview> {
   await ensurePosSchema()
 
@@ -472,60 +609,6 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
       .where(and(eq(tickets.status, 'closed'), gte(tickets.closedAt, start), lte(tickets.closedAt, end)))
   ])
 
-  const weeklyBuckets = buildDailyPaymentBuckets(startDate, endDate, formatDayLabel, formatDetailedDayLabel)
-  const monthlyBuckets = buildMonthlyPaymentBuckets(date)
-  const yearlyBuckets = buildAnnualPaymentBuckets(date)
-
-  const weeklyBucketsMap = new Map(weeklyBuckets.map(item => [item.date, item]))
-  const monthlyBucketsMap = new Map(monthlyBuckets.map(item => [item.date, item]))
-  const yearlyBucketsMap = new Map(yearlyBuckets.map(item => [item.date, item]))
-
-  for (const payment of weeklyPaymentRows) {
-    const dayKey = toDateInputValue(new Date(payment.paidAt), businessTimeZone)
-    const amount = Number(payment.amount || 0)
-
-    applyPaymentAmount(weeklyBucketsMap.get(dayKey), payment.method, amount)
-  }
-
-  for (const payment of monthlyPaymentRows) {
-    applyPaymentAmount(monthlyBucketsMap.get(payment.bucket), payment.method, Number(payment.total || 0))
-  }
-
-  for (const payment of yearlyPaymentRows) {
-    applyPaymentAmount(yearlyBucketsMap.get(payment.bucket), payment.method, Number(payment.total || 0))
-  }
-
-  const ticketFlowByDay = rangeDates.map(day => ({
-    date: day,
-    label: formatDayLabel(day),
-    opened: 0,
-    closed: 0
-  }))
-
-  const ticketFlowByDayMap = new Map(ticketFlowByDay.map(item => [item.date, item]))
-
-  for (const ticket of openedRows) {
-    const dayKey = toDateInputValue(new Date(ticket.openedAt), businessTimeZone)
-    const bucket = ticketFlowByDayMap.get(dayKey)
-
-    if (bucket) {
-      bucket.opened += 1
-    }
-  }
-
-  for (const ticket of closedRows) {
-    if (!ticket.closedAt) {
-      continue
-    }
-
-    const dayKey = toDateInputValue(new Date(ticket.closedAt), businessTimeZone)
-    const bucket = ticketFlowByDayMap.get(dayKey)
-
-    if (bucket) {
-      bucket.closed += 1
-    }
-  }
-
   const paidDocumentIds = paidDocumentRows.map(row => row.documentId)
   const [{ topCustomers, topItems }, turnoverRows]: [Pick<ReportsLeaders, 'topCustomers' | 'topItems'>, TurnoverRow[]] = await Promise.all([
     getTopLeaders(db, paidDocumentIds),
@@ -543,59 +626,18 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
       : Promise.resolve([])
   ])
 
-  const paymentsByDay = weeklyBuckets.map(({ date: bucketDate, label, total, cash, cardTwint, bankTransfer, stripe }) => ({
-    date: bucketDate,
-    label,
-    total,
-    cash,
-    cardTwint,
-    bankTransfer,
-    stripe
-  }))
-
-  const totalPaid = weeklyBuckets.reduce((sum, item) => sum + item.total, 0)
-  const paidToday = weeklyBucketsMap.get(date)?.total || 0
-
-  return {
-    range: {
-      startDate,
-      endDate,
-      labels: paymentsByDay.map(item => item.label)
-    },
-    kpis: {
-      totalPaid,
-      paidToday,
-      averagePerDay: Math.round(totalPaid / paymentsByDay.length),
-      openTickets: Number(openTicketRows[0]?.count || 0)
-    },
-    paymentsByDay,
-    paymentPeriods: [{
-      key: 'week',
-      label: '7 jours',
-      description: 'Vue glissante quotidienne sur les 7 derniers jours encaissés.',
-      buckets: weeklyBuckets
-    }, {
-      key: 'month',
-      label: 'Mois',
-      description: 'Total mensuel de janvier à décembre pour l’année sélectionnée.',
-      buckets: monthlyBuckets
-    }, {
-      key: 'years',
-      label: 'Années',
-      description: 'Total annuel sur les 5 dernières années.',
-      buckets: yearlyBuckets
-    }],
-    turnoverByCategory: turnoverRows
-      .filter((row): row is typeof row & { category: NonNullable<typeof row.category> } => Boolean(row.category))
-      .map(row => ({
-        category: row.category,
-        label: lineCategoryLabels[row.category],
-        total: Number(row.total || 0)
-      })),
+  return projectReportsOverview({
+    date,
+    weeklyPaymentRows,
+    monthlyPaymentRows,
+    yearlyPaymentRows,
+    openTicketCount: openTicketRows[0]?.count || 0,
+    openedRows,
+    closedRows,
     topCustomers,
     topItems,
-    ticketFlowByDay
-  }
+    turnoverRows
+  })
 }
 
 export async function getReportsLeaders(startDate: string, endDate: string): Promise<ReportsLeaders> {
