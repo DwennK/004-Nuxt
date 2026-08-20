@@ -10,6 +10,10 @@ const LOCKOUT_MS = 15 * 60 * 1000
 let tableReady: Promise<void> | null = null
 
 function ensureTable() {
+  if (useRuntimeConfig().posAllowRuntimeSchemaBootstrap !== true) {
+    return Promise.resolve()
+  }
+
   if (!tableReady) {
     tableReady = useTursoClient().execute(`
       CREATE TABLE IF NOT EXISTS login_attempts (

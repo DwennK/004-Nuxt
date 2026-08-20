@@ -9,5 +9,9 @@ export default defineNitroPlugin(() => {
         message: 'Session invalide'
       })
     }
+
+    if (user) {
+      session.user = user
+    }
   })
 })

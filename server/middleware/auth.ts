@@ -18,4 +18,9 @@ export default defineEventHandler(async (event) => {
       message: 'Session invalide'
     })
   }
+
+  const requestId = event.context.auth?.requestId
+  if (requestId) {
+    setResponseHeader(event, 'X-Request-Id', requestId)
+  }
 })

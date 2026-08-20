@@ -13,6 +13,38 @@ export const ASSISTANT_MAX_RETURNED_ROWS = 50
 const ASSISTANT_ROW_PROBE_LIMIT = ASSISTANT_MAX_RETURNED_ROWS + 1
 const ASSISTANT_QUERY_TIMEOUT_MS = 3000
 
+export const ASSISTANT_SQL_COMPLEXITY_BUDGET = Object.freeze({
+  maxCharacters: 4_000,
+  maxTokens: 512,
+  maxTableReferences: 8,
+  maxJoins: 6,
+  maxCtes: 4,
+  maxSelects: 6,
+  maxFunctionCalls: 24,
+  maxParenthesisDepth: 10
+})
+
+export const ASSISTANT_ALLOWED_SQL_FUNCTIONS = [
+  'avg',
+  'cast',
+  'coalesce',
+  'count',
+  'date',
+  'datetime',
+  'ifnull',
+  'lower',
+  'max',
+  'min',
+  'nullif',
+  'round',
+  'strftime',
+  'substr',
+  'substring',
+  'sum',
+  'trim',
+  'upper'
+] as const
+
 const forbiddenSqlTokenPattern = /\b(insert|update|delete|alter|drop|truncate|create|grant|revoke|copy|call|do|execute|pragma|attach|detach|begin|commit|rollback|savepoint|release|vacuum|reindex|analyze)\b/i
 const commentPattern = /--|\/\*|\*\//
 const limitPattern = /\blimit\s+(\d+)\b/i
@@ -56,26 +88,30 @@ const sqlKeywordTokens = new Set([
   'where',
   'with'
 ])
-const sqlFunctionTokens = new Set([
-  'avg',
-  'cast',
-  'coalesce',
-  'count',
-  'date',
-  'datetime',
-  'ifnull',
-  'lower',
-  'max',
-  'min',
-  'nullif',
-  'round',
-  'strftime',
-  'substr',
-  'substring',
-  'sum',
-  'trim',
-  'upper'
+const parenthesizedSqlSyntaxTokens = new Set([
+  'and',
+  'as',
+  'between',
+  'by',
+  'case',
+  'distinct',
+  'else',
+  'from',
+  'having',
+  'in',
+  'is',
+  'join',
+  'limit',
+  'not',
+  'on',
+  'or',
+  'select',
+  'then',
+  'using',
+  'when',
+  'where'
 ])
+const sqlFunctionTokens = new Set<string>(ASSISTANT_ALLOWED_SQL_FUNCTIONS)
 const tableReferenceBoundaryTokens = new Set([
   'cross',
   'except',
@@ -110,17 +146,55 @@ type TableReference = {
   alias: string | null
 }
 
+type AssistantSqlAnalysis = {
+  tokens: SqlToken[]
+  tableReferences: TableReference[]
+  functionCalls: string[]
+  joinCount: number
+  cteCount: number
+  selectCount: number
+  maxParenthesisDepth: number
+}
+
+export type AssistantSqlAuditMetadata = {
+  characterCount: number
+  tokenCount: number
+  tableCount: number
+  tables: string[]
+  functionCallCount: number
+  functions: string[]
+  joinCount: number
+  cteCount: number
+  selectCount: number
+  maxParenthesisDepth: number
+  limitApplied: boolean
+}
+
+export type AssistantSqlValidationCode = 'invalid_query'
+  | 'read_only_violation'
+  | 'sensitive_column'
+  | 'disallowed_table'
+  | 'disallowed_column'
+  | 'disallowed_function'
+  | 'complexity_budget'
+  | 'query_timeout'
+  | 'query_execution_failed'
+
 export type AssistantValidatedQuery = {
   normalizedSql: string
   displaySql: string
   executionSql: string
   limitApplied: boolean
+  audit: AssistantSqlAuditMetadata
 }
 
 export class AssistantSqlValidationError extends Error {
-  constructor(message: string) {
+  code: AssistantSqlValidationCode
+
+  constructor(message: string, code: AssistantSqlValidationCode = 'invalid_query') {
     super(message)
     this.name = 'AssistantSqlValidationError'
+    this.code = code
   }
 }
 
@@ -142,6 +216,14 @@ function stripStringLiterals(sqlText: string) {
   return sqlText.replace(/'(?:''|[^'])*'/g, '\'\'')
 }
 
+function containsUnsupportedSqlSyntax(sqlText: string) {
+  return [...stripStringLiterals(sqlText)].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0
+    const allowedWhitespace = character === '\t' || character === '\n' || character === '\r'
+    return codePoint > 0x7e || (codePoint < 0x20 && !allowedWhitespace)
+  })
+}
+
 function tokenizeSql(sqlText: string) {
   const tokens: SqlToken[] = []
   const tokenPattern = /[a-z_][a-z0-9_]*|[(),.]/ig
@@ -161,6 +243,110 @@ function tokenizeSql(sqlText: string) {
 
 function isIdentifierToken(token: SqlToken | undefined): token is SqlToken & { kind: 'identifier' } {
   return token?.kind === 'identifier'
+}
+
+function extractFunctionCalls(tokens: SqlToken[]) {
+  const functionCalls: string[] = []
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]
+    const next = tokens[index + 1]
+
+    if (!isIdentifierToken(token) || next?.value !== '(') {
+      continue
+    }
+
+    // Fixed SQL grammar tokens can introduce an expression in parentheses,
+    // for example IN (...) or a CTE declared with AS (...).
+    if (parenthesizedSqlSyntaxTokens.has(token.lower)) {
+      continue
+    }
+
+    functionCalls.push(token.lower)
+  }
+
+  return functionCalls
+}
+
+function measureParenthesisDepth(sqlText: string) {
+  let currentDepth = 0
+  let maxDepth = 0
+
+  for (const character of stripStringLiterals(sqlText)) {
+    if (character === '(') {
+      currentDepth += 1
+      maxDepth = Math.max(maxDepth, currentDepth)
+    } else if (character === ')') {
+      currentDepth -= 1
+
+      if (currentDepth < 0) {
+        throw new AssistantSqlValidationError('Les parenthèses SQL sont déséquilibrées.')
+      }
+    }
+  }
+
+  if (currentDepth !== 0) {
+    throw new AssistantSqlValidationError('Les parenthèses SQL sont déséquilibrées.')
+  }
+
+  return maxDepth
+}
+
+function analyzeAssistantSql(sqlText: string): AssistantSqlAnalysis {
+  const tokens = tokenizeSql(sqlText)
+  const startsWithCte = /^with\b/i.test(sqlText)
+
+  return {
+    tokens,
+    tableReferences: extractTableReferences(sqlText),
+    functionCalls: extractFunctionCalls(tokens),
+    joinCount: tokens.filter(token => token.lower === 'join').length,
+    cteCount: startsWithCte
+      ? tokens.filter((token, index) => token.lower === 'as' && tokens[index + 1]?.value === '(').length
+      : 0,
+    selectCount: tokens.filter(token => token.lower === 'select').length,
+    maxParenthesisDepth: measureParenthesisDepth(sqlText)
+  }
+}
+
+function assertAllowedFunctions(analysis: AssistantSqlAnalysis) {
+  for (const functionName of analysis.functionCalls) {
+    if (!sqlFunctionTokens.has(functionName)) {
+      throw new AssistantSqlValidationError(
+        `La fonction SQL "${functionName}" n’est pas autorisée.`,
+        'disallowed_function'
+      )
+    }
+  }
+}
+
+function assertComplexityBudget(sqlText: string, analysis: AssistantSqlAnalysis) {
+  const budget = ASSISTANT_SQL_COMPLEXITY_BUDGET
+
+  if (/^with\s+recursive\b/i.test(sqlText)) {
+    throw new AssistantSqlValidationError(
+      'Les CTE récursives ne sont pas autorisées.',
+      'complexity_budget'
+    )
+  }
+
+  const exceeded = [
+    sqlText.length > budget.maxCharacters,
+    analysis.tokens.length > budget.maxTokens,
+    analysis.tableReferences.length > budget.maxTableReferences,
+    analysis.joinCount > budget.maxJoins,
+    analysis.cteCount > budget.maxCtes,
+    analysis.selectCount > budget.maxSelects,
+    analysis.functionCalls.length > budget.maxFunctionCalls,
+    analysis.maxParenthesisDepth > budget.maxParenthesisDepth
+  ].some(Boolean)
+
+  if (exceeded) {
+    throw new AssistantSqlValidationError(
+      'La requête dépasse le budget de complexité autorisé.',
+      'complexity_budget'
+    )
+  }
 }
 
 function extractTableReferences(sqlText: string) {
@@ -241,15 +427,25 @@ function assertSingleReadOnlyStatement(sqlText: string) {
   }
 
   if (!/^(select|with)\b/i.test(sqlText)) {
-    throw new AssistantSqlValidationError('Seules les requêtes SELECT en lecture seule sont autorisées.')
+    throw new AssistantSqlValidationError(
+      'Seules les requêtes SELECT en lecture seule sont autorisées.',
+      'read_only_violation'
+    )
   }
 
   if (forbiddenSqlTokenPattern.test(sqlText)) {
-    throw new AssistantSqlValidationError('La requête contient un mot-clé SQL interdit pour un accès en lecture seule.')
+    throw new AssistantSqlValidationError(
+      'La requête contient un mot-clé SQL interdit pour un accès en lecture seule.',
+      'read_only_violation'
+    )
   }
 
   if (quotedIdentifierPattern.test(sqlText)) {
     throw new AssistantSqlValidationError('Les identifiants SQL cités ne sont pas autorisés.')
+  }
+
+  if (containsUnsupportedSqlSyntax(sqlText)) {
+    throw new AssistantSqlValidationError('La requête contient une syntaxe SQL non prise en charge.')
   }
 
   if (/\bselect\s+\*/i.test(sqlText) || /,\s*\*/.test(sqlText) || qualifiedWildcardPattern.test(sqlText)) {
@@ -257,24 +453,33 @@ function assertSingleReadOnlyStatement(sqlText: string) {
   }
 
   if (blockedColumnPattern.test(sqlText)) {
-    throw new AssistantSqlValidationError('La requête tente d’accéder à une colonne sensible bloquée.')
+    throw new AssistantSqlValidationError(
+      'La requête tente d’accéder à une colonne sensible bloquée.',
+      'sensitive_column'
+    )
   }
 }
 
-function assertAllowedTables(sqlText: string) {
+function assertAllowedTables(sqlText: string, tableReferences: TableReference[]) {
   const cteNames = buildCteNameSet(sqlText)
 
-  for (const reference of extractTableReferences(sqlText)) {
+  for (const reference of tableReferences) {
     if (cteNames.has(reference.tableName)) {
       continue
     }
 
     if (assistantBlockedTables.has(reference.tableName)) {
-      throw new AssistantSqlValidationError(`La table "${reference.tableName}" est explicitement bloquée.`)
+      throw new AssistantSqlValidationError(
+        `La table "${reference.tableName}" est explicitement bloquée.`,
+        'disallowed_table'
+      )
     }
 
     if (!assistantAllowedTables.has(reference.tableName)) {
-      throw new AssistantSqlValidationError(`La table "${reference.tableName}" n’est pas exposée à l’assistant.`)
+      throw new AssistantSqlValidationError(
+        `La table "${reference.tableName}" n’est pas exposée à l’assistant.`,
+        'disallowed_table'
+      )
     }
   }
 }
@@ -317,7 +522,8 @@ function assertAllowedColumns(sqlText: string) {
 
     if (!tableName) {
       throw new AssistantSqlValidationError(
-        `Le qualifiant "${qualifier}" n’est pas une table ou un alias exposé à l’assistant.`
+        `Le qualifiant "${qualifier}" n’est pas une table ou un alias exposé à l’assistant.`,
+        'disallowed_column'
       )
     }
 
@@ -325,7 +531,8 @@ function assertAllowedColumns(sqlText: string) {
 
     if (!allowedColumns?.has(columnName)) {
       throw new AssistantSqlValidationError(
-        `La colonne "${qualifier}.${columnName}" n’est pas exposée à l’assistant.`
+        `La colonne "${qualifier}.${columnName}" n’est pas exposée à l’assistant.`,
+        'disallowed_column'
       )
     }
   }
@@ -348,7 +555,6 @@ function assertAllowedColumns(sqlText: string) {
       previous?.value === '.'
       || next?.value === '.'
       || previous?.lower === 'as'
-      || next?.value === '('
       || sqlKeywordTokens.has(token.lower)
       || sqlFunctionTokens.has(token.lower)
       || aliases.has(token.lower)
@@ -364,7 +570,8 @@ function assertAllowedColumns(sqlText: string) {
 
     if (!allowedByReferencedTable) {
       throw new AssistantSqlValidationError(
-        `La colonne "${token.lower}" n’est pas exposée à l’assistant.`
+        `La colonne "${token.lower}" n’est pas exposée à l’assistant.`,
+        'disallowed_column'
       )
     }
   }
@@ -394,19 +601,43 @@ export function validateAssistantSql(candidate: string): AssistantValidatedQuery
   const normalizedSql = normalizeCandidateSql(candidate)
 
   assertSingleReadOnlyStatement(normalizedSql)
-  assertAllowedTables(normalizedSql)
+  const analysis = analyzeAssistantSql(normalizedSql)
+
+  assertAllowedFunctions(analysis)
+  assertComplexityBudget(normalizedSql, analysis)
+  assertAllowedTables(normalizedSql, analysis.tableReferences)
   assertAllowedColumns(normalizedSql)
 
   const limitMatch = normalizedSql.match(limitPattern)
   const limitApplied = !limitMatch
   const displaySql = buildDisplaySql(normalizedSql, limitApplied)
   const executionSql = `SELECT * FROM (${normalizedSql}) AS assistant_guarded_query LIMIT ${ASSISTANT_ROW_PROBE_LIMIT}`
+  const cteNames = buildCteNameSet(normalizedSql)
+  const tables = [...new Set(
+    analysis.tableReferences
+      .map(reference => reference.tableName)
+      .filter(tableName => !cteNames.has(tableName))
+  )]
+  const functions = [...new Set(analysis.functionCalls)]
 
   return {
     normalizedSql,
     displaySql,
     executionSql,
-    limitApplied
+    limitApplied,
+    audit: {
+      characterCount: normalizedSql.length,
+      tokenCount: analysis.tokens.length,
+      tableCount: tables.length,
+      tables,
+      functionCallCount: analysis.functionCalls.length,
+      functions,
+      joinCount: analysis.joinCount,
+      cteCount: analysis.cteCount,
+      selectCount: analysis.selectCount,
+      maxParenthesisDepth: analysis.maxParenthesisDepth,
+      limitApplied
+    }
   }
 }
 
@@ -456,7 +687,7 @@ export async function runReadOnlyQuery(validatedQuery: AssistantValidatedQuery, 
       scope: 'assistant-sql',
       requestId,
       accepted: true,
-      sql: validatedQuery.displaySql,
+      query: validatedQuery.audit,
       durationMs: Date.now() - startedAt,
       rowCount: shapedRows.length,
       truncated
@@ -476,15 +707,16 @@ export async function runReadOnlyQuery(validatedQuery: AssistantValidatedQuery, 
       scope: 'assistant-sql',
       requestId,
       accepted: false,
-      sql: validatedQuery.displaySql,
+      query: validatedQuery.audit,
       durationMs: Date.now() - startedAt,
-      reason: message
+      reason: timeout ? 'query_timeout' : 'query_execution_failed'
     }))
 
     throw new AssistantSqlValidationError(
       timeout
         ? 'La requête a dépassé le délai maximal de 3 secondes.'
-        : 'La requête validée n’a pas pu être exécutée.'
+        : 'La requête validée n’a pas pu être exécutée.',
+      timeout ? 'query_timeout' : 'query_execution_failed'
     )
   }
 }

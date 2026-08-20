@@ -8,6 +8,7 @@ import {
   loginThrottleKey,
   registerLoginFailure
 } from '~~/server/utils/auth/login-throttle'
+import { listCapabilities } from '~~/shared/utils/capabilities'
 import { verifyLoginTurnstile } from '~~/server/utils/auth/turnstile'
 
 const bodySchema = z.object({
@@ -71,7 +72,8 @@ export default eventHandler(async (event) => {
       id: user.id,
       email: user.email,
       name: user.name,
-      isAdmin: user.isAdmin
+      isAdmin: user.isAdmin,
+      capabilities: listCapabilities(user)
     }
   })
 

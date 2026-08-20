@@ -2,6 +2,7 @@ import type { AssistantChatMessageInput, AssistantChatResponse } from '~~/shared
 import { buildAssistantSchemaContext } from './allowlist'
 import { requestStructuredResponse, requestTextResponse } from './provider'
 import {
+  ASSISTANT_ALLOWED_SQL_FUNCTIONS,
   AssistantSqlValidationError,
   runReadOnlyQuery,
   validateAssistantSql
@@ -66,6 +67,7 @@ function buildPlanningSystemPrompt() {
     '- Pas de SELECT *. Liste les colonnes explicitement.',
     '- Toujours qualifier les colonnes avec le nom de table ou un alias.',
     '- Utiliser uniquement les tables et colonnes exposées ci-dessous.',
+    `- Utiliser uniquement ces fonctions SQL: ${ASSISTANT_ALLOWED_SQL_FUNCTIONS.join(', ')}.`,
     '- Préférer des agrégations courtes et lisibles pour répondre à une question métier.',
     '- Si la question est ambiguë, pose l’hypothèse la plus raisonnable et produis la requête. Explique l’hypothèse dans querySummary.',
     '- Si la question semble hors périmètre, produis quand même un SELECT plausible sur les tables exposées (ex: SELECT c.id, c.first_name, c.last_name FROM customers c LIMIT 5) et signale le désalignement dans querySummary.',
@@ -119,8 +121,11 @@ function normalizePlanningResult(planning: Partial<AssistantPlanningResult>) {
   } satisfies AssistantPlanningResult
 }
 
-export async function runAssistantChat(messages: AssistantChatMessageInput[], debug: boolean): Promise<AssistantChatResponse> {
-  const requestId = crypto.randomUUID()
+export async function runAssistantChat(
+  messages: AssistantChatMessageInput[],
+  debug: boolean,
+  requestId: string = crypto.randomUUID()
+): Promise<AssistantChatResponse> {
   const latestQuestion = [...messages].reverse().find(message => message.role === 'user')?.content || ''
 
   const rawPlanning = await requestStructuredResponse<Partial<AssistantPlanningResult>>({
@@ -137,7 +142,7 @@ export async function runAssistantChat(messages: AssistantChatMessageInput[], de
       scope: 'assistant-planning',
       requestId,
       reason: 'empty-sql',
-      rawPlanning
+      candidateCharacters: planning.sql.length
     }))
 
     return {
@@ -163,8 +168,8 @@ export async function runAssistantChat(messages: AssistantChatMessageInput[], de
       scope: 'assistant-sql',
       requestId,
       accepted: false,
-      sql: planning.sql,
-      reason: message
+      candidateCharacters: planning.sql.length,
+      reason: error instanceof AssistantSqlValidationError ? error.code : 'invalid_query'
     }))
 
     return {
