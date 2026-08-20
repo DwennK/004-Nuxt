@@ -1,4 +1,5 @@
 import type { SentMailDetail, SentMailListResponse, SentMailStatus, SentMailSummary } from '~~/shared/types/pos'
+import { externalFetch } from './external-fetch'
 
 type ResendEmailReference = {
   id?: string
@@ -27,6 +28,9 @@ type ListSentEmailsOptions = {
   after?: string
   before?: string
 }
+
+const RESEND_RESPONSE_LIMIT_BYTES = 4 * 1024 * 1024
+const RESEND_DETAIL_CONCURRENCY = 4
 
 const knownSentMailStatuses = new Set<SentMailStatus>([
   'queued',
@@ -141,11 +145,17 @@ async function resendRequest<T>(path: string, query?: Record<string, string | nu
     }
   }
 
-  const response = await fetch(url, {
+  const { response } = await externalFetch(url, {
     headers: {
       'Authorization': `Bearer ${config.resendApiKey}`,
       'Content-Type': 'application/json'
     }
+  }, {
+    provider: 'resend',
+    timeoutMs: 15_000,
+    maxResponseBytes: RESEND_RESPONSE_LIMIT_BYTES,
+    timeoutMessage: 'La récupération des e-mails a dépassé le délai autorisé',
+    networkErrorMessage: 'Le service Resend est indisponible'
   })
 
   const payload = await response.json().catch(() => null) as unknown
@@ -160,6 +170,32 @@ async function resendRequest<T>(path: string, query?: Record<string, string | nu
   return payload as T
 }
 
+async function mapWithConcurrency<T, TResult>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<TResult>
+) {
+  const results = new Array<TResult>(items.length)
+  let nextIndex = 0
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(items[index]!, index)
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(concurrency, items.length) },
+      () => runWorker()
+    )
+  )
+
+  return results
+}
+
 export async function listSentEmails({ limit, after, before }: ListSentEmailsOptions): Promise<SentMailListResponse> {
   const payload = await resendRequest<ResendEmailListResponse>('/emails', {
     limit,
@@ -167,9 +203,10 @@ export async function listSentEmails({ limit, after, before }: ListSentEmailsOpt
     before
   })
 
-  const items = await Promise.all((payload.data || [])
-    .filter(mail => mail?.id)
-    .map(async (mail) => {
+  const items = await mapWithConcurrency(
+    (payload.data || []).filter(mail => mail?.id),
+    RESEND_DETAIL_CONCURRENCY,
+    async (mail) => {
       const summary = normalizeSummary(mail)
 
       try {
@@ -181,7 +218,8 @@ export async function listSentEmails({ limit, after, before }: ListSentEmailsOpt
       } catch {
         return summary
       }
-    }))
+    }
+  )
 
   return {
     items,

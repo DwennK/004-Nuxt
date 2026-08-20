@@ -5,6 +5,7 @@ import type { CustomerUpsertInput, WooImportResult, WooOrderListResponse, WooOrd
 import { getDocumentImportByExternalId, listDocumentImportsByExternalIds } from './document-imports'
 import { mapCustomerInput } from './pos/customers'
 import { calculateDocumentTotals, ensurePosSchema, generateDocumentNumber, normalizeOptionalText } from './pos/core'
+import { externalFetch } from './external-fetch'
 import { useDb } from './turso'
 
 type WooOrderMeta = {
@@ -121,11 +122,16 @@ async function wooCommerceRequest<T>(path: string, query: Record<string, string 
     url.searchParams.set(key, String(value))
   }
 
-  const response = await fetch(url, {
+  const { response } = await externalFetch(url, {
     headers: {
       Accept: 'application/json',
       Authorization: getWooCommerceAuthorizationHeader(consumerKey, consumerSecret)
     }
+  }, {
+    provider: 'woocommerce',
+    timeoutMs: 15_000,
+    timeoutMessage: 'La requête WooCommerce a dépassé le délai autorisé',
+    networkErrorMessage: 'WooCommerce est indisponible'
   })
 
   const payload = await response.json().catch(() => null) as Record<string, unknown> | T | null
@@ -565,7 +571,6 @@ export async function importWooOrderToInvoice(orderRef: string): Promise<WooImpo
   }
 
   const db = useDb()
-  const documentNumber = await generateDocumentNumber('invoice')
   const issuedAt = normalizeOptionalText(order.date_created) || new Date().toISOString()
   const notes = [
     `Import WooCommerce #${order.number}`,
@@ -577,6 +582,7 @@ export async function importWooOrderToInvoice(orderRef: string): Promise<WooImpo
 
   try {
     document = await db.transaction(async (tx) => {
+      const documentNumber = await generateDocumentNumber('invoice', tx)
       const customerId = await resolveWooCustomerId(order, tx)
       const now = new Date().toISOString()
       const insertedRows = await tx.insert(documents).values({

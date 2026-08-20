@@ -7,6 +7,7 @@ import type {
   MobileSentrixSearchResponse,
   MobileSentrixStatusResponse
 } from '~~/shared/types/pos'
+import { externalFetch } from './external-fetch'
 import { normalizeOptionalText } from './pos/core'
 
 type MobileSentrixConfig = {
@@ -201,8 +202,13 @@ async function mobileSentrixRequest<T>(path: string, query: MobileSentrixApiQuer
   const url = new URL(path.startsWith('/api/rest') ? path : `/api/rest${path.startsWith('/') ? path : `/${path}`}`, config.baseUrl)
   appendQuery(url, query)
 
-  const response = await fetch(url, {
+  const { response } = await externalFetch(url, {
     headers: createMobileSentrixRequestHeaders(config)
+  }, {
+    provider: 'mobilesentrix',
+    timeoutMs: 15_000,
+    timeoutMessage: 'La requête MobileSentrix a dépassé le délai autorisé',
+    networkErrorMessage: 'MobileSentrix est indisponible'
   })
 
   const text = await response.text()
@@ -391,7 +397,7 @@ export function getMobileSentrixAuthorizeUrl(origin: string) {
 
 export async function exchangeMobileSentrixOAuthToken(oauthToken: string, oauthVerifier: string): Promise<MobileSentrixOAuthExchangeResponse> {
   const config = requireConsumerConfig()
-  const response = await fetch(new URL('/oauth/authorize/identifiercallback', config.baseUrl), {
+  const { response } = await externalFetch(new URL('/oauth/authorize/identifiercallback', config.baseUrl), {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
@@ -403,6 +409,11 @@ export async function exchangeMobileSentrixOAuthToken(oauthToken: string, oauthV
       oauth_token: oauthToken,
       oauth_verifier: oauthVerifier
     })
+  }, {
+    provider: 'mobilesentrix-oauth',
+    timeoutMs: 15_000,
+    timeoutMessage: 'L’échange OAuth MobileSentrix a dépassé le délai autorisé',
+    networkErrorMessage: 'L’échange OAuth MobileSentrix est indisponible'
   })
   const text = await response.text()
   let payload: Record<string, unknown> | null = null

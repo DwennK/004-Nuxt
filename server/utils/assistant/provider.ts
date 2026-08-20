@@ -1,3 +1,6 @@
+import { createError } from 'h3'
+import { externalFetch, isExternalFetchError } from '../external-fetch'
+
 type StructuredResponseOptions = {
   requestId: string
   schemaName: string
@@ -130,6 +133,10 @@ function parseStructuredContent<T>(content: string) {
 }
 
 function shouldRetryStructuredWithoutSchema(error: unknown) {
+  if (isExternalFetchError(error)) {
+    return false
+  }
+
   const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
     ? Number((error as { statusCode?: unknown }).statusCode)
     : NaN
@@ -142,16 +149,44 @@ function shouldRetryStructuredWithoutSchema(error: unknown) {
     || statusMessage.includes('structured JSON')
 }
 
+async function requestChatCompletion(
+  url: string,
+  requestId: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>
+) {
+  const { response } = await externalFetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body)
+  }, {
+    provider: 'minimax',
+    requestId,
+    timeoutMs: 45_000,
+    timeoutMessage: 'MiniMax request timed out',
+    networkErrorMessage: 'MiniMax is unavailable'
+  })
+  const payload = await response.json().catch(() => null) as (ChatCompletionResponse & {
+    error?: { message?: string }
+  }) | null
+
+  if (!response.ok) {
+    throw createError({
+      statusCode: response.status,
+      statusMessage: payload?.error?.message || 'MiniMax request failed',
+      data: payload
+    })
+  }
+
+  return payload || {}
+}
+
 async function createChatCompletion(requestId: string, body: Record<string, unknown>) {
   const { apiKey, baseUrl } = getProviderConfig()
   const headers = buildHeaders(apiKey, requestId)
 
   try {
-    return await $fetch<ChatCompletionResponse>(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body
-    })
+    return await requestChatCompletion(`${baseUrl}/chat/completions`, requestId, headers, body)
   } catch (error) {
     const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
       ? Number((error as { statusCode?: unknown }).statusCode)
@@ -170,11 +205,7 @@ async function createChatCompletion(requestId: string, body: Record<string, unkn
       throw error
     }
 
-    return $fetch<ChatCompletionResponse>(`${alternativeBaseUrl}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body
-    })
+    return requestChatCompletion(`${alternativeBaseUrl}/chat/completions`, requestId, headers, body)
   }
 }
 

@@ -1,6 +1,7 @@
 import type { DocumentEmailInput, DocumentDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { getDocumentPdfFilename } from '~~/shared/utils/document-email'
+import { externalFetch } from '../external-fetch'
 
 type SendDocumentEmailOptions = {
   input: DocumentEmailInput
@@ -36,7 +37,7 @@ export async function sendDocumentEmail({ input, document, company, pdfBytes }: 
   }
 
   const replyTo = config.mailReplyTo || company.email || undefined
-  const response = await fetch('https://api.resend.com/emails', {
+  const { response } = await externalFetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${config.resendApiKey}`,
@@ -53,6 +54,11 @@ export async function sendDocumentEmail({ input, document, company, pdfBytes }: 
         content: encodeBase64(pdfBytes)
       }]
     })
+  }, {
+    provider: 'resend',
+    timeoutMs: 15_000,
+    timeoutMessage: 'L’envoi e-mail a dépassé le délai autorisé',
+    networkErrorMessage: 'Le service d’envoi e-mail est indisponible'
   })
 
   const payload = await response.json().catch(() => null) as { id?: string, message?: string, error?: string } | null
