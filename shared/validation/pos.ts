@@ -26,9 +26,8 @@ const optionalText = z.string().trim().optional().nullable().transform((value) =
 const optionalEmail = z.union([
   z.string().trim().email('Un e-mail valide est obligatoire'),
   z.literal(''),
-  z.null(),
-  z.undefined()
-]).transform((value) => {
+  z.null()
+]).optional().transform((value) => {
   if (!value) {
     return null
   }

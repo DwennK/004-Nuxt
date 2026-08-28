@@ -20,7 +20,7 @@ const optionalEmail = z.preprocess((value) => {
 }, z.union([
   z.string().email('Un e-mail valide est obligatoire'),
   z.null()
-]).transform(value => value ?? null))
+]).optional().transform(value => value ?? null))
 
 const optionalCountryCode = z.preprocess((value) => {
   if (typeof value !== 'string') {
@@ -32,7 +32,7 @@ const optionalCountryCode = z.preprocess((value) => {
 }, z.union([
   z.string().length(2, 'Le code pays doit contenir 2 lettres'),
   z.null()
-]).transform(value => value ?? null))
+]).optional().transform(value => value ?? null))
 
 const optionalLogo = z.preprocess((value) => {
   if (typeof value !== 'string') {
@@ -44,7 +44,7 @@ const optionalLogo = z.preprocess((value) => {
 }, z.union([
   z.string().startsWith('data:', 'Le logo doit être une image valide'),
   z.null()
-]).transform(value => value ?? null))
+]).optional().transform(value => value ?? null))
 
 const optionalIban = z.preprocess((value) => {
   if (typeof value !== 'string') {
@@ -56,7 +56,7 @@ const optionalIban = z.preprocess((value) => {
 }, z.union([
   z.string().refine(value => isValidIban(value), 'L’IBAN doit être valide.'),
   z.null()
-]).transform(value => value ?? null))
+]).optional().transform(value => value ?? null))
 
 export const companySettingsInputSchema = z.object({
   name: z.string().trim().min(1, 'Le nom de la société est obligatoire'),
