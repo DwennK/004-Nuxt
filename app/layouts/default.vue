@@ -359,7 +359,5 @@ const groups = computed(() => {
     />
 
     <slot />
-
-    <NotificationsSlideover />
   </UDashboardGroup>
 </template>
