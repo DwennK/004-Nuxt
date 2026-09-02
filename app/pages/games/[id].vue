@@ -1216,7 +1216,7 @@ const MEMORY_VALUES = [
   { value: 'usb', label: 'USB', icon: 'i-lucide-usb' },
   { value: 'cpu', label: 'CPU', icon: 'i-lucide-cpu' },
   { value: 'ssd', label: 'SSD', icon: 'i-lucide-hard-drive' },
-  { value: 'sim', label: 'SIM', icon: 'i-lucide-sim-card' },
+  { value: 'sim', label: 'SIM', icon: 'i-lucide-card-sim' },
   { value: 'lcd', label: 'LCD', icon: 'i-lucide-monitor' },
   { value: 'wifi', label: 'WiFi', icon: 'i-lucide-wifi' },
   { value: 'gpu', label: 'GPU', icon: 'i-lucide-circuit-board' }
