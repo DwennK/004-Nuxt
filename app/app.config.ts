@@ -3,6 +3,11 @@ export default defineAppConfig({
     colors: {
       primary: 'outlook',
       neutral: 'slate'
+    },
+    table: {
+      slots: {
+        tr: 'data-[selectable=true]:cursor-pointer'
+      }
     }
   }
 })

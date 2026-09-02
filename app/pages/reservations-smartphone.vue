@@ -470,7 +470,7 @@ const pagination = ref({
         :ui="{
           base: 'table-fixed border-separate border-spacing-0',
           thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-          tbody: '[&>tr]:last:[&>td]:border-b-0 [&>tr]:cursor-pointer [&>tr]:hover:bg-elevated/30',
+          tbody: '[&>tr]:last:[&>td]:border-b-0 [&>tr]:hover:bg-elevated/30',
           th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
           td: 'border-b border-default py-2 align-middle text-sm',
           separator: 'h-0'
