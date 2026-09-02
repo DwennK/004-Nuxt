@@ -85,8 +85,8 @@ Important product rules:
 
 Before running the app locally, make sure you have:
 
-- Node.js LTS
-- `npm` 10+ (`package.json` declares `npm@10.9.0`)
+- Node.js 22.23.2 LTS (`.node-version`, also used by CI)
+- `npm` 10.9.9 (`package.json` and CI use the same version)
 - a Turso / libSQL database
 - valid `TURSO_URL` and `TURSO_TOKEN`
 - a Resend account plus a verified sender domain if you want to send documents by e-mail

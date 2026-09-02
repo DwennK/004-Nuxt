@@ -72,5 +72,5 @@
     "vue-tsc": "^3.3.8",
     "wrangler": "^4.128.0"
   },
-  "packageManager": "npm@10.9.0"
+  "packageManager": "npm@10.9.9"
 }
