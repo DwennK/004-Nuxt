@@ -279,6 +279,13 @@ Relevant files:
 - import API: [`server/api/tools/woocommerce/import.post.ts`](./server/api/tools/woocommerce/import.post.ts)
 - server logic: [`server/utils/woocommerce.ts`](./server/utils/woocommerce.ts)
 
+## MobileSentrix
+
+The `/tools/mobilesentrix` integration uses OAuth plus the server-side `ms-token`
+header supplied by MobileSentrix to authorize REST requests through Cloudflare.
+See [MobileSentrix configuration and live checks](./docs/mobilesentrix.md) for local
+environment variables, Worker secrets and verification steps.
+
 ## Authentication
 
 The app uses session-based authentication powered by [`nuxt-auth-utils`](https://github.com/atinux/nuxt-auth-utils).
