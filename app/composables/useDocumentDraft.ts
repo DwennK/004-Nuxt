@@ -98,7 +98,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     catalogItemId: z.coerce.number().int().positive().optional().nullable(),
     label: z.string().trim().min(1, 'Le libellé est obligatoire'),
     quantity: z.coerce.number().int('La quantité doit être un nombre entier').positive('La quantité doit être supérieure à 0'),
-    unitPrice: z.coerce.number(),
+    unitPriceCents: z.coerce.number().int(),
     vatRate: z.coerce.number().min(0).max(100),
     categoryHint: z.enum(lineCategoryHints).optional().nullable()
   })
@@ -116,7 +116,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     lines: z.array(lineSchema).min(1, 'Au moins une ligne est obligatoire')
   }).superRefine((value, ctx) => {
     const total = value.lines.reduce((sum, line) => {
-      return sum + Math.round(line.quantity * line.unitPrice * 100)
+      return sum + line.quantity * line.unitPriceCents
     }, 0)
 
     if (total < 0) {
@@ -182,6 +182,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     categoryItems: lineEditor.categoryItems,
     totals: lineEditor.totals,
     addEmptyLine: lineEditor.addEmptyLine,
+    resetLines: lineEditor.resetLines,
     addCatalogItem: lineEditor.addCatalogItem,
     incrementLine: lineEditor.incrementLine,
     decrementLine: lineEditor.decrementLine,

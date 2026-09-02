@@ -1,4 +1,4 @@
-import type { ComputedRef, Ref } from 'vue'
+import { computed, reactive, watchEffect, type ComputedRef, type Ref } from 'vue'
 import { lineCategoryHints, lineCategoryLabels } from '~~/shared/constants/pos'
 import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
 import type {
@@ -15,7 +15,8 @@ export type CommercialDraftLine = {
   catalogItemId: number | null
   label: string
   quantity: number
-  unitPrice: number
+  /** Integer cents; currency input fields convert at the view boundary. */
+  unitPriceCents: number
   vatRate: number
   categoryHint: LineCategoryHint | null
 }
@@ -32,13 +33,16 @@ type UseCommercialLinesDraftOptions = {
   initialLines: Ref<EditableCommercialLinePayload[] | undefined>
   catalogItems: Ref<CatalogItemRecord[]>
   lineIdPrefix?: string
+  allowEmpty?: boolean
+  reuseEmptyLine?: boolean
 }
 
 export type CommercialLinesDraftController = {
   state: { lines: CommercialDraftLine[] }
   categoryItems: Array<SelectItem<LineCategoryHint>>
   totals: ComputedRef<{ subtotal: number, taxAmount: number, total: number }>
-  addEmptyLine: () => void
+  addEmptyLine: () => CommercialDraftLine
+  resetLines: (lines?: EditableCommercialLinePayload[]) => void
   addCatalogItem: (item: CatalogItemRecord) => void
   incrementLine: (index: number) => void
   decrementLine: (index: number) => void
@@ -49,7 +53,7 @@ export type CommercialLinesDraftController = {
   updateLineLabel: (index: number, value: string) => void
   updateLineUnitPrice: (index: number, value: number | null) => void
   selectAllOnFocus: (event: FocusEvent) => void
-  serializeLines: () => EditableCommercialLinePayload[]
+  serializeLines: (lines?: readonly CommercialDraftLine[]) => EditableCommercialLinePayload[]
 }
 
 function getLineCategoryFromItem(item: CatalogItemRecord): LineCategoryHint {
@@ -69,14 +73,14 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
       catalogItemId: input?.catalogItemId ?? null,
       label: input?.label ?? '',
       quantity: input?.quantity ?? 1,
-      unitPrice: input?.unitPrice ?? 0,
+      unitPriceCents: input?.unitPriceCents ?? 0,
       vatRate: input?.vatRate ?? 8.1,
       categoryHint: input?.categoryHint ?? null
     }
   }
 
   const state = reactive<{ lines: CommercialDraftLine[] }>({
-    lines: [createLine()]
+    lines: []
   })
 
   const categoryItems = lineCategoryHints.map(category => ({
@@ -84,29 +88,23 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
     value: category
   }))
 
-  watchEffect(() => {
-    state.lines = options.initialLines.value?.length
-      ? options.initialLines.value.map(line => createLine({
-          catalogItemId: line.catalogItemId ?? null,
-          label: line.label,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice / 100,
-          vatRate: line.vatRate,
-          categoryHint: line.categoryHint ?? null
+  function resetLines(lines = options.initialLines.value) {
+    state.lines = lines?.length
+      ? lines.map(line => createLine({
+          ...line,
+          unitPriceCents: line.unitPrice
         }))
-      : [createLine()]
-  })
+      : options.allowEmpty ? [] : [createLine()]
+  }
 
-  const totals = computed(() => {
-    return calculateCommercialTotals(state.lines.map(line => ({
-      quantity: line.quantity || 0,
-      unitPrice: Math.round((line.unitPrice || 0) * 100),
-      vatRate: line.vatRate || 0
-    })))
-  })
+  watchEffect(() => resetLines(options.initialLines.value))
+
+  const totals = computed(() => calculateCommercialTotals(serializeLines()))
 
   function addEmptyLine() {
-    state.lines.push(createLine())
+    const line = createLine()
+    state.lines.push(line)
+    return line
   }
 
   function detachLineFromCatalog(index: number) {
@@ -123,7 +121,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
     const existing = state.lines.find((line) => {
       return line.catalogItemId === item.id
         && line.label === item.name
-        && line.unitPrice === item.defaultPrice / 100
+        && line.unitPriceCents === item.defaultPrice
         && line.vatRate === item.vatRate
     })
 
@@ -132,13 +130,15 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
       return
     }
 
-    const emptyLine = state.lines.find(line => !line.label.trim() && !line.catalogItemId)
+    const emptyLine = options.reuseEmptyLine === false
+      ? undefined
+      : state.lines.find(line => !line.label.trim() && !line.catalogItemId)
 
     if (emptyLine) {
       emptyLine.catalogItemId = item.id
       emptyLine.label = item.name
       emptyLine.quantity = 1
-      emptyLine.unitPrice = item.defaultPrice / 100
+      emptyLine.unitPriceCents = item.defaultPrice
       emptyLine.vatRate = item.vatRate
       emptyLine.categoryHint = getLineCategoryFromItem(item)
       return
@@ -148,7 +148,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
       catalogItemId: item.id,
       label: item.name,
       quantity: 1,
-      unitPrice: item.defaultPrice / 100,
+      unitPriceCents: item.defaultPrice,
       vatRate: item.vatRate,
       categoryHint: getLineCategoryFromItem(item)
     }))
@@ -179,7 +179,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
       return
     }
 
-    if (state.lines.length === 1) {
+    if (state.lines.length === 1 && !options.allowEmpty) {
       state.lines.splice(index, 1, createLine())
       return
     }
@@ -198,7 +198,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
       catalogItemId: line.catalogItemId,
       label: line.label,
       quantity: line.quantity,
-      unitPrice: line.unitPrice,
+      unitPriceCents: line.unitPriceCents,
       vatRate: line.vatRate,
       categoryHint: line.categoryHint
     }))
@@ -240,7 +240,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
     }
 
     line.label = item.name
-    line.unitPrice = item.defaultPrice / 100
+    line.unitPriceCents = item.defaultPrice
     line.vatRate = item.vatRate
     line.categoryHint = getLineCategoryFromItem(item)
   }
@@ -260,7 +260,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
     }
 
     detachLineFromCatalog(index)
-    state.lines[index]!.unitPrice = parseCurrencyInput(value || 0) / 100
+    state.lines[index]!.unitPriceCents = parseCurrencyInput(value || 0)
   }
 
   function selectAllOnFocus(event: FocusEvent) {
@@ -275,12 +275,12 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
     })
   }
 
-  function serializeLines(): EditableCommercialLinePayload[] {
-    return state.lines.map(line => ({
+  function serializeLines(lines: readonly CommercialDraftLine[] = state.lines): EditableCommercialLinePayload[] {
+    return lines.map(line => ({
       catalogItemId: line.catalogItemId || null,
       label: line.label,
       quantity: Number(line.quantity || 0),
-      unitPrice: Math.round((line.unitPrice || 0) * 100),
+      unitPrice: line.unitPriceCents || 0,
       vatRate: Number(line.vatRate || 0),
       categoryHint: line.categoryHint || null
     }))
@@ -291,6 +291,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
     categoryItems,
     totals,
     addEmptyLine,
+    resetLines,
     addCatalogItem,
     incrementLine,
     decrementLine,

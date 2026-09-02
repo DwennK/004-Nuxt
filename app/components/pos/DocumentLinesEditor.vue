@@ -271,10 +271,10 @@ async function handleBarcodeScan(value: string) {
                   </p>
                 </div>
 
-                <UFormField :name="`lines.${index}.unitPrice`" class="justify-self-end">
+                <UFormField :name="`lines.${index}.unitPriceCents`" class="justify-self-end">
                   <UInputNumber
                     :id="`document-line-price-${line.id}`"
-                    :model-value="line.unitPrice"
+                    :model-value="line.unitPriceCents / 100"
                     :min="commercialLineUnitPriceMin"
                     :step="0.05"
                     :increment="false"
@@ -323,7 +323,7 @@ async function handleBarcodeScan(value: string) {
 
                 <div class="text-right tabular-nums">
                   <p class="text-base font-semibold text-highlighted">
-                    {{ formatCurrency(Math.round(line.quantity * line.unitPrice * 100)) }}
+                    {{ formatCurrency(line.quantity * line.unitPriceCents) }}
                   </p>
                 </div>
 

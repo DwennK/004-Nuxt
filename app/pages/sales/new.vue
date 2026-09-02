@@ -6,31 +6,30 @@ import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, normalizeSearchText, parseCurrencyInput } from '~~/shared/utils/pos'
 import {
   commercialLineUnitPriceInputClass,
-  commercialLineUnitPriceMin
+  commercialLineUnitPriceMin,
+  useCommercialLinesDraft,
+  type CommercialDraftLine
 } from '~~/app/composables/useCommercialLinesDraft'
-
-type SaleLine = {
-  id: string
-  catalogItemId: number | null
-  label: string
-  quantity: number
-  unitPrice: number
-  vatRate: number
-  categoryHint: 'accessory' | 'repair' | 'service' | null
-}
 
 const toast = useToast()
 const saleMutation = useIdempotentMutation()
 
 const selectedCustomerId = ref<number | null>(null)
-const lines = ref<SaleLine[]>([])
+const lineEditor = useCommercialLinesDraft({
+  initialLines: ref(undefined),
+  catalogItems: ref([]),
+  lineIdPrefix: 'sale-line',
+  allowEmpty: true,
+  reuseEmptyLine: false
+})
+const lines = toRef(lineEditor.state, 'lines')
+const { incrementLine, decrementLine, removeLine, cloneLine, moveLine, updateLineLabel, updateLineUnitPrice, selectAllOnFocus } = lineEditor
 const isSaving = ref<PaymentMethod | null>(null)
 const lastCreatedDocument = ref<DocumentDetail | null>(null)
 const lastCompletedPaymentMethod = ref<PaymentMethod | null>(null)
 const saleCompletionOpen = ref(false)
 const customerPool = ref<CustomerRecord[]>([])
 const cashReceived = ref<number | null>(null)
-let nextSaleLineId = 0
 const {
   search,
   highlightedItemIndex,
@@ -66,7 +65,7 @@ const payableLines = computed(() => {
 })
 
 const totals = computed(() => {
-  return calculateCommercialTotals(payableLines.value)
+  return calculateCommercialTotals(lineEditor.serializeLines(payableLines.value))
 })
 
 const emptyLineCount = computed(() => {
@@ -103,59 +102,18 @@ const lastPaymentMethodLabel = computed(() => {
   return lastCompletedPaymentMethod.value ? paymentMethodLabels[lastCompletedPaymentMethod.value] : ''
 })
 
-function getCategoryHint(item: CatalogItemRecord): SaleLine['categoryHint'] {
-  if (item.type === 'product') {
-    return 'accessory'
-  }
-
-  return item.type === 'repair' ? 'repair' : 'service'
-}
-
-function createSaleLine(input: Omit<SaleLine, 'id'>): SaleLine {
-  return {
-    id: `sale-line-${nextSaleLineId++}`,
-    ...input
-  }
-}
-
-function isEmptyLine(line: SaleLine) {
-  return !line.catalogItemId
-    && !line.label.trim()
-    && line.unitPrice === 0
+function isEmptyLine(line: CommercialDraftLine) {
+  return !line.catalogItemId && !line.label.trim() && line.unitPriceCents === 0
 }
 
 function addCatalogItem(item: CatalogItemRecord) {
-  const existing = lines.value.find(line => line.catalogItemId === item.id)
-
-  if (existing) {
-    existing.quantity += 1
-    return
-  }
-
-  lines.value.push(createSaleLine({
-    catalogItemId: item.id,
-    label: item.name,
-    quantity: 1,
-    unitPrice: item.defaultPrice,
-    vatRate: item.vatRate,
-    categoryHint: getCategoryHint(item)
-  }))
-
+  lineEditor.addCatalogItem(item)
   resetSearch()
 }
 
 async function createNewLine() {
-  const line = createSaleLine({
-    catalogItemId: null,
-    label: '',
-    quantity: 1,
-    unitPrice: 0,
-    vatRate: 8.1,
-    categoryHint: null
-  })
-
+  const line = lineEditor.addEmptyLine()
   resetSearch()
-  lines.value.push(line)
 
   await nextTick()
 
@@ -171,87 +129,6 @@ async function createNewLine() {
 
   input.focus()
   input.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-}
-
-function incrementLine(index: number) {
-  lines.value[index]!.quantity += 1
-}
-
-function decrementLine(index: number) {
-  const line = lines.value[index]
-
-  if (!line) {
-    return
-  }
-
-  if (line.quantity <= 1) {
-    return
-  }
-
-  line.quantity -= 1
-}
-
-function removeLine(index: number) {
-  if (!lines.value[index]) {
-    return
-  }
-
-  lines.value.splice(index, 1)
-}
-
-function cloneLine(index: number) {
-  const line = lines.value[index]
-
-  if (!line) {
-    return
-  }
-
-  lines.value.splice(index + 1, 0, {
-    ...line,
-    id: `sale-line-${nextSaleLineId++}`
-  })
-}
-
-function moveLine(index: number, direction: 'up' | 'down') {
-  const targetIndex = direction === 'up' ? index - 1 : index + 1
-
-  if (!lines.value[index] || targetIndex < 0 || targetIndex >= lines.value.length) {
-    return
-  }
-
-  const [line] = lines.value.splice(index, 1)
-
-  if (!line) {
-    return
-  }
-
-  lines.value.splice(targetIndex, 0, line)
-}
-
-function detachLineFromCatalog(line: SaleLine) {
-  line.catalogItemId = null
-}
-
-function updateLineLabel(index: number, value: string) {
-  const line = lines.value[index]
-
-  if (!line) {
-    return
-  }
-
-  detachLineFromCatalog(line)
-  line.label = value
-}
-
-function updateLineUnitPrice(index: number, value: number | null) {
-  const line = lines.value[index]
-
-  if (!line) {
-    return
-  }
-
-  detachLineFromCatalog(line)
-  line.unitPrice = parseCurrencyInput(value || 0)
 }
 
 function addFirstMatch() {
@@ -318,7 +195,7 @@ async function handleBarcodeScan(value: string) {
 
 function resetSaleState() {
   resetSearch()
-  lines.value = []
+  lineEditor.resetLines([])
   selectedCustomerId.value = null
   cashReceived.value = null
 }
@@ -349,7 +226,7 @@ async function navigateToCompletedDocument(path: string) {
 }
 
 async function completeSale(method: PaymentMethod) {
-  const linesToSubmit = payableLines.value.map(({ id: _id, ...line }) => ({
+  const linesToSubmit = lineEditor.serializeLines(payableLines.value).map(line => ({
     ...line,
     label: line.label.trim()
   }))
@@ -464,18 +341,6 @@ defineShortcuts({
     handler: () => chargeWithShortcut('card_twint')
   }
 })
-
-function selectAllOnFocus(event: FocusEvent) {
-  const target = event.target
-
-  if (!(target instanceof HTMLInputElement)) {
-    return
-  }
-
-  requestAnimationFrame(() => {
-    target.select()
-  })
-}
 </script>
 
 <template>
@@ -784,7 +649,7 @@ function selectAllOnFocus(event: FocusEvent) {
                     </label>
                     <UInputNumber
                       :id="`sale-line-price-${line.id}`"
-                      :model-value="line.unitPrice / 100"
+                      :model-value="line.unitPriceCents / 100"
                       :min="commercialLineUnitPriceMin"
                       :step="0.05"
                       :increment="false"
@@ -823,7 +688,7 @@ function selectAllOnFocus(event: FocusEvent) {
 
                   <div class="text-left md:text-right">
                     <p class="text-lg font-semibold text-highlighted">
-                      {{ formatCurrency(line.quantity * line.unitPrice) }}
+                      {{ formatCurrency(line.quantity * line.unitPriceCents) }}
                     </p>
                   </div>
 
