@@ -398,14 +398,18 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
           </div>
         </div>
 
-        <div v-else-if="activeTab === 'payments'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)] xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <div v-else-if="activeTab === 'payments'" class="flex min-h-0 flex-col gap-3 xl:h-[calc(100vh-18.5rem)]">
+          <div v-if="document.shopify" class="flex flex-wrap items-center justify-between gap-2">
+            <span class="text-sm text-muted">Shopify {{ document.shopify.orderName }} · {{ document.shopify.domain }}</span>
+            <PosShopifyPaymentSync v-if="canAdjustFinancialRecords" :document-id="document.id" @refresh="refresh()" />
+          </div>
           <PosDocumentPaymentsEditor
             :document-id="document.id"
             :payments="document.payments"
             :document-total="document.total"
             :balance-due="balanceDue"
             :is-payable-document="isPayableDocument"
-            class="xl:col-span-2"
+            class="min-h-0 flex-1"
             @refresh="refresh()"
           />
         </div>

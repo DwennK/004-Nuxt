@@ -36,7 +36,8 @@ const paymentSeries: Array<{
   { method: 'cash', key: 'cash' },
   { method: 'card_twint', key: 'cardTwint' },
   { method: 'bank_transfer', key: 'bankTransfer' },
-  { method: 'stripe', key: 'stripe' }
+  { method: 'stripe', key: 'stripe' },
+  { method: 'shopify', key: 'shopify' }
 ]
 
 const paymentsCategories = Object.fromEntries(

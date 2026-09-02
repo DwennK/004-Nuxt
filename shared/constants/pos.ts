@@ -56,11 +56,10 @@ export const ticketStatuses = [
 export const ticketWorkflowSteps = ['reception', 'diagnostic', 'workshop', 'pickup', 'closure'] as const
 export const documentTypes = ['quote', 'customer_order', 'invoice'] as const
 export const documentStatuses = ['draft', 'issued', 'paid', 'cancelled'] as const
-export const paymentMethods = ['cash', 'card_twint', 'bank_transfer', 'stripe'] as const
+export const paymentMethods = ['cash', 'card_twint', 'bank_transfer', 'stripe', 'shopify'] as const
 export const paymentStatuses = ['pending', 'paid', 'refunded', 'cancelled'] as const
 export const lineCategoryHints = ['accessory', 'repair', 'service'] as const
 export const payableDocumentTypes = ['customer_order', 'invoice'] as const
-export const woocommerceOpenOrderStatuses = ['pending', 'processing', 'on-hold'] as const
 
 export const catalogItemTypeLabels: Record<(typeof catalogItemTypes)[number], string> = {
   product: 'Article',
@@ -148,14 +147,16 @@ export const paymentMethodLabels: Record<(typeof paymentMethods)[number], string
   cash: 'Espèces',
   card_twint: 'Carte Bancaire / TWINT',
   bank_transfer: 'Virement bancaire',
-  stripe: 'Stripe'
+  stripe: 'Stripe',
+  shopify: 'Shopify'
 }
 
 export const paymentMethodColors: Record<(typeof paymentMethods)[number], 'success' | 'info' | 'neutral' | 'warning'> = {
   cash: 'success',
   card_twint: 'info',
   bank_transfer: 'neutral',
-  stripe: 'warning'
+  stripe: 'warning',
+  shopify: 'success'
 }
 
 export const paymentStatusLabels: Record<(typeof paymentStatuses)[number], string> = {
@@ -170,12 +171,6 @@ export const paymentStatusColors: Record<(typeof paymentStatuses)[number], 'warn
   paid: 'success',
   refunded: 'neutral',
   cancelled: 'error'
-}
-
-export const woocommerceOrderStatusLabels: Record<(typeof woocommerceOpenOrderStatuses)[number], string> = {
-  'pending': 'Attente paiement',
-  'processing': 'En cours',
-  'on-hold': 'En attente'
 }
 
 export const lineCategoryLabels: Record<(typeof lineCategoryHints)[number], string> = {

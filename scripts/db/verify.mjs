@@ -172,7 +172,7 @@ export const checks = [
     name: 'invalid_payment_enums',
     tables: ['payments'],
     sql: `SELECT COUNT(*) AS violations FROM payments
-      WHERE method NOT IN ('cash', 'card_twint', 'bank_transfer', 'stripe')
+      WHERE method NOT IN ('cash', 'card_twint', 'bank_transfer', 'stripe', 'shopify')
         OR status NOT IN ('pending', 'paid', 'refunded', 'cancelled')`
   },
   {

@@ -62,8 +62,11 @@ function assertBefore(source, firstNeedle, secondNeedle, label) {
   const protectedRoutes = [
     ['server/api/settings/company.patch.ts', 'readValidatedBody'],
     ['server/api/settings/customer-sms.patch.ts', 'readValidatedBody'],
-    ['server/api/tools/woocommerce/orders.get.ts', 'getValidatedQuery'],
-    ['server/api/tools/woocommerce/import.post.ts', 'readValidatedBody'],
+    ['server/api/tools/shopify/orders.get.ts', 'getValidatedQuery'],
+    ['server/api/tools/shopify/import.post.ts', 'readValidatedBody'],
+    ['server/api/tools/shopify/search.get.ts', 'getValidatedQuery'],
+    ['server/api/tools/shopify/payments.post.ts', 'readValidatedBody'],
+    ['server/api/tools/shopify/connection.get.ts', 'return getShopifyConnection()'],
     ['server/api/sent-emails/index.get.ts', 'getQuery'],
     ['server/api/sent-emails/[id].get.ts', 'paramsSchema.parse']
   ]

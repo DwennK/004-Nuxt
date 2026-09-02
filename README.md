@@ -36,7 +36,7 @@ Secondary business modules:
 - smartphone reservations
 - vacation tracking
 - sent e-mails viewer
-- WooCommerce order import
+- Shopify order and payment import
 - customer SMS settings / QR flows
 - internal AI assistant
 
@@ -54,7 +54,7 @@ Typical business flows:
 - customer order: `Ticket or direct context -> Customer order -> Invoice -> Payment`
 - direct sale: `Quick sale -> Invoice -> Payment`
 - quick support: `Invoice -> Payment`
-- WooCommerce import: `Woo order -> POS invoice -> manual payment reconciliation`
+- Shopify import: `Shopify order -> POS invoice + Shopify payments`
 
 Important product rules:
 
@@ -90,7 +90,7 @@ Before running the app locally, make sure you have:
 - a Turso / libSQL database
 - valid `TURSO_URL` and `TURSO_TOKEN`
 - a Resend account plus a verified sender domain if you want to send documents by e-mail
-- WooCommerce API credentials if you want to use the import tool
+- Shopify Admin API credentials if you want to use the import tool
 
 ## Quick Start
 
@@ -130,7 +130,7 @@ Useful first screens to check:
 - `/payments`
 - `/reports/daily`
 - `/inbox`
-- `/tools/woocommerce-import`
+- `/tools/shopify-import`
 
 ## Environment Variables
 
@@ -146,9 +146,10 @@ MINIMAX_BASE_URL=https://api.minimax.io/v1
 RESEND_API_KEY=
 MAIL_FROM=
 MAIL_REPLY_TO=
-WOOCOMMERCE_STORE_URL=
-WOOCOMMERCE_CONSUMER_KEY=
-WOOCOMMERCE_CONSUMER_SECRET=
+SHOPIFY_SHOP_DOMAIN=
+SHOPIFY_CLIENT_ID=
+SHOPIFY_CLIENT_SECRET=
+SHOPIFY_ADMIN_ACCESS_TOKEN=
 NUXT_SESSION_PASSWORD=
 ```
 
@@ -177,11 +178,12 @@ Outgoing e-mail / Resend:
 - `MAIL_FROM`: authenticated sender for outgoing e-mails, for example `Microwest <info@microwest.ch>`
 - `MAIL_REPLY_TO`: optional reply-to address
 
-WooCommerce:
+Shopify:
 
-- `WOOCOMMERCE_STORE_URL`: WooCommerce store base URL, for example `https://shopyphone.ch`
-- `WOOCOMMERCE_CONSUMER_KEY`: WooCommerce REST API consumer key
-- `WOOCOMMERCE_CONSUMER_SECRET`: WooCommerce REST API consumer secret
+- `SHOPIFY_SHOP_DOMAIN`: exact `*.myshopify.com` hostname
+- `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`: installed Dev Dashboard application
+- `SHOPIFY_ADMIN_ACCESS_TOKEN`: alternative existing Admin token; do not combine authentication modes
+- See [`docs/shopify-import.md`](./docs/shopify-import.md) for scopes and setup.
 
 Internal AI assistant:
 
@@ -192,7 +194,7 @@ Internal AI assistant:
 Notes:
 
 - `MAIL_FROM` must use a sender on a domain verified in Resend
-- WooCommerce credentials are only used server-side
+- Shopify credentials are only used server-side
 
 ## Key Routes
 
@@ -218,7 +220,7 @@ Operator flows:
 Secondary modules:
 
 - sent e-mails: [`app/pages/inbox.vue`](./app/pages/inbox.vue)
-- WooCommerce import: [`app/pages/tools/woocommerce-import.vue`](./app/pages/tools/woocommerce-import.vue)
+- Shopify import: [`app/pages/tools/shopify-import.vue`](./app/pages/tools/shopify-import.vue)
 - vacations: [`app/pages/vacances.vue`](./app/pages/vacances.vue)
 - smartphone stock: [`app/pages/stocks-smartphone.vue`](./app/pages/stocks-smartphone.vue)
 - smartphone reservations: [`app/pages/reservations-smartphone.vue`](./app/pages/reservations-smartphone.vue)
@@ -250,34 +252,20 @@ Current scope:
 - no local sync journal in v1
 - Resend remains the source of truth
 
-## WooCommerce Import
+## Shopify Import
 
-The POS includes a WooCommerce import tool at `/tools/woocommerce-import`.
+The POS includes an administrator-only import tool at `/tools/shopify-import`.
+It imports open Shopify orders into invoices with their successful payments,
+using the dedicated `shopify` payment method. Later captures can be retrieved
+with **Actualiser les paiements** without duplicating existing transactions.
 
-It turns a WooCommerce order into a POS invoice while preserving the current POS model.
+The integration supports CHF, discounts, free items, shipping and actual Shopify
+VAT. Unsupported refunds, gift-card/store-credit payments, duties and inconsistent
+totals are rejected before writing. Existing WooCommerce invoices remain intact.
+The old page redirects to Shopify; WooCommerce API credentials are no longer used.
 
-Current behavior:
-
-- list of open Woo statuses: `pending`, `processing`, `on-hold`
-- manual import by Woo order number or id
-- duplicate imports blocked through `document_imports`
-- imported invoices stay editable in the POS
-- source order number added as a zero-value line, for example `Commande ShopyPhone #72787`
-
-Current v1 constraints:
-
-- supported currency: `CHF`
-- coupons / discounts are rejected
-- Woo payments are not imported
-- if Woo returns no tax for a positive line, the importer falls back to the current POS default VAT rate (`8.1%`)
-- civilities incorrectly stored in Woo `company` fields such as `Monsieur` or `Madame` are ignored during customer creation
-
-Relevant files:
-
-- page: [`app/pages/tools/woocommerce-import.vue`](./app/pages/tools/woocommerce-import.vue)
-- orders API: [`server/api/tools/woocommerce/orders.get.ts`](./server/api/tools/woocommerce/orders.get.ts)
-- import API: [`server/api/tools/woocommerce/import.post.ts`](./server/api/tools/woocommerce/import.post.ts)
-- server logic: [`server/utils/woocommerce.ts`](./server/utils/woocommerce.ts)
+See [Shopify configuration and import behavior](./docs/shopify-import.md) for
+credentials, permissions, reconciliation rules and local validation.
 
 ## MobileSentrix
 
@@ -349,7 +337,7 @@ Useful local checks:
 
 - test document e-mail sending from a document detail page
 - open `/inbox` to confirm sent e-mails load from Resend
-- open `/tools/woocommerce-import` to confirm Woo orders load
+- open `/tools/shopify-import` to confirm Shopify orders load
 - use `npm run db:studio` to inspect data quickly
 
 ## Architecture
@@ -397,7 +385,7 @@ Main POS services:
 
 Integration-specific services:
 
-- [`server/utils/woocommerce.ts`](./server/utils/woocommerce.ts)
+- [`server/utils/shopify/import.ts`](./server/utils/shopify/import.ts)
 - [`server/utils/company-settings.ts`](./server/utils/company-settings.ts)
 - [`server/utils/customer-sms-settings.ts`](./server/utils/customer-sms-settings.ts)
 - [`server/utils/assistant/`](./server/utils/assistant/)

@@ -175,6 +175,8 @@ export const documentImports = sqliteTable('document_imports', {
   source: text('source', {
     enum: [
       'woocommerce_order',
+      'shopify_order',
+      'shopify_payment',
       'api_document_create',
       'api_sale_create_and_pay',
       'api_document_mark_paid',
@@ -210,7 +212,7 @@ export const payments = sqliteTable('payments', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   documentId: integer('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
-  method: text('method', { enum: ['cash', 'card_twint', 'bank_transfer', 'stripe'] }).notNull(),
+  method: text('method', { enum: ['cash', 'card_twint', 'bank_transfer', 'stripe', 'shopify'] }).notNull(),
   status: text('status', { enum: ['pending', 'paid', 'refunded', 'cancelled'] }).notNull().default('pending'),
   amount: integer('amount').notNull(),
   paidAt: text('paid_at').notNull(),

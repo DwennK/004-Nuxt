@@ -87,7 +87,8 @@ function buildDailyPaymentBuckets(
       cash: 0,
       cardTwint: 0,
       bankTransfer: 0,
-      stripe: 0
+      stripe: 0,
+      shopify: 0
     })
   }
 
@@ -108,7 +109,8 @@ function buildMonthlyPaymentBuckets(date: string): ReportsOverview['paymentPerio
       cash: 0,
       cardTwint: 0,
       bankTransfer: 0,
-      stripe: 0
+      stripe: 0,
+      shopify: 0
     }
   })
 }
@@ -128,14 +130,15 @@ function buildAnnualPaymentBuckets(date: string, count = 5): ReportsOverview['pa
       cash: 0,
       cardTwint: 0,
       bankTransfer: 0,
-      stripe: 0
+      stripe: 0,
+      shopify: 0
     }
   })
 }
 
 type PaymentAggregationBucket = Pick<
   ReportsOverview['paymentPeriods'][number]['buckets'][number],
-  'total' | 'cash' | 'cardTwint' | 'bankTransfer' | 'stripe'
+  'total' | 'cash' | 'cardTwint' | 'bankTransfer' | 'stripe' | 'shopify'
 >
 
 function applyPaymentAmount(
@@ -161,6 +164,9 @@ function applyPaymentAmount(
       break
     case 'stripe':
       bucket.stripe += amount
+      break
+    case 'shopify':
+      bucket.shopify += amount
       break
   }
 }
@@ -487,14 +493,15 @@ export function projectReportsOverview(input: ReportsOverviewProjectionInput): R
     }
   }
 
-  const paymentsByDay = weeklyBuckets.map(({ date: bucketDate, label, total, cash, cardTwint, bankTransfer, stripe }) => ({
+  const paymentsByDay = weeklyBuckets.map(({ date: bucketDate, label, total, cash, cardTwint, bankTransfer, stripe, shopify }) => ({
     date: bucketDate,
     label,
     total,
     cash,
     cardTwint,
     bankTransfer,
-    stripe
+    stripe,
+    shopify
   }))
   const totalPaid = weeklyBuckets.reduce((sum, item) => sum + item.total, 0)
   const paidToday = weeklyBucketsMap.get(input.date)?.total || 0

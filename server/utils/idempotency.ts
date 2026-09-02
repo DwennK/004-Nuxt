@@ -7,7 +7,7 @@ import { useDb } from './turso'
 
 export type OperationReceiptSource = Exclude<
   typeof documentImports.$inferSelect.source,
-  'woocommerce_order'
+  'woocommerce_order' | 'shopify_order' | 'shopify_payment'
 >
 
 type StoredReceipt = {

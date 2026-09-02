@@ -1,3 +1,4 @@
+import type { ShopifyProvenance } from './shopify'
 import type {
   catalogItemTypes,
   documentStatuses,
@@ -22,7 +23,6 @@ export type PrintProfile = 'a4' | 'thermal'
 export type PaymentMethod = (typeof paymentMethods)[number]
 export type PaymentStatus = (typeof paymentStatuses)[number]
 export type LineCategoryHint = (typeof lineCategoryHints)[number]
-export type WooImportState = 'ready' | 'imported'
 
 export interface CustomerUpsertInput {
   displayName?: string | null
@@ -221,6 +221,7 @@ export interface DocumentRecord {
 }
 
 export interface DocumentDetail extends DocumentRecord {
+  shopify?: ShopifyProvenance | null
   customer: CustomerRecord
   ticket: TicketRecord | null
   lines: DocumentLineRecord[]
@@ -506,6 +507,7 @@ export interface ReportsOverview {
     cardTwint: number
     bankTransfer: number
     stripe: number
+    shopify: number
   }>
   paymentPeriods: Array<{
     key: 'week' | 'month' | 'years'
@@ -520,6 +522,7 @@ export interface ReportsOverview {
       cardTwint: number
       bankTransfer: number
       stripe: number
+      shopify: number
     }>
   }>
   turnoverByCategory: Array<{
@@ -569,29 +572,6 @@ export interface ReportsLeaders {
   totalPaid: number
   topCustomers: ReportsTopCustomer[]
   topItems: ReportsTopItem[]
-}
-
-export interface WooOrderSummary {
-  id: number
-  number: string
-  status: string
-  createdAt: string
-  currency: string
-  customerName: string
-  email: string | null
-  phone: string | null
-  totalCents: number
-  importState: WooImportState
-  alreadyImported: boolean
-  documentId: number | null
-}
-
-export type WooOrderListResponse = PaginatedResponse<WooOrderSummary>
-
-export interface WooImportResult {
-  documentId: number
-  documentNumber: string
-  orderNumber: string
 }
 
 export interface MobileSentrixStatusResponse {

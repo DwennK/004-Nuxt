@@ -1,3 +1,4 @@
+import { getShopifyProvenance } from '../shopify/import'
 import { and, asc, desc, eq, gte, inArray, lte, ne, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import {
@@ -596,6 +597,7 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
         }
       : null,
     lines: lineRows.map(mapDocumentLine),
+    shopify: await getShopifyProvenance(id, db),
     payments: paymentRows.map(mapPayment)
   }
 }

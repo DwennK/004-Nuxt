@@ -17,6 +17,7 @@ describe('editing recorded financial data', () => {
     client = createClient({ url: databaseUrl })
 
     await client.batch([
+      `CREATE TABLE document_imports (id INTEGER PRIMARY KEY, document_id INTEGER NOT NULL, source TEXT NOT NULL, external_id TEXT NOT NULL, external_number TEXT NOT NULL, created_at TEXT NOT NULL)`,
       `CREATE TABLE customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         first_name TEXT NOT NULL,

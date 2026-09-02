@@ -189,10 +189,6 @@ export const documentEmailSchema = z.object({
   message: z.string().trim().min(1, 'Le message est obligatoire')
 })
 
-export const wooCommerceImportSchema = z.object({
-  orderRef: z.string().trim().min(1, 'Le numéro de commande est obligatoire')
-})
-
 export const mobileSentrixOAuthExchangeSchema = z.object({
   oauthToken: z.string().trim().min(1, 'Le token OAuth est obligatoire'),
   oauthVerifier: z.string().trim().min(1, 'Le verifier OAuth est obligatoire')

@@ -42,6 +42,8 @@ function getShortPaymentMethodLabel(method: DailySummary['totalsByMethod'][numbe
       return 'Virement'
     case 'stripe':
       return 'Stripe'
+    case 'shopify':
+      return 'Shopify'
   }
 }
 

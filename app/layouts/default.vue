@@ -91,9 +91,9 @@ const secondaryLinks = [{
       open.value = false
     }
   }, {
-    label: 'Import Woocommerce',
+    label: 'Import Shopify',
     icon: 'i-lucide-shopping-cart',
-    to: '/tools/woocommerce-import',
+    to: '/tools/shopify-import',
     onSelect: () => {
       open.value = false
     }
