@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { ensurePosSchema } from '~~/server/utils/pos/core'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
 import { useDb } from '~~/server/utils/turso'
 import type { AssistantTableCell } from '~~/shared/types/assistant'
 import {

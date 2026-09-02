@@ -24,14 +24,12 @@ import { buildZonedDayRange, isPayableDocumentType } from '~~/shared/utils/pos'
 import type { PosDatabaseExecutor } from '../turso'
 import { useDb } from '../turso'
 import { runIdempotentDocumentOperation } from '../idempotency'
-import {
-  calculateDocumentTotals,
-  createTicketEvent,
-  ensurePosSchema,
-  generateDocumentNumber,
-  mapCustomer,
-  normalizeOptionalText
-} from './core'
+import { calculateCommercialTotals as calculateDocumentTotals } from '~~/shared/domain/commercial/money'
+import { createTicketEvent } from '~~/server/utils/pos/ticket-events'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
+import { generateDocumentNumber } from '~~/server/utils/pos/numbers'
+import { mapCustomer } from '~~/server/modules/customers/mapper'
+import { normalizeOptionalText } from '~~/shared/lib/text'
 import { getPayablePaymentDocument, recordDocumentPayment } from './payment-writes'
 import { resolveCounterCustomer } from './counter-customer'
 

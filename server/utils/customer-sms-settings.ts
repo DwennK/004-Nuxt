@@ -6,7 +6,8 @@ import {
   serializeCustomerSmsSettings
 } from '~~/shared/utils/customer-sms'
 import { useDb } from './turso'
-import { createTicketEvent, ensurePosSchema } from './pos/core'
+import { createTicketEvent } from '~~/server/utils/pos/ticket-events'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
 
 const COMPANY_SETTINGS_ID = 1
 

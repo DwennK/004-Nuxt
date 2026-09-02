@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm'
 import { companySettings } from '~~/server/db/schema'
 import type { CompanySettingsInput, CompanySettingsRecord } from '~~/shared/types/settings'
 import { useDb } from './turso'
-import { ensurePosSchema, normalizeOptionalText, normalizeRequiredText } from './pos/core'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
+import { normalizeOptionalText, normalizeRequiredText } from '~~/shared/lib/text'
 
 const COMPANY_SETTINGS_ID = 1
 

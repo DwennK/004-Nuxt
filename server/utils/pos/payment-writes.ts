@@ -7,7 +7,8 @@ import { normalizeOptionalText } from '~~/shared/lib/text'
 import type { PaymentMethod } from '~~/shared/types/pos'
 import { isPayableDocumentType } from '~~/shared/utils/pos'
 import type { PosTransaction } from '../turso'
-import { createTicketEvent, syncDocumentStatus } from './core'
+import { createTicketEvent } from '~~/server/utils/pos/ticket-events'
+import { syncDocumentStatus } from '~~/server/utils/pos/document-balances'
 
 type PaymentDocument = Pick<typeof documents.$inferSelect,
   'id' | 'type' | 'status' | 'customerId' | 'total' | 'ticketId' | 'documentNumber'>

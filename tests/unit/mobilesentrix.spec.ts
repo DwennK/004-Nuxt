@@ -3,7 +3,6 @@ import { externalFetch } from '../../server/utils/external-fetch'
 import { listMobileSentrixCategories, searchMobileSentrixProducts } from '../../server/utils/mobilesentrix'
 
 vi.mock('../../server/utils/external-fetch', () => ({ externalFetch: vi.fn() }))
-vi.mock('../../server/utils/pos/core', async () => import('../../shared/lib/text'))
 
 function mockResponse(payload: unknown) {
   vi.mocked(externalFetch).mockResolvedValue({

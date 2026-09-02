@@ -3,7 +3,8 @@ import { catalogItems } from '~~/server/db/schema'
 import { normalizeSearchText } from '~~/shared/utils/pos'
 import type { CatalogItemInput, CatalogItemListResponse, CatalogItemRecord, CatalogItemType } from '~~/shared/types/pos'
 import { useDb } from '../turso'
-import { ensurePosSchema, normalizeOptionalText, normalizeRequiredText } from './core'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
+import { normalizeOptionalText, normalizeRequiredText } from '~~/shared/lib/text'
 
 type ListCatalogItemsOptions = {
   search?: string

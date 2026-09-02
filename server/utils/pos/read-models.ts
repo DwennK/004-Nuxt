@@ -20,10 +20,10 @@ import type {
   TicketListResponse,
   TicketStatus
 } from '~~/shared/types/pos'
-import { formatCurrency, isPayableDocumentType } from '~~/shared/utils/pos'
+import { formatCurrency, isPayableDocumentType, buildZonedDayRange as buildDayRange } from '~~/shared/utils/pos'
 import type { PosDatabase } from '../turso'
 import { useDb } from '../turso'
-import { buildDayRange, ensurePosSchema } from './core'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
 import { projectReportsLeaders, projectReportsOverview } from './reports'
 
 type ReadModelName = 'counter-overview' | 'home-overview'

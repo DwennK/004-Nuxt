@@ -8,7 +8,7 @@ import type {
   MobileSentrixStatusResponse
 } from '~~/shared/types/pos'
 import { externalFetch } from './external-fetch'
-import { normalizeOptionalText } from './pos/core'
+import { normalizeOptionalText } from '~~/shared/lib/text'
 
 type MobileSentrixConfig = {
   baseUrl: string

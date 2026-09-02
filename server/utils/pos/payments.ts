@@ -9,7 +9,9 @@ import type { PaymentListItem, PaymentListResponse, PaymentRecord } from '~~/sha
 import { buildZonedDayRange } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
 import { runIdempotentDocumentOperation } from '../idempotency'
-import { ensurePosSchema, normalizeOptionalText, syncDocumentStatus } from './core'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
+import { normalizeOptionalText } from '~~/shared/lib/text'
+import { syncDocumentStatus } from '~~/server/utils/pos/document-balances'
 import { mapPayment } from './documents'
 import { assertPaymentFitsDocument, createPaymentRecordedEvent, getPayablePaymentDocument, recordDocumentPayment } from './payment-writes'
 

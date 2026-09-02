@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 
 const guardedRuntimeSchemaFiles = [
-  'server/utils/pos/core.ts',
+  'server/utils/pos/schema.ts',
   'server/utils/smartphone-stocks.ts',
   'server/utils/smartphone-reservations.ts',
   'server/utils/auth/login-throttle.ts'

@@ -11,7 +11,8 @@ import type {
 } from '~~/shared/types/pos'
 import { countBusinessDays, countBusinessDaysInYear } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
-import { ensurePosSchema, normalizeOptionalText } from './core'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
+import { normalizeOptionalText } from '~~/shared/lib/text'
 
 function mapEmployee(row: typeof employees.$inferSelect): EmployeeRecord {
   const displayName = [row.firstName, row.lastName].filter(Boolean).join(' ').trim() || 'Employé'

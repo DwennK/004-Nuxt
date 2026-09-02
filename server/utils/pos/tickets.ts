@@ -23,18 +23,14 @@ import type {
 } from '~~/shared/types/pos'
 import type { PosDatabaseExecutor } from '../turso'
 import { useDb } from '../turso'
-import {
-  calculateDocumentTotals,
-  createTicketEvent,
-  closeTicketRecord,
-  ensurePosSchema,
-  generateTicketNumber,
-  getTicketPayments,
-  mapCustomer,
-  normalizeOptionalText,
-  syncDocumentStatus,
-  updateTicketStatusRecord
-} from './core'
+import { calculateCommercialTotals as calculateDocumentTotals } from '~~/shared/domain/commercial/money'
+import { createTicketEvent } from '~~/server/utils/pos/ticket-events'
+import { closeTicketRecord, updateTicketStatusRecord } from '~~/server/utils/pos/ticket-status'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
+import { generateTicketNumber } from '~~/server/utils/pos/numbers'
+import { getTicketPayments, syncDocumentStatus } from '~~/server/utils/pos/document-balances'
+import { mapCustomer } from '~~/server/modules/customers/mapper'
+import { normalizeOptionalText } from '~~/shared/lib/text'
 import { cloneDocumentLinesFromLatest, createDocumentRecord, mapDocument, mapPayment } from './documents'
 
 export function mapTicket(row: typeof tickets.$inferSelect): TicketRecord {

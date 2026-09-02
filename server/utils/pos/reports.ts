@@ -2,9 +2,9 @@ import { and, desc, eq, gte, inArray, lte, sql, sum } from 'drizzle-orm'
 import { catalogItems, customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
 import type { DailySummary, ReportsLeaders, ReportsOverview } from '~~/shared/types/pos'
-import { businessTimeZone, toDateInputValue } from '~~/shared/utils/pos'
+import { businessTimeZone, toDateInputValue, buildZonedDayRange as buildDayRange } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
-import { buildDayRange, ensurePosSchema } from './core'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
 
 function shiftIsoDate(date: string, days: number) {
   const [year, month, day] = date.split('-').map(Number)

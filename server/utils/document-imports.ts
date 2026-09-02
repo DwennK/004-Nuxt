@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import { documentImports } from '~~/server/db/schema'
-import { ensurePosSchema } from '~~/server/utils/pos/core'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
 import { useDb } from './turso'
 
 export type DocumentImportSource = typeof documentImports.$inferSelect.source

@@ -9,9 +9,9 @@ import {
   ticketStatusLabels
 } from '~~/shared/constants/pos'
 import type { HomeActivityItem, HomeOverview } from '~~/shared/types/pos'
-import { formatCurrency } from '~~/shared/utils/pos'
+import { formatCurrency, buildZonedDayRange as buildDayRange } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
-import { buildDayRange, ensurePosSchema } from './core'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
 import { listDocuments } from './documents'
 import { getEndOfDaySummary } from './reports'
 import { listTickets } from './tickets'

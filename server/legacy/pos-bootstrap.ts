@@ -1,48 +1,11 @@
-import { and, desc, eq, isNotNull, sql, sum } from 'drizzle-orm'
-import {
-  catalogItems,
-  companySettings,
-  customers,
-  documentLines,
-  documents,
-  numberSequences,
-  payments,
-  ticketEvents,
-  tickets
-} from '~~/server/db/schema'
-import { documentTypePrefixes, payableDocumentTypes, ticketStatusLabels } from '~~/shared/constants/pos'
+// Local break-glass compatibility only. Production uses reviewed migrations.
+import { eq, sql } from 'drizzle-orm'
+import { catalogItems, companySettings, customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
 import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
-import { canTransitionTicketStatus } from '~~/shared/domain/tickets/workflow'
-import { normalizeOptionalText, splitLegacyName } from '~~/shared/lib/text'
-import type {
-  DocumentStatus,
-  DocumentType,
-  PaymentStatus,
-  TicketEventKind,
-  TicketStatus
-} from '~~/shared/types/pos'
-import { buildZonedDayRange, toIsoDateTime } from '~~/shared/utils/pos'
-import type { PosDatabaseExecutor } from '../turso'
-import { useDb, useTursoClient } from '../turso'
-import { buildRepairCatalogSeedItems } from './repair-service-seed'
-
-let posSchemaPromise: Promise<void> | null = null
-
-// Temporary compatibility exports while remaining POS callers migrate to their owning modules.
-export { mapCustomer } from '~~/server/modules/customers/mapper'
-export { normalizeOptionalText, normalizeRequiredText, splitLegacyName } from '~~/shared/lib/text'
-
-function serializeEventMetadata(metadata?: Record<string, unknown> | null) {
-  if (!metadata) {
-    return null
-  }
-
-  try {
-    return JSON.stringify(metadata)
-  } catch {
-    return null
-  }
-}
+import { splitLegacyName } from '~~/shared/lib/text'
+import { toIsoDateTime } from '~~/shared/utils/pos'
+import { useDb, useTursoClient } from '../utils/turso'
+import { buildRepairCatalogSeedItems } from '../utils/pos/repair-service-seed'
 
 async function ensureCompanySettingsRow() {
   const db = useDb()
@@ -77,9 +40,6 @@ async function ensureCompanySettingsRow() {
     updatedAt: now
   })
 }
-
-// Compatibility export while callers move to the shared commercial kernel.
-export const calculateDocumentTotals = calculateCommercialTotals
 
 async function createPosTables() {
   const client = useTursoClient()
@@ -1018,7 +978,7 @@ async function seedOperations() {
     return
   }
 
-  const quoteTotals = calculateDocumentTotals([
+  const quoteTotals = calculateCommercialTotals([
     {
       quantity: 1,
       unitPrice: repairService.defaultPrice,
@@ -1031,7 +991,7 @@ async function seedOperations() {
     }
   ])
 
-  const accessoryTotals = calculateDocumentTotals([
+  const accessoryTotals = calculateCommercialTotals([
     {
       quantity: 1,
       unitPrice: caseItem.defaultPrice,
@@ -1044,7 +1004,7 @@ async function seedOperations() {
     }
   ])
 
-  const supportTotals = calculateDocumentTotals([{
+  const supportTotals = calculateCommercialTotals([{
     quantity: 1,
     unitPrice: whatsappSupport.defaultPrice,
     vatRate: whatsappSupport.vatRate
@@ -1230,332 +1190,23 @@ async function createVacationTables() {
   ], 'write')
 }
 
-export async function ensurePosSchema() {
-  if (!posSchemaPromise) {
-    posSchemaPromise = (async () => {
-      const config = useRuntimeConfig()
+export async function bootstrapLegacyPosSchema() {
+  const config = useRuntimeConfig()
+  if (config.posAllowRuntimeSchemaBootstrap !== true) return
 
-      if (config.posAllowRuntimeSchemaBootstrap !== true) {
-        return
-      }
-
-      await migrateLegacyCustomersTable()
-      await createPosTables()
-      await ensureDocumentImportsTable()
-      await migrateCatalogStructure()
-      await migrateTicketAccessColumns()
-      await migrateCompanySettingsColumns()
-      await migrateDocumentLinesQuantityToInteger()
-      await migrateTicketLinesQuantityToInteger()
-      await ensureUniqueNumberIndexes()
-      await ensureCompanySettingsRow()
-      if (config.posAllowRuntimeDemoSeed === true) {
-        await seedPosData()
-      }
-      await createVacationTables()
-    })().catch((error) => {
-      posSchemaPromise = null
-      throw error
-    })
-  }
-
-  return posSchemaPromise
-}
-
-export async function generateTicketNumber(executor?: PosDatabaseExecutor) {
-  if (!executor) {
-    await ensurePosSchema()
-  }
-
-  const prefix = 'TIC-'
-  const db = executor || useDb()
-  const [result] = await db.insert(numberSequences).values({
-    scope: 'ticket',
-    lastValue: sql<number>`coalesce((
-      select max(cast(substr(${tickets.ticketNumber}, length(${prefix}) + 1) as integer))
-      from ${tickets}
-      where ${tickets.ticketNumber} like ${`${prefix}%`}
-    ), 0) + 1`
-  }).onConflictDoUpdate({
-    target: numberSequences.scope,
-    set: { lastValue: sql`${numberSequences.lastValue} + 1` }
-  }).returning({ lastValue: numberSequences.lastValue })
-
-  const sequence = Number(result?.lastValue || 0)
-
-  if (!sequence) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'Could not generate ticket number'
-    })
-  }
-
-  return `${prefix}${sequence}`
-}
-
-export async function generateDocumentNumber(type: DocumentType, executor?: PosDatabaseExecutor) {
-  if (!executor) {
-    await ensurePosSchema()
-  }
-
-  const prefix = `${documentTypePrefixes[type]}-`
-  const db = executor || useDb()
-  const [result] = await db.insert(numberSequences).values({
-    scope: `document:${type}`,
-    lastValue: sql<number>`coalesce((
-      select max(cast(substr(${documents.documentNumber}, length(${prefix}) + 1) as integer))
-      from ${documents}
-      where ${documents.type} = ${type}
-        and ${documents.documentNumber} like ${`${prefix}%`}
-    ), 0) + 1`
-  }).onConflictDoUpdate({
-    target: numberSequences.scope,
-    set: { lastValue: sql`${numberSequences.lastValue} + 1` }
-  }).returning({ lastValue: numberSequences.lastValue })
-
-  const sequence = Number(result?.lastValue || 0)
-
-  if (!sequence) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'Could not generate document number'
-    })
-  }
-
-  return `${prefix}${sequence}`
-}
-
-export async function createTicketEvent(input: {
-  ticketId: number
-  kind: TicketEventKind
-  label: string
-  note?: string | null
-  metadata?: Record<string, unknown> | null
-  occurredAt?: string | null
-}, executor?: PosDatabaseExecutor) {
-  await ensurePosSchema()
-
-  const db = executor || useDb()
-  const now = toIsoDateTime()
-
-  await db.insert(ticketEvents).values({
-    ticketId: input.ticketId,
-    kind: input.kind,
-    label: input.label.trim(),
-    note: normalizeOptionalText(input.note),
-    metadataJson: serializeEventMetadata(input.metadata),
-    occurredAt: input.occurredAt || now,
-    createdAt: now
-  })
-}
-
-export async function syncDocumentStatus(documentId: number, executor?: PosDatabaseExecutor) {
-  await ensurePosSchema()
-
-  const db = executor || useDb()
-  const paymentSummary = await db.select({
-    paidTotal: sum(payments.amount)
-  })
-    .from(payments)
-    .where(and(eq(payments.documentId, documentId), eq(payments.status, 'paid')))
-
-  const documentRow = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1)
-  const currentDocument = documentRow[0]
-
-  if (!currentDocument) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Document not found'
-    })
-  }
-
-  const paidTotal = Number(paymentSummary[0]?.paidTotal || 0)
-  const isPayable = payableDocumentTypes.includes(currentDocument.type as (typeof payableDocumentTypes)[number])
-  const nextStatus: DocumentStatus = currentDocument.status === 'cancelled'
-    ? 'cancelled'
-    : isPayable && paidTotal >= currentDocument.total && currentDocument.total > 0
-      ? 'paid'
-      : currentDocument.status === 'draft'
-        ? 'draft'
-        : 'issued'
-
-  if (nextStatus !== currentDocument.status) {
-    await db.update(documents)
-      .set({
-        status: nextStatus,
-        updatedAt: toIsoDateTime()
-      })
-      .where(eq(documents.id, documentId))
-  }
-
-  return nextStatus
-}
-
-export async function closeTicketRecord(ticketId: number, internalNotes?: string | null) {
-  await ensurePosSchema()
-
-  const db = useDb()
-  return db.transaction(async (tx) => {
-    const existingRows = await tx.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1)
-    const existing = existingRows[0]
-
-    if (!existing) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Ticket not found'
-      })
-    }
-
-    if (!canTransitionTicketStatus(existing.status, 'closed')) {
-      throw createError({
-        statusCode: 409,
-        statusMessage: `Ticket cannot transition from ${ticketStatusLabels[existing.status]} to ${ticketStatusLabels.closed}`,
-        data: {
-          code: 'TICKET_TRANSITION_NOT_ALLOWED',
-          from: existing.status,
-          to: 'closed'
-        }
-      })
-    }
-
-    const result = await tx.update(tickets)
-      .set({
-        status: 'closed',
-        closedAt: toIsoDateTime(),
-        internalNotes: normalizeOptionalText(internalNotes) ?? undefined,
-        updatedAt: toIsoDateTime()
-      })
-      .where(eq(tickets.id, ticketId))
-      .returning()
-    const row = result[0]
-
-    if (!row) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Ticket not found'
-      })
-    }
-
-    if (existing.status !== 'closed') {
-      await createTicketEvent({
-        ticketId,
-        kind: 'ticket_closed',
-        label: 'Ticket clôturé',
-        note: internalNotes,
-        metadata: {
-          previousStatus: existing.status,
-          nextStatus: 'closed'
-        },
-        occurredAt: row.closedAt
-      }, tx)
-    }
-
-    return row
-  })
-}
-
-export async function updateTicketStatusRecord(ticketId: number, status: TicketStatus, internalNotes?: string | null) {
-  await ensurePosSchema()
-
-  const db = useDb()
-  return db.transaction(async (tx) => {
-    const existingRows = await tx.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1)
-    const existing = existingRows[0]
-
-    if (!existing) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Ticket not found'
-      })
-    }
-
-    if (!canTransitionTicketStatus(existing.status, status)) {
-      throw createError({
-        statusCode: 409,
-        statusMessage: `Ticket cannot transition from ${ticketStatusLabels[existing.status]} to ${ticketStatusLabels[status]}`,
-        data: {
-          code: 'TICKET_TRANSITION_NOT_ALLOWED',
-          from: existing.status,
-          to: status
-        }
-      })
-    }
-
-    const result = await tx.update(tickets)
-      .set({
-        status,
-        closedAt: status === 'closed' ? toIsoDateTime() : null,
-        internalNotes: normalizeOptionalText(internalNotes) ?? undefined,
-        updatedAt: toIsoDateTime()
-      })
-      .where(eq(tickets.id, ticketId))
-      .returning()
-    const row = result[0]
-
-    if (!row) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Ticket not found'
-      })
-    }
-
-    if (existing.status !== status) {
-      await createTicketEvent({
-        ticketId,
-        kind: status === 'closed' ? 'ticket_closed' : 'ticket_status_changed',
-        label: status === 'closed' ? 'Ticket clôturé' : `Statut mis à jour · ${ticketStatusLabels[status]}`,
-        note: internalNotes,
-        metadata: {
-          previousStatus: existing.status,
-          nextStatus: status
-        },
-        occurredAt: status === 'closed' ? row.closedAt : row.updatedAt
-      }, tx)
-    }
-
-    return row
-  })
-}
-
-export async function getTicketPayments(ticketId: number) {
-  await ensurePosSchema()
-
-  const db = useDb()
-  return db.select({
-    id: payments.id,
-    customerId: payments.customerId,
-    documentId: payments.documentId,
-    method: payments.method,
-    status: payments.status,
-    amount: payments.amount,
-    paidAt: payments.paidAt,
-    notes: payments.notes,
-    createdAt: payments.createdAt,
-    updatedAt: payments.updatedAt
-  })
-    .from(payments)
-    .innerJoin(documents, eq(payments.documentId, documents.id))
-    .where(and(eq(documents.ticketId, ticketId), isNotNull(documents.ticketId)))
-    .orderBy(desc(payments.paidAt), desc(payments.id))
-}
-
-export async function getDocumentPaymentTotals(
-  documentId: number,
-  status: PaymentStatus = 'paid',
-  executor?: PosDatabaseExecutor
-) {
-  await ensurePosSchema()
-
-  const db = executor || useDb()
-  const totals = await db.select({
-    total: sum(payments.amount)
-  })
-    .from(payments)
-    .where(and(eq(payments.documentId, documentId), eq(payments.status, status)))
-
-  return Number(totals[0]?.total || 0)
-}
-
-export function buildDayRange(date: string) {
-  return buildZonedDayRange(date)
+  await migrateLegacyCustomersTable()
+  await createPosTables()
+  await useTursoClient().execute(
+    'CREATE TABLE IF NOT EXISTS counter_customer (id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE RESTRICT)'
+  )
+  await ensureDocumentImportsTable()
+  await migrateCatalogStructure()
+  await migrateTicketAccessColumns()
+  await migrateCompanySettingsColumns()
+  await migrateDocumentLinesQuantityToInteger()
+  await migrateTicketLinesQuantityToInteger()
+  await ensureUniqueNumberIndexes()
+  await ensureCompanySettingsRow()
+  if (config.posAllowRuntimeDemoSeed === true) await seedPosData()
+  await createVacationTables()
 }

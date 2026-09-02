@@ -4,7 +4,7 @@ import { mapCustomer } from '~~/server/modules/customers/mapper'
 import { normalizeOptionalText, normalizeRequiredText, splitLegacyName } from '~~/shared/lib/text'
 import type { CustomerListResponse, CustomerUpsertInput } from '~~/shared/types/pos'
 import { useDb } from '../turso'
-import { ensurePosSchema } from './core'
+import { ensurePosSchema } from '~~/server/utils/pos/schema'
 
 export async function listCustomers(filters?: {
   search?: string
