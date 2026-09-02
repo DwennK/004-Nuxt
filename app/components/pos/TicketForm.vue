@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<{
   customers: CustomerRecord[]
   catalogItems?: CatalogItemRecord[]
   initialValue?: Partial<{
+    id: number
     customerId: number | null
     type: (typeof ticketTypes)[number]
     status: (typeof ticketStatuses)[number]
@@ -156,10 +157,18 @@ const state = reactive<Schema>({
 const lineEditor = useCommercialLinesDraft({
   initialLines: computed(() => props.initialValue.lines),
   catalogItems: computed(() => props.catalogItems || []),
-  lineIdPrefix: 'ticket-line'
+  lineIdPrefix: 'ticket-line',
+  draftKey: computed(() => props.initialValue.id)
 })
 
-watchEffect(() => {
+const ticketDraftBaseline = ref('')
+let ticketDraftOwner: number | undefined
+let ticketDraftInitialized = false
+watch(() => props.initialValue, () => {
+  const nextOwner = props.initialValue.id
+  if (ticketDraftInitialized && nextOwner === ticketDraftOwner && JSON.stringify(state) !== ticketDraftBaseline.value) return
+  ticketDraftInitialized = true
+  ticketDraftOwner = nextOwner
   state.customerId = props.initialValue.customerId ?? 0
   state.type = props.initialValue.type || 'repair'
   state.status = props.initialValue.status || 'new'
@@ -173,7 +182,8 @@ watchEffect(() => {
   state.internalNotes = props.initialValue.internalNotes || ''
   state.openedAt = toDateTimeLocal(props.initialValue.openedAt)
   state.closedAt = props.initialValue.closedAt ? toDateTimeLocal(props.initialValue.closedAt) : ''
-})
+  ticketDraftBaseline.value = JSON.stringify(state)
+}, { immediate: true, deep: true })
 
 function buildServiceSearchText(item: CatalogItemRecord) {
   return normalizeSearchText([

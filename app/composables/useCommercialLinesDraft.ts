@@ -1,4 +1,4 @@
-import { computed, reactive, watchEffect, type ComputedRef, type Ref } from 'vue'
+import { computed, reactive, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { lineCategoryHints, lineCategoryLabels } from '~~/shared/constants/pos'
 import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
 import type {
@@ -35,14 +35,17 @@ type UseCommercialLinesDraftOptions = {
   lineIdPrefix?: string
   allowEmpty?: boolean
   reuseEmptyLine?: boolean
+  draftKey?: Ref<number | string | undefined>
 }
 
 export type CommercialLinesDraftController = {
   state: { lines: CommercialDraftLine[] }
+  isDirty: ComputedRef<boolean>
   categoryItems: Array<SelectItem<LineCategoryHint>>
   totals: ComputedRef<{ subtotal: number, taxAmount: number, total: number }>
   addEmptyLine: () => CommercialDraftLine
   resetLines: (lines?: EditableCommercialLinePayload[]) => void
+  acceptSavedLines: (saved: EditableCommercialLinePayload[], submitted: EditableCommercialLinePayload[]) => void
   addCatalogItem: (item: CatalogItemRecord) => void
   incrementLine: (index: number) => void
   decrementLine: (index: number) => void
@@ -82,6 +85,8 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
   const state = reactive<{ lines: CommercialDraftLine[] }>({
     lines: []
   })
+  const baseline = ref('')
+  const isDirty = computed(() => JSON.stringify(serializeLines()) !== baseline.value)
 
   const categoryItems = lineCategoryHints.map(category => ({
     label: lineCategoryLabels[category],
@@ -95,9 +100,26 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
           unitPriceCents: line.unitPrice
         }))
       : options.allowEmpty ? [] : [createLine()]
+    baseline.value = JSON.stringify(serializeLines())
   }
 
-  watchEffect(() => resetLines(options.initialLines.value))
+  function acceptSavedLines(saved: EditableCommercialLinePayload[], submitted: EditableCommercialLinePayload[]) {
+    if (JSON.stringify(serializeLines()) === JSON.stringify(submitted)) {
+      resetLines(saved)
+    } else {
+      baseline.value = JSON.stringify(serializeLines(saved.map(line => createLine({ ...line, unitPriceCents: line.unitPrice }))))
+    }
+  }
+
+  let initialized = false
+  let ownerKey: number | string | undefined
+  watch([() => options.draftKey?.value, options.initialLines], ([key, lines]) => {
+    if (!initialized || key !== ownerKey || !isDirty.value) {
+      resetLines(lines)
+    }
+    initialized = true
+    ownerKey = key
+  }, { immediate: true, deep: true })
 
   const totals = computed(() => calculateCommercialTotals(serializeLines()))
 
@@ -288,10 +310,12 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
 
   return {
     state,
+    isDirty,
     categoryItems,
     totals,
     addEmptyLine,
     resetLines,
+    acceptSavedLines,
     addCatalogItem,
     incrementLine,
     decrementLine,

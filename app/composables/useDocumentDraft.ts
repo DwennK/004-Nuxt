@@ -1,4 +1,4 @@
-import type { ComputedRef, Ref } from 'vue'
+import { computed, reactive, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { z } from 'zod'
 import {
   documentStatusLabels,
@@ -21,7 +21,7 @@ import {
 
 type EditableLinePayload = EditableCommercialLinePayload
 
-export type DocumentInitialValue = Partial<Pick<DocumentDetail, 'type' | 'status' | 'customerId' | 'ticketId' | 'issuedAt' | 'notes'>> & {
+export type DocumentInitialValue = Partial<Pick<DocumentDetail, 'id' | 'type' | 'status' | 'customerId' | 'ticketId' | 'issuedAt' | 'notes'>> & {
   lines?: EditableLinePayload[]
 }
 
@@ -67,6 +67,8 @@ export type DocumentDraftController = {
   documentStatusItems: ComputedRef<Array<SelectItem<DocumentStatus>>>
 } & Omit<CommercialLinesDraftController, 'state'> & {
   serialize: () => DocumentSavePayload
+  resetDraft: () => void
+  acceptSaved: (saved: DocumentDetail, submitted: DocumentSavePayload) => void
 }
 
 function toDateTimeLocal(value?: string | null) {
@@ -90,6 +92,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
   const lineEditor = useCommercialLinesDraft({
     initialLines: computed(() => options.initialValue.value?.lines),
     catalogItems: options.catalogItems,
+    draftKey: computed(() => options.initialValue.value?.id),
     lineIdPrefix: 'document-line'
   })
 
@@ -135,7 +138,8 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     ticketId: null,
     issuedAt: toDateTimeLocal(),
     notes: '',
-    lines: lineEditor.state.lines
+    get lines() { return lineEditor.state.lines },
+    set lines(value) { lineEditor.state.lines = value }
   })
 
   const documentTypeItems = computed(() => options.allowedTypes.value.map(type => ({
@@ -150,17 +154,54 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
       value: status
     })))
 
-  watchEffect(() => {
-    const initialValue = options.initialValue.value
+  const headerBaseline = ref('')
+  function headerSnapshot() {
+    const { lines: _lines, ...header } = state
+    return JSON.stringify(header)
+  }
+  const headerDirty = computed(() => headerSnapshot() !== headerBaseline.value)
 
-    state.type = initialValue?.type || options.allowedTypes.value[0] || 'invoice'
-    state.status = initialValue?.status || 'issued'
-    state.customerId = options.fixedCustomerId.value ?? initialValue?.customerId ?? 0
-    state.ticketId = options.fixedTicketId.value ?? initialValue?.ticketId ?? null
-    state.issuedAt = toDateTimeLocal(initialValue?.issuedAt)
-    state.notes = initialValue?.notes || ''
-    state.lines = lineEditor.state.lines
-  })
+  function headerFrom(initialValue = options.initialValue.value) {
+    return {
+      type: initialValue?.type || options.allowedTypes.value[0] || 'invoice',
+      status: initialValue?.status || 'issued',
+      customerId: options.fixedCustomerId.value ?? initialValue?.customerId ?? 0,
+      ticketId: options.fixedTicketId.value ?? initialValue?.ticketId ?? null,
+      issuedAt: toDateTimeLocal(initialValue?.issuedAt),
+      notes: initialValue?.notes || ''
+    }
+  }
+
+  function resetHeader() {
+    Object.assign(state, headerFrom())
+    headerBaseline.value = headerSnapshot()
+  }
+
+  function acceptSaved(saved: DocumentDetail, submitted: DocumentSavePayload) {
+    if (saved.id !== options.initialValue.value?.id) return
+    const nextHeader = headerFrom(saved)
+    const submittedHeader = headerFrom(submitted)
+    Object.assign(state, Object.fromEntries(Object.entries(nextHeader).filter(([key]) => {
+      const field = key as keyof typeof nextHeader
+      return state[field] === submittedHeader[field]
+    })))
+    headerBaseline.value = JSON.stringify(nextHeader)
+    lineEditor.acceptSavedLines(saved.lines, submitted.lines)
+  }
+
+  function resetDraft() {
+    resetHeader()
+    lineEditor.resetLines()
+  }
+
+  let initialized = false
+  let ownerId: number | undefined
+  watch([options.initialValue, options.allowedTypes, options.fixedCustomerId, options.fixedTicketId], () => {
+    const nextId = options.initialValue.value?.id
+    if (!initialized || nextId !== ownerId || !headerDirty.value) resetHeader()
+    initialized = true
+    ownerId = nextId
+  }, { immediate: true, deep: true })
 
   function serialize(): DocumentSavePayload {
     return {
@@ -176,6 +217,9 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
 
   return {
     state,
+    isDirty: computed(() => headerDirty.value || lineEditor.isDirty.value),
+    resetDraft,
+    acceptSaved,
     schema,
     documentTypeItems,
     documentStatusItems,
@@ -183,6 +227,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     totals: lineEditor.totals,
     addEmptyLine: lineEditor.addEmptyLine,
     resetLines: lineEditor.resetLines,
+    acceptSavedLines: lineEditor.acceptSavedLines,
     addCatalogItem: lineEditor.addCatalogItem,
     incrementLine: lineEditor.incrementLine,
     decrementLine: lineEditor.decrementLine,

@@ -30,6 +30,7 @@ const isContextOpen = ref(false)
 const hasUnsavedDocumentChanges = ref(false)
 const hasOpenedInitialEmailModal = ref(false)
 const documentFormId = 'document-detail-form'
+const documentEditor = useTemplateRef<{ acceptSaved: (saved: DocumentDetail, submitted: DocumentSavePayload) => void }>('documentEditor')
 const unsavedDocumentMessage = 'Des modifications du document ne sont pas enregistrées. Continuer sans enregistrer ?'
 
 const tabItems = [
@@ -77,12 +78,16 @@ async function saveDocument(payload: DocumentSavePayload) {
   }
 
   isSavingDocument.value = true
+  const documentId = id.value
 
   try {
-    await $fetch(`/api/documents/${id.value}`, {
+    const saved = await $fetch<DocumentDetail>(`/api/documents/${documentId}`, {
       method: 'PATCH',
       body: payload
     })
+    if (id.value !== documentId) return
+    documentEditor.value?.acceptSaved(saved, payload)
+    document.value = saved
 
     toast.add({
       title: 'Document mis à jour',
@@ -90,7 +95,6 @@ async function saveDocument(payload: DocumentSavePayload) {
     })
 
     await refresh()
-    hasUnsavedDocumentChanges.value = false
   } finally {
     isSavingDocument.value = false
   }
@@ -396,6 +400,7 @@ function startNewEmailAttempt() {
         <div v-if="activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)]">
           <PosDocumentEditor
             v-if="customers?.items && canEditDocument"
+            ref="documentEditor"
             v-model:context-open="isContextOpen"
             v-model:dirty="hasUnsavedDocumentChanges"
             :form-id="documentFormId"

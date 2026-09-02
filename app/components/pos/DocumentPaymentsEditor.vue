@@ -10,14 +10,6 @@ import { canDeletePayment, canEditPayment } from '~~/shared/domain/payments/rule
 import type { PaymentMethod, PaymentRecord, PaymentStatus } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
 
-type PaymentDraft = {
-  method: PaymentMethod
-  status: PaymentStatus
-  amount: number
-  paidAt: string
-  notes: string
-}
-
 const props = defineProps<{
   documentId: number
   payments: PaymentRecord[]
@@ -47,33 +39,8 @@ const statusItems = editablePaymentStatuses.map(status => ({
   value: status
 }))
 
-function toDateTimeLocal(value?: string | null) {
-  const date = value ? new Date(value) : new Date()
-
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-
-  const pad = (part: number) => String(part).padStart(2, '0')
-
-  return [
-    date.getFullYear(),
-    pad(date.getMonth() + 1),
-    pad(date.getDate())
-  ].join('-') + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-function createPaymentDraft(payment?: PaymentRecord): PaymentDraft {
-  return {
-    method: payment?.method || 'cash',
-    status: payment?.status || 'paid',
-    amount: payment ? payment.amount / 100 : Math.max(props.balanceDue / 100, 0),
-    paidAt: toDateTimeLocal(payment?.paidAt),
-    notes: payment?.notes || ''
-  }
-}
-
-const paymentDrafts = ref<Record<number, PaymentDraft>>({})
+const paymentDraftController = usePaymentDrafts(toRef(props, 'documentId'), toRef(props, 'payments'))
+const paymentDrafts = paymentDraftController.drafts
 const deletingId = ref<number | null>(null)
 const savingId = ref<number | null>(null)
 const creatingMethod = ref<PaymentMethod | 'details' | null>(null)
@@ -95,16 +62,6 @@ function isPaymentStatusEditable(payment: PaymentRecord) {
 function isPaymentDeletable(payment: PaymentRecord) {
   return canDeletePayments.value && canDeletePayment(payment.status)
 }
-
-watchEffect(() => {
-  const nextDrafts: Record<number, PaymentDraft> = {}
-
-  for (const payment of props.payments) {
-    nextDrafts[payment.id] = createPaymentDraft(payment)
-  }
-
-  paymentDrafts.value = nextDrafts
-})
 
 async function addPayment(input: {
   method: PaymentMethod
@@ -153,7 +110,7 @@ function resetDraft(payment: PaymentRecord) {
     return
   }
 
-  paymentDrafts.value[payment.id] = createPaymentDraft(payment)
+  paymentDraftController.reset(payment)
 }
 
 async function savePayment(payment: PaymentRecord) {
@@ -168,9 +125,10 @@ async function savePayment(payment: PaymentRecord) {
   }
 
   savingId.value = payment.id
+  const submitted = { ...draft }
 
   try {
-    await $fetch(`/api/payments/${payment.id}`, {
+    const saved = await $fetch<PaymentRecord>(`/api/payments/${payment.id}`, {
       method: 'PATCH',
       body: {
         customerId: payment.customerId,
@@ -183,6 +141,7 @@ async function savePayment(payment: PaymentRecord) {
       }
     })
 
+    paymentDraftController.acceptSaved(saved, submitted)
     toast.add({
       title: 'Paiement mis à jour',
       color: 'success'

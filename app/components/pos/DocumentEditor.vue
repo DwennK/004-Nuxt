@@ -42,7 +42,6 @@ const contextOpen = defineModel<boolean>('contextOpen', { default: false })
 const dirty = defineModel<boolean>('dirty', { default: false })
 const internalFormId = useId()
 const resolvedFormId = computed(() => props.formId || internalFormId)
-const savedDraftSignature = ref('')
 const toast = useToast()
 
 const documentTypeActionLabels: Record<DocumentType, string> = {
@@ -57,23 +56,10 @@ const resolvedSubmitLabel = computed(() => {
 
 const hasFixedCustomer = computed(() => props.fixedCustomerId !== null)
 
-function getDraftSignature() {
-  return JSON.stringify(editor.serialize())
-}
-
-const currentDraftSignature = computed(() => getDraftSignature())
-
-watch(() => props.initialValue, () => {
-  savedDraftSignature.value = getDraftSignature()
-  dirty.value = false
-}, {
-  immediate: true,
-  flush: 'post'
-})
-
-watch(currentDraftSignature, (signature) => {
-  dirty.value = Boolean(savedDraftSignature.value) && signature !== savedDraftSignature.value
-})
+watch(editor.isDirty, (value) => {
+  dirty.value = value
+}, { immediate: true, flush: 'sync' })
+defineExpose({ acceptSaved: editor.acceptSaved })
 
 function onSubmit() {
   emit('save', editor.serialize())
