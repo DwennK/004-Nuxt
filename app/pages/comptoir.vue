@@ -8,13 +8,9 @@ import {
   ticketStatusLabels
 } from '~~/shared/constants/pos'
 import type {
-  CatalogItemListResponse,
   CounterOverviewResponse,
-  CustomerListResponse,
   DocumentListItem,
-  DocumentListResponse,
-  TicketListItem,
-  TicketListResponse
+  TicketListItem
 } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime, getCatalogItemTypeLabel } from '~~/shared/utils/pos'
 
@@ -62,11 +58,12 @@ type CounterWorkItem = {
 
 const search = ref('')
 const selectedQueueFilter = ref<QueueFilter>('all')
-const debouncedSearch = refDebounced(search, 250)
-const minimumSearchLength = 2
-
-const searchTerm = computed(() => debouncedSearch.value.trim())
-const canSearch = computed(() => searchTerm.value.length >= minimumSearchLength)
+const {
+  searchTerm,
+  canSearch,
+  results: globalSearchResults,
+  loading: isSearching
+} = useGlobalSearch(search, 5)
 
 const counterActions: CounterAction[] = [{
   label: 'Vente rapide',
@@ -94,59 +91,10 @@ const approvalTickets = computed(() => counterOverview.value?.approvalTickets)
 const waitingPartsTickets = computed(() => counterOverview.value?.waitingPartsTickets)
 const reportsOverview = computed(() => counterOverview.value?.reportsOverview)
 
-const { data: customerResults, status: customerSearchStatus, refresh: refreshCustomerResults } = await useFetch<CustomerListResponse>('/api/customers', {
-  key: 'counter-search-customers',
-  query: computed(() => ({
-    search: searchTerm.value,
-    pageSize: 5
-  })),
-  immediate: false,
-  watch: false
-})
-
-const { data: ticketResults, status: ticketSearchStatus, refresh: refreshTicketResults } = await useFetch<TicketListResponse>('/api/tickets', {
-  key: 'counter-search-tickets',
-  query: computed(() => ({
-    q: searchTerm.value,
-    pageSize: 5
-  })),
-  immediate: false,
-  watch: false
-})
-
-const { data: documentResults, status: documentSearchStatus, refresh: refreshDocumentResults } = await useFetch<DocumentListResponse>('/api/documents', {
-  key: 'counter-search-documents',
-  query: computed(() => ({
-    q: searchTerm.value,
-    pageSize: 5
-  })),
-  immediate: false,
-  watch: false
-})
-
-const { data: catalogResults, status: catalogSearchStatus, refresh: refreshCatalogResults } = await useFetch<CatalogItemListResponse>('/api/catalog-items', {
-  key: 'counter-search-catalog',
-  query: computed(() => ({
-    search: searchTerm.value,
-    activeOnly: true,
-    pageSize: 5
-  })),
-  immediate: false,
-  watch: false
-})
-
-watch(searchTerm, (value) => {
-  if (value.length < minimumSearchLength) {
-    return
-  }
-
-  void Promise.all([
-    refreshCustomerResults(),
-    refreshTicketResults(),
-    refreshDocumentResults(),
-    refreshCatalogResults()
-  ])
-})
+const customerResults = computed(() => globalSearchResults.value?.customers)
+const ticketResults = computed(() => globalSearchResults.value?.tickets)
+const documentResults = computed(() => globalSearchResults.value?.documents)
+const catalogResults = computed(() => globalSearchResults.value?.catalogItems)
 
 const readyTicketItems = computed(() => readyTickets.value?.items || [])
 const dueDocumentItems = computed(() => dueDocuments.value?.items || [])
@@ -284,11 +232,6 @@ const hasSearchResults = computed(() =>
     || catalogResults.value?.items.length
   )
 )
-const isSearching = computed(() =>
-  canSearch.value
-  && [customerSearchStatus.value, ticketSearchStatus.value, documentSearchStatus.value, catalogSearchStatus.value].some(status => status === 'pending')
-)
-
 function clearSearch() {
   search.value = ''
 }

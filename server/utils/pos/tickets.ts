@@ -579,6 +579,19 @@ export async function listTickets(filters?: {
   const staleCutoff = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString()
 
   const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
+  const relevanceOrder = searchTerm
+    ? sql<number>`case
+        when lower(${tickets.ticketNumber}) = ${searchTerm} then 0
+        when lower(coalesce(${tickets.imei}, '')) = ${searchTerm} then 0
+        when lower(coalesce(${tickets.serialNumber}, '')) = ${searchTerm} then 0
+        when lower(${customers.phone}) = ${searchTerm} then 0
+        when lower(${customerNameValue}) = ${searchTerm} then 0
+        when lower(${tickets.ticketNumber}) like ${`${searchTerm}%`} then 1
+        when lower(coalesce(${tickets.imei}, '')) like ${`${searchTerm}%`} then 1
+        when lower(coalesce(${tickets.serialNumber}, '')) like ${`${searchTerm}%`} then 1
+        else 2
+      end`
+    : undefined
 
   const whereClause = and(
     filters?.status ? eq(tickets.status, filters.status as typeof tickets.$inferSelect.status) : undefined,
@@ -587,8 +600,11 @@ export async function listTickets(filters?: {
       ? or(
           sql`lower(${tickets.ticketNumber}) like ${searchPattern}`,
           sql`lower(${customerNameValue}) like ${searchPattern}`,
+          sql`lower(${customers.phone}) like ${searchPattern}`,
           sql`lower(coalesce(${tickets.brand}, '')) like ${searchPattern}`,
           sql`lower(coalesce(${tickets.model}, '')) like ${searchPattern}`,
+          sql`lower(coalesce(${tickets.imei}, '')) like ${searchPattern}`,
+          sql`lower(coalesce(${tickets.serialNumber}, '')) like ${searchPattern}`,
           sql`lower(${tickets.issueDescription}) like ${searchPattern}`
         )
       : undefined
@@ -608,7 +624,11 @@ export async function listTickets(filters?: {
       .from(tickets)
       .innerJoin(customers, eq(tickets.customerId, customers.id))
       .where(whereClause)
-      .orderBy(desc(tickets.openedAt), desc(tickets.id))
+      .orderBy(
+        ...(relevanceOrder ? [relevanceOrder] : []),
+        desc(tickets.openedAt),
+        desc(tickets.id)
+      )
       .limit(pageSize)
       .offset(offset)
   ])
@@ -630,8 +650,13 @@ export async function listTickets(filters?: {
 
   const summary = summaryRows[0]
 
+  const pageOrder = new Map(pageIds.map((ticketId, index) => [ticketId, index]))
+  const orderedRows = searchTerm
+    ? [...rows].sort((left, right) => (pageOrder.get(left.ticket.id) || 0) - (pageOrder.get(right.ticket.id) || 0))
+    : rows
+
   return {
-    items: rows.map((row): TicketListItem => ({
+    items: orderedRows.map((row): TicketListItem => ({
       ...mapTicket(row.ticket),
       customerName: row.customer.companyName || `${row.customer.firstName} ${row.customer.lastName}`,
       documentCount: Number(row.documentCount || 0)

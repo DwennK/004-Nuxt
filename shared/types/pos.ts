@@ -274,6 +274,14 @@ export type CustomerListResponse = PaginatedResponse<CustomerRecord>
 
 export type CatalogItemListResponse = PaginatedResponse<CatalogItemRecord>
 
+export interface GlobalSearchResponse {
+  query: string
+  customers: CustomerListResponse
+  tickets: TicketListResponse
+  documents: DocumentListResponse
+  catalogItems: CatalogItemListResponse
+}
+
 export interface PaymentListItem extends PaymentRecord {
   customerName: string | null
   documentNumber: string

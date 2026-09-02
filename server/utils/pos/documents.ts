@@ -500,6 +500,16 @@ export async function listDocuments(filters?: {
     .groupBy(documents.id, customers.id, tickets.id)
     .having(dueFilter)
     .as('document_list')
+  const relevanceOrder = searchTerm
+    ? sql<number>`case
+        when lower(${baseQuery.documentNumber}) = ${searchTerm} then 0
+        when lower(coalesce(${baseQuery.ticketNumber}, '')) = ${searchTerm} then 0
+        when lower(${baseQuery.customerName}) = ${searchTerm} then 0
+        when lower(${baseQuery.documentNumber}) like ${`${searchTerm}%`} then 1
+        when lower(coalesce(${baseQuery.ticketNumber}, '')) like ${`${searchTerm}%`} then 1
+        else 2
+      end`
+    : undefined
 
   const [summaryRows, rows] = await Promise.all([
     db.select({
@@ -509,6 +519,7 @@ export async function listDocuments(filters?: {
     }).from(baseQuery),
     db.select().from(baseQuery)
       .orderBy(
+        ...(relevanceOrder ? [relevanceOrder] : []),
         sortBy === 'balanceDue' ? desc(baseQuery.balanceDue) : desc(baseQuery.issuedAt),
         desc(baseQuery.issuedAt),
         desc(baseQuery.id)

@@ -31,13 +31,30 @@ export async function listCustomers(filters?: {
         )
       : undefined
   )
+  const customerNameValue = sql<string>`lower(trim(${customers.firstName} || ' ' || ${customers.lastName}))`
+  const relevanceOrder = normalizedSearch
+    ? sql<number>`case
+        when lower(trim(coalesce(${customers.companyName}, ''))) = ${normalizedSearch} then 0
+        when ${customerNameValue} = ${normalizedSearch} then 0
+        when lower(trim(${customers.phone})) = ${normalizedSearch} then 0
+        when lower(trim(${customers.email})) = ${normalizedSearch} then 0
+        when lower(trim(coalesce(${customers.companyName}, ''))) like ${`${normalizedSearch}%`} then 1
+        when ${customerNameValue} like ${`${normalizedSearch}%`} then 1
+        else 2
+      end`
+    : undefined
 
   const [totalRows, rows] = await Promise.all([
     db.select({ total: sql<number>`count(*)` }).from(customers).where(whereClause),
     db.select()
       .from(customers)
       .where(whereClause)
-      .orderBy(asc(customers.lastName), asc(customers.firstName), asc(customers.id))
+      .orderBy(
+        ...(relevanceOrder ? [relevanceOrder] : []),
+        asc(customers.lastName),
+        asc(customers.firstName),
+        asc(customers.id)
+      )
       .limit(pageSize)
       .offset(offset)
   ])

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
-import type { CustomerListResponse, DocumentListResponse, TicketListResponse } from '~~/shared/types/pos'
 
 const open = ref(false)
 const dashboardSearchOpen = ref(false)
@@ -131,61 +130,12 @@ const footerLinks = [{
   }
 }] satisfies NavigationMenuItem[]
 
-const { data: customers, status: customersStatus, refresh: refreshCustomers } = useFetch<CustomerListResponse>('/api/customers', {
-  query: {
-    page: 1,
-    pageSize: 5
-  },
-  immediate: false,
-  watch: false
-})
-
-const { data: tickets, status: ticketsStatus, refresh: refreshTickets } = useFetch<TicketListResponse>('/api/tickets', {
-  query: {
-    page: 1,
-    pageSize: 5
-  },
-  immediate: false,
-  watch: false
-})
-
-const { data: documents, status: documentsStatus, refresh: refreshDocuments } = useFetch<DocumentListResponse>('/api/documents', {
-  query: {
-    page: 1,
-    pageSize: 5
-  },
-  immediate: false,
-  watch: false
-})
-
-const hasLoadedDashboardSearchData = ref(false)
-const dashboardSearchLoading = computed(() =>
-  [customersStatus.value, ticketsStatus.value, documentsStatus.value].some(status => status === 'pending')
-)
-
-async function loadDashboardSearchData() {
-  if (hasLoadedDashboardSearchData.value || dashboardSearchLoading.value) {
-    return
-  }
-
-  await Promise.all([
-    refreshCustomers(),
-    refreshTickets(),
-    refreshDocuments()
-  ])
-
-  hasLoadedDashboardSearchData.value = ![
-    customersStatus.value,
-    ticketsStatus.value,
-    documentsStatus.value
-  ].some(status => status === 'error')
-}
-
-watch(dashboardSearchOpen, (isOpen) => {
-  if (isOpen) {
-    void loadDashboardSearchData()
-  }
-})
+const dashboardSearchTerm = ref('')
+const {
+  canSearch: canRunDashboardSearch,
+  results: dashboardSearchResults,
+  loading: dashboardSearchLoading
+} = useGlobalSearch(dashboardSearchTerm, 8)
 
 const counterActions = [{
   id: 'new-sale',
@@ -238,54 +188,78 @@ function flattenNavigationItems(items: NavigationMenuItem[]): SearchNavigationIt
 }
 
 const groups = computed(() => {
-  const customerItems = (customers.value?.items || []).slice(0, 5).map(customer => ({
+  if (!canRunDashboardSearch.value) {
+    return [{
+      id: 'navigate',
+      label: 'Navigation',
+      items: [
+        ...flattenNavigationItems(primaryLinks),
+        ...flattenNavigationItems(secondaryLinks),
+        ...flattenNavigationItems(footerLinks)
+      ]
+    }, {
+      id: 'create',
+      label: 'Actions rapides',
+      items: quickActions
+    }]
+  }
+
+  const customerItems = (dashboardSearchResults.value?.customers.items || []).map(customer => ({
     id: `customer-${customer.id}`,
     label: customer.displayName,
     icon: 'i-lucide-users',
     to: `/customers/${customer.id}`,
-    suffix: customer.phone
+    suffix: customer.phone,
+    description: customer.email || 'Fiche client'
   }))
 
-  const ticketItems = (tickets.value?.items || []).slice(0, 5).map(ticket => ({
+  const ticketItems = (dashboardSearchResults.value?.tickets.items || []).map(ticket => ({
     id: `ticket-${ticket.id}`,
     label: ticket.ticketNumber,
     icon: 'i-lucide-wrench',
     to: `/tickets/${ticket.id}`,
-    suffix: ticket.customerName
+    suffix: ticket.customerName,
+    description: [ticket.imei, ticket.serialNumber, ticket.brand, ticket.model].filter(Boolean).join(' · ')
   }))
 
-  const documentItems = (documents.value?.items || []).map(document => ({
+  const documentItems = (dashboardSearchResults.value?.documents.items || []).map(document => ({
     id: `document-${document.id}`,
     label: document.documentNumber,
     icon: 'i-lucide-files',
     to: `/documents/${document.id}`,
-    suffix: document.customerName
+    suffix: document.customerName,
+    description: document.ticketNumber ? `Ticket ${document.ticketNumber}` : 'Document commercial'
+  }))
+
+  const catalogItems = (dashboardSearchResults.value?.catalogItems.items || []).map(item => ({
+    id: `catalog-${item.id}`,
+    label: item.name,
+    icon: 'i-lucide-package-search',
+    to: `/catalog/${item.id}`,
+    suffix: item.sku || undefined,
+    description: [item.brand, item.model, item.category].filter(Boolean).join(' · ')
   }))
 
   return [{
-    id: 'navigate',
-    label: 'Navigation',
-    items: [
-      ...flattenNavigationItems(primaryLinks),
-      ...flattenNavigationItems(secondaryLinks),
-      ...flattenNavigationItems(footerLinks)
-    ]
-  }, {
-    id: 'create',
-    label: 'Actions rapides',
-    items: quickActions
-  }, {
     id: 'customers',
-    label: 'Clients récents',
+    label: 'Clients',
+    ignoreFilter: true,
     items: customerItems
   }, {
     id: 'tickets',
-    label: 'Tickets récents',
+    label: 'Tickets',
+    ignoreFilter: true,
     items: ticketItems
   }, {
     id: 'documents',
-    label: 'Documents récents',
+    label: 'Documents',
+    ignoreFilter: true,
     items: documentItems
+  }, {
+    id: 'catalog',
+    label: 'Catalogue',
+    ignoreFilter: true,
+    items: catalogItems
   }].filter(group => group.items.length)
 })
 </script>
@@ -354,8 +328,14 @@ const groups = computed(() => {
 
     <UDashboardSearch
       v-model:open="dashboardSearchOpen"
+      v-model:search-term="dashboardSearchTerm"
       :groups="groups"
       :loading="dashboardSearchLoading"
+      title="Recherche globale"
+      description="Rechercher un client, téléphone, ticket, IMEI, document, article ou code-barres."
+      placeholder="Nom, téléphone, TIC-…, IMEI, facture, SKU…"
+      :color-mode="false"
+      preserve-group-order
     />
 
     <slot />
