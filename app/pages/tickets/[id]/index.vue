@@ -55,6 +55,9 @@ const id = computed(() => Number(route.params.id))
 const workflowOpen = ref(false)
 const paymentOpen = ref(false)
 const smsModalOpen = ref(false)
+const noteModalOpen = ref(false)
+const noteDraft = ref('')
+const noteSaving = ref(false)
 const createdDocumentActionsOpen = ref(false)
 const selectedWorkflowAction = ref<TicketWorkflowAction | null>(null)
 const createdCommercialDocument = ref<DocumentDetail | null>(null)
@@ -307,6 +310,8 @@ function getEventIcon(kind: TicketEvent['kind']) {
       return 'i-lucide-workflow'
     case 'ticket_closed':
       return 'i-lucide-check-check'
+    case 'ticket_note_added':
+      return 'i-lucide-message-square-plus'
     case 'document_created':
       return 'i-lucide-file-text'
     case 'payment_recorded':
@@ -336,6 +341,11 @@ function getEventDescription(event: TicketEvent) {
 
   if (event.kind === 'ticket_closed') {
     return 'Le dossier est terminé et ne demande plus d\'action atelier.'
+  }
+
+  if (event.kind === 'ticket_note_added') {
+    const actorName = typeof metadata.actorName === 'string' ? metadata.actorName : null
+    return actorName ? `Ajoutée par ${actorName}` : 'Ajoutée au suivi interne du ticket.'
   }
 
   if (event.kind === 'document_created') {
@@ -387,6 +397,44 @@ function getEventDocumentId(event: TicketEvent) {
 function openWorkflowAction(action: TicketWorkflowAction) {
   selectedWorkflowAction.value = action
   workflowOpen.value = true
+}
+
+function openInternalNote() {
+  noteDraft.value = ''
+  noteModalOpen.value = true
+}
+
+async function addInternalNote() {
+  const note = noteDraft.value.trim()
+
+  if (!note || noteSaving.value) {
+    return
+  }
+
+  noteSaving.value = true
+
+  try {
+    await $fetch(`/api/tickets/${id.value}/notes`, {
+      method: 'POST',
+      body: { note }
+    })
+    await refreshTicket()
+    activeTab.value = 'suivi'
+    noteModalOpen.value = false
+    noteDraft.value = ''
+    toast.add({
+      title: 'Note interne ajoutée',
+      color: 'success'
+    })
+  } catch (error) {
+    toast.add({
+      title: 'Note impossible à enregistrer',
+      description: getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.',
+      color: 'error'
+    })
+  } finally {
+    noteSaving.value = false
+  }
 }
 
 function showCreatedDocumentActions(document: DocumentDetail) {
@@ -614,6 +662,17 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
               }"
             />
           </UDropdownMenu>
+
+          <UButton
+            label="Note interne"
+            aria-label="Ajouter une note interne"
+            icon="i-lucide-message-square-plus"
+            color="neutral"
+            variant="subtle"
+            class="hidden sm:inline-flex"
+            :ui="{ label: 'hidden lg:inline' }"
+            @click="openInternalNote"
+          />
 
           <UButton
             label="SMS client"
@@ -1229,6 +1288,47 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
     :initial-notes="ticket?.internalNotes"
     @submit="handleWorkflowSubmit"
   />
+
+  <UModal
+    v-model:open="noteModalOpen"
+    title="Ajouter une note interne"
+    description="Cette note sera horodatée dans le suivi du ticket."
+    :ui="{ content: 'sm:max-w-xl' }"
+  >
+    <template #body>
+      <UFormField label="Note" required>
+        <UTextarea
+          v-model="noteDraft"
+          :rows="5"
+          maxlength="2000"
+          autofocus
+          class="w-full"
+          placeholder="Ex. Client appelé, pièce commandée, test effectué…"
+          @keydown.meta.enter="addInternalNote"
+          @keydown.ctrl.enter="addInternalNote"
+        />
+      </UFormField>
+    </template>
+
+    <template #footer>
+      <div class="flex w-full justify-end gap-2">
+        <UButton
+          label="Annuler"
+          color="neutral"
+          variant="ghost"
+          :disabled="noteSaving"
+          @click="noteModalOpen = false"
+        />
+        <UButton
+          label="Ajouter la note"
+          icon="i-lucide-message-square-plus"
+          :loading="noteSaving"
+          :disabled="!noteDraft.trim()"
+          @click="addInternalNote"
+        />
+      </div>
+    </template>
+  </UModal>
 
   <PosDocumentPaymentSlideover
     v-if="payableDocument"

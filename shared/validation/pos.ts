@@ -218,6 +218,10 @@ export const ticketStatusUpdateSchema = z.object({
   internalNotes: optionalText
 })
 
+export const ticketNoteInputSchema = z.object({
+  note: z.string().trim().min(1, 'La note est obligatoire').max(2000, 'La note est trop longue')
+})
+
 export const employeeInputSchema = z.object({
   firstName: z.string().trim().min(1, 'Le prénom est obligatoire'),
   lastName: z.string().trim().min(1, 'Le nom est obligatoire'),

@@ -718,6 +718,40 @@ export async function getTicketById(id: number): Promise<TicketDetail> {
   }
 }
 
+export async function addTicketNote(id: number, note: string, actor?: {
+  userId: number
+  name: string
+}) {
+  await ensurePosSchema()
+
+  const db = useDb()
+  await db.transaction(async (tx) => {
+    const [ticket] = await tx.select({ id: tickets.id }).from(tickets).where(eq(tickets.id, id)).limit(1)
+
+    if (!ticket) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Ticket not found'
+      })
+    }
+
+    await createTicketEvent({
+      ticketId: id,
+      kind: 'ticket_note_added',
+      label: 'Note interne ajoutée',
+      note,
+      metadata: actor
+        ? {
+            actorUserId: actor.userId,
+            actorName: actor.name
+          }
+        : null
+    }, tx)
+  })
+
+  return getTicketById(id)
+}
+
 export async function createTicket(input: Omit<TicketRecord, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'> & {
   lines?: TicketLineInput[]
 }) {

@@ -111,7 +111,7 @@ export const ticketEvents = sqliteTable('ticket_events', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   ticketId: integer('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
   kind: text('kind', {
-    enum: ['ticket_created', 'ticket_status_changed', 'ticket_closed', 'document_created', 'payment_recorded', 'ticket_sms_qr_opened']
+    enum: ['ticket_created', 'ticket_status_changed', 'ticket_closed', 'ticket_note_added', 'document_created', 'payment_recorded', 'ticket_sms_qr_opened']
   }).notNull(),
   label: text('label').notNull(),
   note: text('note'),

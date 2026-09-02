@@ -124,6 +124,7 @@ export type TicketEventKind
   = | 'ticket_created'
     | 'ticket_status_changed'
     | 'ticket_closed'
+    | 'ticket_note_added'
     | 'document_created'
     | 'payment_recorded'
     | 'ticket_sms_qr_opened'

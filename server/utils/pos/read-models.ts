@@ -163,7 +163,7 @@ type HomePaymentActivityRow = {
 
 type HomeTicketEventRow = {
   id: number
-  kind: 'ticket_created' | 'ticket_status_changed' | 'ticket_closed' | 'document_created' | 'payment_recorded' | 'ticket_sms_qr_opened'
+  kind: 'ticket_created' | 'ticket_status_changed' | 'ticket_closed' | 'ticket_note_added' | 'document_created' | 'payment_recorded' | 'ticket_sms_qr_opened'
   label: string
   note: string | null
   metadataJson: string | null

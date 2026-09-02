@@ -4,7 +4,8 @@ import {
   createAndPayDocumentSchema,
   documentInputSchema,
   markDocumentPaidSchema,
-  mobileSentrixProductsQuerySchema
+  mobileSentrixProductsQuerySchema,
+  ticketNoteInputSchema
 } from '../../shared/validation/pos'
 import { postalCodeLookupQuerySchema } from '../../shared/validation/lookups'
 import { queryBooleanSchema } from '../../shared/validation/api'
@@ -63,5 +64,15 @@ describe('query validation', () => {
     expect(queryBooleanSchema.parse('true')).toBe(true)
     expect(queryBooleanSchema.parse('false')).toBe(false)
     expect(queryBooleanSchema.safeParse('0').success).toBe(false)
+  })
+})
+
+describe('ticket note validation', () => {
+  it('accepts a useful note and rejects blank or oversized entries', () => {
+    expect(ticketNoteInputSchema.parse({ note: '  Client appelé, pièce commandée.  ' })).toEqual({
+      note: 'Client appelé, pièce commandée.'
+    })
+    expect(ticketNoteInputSchema.safeParse({ note: '   ' }).success).toBe(false)
+    expect(ticketNoteInputSchema.safeParse({ note: 'x'.repeat(2001) }).success).toBe(false)
   })
 })
