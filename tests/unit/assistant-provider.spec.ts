@@ -62,7 +62,7 @@ describe('assistant request-time configuration', () => {
     respond()
     await requestTextResponse({ context: {} } as H3Event, options)
     expect(vi.mocked(externalFetch).mock.calls[0]![1]?.headers).toMatchObject({ Authorization: 'Bearer local-key' })
-    expect(JSON.parse(String(vi.mocked(externalFetch).mock.calls[0]![1]?.body)).model).toBe('MiniMax-M2.7')
+    expect(JSON.parse(String(vi.mocked(externalFetch).mock.calls[0]![1]?.body)).model).toBe('MiniMax-M3')
   })
 
   it('rejects missing or blank credentials before any provider call', async () => {

@@ -28,7 +28,7 @@ type ChatCompletionResponse = {
   }>
 }
 
-const DEFAULT_MINIMAX_MODEL = 'MiniMax-M2.7'
+const DEFAULT_MINIMAX_MODEL = 'MiniMax-M3'
 const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimax.io/v1'
 const STRUCTURED_FALLBACK_STATUS_CODES = new Set([400, 422, 502])
 

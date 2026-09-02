@@ -90,6 +90,8 @@ Variables optionnelles:
 - `MINIMAX_MODEL`
 - `MINIMAX_BASE_URL`
 
+Le modèle par défaut est `MiniMax-M3`, l’identifiant officiel de [MiniMax M3](https://www.minimax.io/models/text/m3). Un `MINIMAX_MODEL` ou `NUXT_MINIMAX_MODEL` explicite remplace ce défaut ; mettre également cette variable à jour lors d’un changement de modèle.
+
 Sur Cloudflare, ces valeurs sont lues dans les bindings du Worker à chaque requête. Les variantes préfixées `NUXT_MINIMAX_*` sont également prises en charge et prioritaires. En local, elles sont lues dans l’environnement chargé depuis `.env`. La clé n’est pas intégrée au build.
 
 Une configuration manquante ou une panne MiniMax produit une erreur `service_unavailable`, distincte des refus SQL. Le message affiché ne contient ni réponse brute du fournisseur ni secret.
