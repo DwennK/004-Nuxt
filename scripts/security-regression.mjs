@@ -66,7 +66,7 @@ function assertBefore(source, firstNeedle, secondNeedle, label) {
     ['server/api/tools/shopify/import.post.ts', 'readValidatedBody'],
     ['server/api/tools/shopify/search.get.ts', 'getValidatedQuery'],
     ['server/api/tools/shopify/payments.post.ts', 'readValidatedBody'],
-    ['server/api/tools/shopify/connection.get.ts', 'return getShopifyConnection()'],
+    ['server/api/tools/shopify/connection.get.ts', 'return getShopifyConnection(event)'],
     ['server/api/sent-emails/index.get.ts', 'getQuery'],
     ['server/api/sent-emails/[id].get.ts', 'paramsSchema.parse']
   ]
