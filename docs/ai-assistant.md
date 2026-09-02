@@ -10,10 +10,12 @@
 Le flux est strictement serveur:
 
 1. le client envoie l’historique utile et la question courante
-2. MiniMax génère un plan SQL structuré
-3. la requête SQL est validée par la couche de garde-fous
+2. MiniMax choisit un plan structuré : requête métier, demande de précision ou réponse de périmètre
+3. seuls les plans de requête complets et cohérents passent à la validation SQL par les garde-fous
 4. la requête validée est exécutée en lecture seule sur Turso via Drizzle
 5. les résultats sont reformulés en réponse métier concise
+
+Les salutations, « test », demandes vagues et questions hors périmètre ne déclenchent aucune requête SQL ni second appel de reformulation. L’assistant demande une précision ou rappelle son périmètre en français. L’historique conserve ces échanges pour interpréter la précision suivante. Un plan invalide ou contradictoire est rejeté avant tout accès à la base.
 
 Les réponses sont affichées en Markdown (gras, listes, tableaux, code) ; les messages utilisateur restent en texte brut. Le HTML brut est échappé, les URL dangereuses sont rejetées et les images distantes ne sont pas chargées. Les tableaux larges défilent horizontalement à l’intérieur du message.
 

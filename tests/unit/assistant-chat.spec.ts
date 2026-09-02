@@ -12,9 +12,9 @@ vi.mock('../../server/utils/assistant/sql', async importOriginal => ({
 }))
 const event = { context: {} } as H3Event
 const messages = [{ id: 'question', role: 'user' as const, content: 'Combien de tickets ?' }]
-const plan = { sql: 'SELECT COUNT(t.id) AS total FROM tickets t', querySummary: 'Nombre de tickets', answerPlan: 'Donner le total.' }
+const plan = { action: 'query', sql: 'SELECT COUNT(t.id) AS total FROM tickets t', querySummary: 'Nombre de tickets', answerPlan: 'Donner le total.', response: '' }
 
-describe('assistant provider failure boundaries', () => {
+describe('assistant planning and failure boundaries', () => {
   beforeEach(() => {
     vi.mocked(requestStructuredResponse).mockReset()
     vi.mocked(requestTextResponse).mockReset()
@@ -55,5 +55,59 @@ describe('assistant provider failure boundaries', () => {
     expect(result.error?.code).toBe('sql_rejected')
     expect(runReadOnlyQuery).not.toHaveBeenCalled()
     expect(requestTextResponse).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['test', 'clarify', 'Quelle information souhaitez-vous consulter ?'],
+    ['Bonjour', 'clarify', 'Bonjour ! Comment puis-je vous aider avec les données du magasin ?'],
+    ['Quel total ?', 'clarify', 'Quel total souhaitez-vous connaître, et sur quelle période ?'],
+    ['Quel temps fera-t-il demain ?', 'out_of_scope', 'Je peux vous aider à consulter les données du magasin.'],
+    ['Supprime les clients', 'out_of_scope', 'Je peux uniquement consulter les données.']
+  ])('answers "%s" without a database query or answer-generation call', async (question, action, response) => {
+    vi.mocked(requestStructuredResponse).mockResolvedValue({ action, response, sql: '', querySummary: '', answerPlan: '' })
+    const result = await runAssistantChat(event, [{ ...messages[0]!, content: question }], false, 'test')
+    expect(result.message.content).toBe(response)
+    expect(result.query).toBeUndefined()
+    expect(result.error).toBeUndefined()
+    expect(runReadOnlyQuery).not.toHaveBeenCalled()
+    expect(requestTextResponse).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    null,
+    {},
+    { ...plan, action: undefined },
+    { ...plan, action: 'clarify', response: 'Précisez la période.' },
+    { ...plan, action: 'out_of_scope', response: 'Hors périmètre.' },
+    { ...plan, sql: '' },
+    { action: 'clarify', response: '', sql: '', querySummary: '', answerPlan: '' }
+  ])('rejects an incomplete or contradictory plan before querying: %j', async (invalidPlan) => {
+    vi.mocked(requestStructuredResponse).mockResolvedValue(invalidPlan)
+    const result = await runAssistantChat(event, messages, false, 'test')
+    expect(result.error?.code).toBe('service_unavailable')
+    expect(runReadOnlyQuery).not.toHaveBeenCalled()
+    expect(requestTextResponse).not.toHaveBeenCalled()
+  })
+
+  it('uses the clarification history and preserves the guarded query path', async () => {
+    const conversation = [
+      { id: '1', role: 'user' as const, content: 'Combien ?' },
+      { id: '2', role: 'assistant' as const, content: 'Que souhaitez-vous compter ?' },
+      { id: '3', role: 'user' as const, content: 'Les tickets.' }
+    ]
+    vi.mocked(requestStructuredResponse).mockResolvedValue(plan)
+    vi.mocked(runReadOnlyQuery).mockResolvedValue({ columns: ['total'], rows: [{ total: 2 }], rowCount: 1, truncated: false })
+    vi.mocked(requestTextResponse).mockResolvedValue('**2 tickets** au total.')
+
+    const result = await runAssistantChat(event, conversation, true, 'follow-up')
+
+    expect(requestStructuredResponse).toHaveBeenCalledWith(event, expect.objectContaining({
+      userPrompt: expect.stringContaining('Assistant: Que souhaitez-vous compter ?\nUtilisateur: Les tickets.')
+    }))
+    expect(runReadOnlyQuery).toHaveBeenCalledOnce()
+    expect(requestTextResponse).toHaveBeenCalledOnce()
+    expect(result.error).toBeUndefined()
+    expect(result.message.content).toBe('**2 tickets** au total.')
+    expect(result.query).toMatchObject({ rowCount: 1, table: { rows: [{ total: 2 }] }, sql: `${plan.sql}\nLIMIT 50` })
   })
 })

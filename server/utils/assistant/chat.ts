@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { isError } from 'h3'
+import { z } from 'zod'
 import type { AssistantChatMessageInput, AssistantChatResponse } from '~~/shared/types/assistant'
 import { buildAssistantSchemaContext } from './allowlist'
 import { requestStructuredResponse, requestTextResponse } from './provider'
@@ -10,31 +11,50 @@ import {
   validateAssistantSql
 } from './sql'
 
-type AssistantPlanningResult = {
-  sql: string
-  querySummary: string
-  answerPlan: string
-}
+const planningResultSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('query'),
+    sql: z.string().trim().min(10),
+    querySummary: z.string().trim().min(1),
+    answerPlan: z.string().trim().min(1),
+    response: z.literal('')
+  }),
+  z.strictObject({
+    action: z.enum(['clarify', 'out_of_scope']),
+    sql: z.literal(''),
+    querySummary: z.literal(''),
+    answerPlan: z.literal(''),
+    response: z.string().trim().min(1).max(2000)
+  })
+])
 
 const planningSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
+    action: {
+      type: 'string',
+      enum: ['query', 'clarify', 'out_of_scope'],
+      description: 'query pour une demande métier précise ; clarify si une précision manque ; out_of_scope hors du périmètre POS.'
+    },
     sql: {
       type: 'string',
-      minLength: 10,
-      description: 'Requête SQLite SELECT complète, jamais vide.'
+      description: 'Requête SQLite SELECT uniquement pour action=query. Chaîne vide sinon.'
     },
     querySummary: {
       type: 'string',
-      minLength: 1
+      description: 'Résumé de la requête pour action=query. Chaîne vide sinon.'
     },
     answerPlan: {
       type: 'string',
-      minLength: 1
+      description: 'Plan de réponse pour action=query. Chaîne vide sinon.'
+    },
+    response: {
+      type: 'string',
+      description: 'Réponse brève en français pour clarify ou out_of_scope. Chaîne vide pour query.'
     }
   },
-  required: ['sql', 'querySummary', 'answerPlan']
+  required: ['action', 'sql', 'querySummary', 'answerPlan', 'response']
 } as const
 
 function buildConversationTranscript(messages: AssistantChatMessageInput[]) {
@@ -59,9 +79,14 @@ function buildPlanningPrompt(messages: AssistantChatMessageInput[]) {
 function buildPlanningSystemPrompt() {
   return [
     'Tu es un assistant analytique interne pour un tableau de bord POS/CRM.',
-    'Ta seule tâche: traduire la question en UNE requête SQL SQLite SELECT en lecture seule. Tu ne dois JAMAIS renvoyer une sql vide.',
-    'Les garde-fous de sécurité (lecture seule, allowlist tables/colonnes, colonnes sensibles bloquées) sont déjà appliqués en aval. Ta réponse n’est PAS ce qui protège la base — contente-toi de produire la meilleure requête possible.',
-    'Réponds strictement avec le schéma JSON demandé. Les trois champs sql, querySummary, answerPlan doivent être non vides.',
+    'Détermine d’abord si la demande nécessite une consultation pertinente des données autorisées, en tenant compte de l’historique.',
+    'Réponds strictement avec le schéma JSON demandé et choisis une action :',
+    '- query : la demande métier est assez précise pour produire UNE requête SQL SQLite SELECT en lecture seule. Renseigne sql, querySummary et answerPlan ; laisse response vide.',
+    '- clarify : salutation, test, ping, demande vague ou précision essentielle manquante. Pose une courte question utile dans response ; laisse sql, querySummary et answerPlan vides.',
+    '- out_of_scope : demande étrangère au POS, écriture de données ou accès non autorisé. Explique brièvement la limite et invite à une question métier en lecture seule dans response ; laisse les trois champs SQL vides.',
+    'Ne consulte jamais des clients, paiements ou autres données pour tester la connexion ou remplir une réponse hors sujet.',
+    'N’invente pas de période, de mesure ou d’objet métier manquant. Utilise les précisions déjà fournies dans l’historique, notamment pour une question de suivi.',
+    'Pour clarify et out_of_scope, ne prétends pas avoir interrogé ou vérifié la base et ne réponds pas au sujet extérieur au POS.',
     'Contraintes SQL:',
     '- SQLite/Turso uniquement.',
     '- Lecture seule: SELECT ou WITH ... SELECT.',
@@ -71,11 +96,16 @@ function buildPlanningSystemPrompt() {
     '- Utiliser uniquement les tables et colonnes exposées ci-dessous.',
     `- Utiliser uniquement ces fonctions SQL: ${ASSISTANT_ALLOWED_SQL_FUNCTIONS.join(', ')}.`,
     '- Préférer des agrégations courtes et lisibles pour répondre à une question métier.',
-    '- Si la question est ambiguë, pose l’hypothèse la plus raisonnable et produis la requête. Explique l’hypothèse dans querySummary.',
-    '- Si la question semble hors périmètre, produis quand même un SELECT plausible sur les tables exposées (ex: SELECT c.id, c.first_name, c.last_name FROM customers c LIMIT 5) et signale le désalignement dans querySummary.',
+    '',
+    'Exemple pour "test" :',
+    '{"action":"clarify","sql":"","querySummary":"","answerPlan":"","response":"Bonjour ! Quelle information souhaitez-vous consulter : ventes, tickets, paiements ou stock ?"}',
+    'Exemple pour "Quel total ?" sans historique utile :',
+    '{"action":"clarify","sql":"","querySummary":"","answerPlan":"","response":"Quel total souhaitez-vous connaître, et sur quelle période ?"}',
+    'Exemple pour "Quel temps fera-t-il demain ?" :',
+    '{"action":"out_of_scope","sql":"","querySummary":"","answerPlan":"","response":"Je peux vous aider à consulter les données du magasin. Souhaitez-vous une information sur les ventes, les tickets ou le stock ?"}',
     '',
     'Exemple pour "Quels sont les 10 derniers paiements encaissés ?":',
-    '{"sql":"SELECT p.id, p.customer_id, p.document_id, p.method, p.amount, p.paid_at FROM payments p WHERE p.status = \'paid\' ORDER BY p.paid_at DESC LIMIT 10","querySummary":"10 derniers paiements avec statut paid, triés par date de paiement.","answerPlan":"Lister la date, le mode, le montant et le document associé."}',
+    '{"action":"query","sql":"SELECT p.id, p.customer_id, p.document_id, p.method, p.amount, p.paid_at FROM payments p WHERE p.status = \'paid\' ORDER BY p.paid_at DESC LIMIT 10","querySummary":"10 derniers paiements avec statut paid, triés par date de paiement.","answerPlan":"Lister la date, le mode, le montant et le document associé.","response":""}',
     '',
     buildAssistantSchemaContext()
   ].join('\n')
@@ -115,14 +145,6 @@ function buildAssistantMessage(content: string): AssistantChatResponse['message'
   }
 }
 
-function normalizePlanningResult(planning: Partial<AssistantPlanningResult>) {
-  return {
-    sql: typeof planning.sql === 'string' ? planning.sql.trim() : '',
-    querySummary: typeof planning.querySummary === 'string' ? planning.querySummary.trim() : '',
-    answerPlan: typeof planning.answerPlan === 'string' ? planning.answerPlan.trim() : ''
-  } satisfies AssistantPlanningResult
-}
-
 function buildProviderErrorResponse(error: unknown, requestId: string): AssistantChatResponse {
   const providerError = isError(error) ? error : undefined
   const data = providerError?.data
@@ -154,7 +176,7 @@ export async function runAssistantChat(
 
   let rawPlanning
   try {
-    rawPlanning = await requestStructuredResponse<Partial<AssistantPlanningResult>>(event, {
+    rawPlanning = await requestStructuredResponse<unknown>(event, {
       requestId,
       schemaName: 'assistant_query_plan',
       schema: planningSchema,
@@ -164,26 +186,31 @@ export async function runAssistantChat(
   } catch (error) {
     return buildProviderErrorResponse(error, requestId)
   }
-  const planning = normalizePlanningResult(rawPlanning)
+  const parsedPlanning = planningResultSchema.safeParse(rawPlanning)
 
-  if (!planning.sql) {
+  if (!parsedPlanning.success) {
     console.warn(JSON.stringify({
       scope: 'assistant-planning',
       requestId,
-      reason: 'empty-sql',
-      candidateCharacters: planning.sql.length
+      reason: 'invalid-plan'
     }))
 
     return {
       message: buildAssistantMessage(
-        'La couche de planification n’a pas produit de requête SQL. Reformulez la question.'
+        'Je n’ai pas pu préparer une réponse à cette demande. Réessayez ou précisez votre question.'
       ),
       error: {
-        code: 'sql_rejected',
-        message: 'Aucune requête SQL générée.',
+        code: 'service_unavailable',
+        message: 'La réponse du service IA est invalide.',
         retryable: true
       }
     }
+  }
+
+  const planning = parsedPlanning.data
+
+  if (planning.action !== 'query') {
+    return { message: buildAssistantMessage(planning.response) }
   }
 
   let validatedQuery

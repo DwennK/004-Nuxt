@@ -349,13 +349,13 @@ async function submitPrompt() {
               v-if="pending"
               id="assistant-loading"
               role="assistant"
-              :parts="createParts('Interrogation en cours')"
+              :parts="createParts('Préparation de la réponse')"
               :avatar="{ icon: 'i-lucide-sparkles' }"
             >
               <template #content>
                 <UChatTool
                   icon="i-lucide-database-zap"
-                  text="Interrogation de la base"
+                  text="Préparation de la réponse"
                   loading
                   streaming
                 />
