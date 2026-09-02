@@ -444,9 +444,6 @@ useHead(() => ({
             </div>
 
             <div class="thermal-brand-copy">
-              <p class="thermal-kicker">
-                Impression thermique
-              </p>
               <h2 class="thermal-company">
                 {{ company.name }}
               </h2>
@@ -548,15 +545,6 @@ useHead(() => ({
               Paiement
             </p>
             <p>{{ paymentSummary.label }} · {{ paymentSummary.paidAt }}</p>
-          </div>
-
-          <div v-if="document.type === 'invoice'" class="thermal-note">
-            <p class="thermal-kicker">
-              Facture complète
-            </p>
-            <p>
-              Ce ticket est un justificatif compact. Utilisez l’impression A4 pour la facture détaillée et la QR-facture.
-            </p>
           </div>
 
           <div v-if="document.notes" class="thermal-note">
