@@ -277,8 +277,9 @@ async function submitPrompt() {
               :icon="message.role === 'user' ? 'i-lucide-user-round' : undefined"
             >
               <template #content>
-                <div class="space-y-3">
-                  <p class="whitespace-pre-wrap text-sm leading-6 text-default">
+                <div class="min-w-0 space-y-3">
+                  <AssistantMarkdown v-if="message.role === 'assistant'" :content="message.content" />
+                  <p v-else class="whitespace-pre-wrap text-sm leading-6 text-default">
                     {{ message.content }}
                   </p>
 

@@ -15,6 +15,8 @@ Le flux est strictement serveur:
 4. la requête validée est exécutée en lecture seule sur Turso via Drizzle
 5. les résultats sont reformulés en réponse métier concise
 
+Les réponses sont affichées en Markdown (gras, listes, tableaux, code) ; les messages utilisateur restent en texte brut. Le HTML brut est échappé, les URL dangereuses sont rejetées et les images distantes ne sont pas chargées. Les tableaux larges défilent horizontalement à l’intérieur du message.
+
 ## Tables et colonnes exposées
 
 La source de vérité est `server/utils/assistant/allowlist.ts`.

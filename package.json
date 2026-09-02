@@ -46,6 +46,7 @@
     "barcode-detector": "^3.2.1",
     "date-fns": "^4.4.0",
     "drizzle-orm": "1.0.0-rc.4",
+    "markdown-it": "^15.0.1",
     "nuxt": "^4.5.0",
     "nuxt-auth-utils": "^0.5.29",
     "nostics": "1.2.0",
