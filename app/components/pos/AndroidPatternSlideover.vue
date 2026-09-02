@@ -409,7 +409,7 @@ defineShortcuts({
       <div class="flex items-center justify-between gap-3">
         <UButton
           label="Effacer"
-          color="neutral"
+          color="error"
           variant="ghost"
           :disabled="!patternPoints.length"
           @click="clearPattern"
