@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import type { H3Event } from 'h3'
 import { z } from 'zod'
 import { customers, documentImports, documentLines, documents, payments } from '~~/server/db/schema'
 import type { ShopifyImportResult, ShopifyOrderList, ShopifyOrderSummary, ShopifyProvenance } from '~~/shared/types/shopify'
@@ -41,15 +42,15 @@ async function summary(domain: string, rows: RemoteSummary[], db: PosDatabaseExe
   }))
 }
 
-export async function listShopifyOrders(after?: string): Promise<ShopifyOrderList> {
-  const { config } = await connectShopify()
+export async function listShopifyOrders(event: H3Event, after?: string): Promise<ShopifyOrderList> {
+  const { config } = await connectShopify(event)
   const result = await fetchShopifyOrders(config, after)
   await ensurePosSchema()
   return { items: await summary(config.domain, result.nodes.filter(o => !o.cancelledAt && !o.test), useDb()), pageInfo: result.pageInfo }
 }
 
-export async function searchShopifyOrder(orderRef: string): Promise<ShopifyOrderSummary> {
-  const { config } = await connectShopify()
+export async function searchShopifyOrder(event: H3Event, orderRef: string): Promise<ShopifyOrderSummary> {
+  const { config } = await connectShopify(event)
   const order = await findShopifyOrder(config, orderRef)
   // Validate eligibility before offering the import action.
   normalizeShopifyOrder(order)
@@ -131,8 +132,8 @@ export async function persistShopifyOrder(domain: string, order: ShopifyOrder, d
   }
 }
 
-export async function importShopifyOrder(orderRef: string) {
-  const { config } = await connectShopify()
+export async function importShopifyOrder(event: H3Event, orderRef: string) {
+  const { config } = await connectShopify(event)
   const order = await findShopifyOrder(config, orderRef)
   await ensurePosSchema()
   return persistShopifyOrder(config.domain, order)
@@ -175,8 +176,8 @@ export async function persistShopifyPaymentSync(domain: string, order: ShopifyOr
   })
 }
 
-export async function syncShopifyPayments(documentId: number) {
-  const { config } = await connectShopify()
+export async function syncShopifyPayments(event: H3Event, documentId: number) {
+  const { config } = await connectShopify(event)
   await ensurePosSchema()
   const origin = await getShopifyProvenance(documentId)
   if (!origin || origin.domain !== config.domain) return shopifyError('Cette facture ne provient pas de la boutique Shopify connectée.', 'SHOPIFY_SHOP_MISMATCH', 409)

@@ -168,9 +168,9 @@ Outgoing e-mail / Cloudflare:
 
 Shopify:
 
-- `SHOPIFY_SHOP_DOMAIN`: exact `*.myshopify.com` hostname
-- `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`: installed Dev Dashboard application
-- `SHOPIFY_ADMIN_ACCESS_TOKEN`: alternative existing Admin token; do not combine authentication modes
+- `NUXT_SHOPIFY_SHOP_DOMAIN`: exact `*.myshopify.com` hostname
+- `NUXT_SHOPIFY_CLIENT_ID` and `NUXT_SHOPIFY_CLIENT_SECRET`: installed Dev Dashboard application
+- `NUXT_SHOPIFY_ADMIN_ACCESS_TOKEN`: alternative existing Admin token; do not combine authentication modes
 - See [`docs/shopify-import.md`](./docs/shopify-import.md) for scopes and setup.
 
 MobileSentrix:

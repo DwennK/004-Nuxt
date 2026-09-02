@@ -3,5 +3,5 @@ import { getShopifyConnection } from '~~/server/utils/shopify/client'
 
 export default eventHandler(async (event) => {
   await requireAdminSessionUser(event)
-  return getShopifyConnection()
+  return getShopifyConnection(event)
 })

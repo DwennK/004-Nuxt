@@ -5,5 +5,5 @@ import { syncShopifyPayments } from '~~/server/utils/shopify/import'
 export default eventHandler(async (event) => {
   await requireAdminSessionUser(event)
   const input = await readValidatedBody(event, shopifyPaymentSyncSchema.parse)
-  return syncShopifyPayments(input.documentId)
+  return syncShopifyPayments(event, input.documentId)
 })

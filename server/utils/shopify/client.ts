@@ -1,3 +1,4 @@
+import type { H3Event } from 'h3'
 import { z } from 'zod'
 import type { ShopifyConnection } from '~~/shared/types/shopify'
 import { externalFetch } from '../external-fetch'
@@ -8,8 +9,8 @@ type ShopifyConfig = { domain: string, clientId: string, clientSecret: string, a
 let tokenCache: { key: string, token: string, expiresAt: number } | undefined
 let pendingToken: { key: string, promise: Promise<string> } | undefined
 
-export function getShopifyConfig(): ShopifyConfig | null {
-  const runtime = useRuntimeConfig()
+export function getShopifyConfig(event: H3Event): ShopifyConfig | null {
+  const runtime = useRuntimeConfig(event)
   const domain = String(runtime.shopifyShopDomain || '').trim().toLowerCase()
   const clientId = String(runtime.shopifyClientId || '').trim()
   const clientSecret = String(runtime.shopifyClientSecret || '').trim()
@@ -24,7 +25,8 @@ export function getShopifyConfig(): ShopifyConfig | null {
 
 async function request(config: ShopifyConfig, path: string, body: unknown, token?: string) {
   const { response } = await externalFetch(new URL(path, `https://${config.domain}`), {
-    method: 'POST', redirect: 'error',
+    // Workers supports manual/follow only. Non-2xx responses below reject redirects.
+    method: 'POST', redirect: 'manual',
     headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Shopify-Access-Token': token } : {}) },
     body: JSON.stringify(body)
   }, { provider: 'shopify', timeoutMs: 15_000, timeoutMessage: 'Shopify met trop de temps à répondre.', networkErrorMessage: 'Shopify est indisponible.' })
@@ -72,8 +74,8 @@ export const connectionQuery = `query ShopifyConnection {
   currentAppInstallation { accessScopes { handle } }
 }`
 
-export async function connectShopify() {
-  const config = getShopifyConfig()
+export async function connectShopify(event: H3Event) {
+  const config = getShopifyConfig(event)
   if (!config) return shopifyError('Shopify n’est pas encore connecté.', 'SHOPIFY_NOT_CONFIGURED', 503)
   const result = await graphql<{ shop: { name: string, myshopifyDomain: string }, currentAppInstallation: { accessScopes: { handle: string }[] } }>(config, connectionQuery)
   if (result.shop?.myshopifyDomain !== config.domain) return shopifyError('La boutique Shopify retournée ne correspond pas à la configuration.', 'SHOPIFY_SHOP_MISMATCH', 409)
@@ -82,9 +84,9 @@ export async function connectShopify() {
   return { config, name: result.shop.name, allOrders: scopes.includes('read_all_orders') }
 }
 
-export async function getShopifyConnection(): Promise<ShopifyConnection> {
-  if (!getShopifyConfig()) return { configured: false }
-  const connection = await connectShopify()
+export async function getShopifyConnection(event: H3Event): Promise<ShopifyConnection> {
+  if (!getShopifyConfig(event)) return { configured: false }
+  const connection = await connectShopify(event)
   return { configured: true, shop: { domain: connection.config.domain, name: connection.name }, allOrders: connection.allOrders }
 }
 

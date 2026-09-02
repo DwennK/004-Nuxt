@@ -1,3 +1,4 @@
+import type { H3Event } from 'h3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { externalFetch } from '../../server/utils/external-fetch'
 import { connectShopify, fetchShopifyOrder, findShopifyOrder, getShopifyConfig, getShopifyConnection } from '../../server/utils/shopify/client'
@@ -5,6 +6,7 @@ import { orderFixture } from '../fixtures/shopify'
 
 vi.mock('../../server/utils/external-fetch', () => ({ externalFetch: vi.fn() }))
 const config = { domain: 'test-pos.myshopify.com', clientId: '', clientSecret: '', accessToken: 'test-token' }
+const event = { context: {} } as H3Event
 const pageInfo = { hasNextPage: false, endCursor: null }
 function response(body: unknown, status = 200) {
   vi.mocked(externalFetch).mockResolvedValueOnce({ response: new Response(JSON.stringify(body), { status }), requestId: 'shopify-test' })
@@ -25,27 +27,43 @@ describe('Shopify read-only transport', () => {
 
   it('reports unconfigured without making an external request', async () => {
     vi.stubGlobal('useRuntimeConfig', () => ({}))
-    expect(await getShopifyConnection()).toEqual({ configured: false })
+    expect(await getShopifyConnection(event)).toEqual({ configured: false })
     expect(externalFetch).not.toHaveBeenCalled()
+  })
+
+  it('reads Worker credentials from the request when startup config is empty', async () => {
+    vi.stubGlobal('useRuntimeConfig', (request?: H3Event) => request === event
+      ? { shopifyShopDomain: config.domain, shopifyClientId: 'worker-client', shopifyClientSecret: 'worker-secret' }
+      : {})
+    response({ access_token: 'worker-token', expires_in: 86400 })
+    response(identity())
+
+    expect(await getShopifyConnection(event)).toEqual({
+      configured: true,
+      shop: { name: 'Test POS', domain: config.domain },
+      allOrders: false
+    })
+    expect(externalFetch).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(externalFetch).mock.calls[1]![1]!.headers).toMatchObject({ 'X-Shopify-Access-Token': 'worker-token' })
   })
 
   it.each(['https://test-pos.myshopify.com', 'test-pos.myshopify.com.evil.test', 'localhost', 'user@foo.myshopify.com'])('rejects untrusted shop destination %s', (domain) => {
     vi.stubGlobal('useRuntimeConfig', () => ({ shopifyShopDomain: domain, shopifyAdminAccessToken: 'test' }))
-    expect(() => getShopifyConfig()).toThrow()
+    expect(() => getShopifyConfig(event)).toThrow()
   })
 
   it('rejects ambiguous credentials', () => {
     vi.stubGlobal('useRuntimeConfig', () => ({ shopifyShopDomain: config.domain, shopifyAdminAccessToken: 'test', shopifyClientId: 'id', shopifyClientSecret: 'secret' }))
-    expect(() => getShopifyConfig()).toThrow()
+    expect(() => getShopifyConfig(event)).toThrow()
   })
 
   it('validates shop identity and read_orders permission', async () => {
     response(identity('wrong.myshopify.com'))
-    await expect(connectShopify()).rejects.toMatchObject({ data: { code: 'SHOPIFY_SHOP_MISMATCH' } })
+    await expect(connectShopify(event)).rejects.toMatchObject({ data: { code: 'SHOPIFY_SHOP_MISMATCH' } })
     const payload = identity()
     payload.data.currentAppInstallation.accessScopes = []
     response(payload)
-    await expect(connectShopify()).rejects.toMatchObject({ data: { code: 'SHOPIFY_ACCESS_DENIED' } })
+    await expect(connectShopify(event)).rejects.toMatchObject({ data: { code: 'SHOPIFY_ACCESS_DENIED' } })
   })
 
   it('caches client-credential tokens and renews before expiry', async () => {
@@ -53,28 +71,35 @@ describe('Shopify read-only transport', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
     response({ access_token: 'temporary-1', expires_in: 120 })
     response(identity())
-    await connectShopify()
+    await connectShopify(event)
     response(identity())
-    await connectShopify()
+    await connectShopify(event)
     expect(externalFetch).toHaveBeenCalledTimes(3)
     now.mockReturnValue(1_061_000)
     response({ access_token: 'temporary-2', expires_in: 120 })
     response(identity())
-    await connectShopify()
+    await connectShopify(event)
     expect(externalFetch).toHaveBeenCalledTimes(5)
     const options = vi.mocked(externalFetch).mock.calls[4]![1]!
     expect(options.headers).toMatchObject({ 'X-Shopify-Access-Token': 'temporary-2' })
-    expect(options.redirect).toBe('error')
+    expect(options.redirect).toBe('manual')
+  })
+
+  it.each([301, 302, 307, 308])('rejects HTTP %s without forwarding credentials to a redirect', async (status) => {
+    response({}, status)
+    await expect(connectShopify(event)).rejects.toMatchObject({ data: { code: 'SHOPIFY_UNAVAILABLE' } })
+    expect(externalFetch).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(externalFetch).mock.calls[0]![1]!.redirect).toBe('manual')
   })
 
   it.each([401, 403, 429, 500])('returns safe provider errors for HTTP %s', async (status) => {
     response({ secret: 'must-not-leak' }, status)
-    await expect(connectShopify()).rejects.not.toThrow('must-not-leak')
+    await expect(connectShopify(event)).rejects.not.toThrow('must-not-leak')
   })
 
   it('rejects partial GraphQL data and permission errors', async () => {
     response({ ...identity(), errors: [{ message: 'Private data', extensions: { code: 'ACCESS_DENIED' } }] })
-    await expect(connectShopify()).rejects.toMatchObject({ data: { code: 'SHOPIFY_ACCESS_DENIED' } })
+    await expect(connectShopify(event)).rejects.toMatchObject({ data: { code: 'SHOPIFY_ACCESS_DENIED' } })
   })
 
   it('retrieves every page of lines and shipping before parsing', async () => {

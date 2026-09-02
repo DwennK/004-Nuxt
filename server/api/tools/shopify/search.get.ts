@@ -5,5 +5,5 @@ import { searchShopifyOrder } from '~~/server/utils/shopify/import'
 export default eventHandler(async (event) => {
   await requireAdminSessionUser(event)
   const input = await getValidatedQuery(event, shopifyOrderRefSchema.parse)
-  return searchShopifyOrder(input.orderRef)
+  return searchShopifyOrder(event, input.orderRef)
 })

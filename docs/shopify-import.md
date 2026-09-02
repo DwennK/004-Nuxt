@@ -11,9 +11,9 @@ API Admin GraphQL épinglée à `2026-07`. Configurer côté serveur, en local d
 `.env` et en production dans les secrets/variables du Worker :
 
 ```dotenv
-SHOPIFY_SHOP_DOMAIN=boutique.myshopify.com
-SHOPIFY_CLIENT_ID=
-SHOPIFY_CLIENT_SECRET=
+NUXT_SHOPIFY_SHOP_DOMAIN=boutique.myshopify.com
+NUXT_SHOPIFY_CLIENT_ID=
+NUXT_SHOPIFY_CLIENT_SECRET=
 ```
 
 L’application doit être installée sur cette boutique. Le mode client credentials
@@ -22,9 +22,39 @@ Shopify. Le serveur met le jeton en cache en mémoire et le renouvelle une minut
 avant expiration ; un redémarrage du Worker obtient simplement un nouveau jeton.
 
 Pour une application existante disposant d’un jeton Admin durable, utiliser
-`SHOPIFY_ADMIN_ACCESS_TOKEN` à la place du Client ID/secret, jamais les deux modes
+`NUXT_SHOPIFY_ADMIN_ACCESS_TOKEN` à la place du Client ID/secret, jamais les deux modes
 ensemble. Les secrets restent privés ; les réponses de configuration n’exposent
 que le nom et le domaine de la boutique et l’accès à l’historique.
+
+Le préfixe `NUXT_` est obligatoire en local comme sur Cloudflare. Les anciennes
+variables `SHOPIFY_*` doivent être renommées. Les valeurs par défaut restent
+vides dans `nuxt.config.ts` pour ne pas intégrer les identifiants au build.
+Chaque route transmet la requête à `useRuntimeConfig(event)` : les bindings du
+Worker sont ainsi lus après leur mise à disposition par Cloudflare.
+Pour l’aperçu local Worker, charger explicitement ces bindings avec
+`npm run preview -- --local --env-file ../.env` ; le script lance Wrangler depuis
+`.output`, qui ne charge pas automatiquement le `.env` de la racine.
+
+### Configuration ShopyPhone
+
+La boutique cible est `80jmu7-uv.myshopify.com`. Les identifiants de l’application
+Admin du projet ShopyPhone peuvent être réutilisés pour cette boutique :
+
+| Projet ShopyPhone | POS / Cloudflare | Stockage en production |
+| --- | --- | --- |
+| `SHOPIFY_STORE` | `NUXT_SHOPIFY_SHOP_DOMAIN` | Variable |
+| `SHOPIFY_CLIENT_ID` | `NUXT_SHOPIFY_CLIENT_ID` | Variable ou secret |
+| `SHOPIFY_CLIENT_SECRET` | `NUXT_SHOPIFY_CLIENT_SECRET` | Secret |
+
+Laisser `NUXT_SHOPIFY_ADMIN_ACCESS_TOKEN` vide avec ce mode. Le `.env` local reste
+ignoré par Git ; ses valeurs ne sont pas transférées par un commit ou un déploiement.
+En production, renseigner les trois bindings sur le Worker POS `nuxt`
+(`pos.microwest.ch`), dans **Settings > Variables and Secrets**. Le secret client
+doit être de type **Secret**, jamais une valeur dans `wrangler.json`.
+
+La vérification du 2 septembre 2026 a confirmé l’accès aux commandes, coordonnées,
+lignes et transactions. `read_all_orders` n’était pas accordé ; l’historique reste
+limité aux 60 derniers jours tant que cette autorisation n’est pas ajoutée.
 
 Autoriser `read_orders` et les coordonnées clients protégées nécessaires aux
 factures (nom, adresse, e-mail, téléphone). `read_all_orders` est nécessaire
