@@ -473,7 +473,7 @@ defineShortcuts({
           </template>
         </UModal>
 
-        <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div class="space-y-4">
             <UCard
               variant="subtle"
@@ -510,7 +510,7 @@ defineShortcuts({
                     name="sale-search"
                     icon="i-lucide-search"
                     size="xl"
-                    class="flex-1"
+                    class="min-w-0 flex-1"
                     placeholder="cable, coque, chargeur, verre..."
                     autofocus
                     @keydown="handleSearchKeydown"

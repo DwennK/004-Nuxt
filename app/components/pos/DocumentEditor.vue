@@ -88,7 +88,7 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
     :id="resolvedFormId"
     :schema="schema"
     :state="state"
-    class="space-y-4"
+    class="min-w-0 space-y-4"
     @submit="onSubmit"
     @error="onSubmitError"
   >
