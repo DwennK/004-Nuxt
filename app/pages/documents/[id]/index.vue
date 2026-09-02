@@ -4,20 +4,27 @@ import type { z } from 'zod'
 import { nextTick } from 'vue'
 
 import type { DocumentSavePayload } from '~~/app/composables/useDocumentDraft'
-import type { CustomerListResponse, DocumentDetail, DocumentEmailInput } from '~~/shared/types/pos'
+import type { CustomerListResponse, DocumentDetail, DocumentEmailInput, SentMailSendResult } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { documentEmailSchema } from '~~/shared/validation/pos'
 import { getDocumentEmailMessage, getDocumentEmailSubject } from '~~/shared/utils/document-email'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, isPayableDocumentType } from '~~/shared/utils/pos'
+import { readPendingEmailAttempt, type PendingEmailAttempt } from '~~/shared/utils/email-attempt'
 
 const route = useRoute()
 const toast = useToast()
 const { can } = useCapabilities()
+const { user } = useUserSession()
 const id = computed(() => Number(route.params.id))
 const activeTab = ref(route.query.tab === 'payments' ? 'payments' : 'lines')
 const isEmailModalOpen = ref(false)
 const isSendingEmail = ref(false)
+const emailAttempt = ref<PendingEmailAttempt | null>(null)
+const emailStorageKey = computed(() => `pos:pending-email:${user.value?.id}:${id.value}`)
+const emailAttemptLocked = ref(false)
+const emailFeedback = ref<string | null>(null)
+const emailFailed = ref(false)
 const isSavingDocument = ref(false)
 const isContextOpen = ref(false)
 const hasUnsavedDocumentChanges = ref(false)
@@ -185,7 +192,19 @@ function openEmailModal() {
     return
   }
 
-  fillEmailState()
+  try {
+    emailAttempt.value = readPendingEmailAttempt(window.sessionStorage, emailStorageKey.value)
+  } catch {
+    toast.add({ title: 'Envoi indisponible', description: 'La sauvegarde de la tentative dans cet onglet est inaccessible. Vérifiez l’historique avant tout nouvel envoi.', color: 'warning' })
+    return
+  }
+  emailAttemptLocked.value = !!emailAttempt.value
+  if (emailAttempt.value) {
+    Object.assign(emailState, emailAttempt.value.payload)
+    emailFeedback.value = 'Une tentative est enregistrée dans cet onglet. Vérifiez son résultat avant tout nouvel envoi.'
+  } else {
+    fillEmailState()
+  }
   isEmailModalOpen.value = true
 }
 
@@ -208,22 +227,49 @@ function getErrorMessage(error: unknown) {
 }
 
 async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
+  if (isSendingEmail.value) return
+  const storageKey = emailStorageKey.value
+  const attempt = emailAttempt.value || { key: crypto.randomUUID(), payload: { ...event.data } }
+  try {
+    // Persist synchronously before making the request, including across reloads.
+    window.sessionStorage.setItem(storageKey, JSON.stringify(attempt))
+  } catch {
+    toast.add({ title: 'Envoi indisponible', description: 'Impossible de conserver la tentative dans cet onglet. Aucun message n’a été envoyé.', color: 'error' })
+    return
+  }
+  emailAttempt.value = attempt
   isSendingEmail.value = true
+  emailAttemptLocked.value = true
+  emailFeedback.value = null
+  emailFailed.value = false
 
   try {
-    await $fetch(`/api/documents/${id.value}/email`, {
+    const result = await $fetch<SentMailSendResult>(`/api/documents/${id.value}/email`, {
       method: 'POST',
-      body: event.data
+      headers: { 'Idempotency-Key': attempt.key },
+      body: attempt.payload,
+      retry: 0
     })
 
+    if (!result.ok) {
+      emailFeedback.value = result.errorMessage || 'Envoi en cours. Vérifiez son résultat avant de renvoyer le document.'
+      emailFailed.value = ['failed', 'bounced', 'rejected'].includes(result.status)
+      return
+    }
+    window.sessionStorage.removeItem(storageKey)
+    emailAttempt.value = null
+    emailAttemptLocked.value = false
     isEmailModalOpen.value = false
 
     toast.add({
-      title: 'E-mail envoyé',
-      description: `Le document ${document.value?.documentNumber || ''} a été envoyé à ${event.data.to}.`,
+      title: result.replayed ? 'Envoi déjà enregistré' : 'E-mail envoyé',
+      description: `Le document ${document.value?.documentNumber || ''} a été confié au service d’envoi pour ${event.data.to}.`,
       color: 'success'
     })
   } catch (error) {
+    const code = (error as { data?: { data?: { code?: string } } })?.data?.data?.code
+    emailFailed.value = !!code && ['EMAIL_NOT_CONFIGURED', 'EMAIL_INVALID_ADDRESS', 'EMAIL_TOO_LARGE'].includes(code)
+    emailFeedback.value = `${getErrorMessage(error)} La même tentative sera réutilisée pour éviter un double envoi.`
     toast.add({
       title: 'Erreur',
       description: getErrorMessage(error),
@@ -232,6 +278,16 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
   } finally {
     isSendingEmail.value = false
   }
+}
+
+function startNewEmailAttempt() {
+  // Only a confirmed refusal/failure permits a new send from this form.
+  if (!emailFailed.value) return
+  window.sessionStorage.removeItem(emailStorageKey.value)
+  emailAttempt.value = null
+  emailAttemptLocked.value = false
+  emailFailed.value = false
+  emailFeedback.value = null
 }
 </script>
 
@@ -430,9 +486,18 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
         class="space-y-4"
         @submit="submitDocumentEmail"
       >
+        <UAlert
+          v-if="emailFeedback"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-triangle-alert"
+          title="Suivi de l’envoi"
+          :description="emailFeedback"
+        />
         <UFormField label="Destinataire" name="to" required>
           <UInput
             v-model="emailState.to"
+            :disabled="emailAttemptLocked"
             type="email"
             class="w-full"
             placeholder="client@example.com"
@@ -442,6 +507,7 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
         <UFormField label="Objet" name="subject" required>
           <UInput
             v-model="emailState.subject"
+            :disabled="emailAttemptLocked"
             class="w-full"
             placeholder="Votre facture FA-123"
           />
@@ -450,13 +516,21 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
         <UFormField label="Message" name="message" required>
           <UTextarea
             v-model="emailState.message"
+            :disabled="emailAttemptLocked"
             :rows="8"
             class="w-full"
             autoresize
           />
         </UFormField>
 
-        <div class="flex items-center justify-end gap-2">
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <UButton
+            v-if="emailFailed"
+            color="warning"
+            variant="soft"
+            label="Préparer un nouvel envoi"
+            @click="startNewEmailAttempt"
+          />
           <UButton
             color="neutral"
             variant="soft"
@@ -467,7 +541,7 @@ async function submitDocumentEmail(event: FormSubmitEvent<DocumentEmailForm>) {
           <UButton
             type="submit"
             icon="i-lucide-send"
-            label="Envoyer"
+            :label="emailAttemptLocked ? 'Vérifier l’envoi' : 'Envoyer'"
             :loading="isSendingEmail"
           />
         </div>

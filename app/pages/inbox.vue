@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { breakpointsTailwind } from '@vueuse/core'
 import type { SentMailDetail, SentMailListResponse, SentMailSummary } from '~~/shared/types/pos'
 
@@ -11,6 +11,7 @@ const selectedMailId = ref<string | null>(null)
 const selectedMail = ref<SentMailDetail | null>(null)
 const selectedMailPending = ref(false)
 const selectedMailErrorMessage = ref<string | null>(null)
+let selectedMailRequest = 0
 
 const listQuery = computed(() => ({
   limit: PAGE_SIZE,
@@ -64,16 +65,19 @@ const listErrorMessage = computed(() =>
 )
 
 async function loadSelectedMail(id: string) {
+  const request = ++selectedMailRequest
   selectedMailPending.value = true
   selectedMailErrorMessage.value = null
 
   try {
-    selectedMail.value = await $fetch<SentMailDetail>(`/api/sent-emails/${encodeURIComponent(id)}`)
+    const detail = await $fetch<SentMailDetail>(`/api/sent-emails/${encodeURIComponent(id)}`)
+    if (request === selectedMailRequest && selectedMailId.value === id) selectedMail.value = detail
   } catch (fetchError) {
+    if (request !== selectedMailRequest || selectedMailId.value !== id) return
     selectedMail.value = null
     selectedMailErrorMessage.value = getFetchErrorMessage(fetchError, 'Impossible de charger le détail de cet e-mail.')
   } finally {
-    selectedMailPending.value = false
+    if (request === selectedMailRequest) selectedMailPending.value = false
   }
 }
 
@@ -93,13 +97,21 @@ watch(mails, (items) => {
 }, { immediate: true })
 
 watch(selectedMailId, (id) => {
+  selectedMail.value = null
   if (!id) {
-    selectedMail.value = null
+    selectedMailRequest++
+    selectedMailPending.value = false
     selectedMailErrorMessage.value = null
     return
   }
 
   void loadSelectedMail(id)
+})
+
+// The initial list can select a message before this watcher is registered.
+// Start its detail request after hydration so SSR and client markup match.
+onMounted(() => {
+  if (selectedMailId.value) void loadSelectedMail(selectedMailId.value)
 })
 
 async function refreshMails() {
@@ -150,7 +162,7 @@ const isMailPanelOpen = computed({
   }
 })
 
-const breakpoints = useBreakpoints(breakpointsTailwind)
+const breakpoints = useBreakpoints(breakpointsTailwind, { ssrWidth: 1024 })
 const isMobile = breakpoints.smaller('lg')
 </script>
 
@@ -198,7 +210,7 @@ const isMobile = breakpoints.smaller('lg')
         v-else-if="!mails.length && status !== 'pending'"
         icon="i-lucide-send"
         title="Aucun e-mail envoyé"
-        description="Les e-mails envoyés via Resend apparaîtront ici."
+        description="Les nouveaux envois du POS apparaîtront ici."
         class="flex-1 py-12"
       />
 

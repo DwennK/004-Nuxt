@@ -298,20 +298,7 @@ export interface DocumentEmailInput {
   message: string
 }
 
-export type SentMailStatus
-  = | 'queued'
-    | 'scheduled'
-    | 'sent'
-    | 'delivered'
-    | 'delivery_delayed'
-    | 'bounced'
-    | 'complained'
-    | 'opened'
-    | 'clicked'
-    | 'rendering_failure'
-    | 'canceled'
-    | 'suppressed'
-    | 'unknown'
+export type SentMailStatus = (typeof import('../constants/email').sentMailStatuses)[number]
 
 export interface SentMailSummary {
   id: string
@@ -328,6 +315,15 @@ export interface SentMailDetail extends SentMailSummary {
   cc: string[]
   bcc: string[]
   bodyText: string
+  errorMessage?: string | null
+}
+
+export interface SentMailSendResult {
+  ok: boolean
+  id: string
+  status: SentMailStatus
+  replayed: boolean
+  errorMessage: string | null
 }
 
 export interface SentMailListResponse {

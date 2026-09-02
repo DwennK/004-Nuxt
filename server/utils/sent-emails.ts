@@ -1,245 +1,67 @@
-import type { SentMailDetail, SentMailListResponse, SentMailStatus, SentMailSummary } from '~~/shared/types/pos'
-import { externalFetch } from './external-fetch'
+import { and, asc, desc, eq, gt, lt, or } from 'drizzle-orm'
+import { createError } from 'h3'
+import { z } from 'zod'
+import { sentEmails } from '~~/server/db/schema'
+import type { SentMailDetail, SentMailListResponse, SentMailSummary } from '~~/shared/types/pos'
+import { useDb, type PosDatabase } from './turso'
+import { effectiveMailStatus, type SentEmailRecord } from './email/journal'
 
-type ResendEmailReference = {
-  id?: string
-  to?: string[] | null
-  from?: string | null
-  created_at?: string | null
-  subject?: string | null
-  bcc?: string[] | null
-  cc?: string[] | null
-  reply_to?: string[] | null
-  last_event?: string | null
+type ListSentEmailsOptions = { limit: number, after?: string, before?: string }
+
+function preview(text: string) {
+  return text.replace(/\s+/g, ' ').trim().slice(0, 140)
 }
 
-type ResendEmailListResponse = {
-  has_more?: boolean
-  data?: ResendEmailReference[] | null
-}
-
-type ResendEmailDetailResponse = ResendEmailReference & {
-  html?: string | null
-  text?: string | null
-}
-
-type ListSentEmailsOptions = {
-  limit: number
-  after?: string
-  before?: string
-}
-
-const RESEND_RESPONSE_LIMIT_BYTES = 4 * 1024 * 1024
-const RESEND_DETAIL_CONCURRENCY = 4
-
-const knownSentMailStatuses = new Set<SentMailStatus>([
-  'queued',
-  'scheduled',
-  'sent',
-  'delivered',
-  'delivery_delayed',
-  'bounced',
-  'complained',
-  'opened',
-  'clicked',
-  'rendering_failure',
-  'canceled',
-  'suppressed',
-  'unknown'
-])
-
-function parseSentMailStatus(value?: string | null): SentMailStatus {
-  if (value && knownSentMailStatuses.has(value as SentMailStatus)) {
-    return value as SentMailStatus
-  }
-
-  return 'unknown'
-}
-
-function decodeHtmlEntities(input: string) {
-  return input
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, '\'')
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
-}
-
-function htmlToText(html: string) {
-  return decodeHtmlEntities(
-    html
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/(p|div|section|article|header|footer|tr|table|h[1-6])>/gi, '\n')
-      .replace(/<li[^>]*>/gi, '- ')
-      .replace(/<\/li>/gi, '\n')
-      .replace(/<[^>]+>/g, ' ')
-  )
-    .replace(/\r/g, '')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n[ \t]+/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
-function normalizeBodyText(payload: Pick<ResendEmailDetailResponse, 'text' | 'html'>) {
-  return payload.text?.trim()
-    || (payload.html ? htmlToText(payload.html) : '')
-}
-
-function buildPreview(bodyText: string) {
-  return bodyText
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 140)
-}
-
-function normalizeSummary(mail: ResendEmailReference): SentMailSummary {
+function summary(record: SentEmailRecord): SentMailSummary {
   return {
-    id: String(mail.id || ''),
-    to: Array.isArray(mail.to) ? mail.to.filter(Boolean) : [],
-    from: String(mail.from || ''),
-    subject: String(mail.subject || '(Sans objet)'),
-    createdAt: String(mail.created_at || new Date(0).toISOString()),
-    lastEvent: parseSentMailStatus(mail.last_event),
-    replyTo: Array.isArray(mail.reply_to) ? mail.reply_to.filter(Boolean) : [],
-    preview: ''
+    id: record.id, from: record.from, to: record.to, replyTo: record.replyTo,
+    subject: record.subject, createdAt: record.createdAt,
+    lastEvent: effectiveMailStatus(record), preview: preview(record.bodyText)
   }
 }
 
-function getReadableErrorMessage(payload: unknown, fallback: string) {
-  if (payload && typeof payload === 'object') {
-    if ('message' in payload && typeof payload.message === 'string' && payload.message.trim()) {
-      return payload.message
-    }
-
-    if ('error' in payload && typeof payload.error === 'string' && payload.error.trim()) {
-      return payload.error
-    }
-  }
-
-  return fallback
+function cursor(record: SentEmailRecord) {
+  return btoa(record.createdAt + '|' + record.id)
 }
 
-async function resendRequest<T>(path: string, query?: Record<string, string | number | undefined>) {
-  const config = useRuntimeConfig()
-
-  if (!config.resendApiKey) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'La configuration Resend est incomplète'
-    })
+function parseCursor(value: string) {
+  try {
+    const parts = atob(value).split('|')
+    return z.tuple([z.iso.datetime(), z.uuid()]).parse(parts)
+  } catch {
+    throw createError({ statusCode: 400, statusMessage: 'Le curseur de pagination des e-mails est invalide.' })
   }
-
-  const url = new URL(path, 'https://api.resend.com')
-
-  if (query) {
-    for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined && value !== '') {
-        url.searchParams.set(key, String(value))
-      }
-    }
-  }
-
-  const { response } = await externalFetch(url, {
-    headers: {
-      'Authorization': `Bearer ${config.resendApiKey}`,
-      'Content-Type': 'application/json'
-    }
-  }, {
-    provider: 'resend',
-    timeoutMs: 15_000,
-    maxResponseBytes: RESEND_RESPONSE_LIMIT_BYTES,
-    timeoutMessage: 'La récupération des e-mails a dépassé le délai autorisé',
-    networkErrorMessage: 'Le service Resend est indisponible'
-  })
-
-  const payload = await response.json().catch(() => null) as unknown
-
-  if (!response.ok) {
-    throw createError({
-      statusCode: response.status >= 500 ? 502 : response.status,
-      statusMessage: getReadableErrorMessage(payload, 'Impossible de récupérer les e-mails Resend')
-    })
-  }
-
-  return payload as T
 }
 
-async function mapWithConcurrency<T, TResult>(
-  items: T[],
-  concurrency: number,
-  mapper: (item: T, index: number) => Promise<TResult>
-) {
-  const results = new Array<TResult>(items.length)
-  let nextIndex = 0
-
-  async function runWorker() {
-    while (nextIndex < items.length) {
-      const index = nextIndex
-      nextIndex += 1
-      results[index] = await mapper(items[index]!, index)
-    }
+export async function listSentEmails(options: ListSentEmailsOptions, database: PosDatabase = useDb()): Promise<SentMailListResponse> {
+  if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > 100 || (options.after && options.before)) {
+    throw createError({ statusCode: 400, statusMessage: 'Pagination des e-mails invalide.' })
   }
-
-  await Promise.all(
-    Array.from(
-      { length: Math.min(concurrency, items.length) },
-      () => runWorker()
-    )
-  )
-
-  return results
-}
-
-export async function listSentEmails({ limit, after, before }: ListSentEmailsOptions): Promise<SentMailListResponse> {
-  const payload = await resendRequest<ResendEmailListResponse>('/emails', {
-    limit,
-    after,
-    before
-  })
-
-  const items = await mapWithConcurrency(
-    (payload.data || []).filter(mail => mail?.id),
-    RESEND_DETAIL_CONCURRENCY,
-    async (mail) => {
-      const summary = normalizeSummary(mail)
-
-      try {
-        const detailPayload = await resendRequest<ResendEmailDetailResponse>(`/emails/${summary.id}`)
-        return {
-          ...summary,
-          preview: buildPreview(normalizeBodyText(detailPayload))
-        }
-      } catch {
-        return summary
-      }
-    }
-  )
-
+  const token = options.after || options.before
+  const [date, id] = token ? parseCursor(token) : []
+  const compare = options.before ? gt : lt
+  const order = options.before ? asc : desc
+  const records = await database.select().from(sentEmails).where(date && id
+    ? or(compare(sentEmails.createdAt, date), and(eq(sentEmails.createdAt, date), compare(sentEmails.id, id)))
+    : undefined
+  ).orderBy(order(sentEmails.createdAt), order(sentEmails.id)).limit(options.limit + 1)
+  const hasMore = records.length > options.limit
+  const page = records.slice(0, options.limit)
+  if (options.before) page.reverse()
   return {
-    items,
-    hasMore: Boolean(payload.has_more),
-    beforeCursor: items[0]?.id || null,
-    afterCursor: items.at(-1)?.id || null,
-    limit
+    items: page.map(summary), hasMore, limit: options.limit,
+    beforeCursor: page[0] ? cursor(page[0]) : null,
+    afterCursor: page.at(-1) ? cursor(page.at(-1)!) : null
   }
 }
 
-export async function getSentEmail(id: string): Promise<SentMailDetail> {
-  const payload = await resendRequest<ResendEmailDetailResponse>(`/emails/${id}`)
-  const summary = normalizeSummary(payload)
-  const bodyText = normalizeBodyText(payload)
-
+export async function getSentEmail(id: string, database: PosDatabase = useDb()): Promise<SentMailDetail> {
+  const [record] = await database.select().from(sentEmails).where(eq(sentEmails.id, id)).limit(1)
+  if (!record) throw createError({ statusCode: 404, statusMessage: 'E-mail introuvable.' })
   return {
-    ...summary,
-    preview: buildPreview(bodyText),
-    cc: Array.isArray(payload.cc) ? payload.cc.filter(Boolean) : [],
-    bcc: Array.isArray(payload.bcc) ? payload.bcc.filter(Boolean) : [],
-    bodyText
+    ...summary(record), cc: [], bcc: [], bodyText: record.bodyText,
+    errorMessage: effectiveMailStatus(record) === 'unknown'
+      ? 'Résultat d’envoi à vérifier. Ne renvoyez pas ce message avant vérification.'
+      : record.errorMessage
   }
 }

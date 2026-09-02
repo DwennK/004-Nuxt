@@ -29,7 +29,7 @@
     "db:backfill:document-totals": "node scripts/db/backfill-document-totals.mjs",
     "seed:test-user": "node scripts/seed-test-user.mjs",
     "deploy": "npm run build && wrangler --cwd .output deploy --keep-vars",
-    "cf-typegen": "npm run build && wrangler --cwd .output types"
+    "cf-typegen": "wrangler types server/types/cloudflare-env.d.ts --include-runtime false --env-file .env.example --env-interface PosCloudflareEnv"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.128",
@@ -59,6 +59,7 @@
   },
   "devDependencies": {
     "@adonisjs/hash": "^10.1.0",
+    "@cloudflare/workers-types": "5.20260901.1",
     "@nuxt/eslint": "^1.16.0",
     "@types/qrcode": "^1.5.6",
     "dotenv": "^17.4.2",

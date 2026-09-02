@@ -185,8 +185,8 @@ export const createAndPayDocumentSchema = z.object({
 
 export const documentEmailSchema = z.object({
   to: z.string().trim().email('Un e-mail valide est obligatoire'),
-  subject: z.string().trim().min(1, 'L’objet est obligatoire'),
-  message: z.string().trim().min(1, 'Le message est obligatoire')
+  subject: z.string().trim().min(1, 'L’objet est obligatoire').max(998).refine(value => !/[\r\n]/.test(value), 'L’objet ne peut pas contenir de saut de ligne'),
+  message: z.string().trim().min(1, 'Le message est obligatoire').max(100000, 'Le message est trop long')
 })
 
 export const mobileSentrixOAuthExchangeSchema = z.object({

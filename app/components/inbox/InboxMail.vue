@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { format } from 'date-fns'
 import type { SentMailDetail, SentMailSummary } from '~~/shared/types/pos'
 import { getSentMailStatusMeta } from '~~/shared/utils/sent-email'
+import { formatDateTime } from '~~/shared/utils/pos'
 
 const props = defineProps<{
   summary: SentMailSummary | null
@@ -66,7 +66,7 @@ const displayedMail = computed(() => props.mail || props.summary)
 
               <div>
                 <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                  Reply-to
+                  Répondre à
                 </p>
                 <p class="mt-1 text-default">
                   {{ displayedMail.replyTo.join(', ') || '—' }}
@@ -75,10 +75,10 @@ const displayedMail = computed(() => props.mail || props.summary)
 
               <div>
                 <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                  Envoyé le
+                  Tentative du
                 </p>
                 <p class="mt-1 text-default">
-                  {{ format(new Date(displayedMail.createdAt), 'dd MMM yyyy HH:mm') }}
+                  {{ formatDateTime(displayedMail.createdAt) }}
                 </p>
               </div>
             </div>
@@ -126,15 +126,25 @@ const displayedMail = computed(() => props.mail || props.summary)
           <USkeleton class="h-5 w-4/5" />
         </div>
 
-        <div v-else-if="mail?.bodyText" class="whitespace-pre-wrap text-sm text-default">
-          {{ mail.bodyText }}
+        <div v-else-if="mail" class="space-y-4">
+          <UAlert
+            v-if="mail.errorMessage"
+            icon="i-lucide-triangle-alert"
+            color="warning"
+            variant="soft"
+            title="Suivi de l’envoi"
+            :description="mail.errorMessage"
+          />
+          <div class="whitespace-pre-wrap text-sm text-default">
+            {{ mail.bodyText }}
+          </div>
         </div>
 
         <UEmpty
           v-else
           icon="i-lucide-file-text"
           title="Contenu indisponible"
-          description="Resend n’a retourné aucun texte exploitable pour cet e-mail."
+          description="Le contenu de cet e-mail n’est pas disponible."
           class="py-12"
         />
       </div>

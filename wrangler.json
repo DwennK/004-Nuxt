@@ -13,6 +13,30 @@
       "custom_domain": true
     }
   ],
+  "vars": {
+    "NUXT_MAIL_FROM": "info@microwest.ch",
+    "NUXT_MAIL_REPLY_TO": "info@microwest.ch"
+  },
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["info@microwest.ch"],
+      "remote": false
+    }
+  ],
+  "queues": {
+    "consumers": [
+      {
+        "queue": "pos-email-events",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 10,
+        "retry_delay": 60,
+        "dead_letter_queue": "pos-email-events-dlq"
+      }
+    ]
+  },
+  "observability": { "enabled": true },
   "workers_dev": false,
   "preview_urls": false
 }

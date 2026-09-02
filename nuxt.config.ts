@@ -26,7 +26,6 @@ export default defineNuxtConfig({
     minimaxApiKey: process.env.MINIMAX_API_KEY,
     minimaxModel: process.env.MINIMAX_MODEL,
     minimaxBaseUrl: process.env.MINIMAX_BASE_URL,
-    resendApiKey: process.env.RESEND_API_KEY,
     mailFrom: process.env.MAIL_FROM,
     mailReplyTo: process.env.MAIL_REPLY_TO,
     shopifyShopDomain: process.env.SHOPIFY_SHOP_DOMAIN,

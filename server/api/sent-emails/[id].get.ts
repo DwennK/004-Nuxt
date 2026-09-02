@@ -3,7 +3,7 @@ import { requireAdminSessionUser } from '~~/server/utils/auth/session'
 import { getSentEmail } from '~~/server/utils/sent-emails'
 
 const paramsSchema = z.object({
-  id: z.string().trim().min(1)
+  id: z.uuid()
 })
 
 export default eventHandler(async (event) => {

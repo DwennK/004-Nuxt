@@ -17,7 +17,7 @@ The app is built for day-to-day in-store operations with a strict business split
 
 The app uses Nuxt server routes, Drizzle ORM and Turso/libSQL, and targets Cloudflare Workers through Nitro. User-facing copy is in French.
 
-This README describes the code in the repository, not a verified production deployment.
+This README describes the code in the repository, not a verified production deployment. In particular, the Cloudflare e-mail transition requires separate database and infrastructure activation before deployment.
 
 ## Product Scope
 
@@ -42,7 +42,7 @@ Secondary business modules:
 - internal AI assistant
 - interface preferences and games
 
-`/inbox` is an administrator-only sent-mail viewer, not an incoming mailbox. `/tools/woocommerce-import` is a compatibility redirect to the Shopify tool, not an active WooCommerce integration.
+`/inbox` is an administrator-only sent-mail journal, not an incoming mailbox. `/tools/woocommerce-import` is a compatibility redirect to the Shopify tool, not an active WooCommerce integration.
 
 ## Main Workflows
 
@@ -159,11 +159,12 @@ Generate a session secret with:
 openssl rand -base64 32
 ```
 
-Outgoing e-mail / Resend:
+Outgoing e-mail / Cloudflare:
 
-- `RESEND_API_KEY`: Resend API key used to send commercial documents and read sent-email history
 - `MAIL_FROM`: authenticated sender for outgoing e-mails, for example `Microwest <info@microwest.ch>`
 - `MAIL_REPLY_TO`: optional reply-to address
+- `EMAIL`: native Worker binding restricted to `info@microwest.ch` in `wrangler.json`; no sending API key
+- See [`docs/cloudflare-email.md`](./docs/cloudflare-email.md) for the database and production activation gates.
 
 Shopify:
 
@@ -188,7 +189,7 @@ Internal AI assistant:
 
 Notes:
 
-- `MAIL_FROM` must use a sender on a domain verified in Resend
+- `MAIL_FROM` must match the binding restriction and a domain verified for Cloudflare Email Sending
 - Shopify credentials are only used server-side
 - `NUXT_PUBLIC_SITE_URL` remains in the environment template, but the current app has no site-URL / OG-generation consumer; it is not required for POS flows
 
@@ -232,9 +233,9 @@ Secondary modules:
 
 The default sidebar navigation is defined in [`app/layouts/default.vue`](./app/layouts/default.vue).
 
-## Resend Integration
+## Cloudflare Email Integration
 
-Resend is used for two things:
+The native Cloudflare binding and the Turso journal provide:
 
 - sending commercial documents by e-mail
 - viewing sent e-mail history in `/inbox`
@@ -251,8 +252,14 @@ Current scope:
 
 - read-only sent-email history
 - list + detail view
-- no local sync journal in v1
-- Resend remains the source of truth
+- durable local history for new attempts, with stable date/ID pagination
+- idempotent sending with the existing PDF and reply-to address
+- delivery events consumed through a private Queue by the existing Worker
+- no inbound mail, open/click tracking, preview retention dependency or automatic purge
+
+Previous Resend messages are neither imported nor deleted. Production activation
+is blocked until the real database baseline, tested restore and reviewed additive
+migration exist. Follow [`docs/cloudflare-email.md`](./docs/cloudflare-email.md).
 
 ## Shopify Import
 
@@ -315,7 +322,7 @@ Scripts are defined in [`package.json`](./package.json):
 | `npm run test:e2e` | Playwright login-page smoke test |
 | `npm run preview` | Rebuild, then run Wrangler locally against `.output` |
 | `npm run deploy` | Rebuild, then deploy `.output` with `--keep-vars` |
-| `npm run cf-typegen` | Rebuild and generate Worker types using the `.output` Wrangler configuration |
+| `npm run cf-typegen` | Generate Worker binding types in `server/types/cloudflare-env.d.ts` |
 | `npm run db:push` / `npm run db:studio` | Development schema push / database UI; verify the configured target first |
 | `npm run db:introspect` / `npm run db:verify` | Database inventory / schema and invariant verification |
 | `npm run db:status` | Compare migration files and database ledger; `-- --local-only` avoids database access |
@@ -334,7 +341,7 @@ npm run test:e2e
 
 [`playwright.config.ts`](./playwright.config.ts) uses a 1440×900 viewport and starts or reuses a local server on port 3000. It does not launch the system Google Chrome application. The automated test checks the login shell, not an authenticated sale or an external integration. UI changes still need a desktop check and a mobile check when responsive behavior is affected.
 
-The [CI workflow](./.github/workflows/ci.yml) runs `npm ci`, `npm run check`, then the browser smoke job. It does not deploy the Worker. Passing tests and a Git push are not proof of a live delivery or deployment.
+The [CI workflow](./.github/workflows/ci.yml) runs `npm ci`, `npm run check`, then the browser smoke job. It does not deploy the Worker. Local e-mail simulation, passing tests and a Git push are not proof of a live delivery or deployment.
 
 ## Architecture
 
@@ -358,6 +365,7 @@ Main tables:
 - `employees`
 - `vacation_entries`
 - `users` and `login_attempts`
+- `sent_emails` and `sent_email_events` (e-mail transition; migration required before activation)
 
 Main schema file:
 
@@ -459,9 +467,10 @@ Before an authorized production deployment:
 
 1. Run `npm run check` and the relevant browser / Worker checks.
 2. Complete the [database migration gate](./docs/database-migrations.md), including backup restore verification and a recorded rollback reference.
-3. Verify the Cloudflare account, Worker target, required runtime secrets and bindings. Changing `.env` does not update Worker secrets.
-4. Deploy using the release procedure. `npm run deploy` rebuilds and directly deploys `.output` with `--keep-vars`; it is not the staged promotion workflow described in the migration runbook.
-5. Verify the affected screens and external integrations on the deployed version. A successful build or upload alone is not a live functional check.
+3. For the e-mail transition, also complete [Cloudflare e-mail activation](./docs/cloudflare-email.md). The local SQL candidate is not an approved production migration.
+4. Verify the Cloudflare account, Worker target, required runtime secrets, bindings and queues. Changing `.env` does not update Worker secrets.
+5. Deploy using the release procedure. `npm run deploy` rebuilds and directly deploys `.output` with `--keep-vars`; it is not the staged promotion workflow described in the migration runbook.
+6. Verify the affected screens and external integrations on the deployed version. A successful build or upload alone is not a live functional check.
 
 [`wrangler.json`](./wrangler.json) declares Worker `nuxt` and the custom domain `pos.microwest.ch`. Use the provided preview / deploy scripts so Wrangler reads the generated `.output` configuration. Do not change that output by hand. A Worker rollback does not restore the external Turso database.
 
@@ -473,6 +482,7 @@ Before an authorized production deployment:
 - [API contracts and financial idempotency](./docs/api-contracts.md)
 - [Architecture boundaries](./docs/architecture-boundaries.md)
 - [Development account](./docs/dev-login.md)
+- [Cloudflare document e-mails](./docs/cloudflare-email.md)
 - [Shopify import](./docs/shopify-import.md)
 - [MobileSentrix](./docs/mobilesentrix.md)
 - [Internal AI assistant](./docs/ai-assistant.md)

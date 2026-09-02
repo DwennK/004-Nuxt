@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { sentMailStatuses } from '../../shared/constants/email'
 
 export const customers = sqliteTable('customers', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -295,6 +296,46 @@ export const loginAttempts = sqliteTable('login_attempts', {
   lockedUntil: integer('locked_until').notNull().default(0),
   updatedAt: integer('updated_at').notNull().default(0)
 })
+
+// Durable POS history, independent of the provider's message-preview retention.
+export const sentEmails = sqliteTable('sent_emails', {
+  id: text('id').primaryKey(),
+  documentId: integer('document_id').references(() => documents.id, { onDelete: 'set null' }),
+  actorId: integer('actor_id').references(() => users.id, { onDelete: 'set null' }),
+  idempotencyKey: text('idempotency_key').notNull(),
+  fingerprint: text('fingerprint').notNull(),
+  from: text('from_address').notNull(),
+  to: text('to_addresses', { mode: 'json' }).$type<string[]>().notNull(),
+  replyTo: text('reply_to', { mode: 'json' }).$type<string[]>().notNull(),
+  subject: text('subject').notNull(),
+  bodyText: text('body_text').notNull(),
+  attachments: text('attachments', { mode: 'json' }).$type<Array<{ filename: string, type: string, size: number }>>().notNull(),
+  providerMessageId: text('provider_message_id'),
+  status: text('status', { enum: sentMailStatuses }).notNull(),
+  errorCode: text('error_code'),
+  errorMessage: text('error_message'),
+  lastEventAt: text('last_event_at'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull()
+}, table => ({
+  idempotencyIdx: uniqueIndex('sent_emails_idempotency_idx').on(table.idempotencyKey),
+  providerIdx: uniqueIndex('sent_emails_provider_idx').on(table.providerMessageId),
+  createdIdx: index('sent_emails_created_idx').on(table.createdAt, table.id),
+  documentIdx: index('sent_emails_document_idx').on(table.documentId)
+}))
+
+// Also holds early events until send() has returned the provider message ID.
+export const sentEmailEvents = sqliteTable('sent_email_events', {
+  id: text('id').primaryKey(),
+  providerMessageId: text('provider_message_id').notNull(),
+  recipient: text('recipient').notNull(),
+  sender: text('sender').notNull(),
+  status: text('status', { enum: sentMailStatuses }).notNull(),
+  occurredAt: text('occurred_at').notNull(),
+  createdAt: text('created_at').notNull()
+}, table => ({
+  messageIdx: index('sent_email_events_message_idx').on(table.providerMessageId, table.occurredAt)
+}))
 
 export const smartphoneReservationRequests = sqliteTable('smartphone_reservation_requests', {
   id: integer('id').primaryKey({ autoIncrement: true }),

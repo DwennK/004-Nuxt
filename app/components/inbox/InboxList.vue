@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { format, isToday } from 'date-fns'
 import type { SentMailSummary } from '~~/shared/types/pos'
-import { getSentMailStatusMeta } from '~~/shared/utils/sent-email'
+import { formatSentMailListDate, getSentMailStatusMeta } from '~~/shared/utils/sent-email'
 
 const props = defineProps<{
   mails: SentMailSummary[]
@@ -68,7 +67,7 @@ defineShortcuts({
           </div>
 
           <span class="shrink-0 text-xs text-toned">
-            {{ isToday(new Date(mail.createdAt)) ? format(new Date(mail.createdAt), 'HH:mm') : format(new Date(mail.createdAt), 'dd MMM') }}
+            {{ formatSentMailListDate(mail.createdAt) }}
           </span>
         </div>
 
@@ -85,9 +84,7 @@ defineShortcuts({
                 ? 'bg-error'
                 : getSentMailStatusMeta(mail.lastEvent).color === 'warning'
                   ? 'bg-warning'
-                  : getSentMailStatusMeta(mail.lastEvent).color === 'primary'
-                    ? 'bg-primary'
-                    : 'bg-muted'"
+                  : 'bg-muted'"
           />
         </div>
 
