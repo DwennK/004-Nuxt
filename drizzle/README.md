@@ -1,8 +1,19 @@
 # Database migrations
 
-This directory intentionally contains no migration folders until the existing
-Turso database has been introspected and baselined through the procedure in
+The restored Microwest database was introspected and baselined on 2026-09-02
+through the procedure in
 [`docs/database-migrations.md`](../docs/database-migrations.md).
+
+- `20260902155258_talented_songbird` is the exact adoption baseline generated
+  from the restored database with `drizzle-kit pull --init`. Its commented SQL
+  records the existing 17 tables without recreating them.
+- `20260902155313_pos_counter_and_email_journal` adds `counter_customer`,
+  `sent_emails`, `sent_email_events`, and their indexes. It leaves existing data
+  and tables intact. The SQL was rehearsed on a remote clone and a fresh local
+  restoration, with clean verification and zero pending migrations on rerun.
+
+The `users.is_admin` default is expressed as SQL `0` in the application schema
+to preserve the existing SQLite default and avoid an unnecessary table rebuild.
 
 Do not generate an initial migration from an empty database and apply it to the
 existing POS database. The first committed migration folder must be the exact
@@ -27,9 +38,9 @@ Check the committed migration inventory without connecting to any database:
 npm run db:status -- --local-only
 ```
 
-Until the baseline is committed, this reports `baselineRequired: true` and
-exits with code 1. That is an expected missing-baseline signal, not permission
-to generate a replacement initial migration.
+Local status verifies the committed migration inventory. Remote status must
+also confirm that the target database ledger matches these exact migrations;
+the old database has not been baselined or migrated by this restoration.
 
 The safe database commands are exposed through `package.json`:
 
