@@ -27,6 +27,13 @@ Les deux paramètres doivent être renseignés ensemble ; les laisser tous deux
 vides désactive le header supplémentaire. Le flux OAuth navigateur ne reçoit
 pas ce secret.
 
+Les vignettes renvoyées par l’API sont hébergées sur
+`https://static.mobilesentrix.com`. Le mapping serveur et la directive CSP
+`img-src` autorisent ce domaine HTTPS ainsi que `www.mobilesentrix.com`.
+Les liens vers les fiches restent limités au domaine de la boutique configurée.
+Le navigateur charge les images publiques directement, sans recevoir le
+header `ms-token` ni les identifiants OAuth.
+
 ## Production Cloudflare
 
 Le site `https://pos.microwest.ch` utilise le Worker `nuxt`, déclaré dans

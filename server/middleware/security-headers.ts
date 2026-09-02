@@ -6,7 +6,7 @@ const PRODUCTION_CSP = [
   `object-src 'none'`,
   `frame-ancestors 'none'`,
   `form-action 'self'`,
-  `img-src 'self' data: blob:`,
+  `img-src 'self' data: blob: https://www.mobilesentrix.com https://static.mobilesentrix.com`,
   `media-src 'self' blob:`,
   `font-src 'self' data:`,
   `style-src 'self' 'unsafe-inline'`,

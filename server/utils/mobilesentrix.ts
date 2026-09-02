@@ -261,7 +261,7 @@ function textValue(record: Record<string, unknown>, keys: string[]) {
   return null
 }
 
-function externalMobileSentrixUrlValue(value: string | null) {
+function externalMobileSentrixUrlValue(value: string | null, kind: 'page' | 'image' = 'page') {
   if (!value) {
     return null
   }
@@ -276,7 +276,10 @@ function externalMobileSentrixUrlValue(value: string | null) {
     return null
   }
 
-  if (candidate.protocol !== 'https:' || candidate.hostname !== baseUrl.hostname) {
+  const allowedHost = candidate.hostname === baseUrl.hostname
+    || (kind === 'image' && candidate.hostname === 'static.mobilesentrix.com')
+
+  if (candidate.protocol !== 'https:' || !allowedHost) {
     return null
   }
 
@@ -340,7 +343,7 @@ function mapProduct(value: unknown): MobileSentrixProductSummary {
     manufacturer: textValue(record, ['manufacturer_text', 'device_manufacturer_text', 'manufacturer']),
     model: textValue(record, ['model_text', 'device_model_text', 'model']),
     frontPosition: textValue(record, ['front_position', 'front_position_text']),
-    imageUrl: externalMobileSentrixUrlValue(textValue(record, ['image_link', 'default_image', 'image'])),
+    imageUrl: externalMobileSentrixUrlValue(textValue(record, ['image_link', 'default_image', 'image']), 'image'),
     url: externalMobileSentrixUrlValue(textValue(record, ['link', 'url'])),
     tags: stringArrayValue(record.tags),
     raw: record
@@ -359,7 +362,7 @@ function mapCategory(value: unknown): MobileSentrixCategorySummary {
       : textValue(record, ['is_active', 'isActive']) === '1',
     productCount: numberValue(record, ['product_count', 'productCount']),
     url: externalMobileSentrixUrlValue(textValue(record, ['link', 'url'])),
-    imageUrl: externalMobileSentrixUrlValue(textValue(record, ['image_link', 'image']))
+    imageUrl: externalMobileSentrixUrlValue(textValue(record, ['image_link', 'image']), 'image')
   }
 }
 
