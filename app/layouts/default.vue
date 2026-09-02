@@ -60,7 +60,7 @@ const secondaryLinks = [{
     open.value = false
   }
 }, {
-  label: 'Reports',
+  label: 'Rapports',
   icon: 'i-lucide-chart-column',
   to: '/reports',
   onSelect: () => {

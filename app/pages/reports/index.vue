@@ -101,7 +101,7 @@ const stats = computed(() => {
 <template>
   <UDashboardPanel id="reports-overview">
     <template #header>
-      <UDashboardNavbar title="Reports">
+      <UDashboardNavbar title="Rapports">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
