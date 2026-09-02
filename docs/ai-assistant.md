@@ -90,6 +90,10 @@ Variables optionnelles:
 - `MINIMAX_MODEL`
 - `MINIMAX_BASE_URL`
 
+Sur Cloudflare, ces valeurs sont lues dans les bindings du Worker à chaque requête. Les variantes préfixées `NUXT_MINIMAX_*` sont également prises en charge et prioritaires. En local, elles sont lues dans l’environnement chargé depuis `.env`. La clé n’est pas intégrée au build.
+
+Une configuration manquante ou une panne MiniMax produit une erreur `service_unavailable`, distincte des refus SQL. Le message affiché ne contient ni réponse brute du fournisseur ni secret.
+
 Par défaut, l’assistant utilise `https://api.minimax.io/v1`. Selon le compte MiniMax, `https://api.minimaxi.com/v1` peut exister aussi, mais certaines clés ne sont valides que sur l’un des deux environnements.
 
 Variables Turso inchangées:

@@ -23,9 +23,10 @@ export default defineNuxtConfig({
     tursoToken: process.env.TURSO_TOKEN,
     posAllowRuntimeSchemaBootstrap: process.env.POS_ALLOW_RUNTIME_SCHEMA_BOOTSTRAP === 'true',
     posAllowRuntimeDemoSeed: process.env.POS_ALLOW_RUNTIME_DEMO_SEED === 'true',
-    minimaxApiKey: process.env.MINIMAX_API_KEY,
-    minimaxModel: process.env.MINIMAX_MODEL,
-    minimaxBaseUrl: process.env.MINIMAX_BASE_URL,
+    // MiniMax credentials are resolved per request, including legacy Worker bindings.
+    minimaxApiKey: '',
+    minimaxModel: '',
+    minimaxBaseUrl: '',
     mailFrom: process.env.MAIL_FROM,
     mailReplyTo: process.env.MAIL_REPLY_TO,
     // NUXT_SHOPIFY_* is resolved at request time; keep credentials out of the build.

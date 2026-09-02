@@ -11,5 +11,5 @@ export default eventHandler(async (event) => {
   }
 
   const { requestId } = getUseCaseContext(event)
-  return runAssistantChat(body.messages, body.debug, requestId)
+  return runAssistantChat(event, body.messages, body.debug, requestId)
 })

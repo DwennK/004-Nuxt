@@ -1,3 +1,5 @@
+import type { H3Event } from 'h3'
+import { isError } from 'h3'
 import type { AssistantChatMessageInput, AssistantChatResponse } from '~~/shared/types/assistant'
 import { buildAssistantSchemaContext } from './allowlist'
 import { requestStructuredResponse, requestTextResponse } from './provider'
@@ -121,20 +123,47 @@ function normalizePlanningResult(planning: Partial<AssistantPlanningResult>) {
   } satisfies AssistantPlanningResult
 }
 
+function buildProviderErrorResponse(error: unknown, requestId: string): AssistantChatResponse {
+  const providerError = isError(error) ? error : undefined
+  const data = providerError?.data
+  const notConfigured = data && typeof data === 'object' && 'code' in data && data.code === 'assistant_not_configured'
+  const message = notConfigured
+    ? 'L’assistant IA n’est pas configuré sur le serveur. Contactez un administrateur.'
+    : 'Le service IA est temporairement indisponible. Réessayez dans quelques instants.'
+
+  console.warn(JSON.stringify({
+    scope: 'assistant-provider',
+    requestId,
+    reason: notConfigured ? 'not_configured' : 'unavailable',
+    statusCode: providerError?.statusCode
+  }))
+
+  return {
+    message: buildAssistantMessage(message),
+    error: { code: 'service_unavailable', message, retryable: !notConfigured }
+  }
+}
+
 export async function runAssistantChat(
+  event: H3Event,
   messages: AssistantChatMessageInput[],
   debug: boolean,
   requestId: string = crypto.randomUUID()
 ): Promise<AssistantChatResponse> {
   const latestQuestion = [...messages].reverse().find(message => message.role === 'user')?.content || ''
 
-  const rawPlanning = await requestStructuredResponse<Partial<AssistantPlanningResult>>({
-    requestId,
-    schemaName: 'assistant_query_plan',
-    schema: planningSchema,
-    systemPrompt: buildPlanningSystemPrompt(),
-    userPrompt: buildPlanningPrompt(messages)
-  })
+  let rawPlanning
+  try {
+    rawPlanning = await requestStructuredResponse<Partial<AssistantPlanningResult>>(event, {
+      requestId,
+      schemaName: 'assistant_query_plan',
+      schema: planningSchema,
+      systemPrompt: buildPlanningSystemPrompt(),
+      userPrompt: buildPlanningPrompt(messages)
+    })
+  } catch (error) {
+    return buildProviderErrorResponse(error, requestId)
+  }
   const planning = normalizePlanningResult(rawPlanning)
 
   if (!planning.sql) {
@@ -186,25 +215,30 @@ export async function runAssistantChat(
 
   try {
     const result = await runReadOnlyQuery(validatedQuery, requestId)
-    const explanation = await requestTextResponse({
-      requestId,
-      systemPrompt: [
-        'Tu rédiges des réponses métier internes en français pour un tableau de bord POS/CRM.',
-        'Sois concis, factuel et utile.',
-        'Si le résultat est vide, dis-le clairement.',
-        'N’invente aucun chiffre absent du résultat.',
-        'Rappelle brièvement si les montants sont en CHF en convertissant les centimes en francs quand c’est évident.',
-        'N’affiche pas de SQL.'
-      ].join('\n'),
-      userPrompt: buildAnswerPrompt({
-        question: latestQuestion,
-        querySummary: planning.querySummary,
-        answerPlan: planning.answerPlan,
-        rows: result.rows,
-        rowCount: result.rowCount,
-        truncated: result.truncated
+    let explanation
+    try {
+      explanation = await requestTextResponse(event, {
+        requestId,
+        systemPrompt: [
+          'Tu rédiges des réponses métier internes en français pour un tableau de bord POS/CRM.',
+          'Sois concis, factuel et utile.',
+          'Si le résultat est vide, dis-le clairement.',
+          'N’invente aucun chiffre absent du résultat.',
+          'Rappelle brièvement si les montants sont en CHF en convertissant les centimes en francs quand c’est évident.',
+          'N’affiche pas de SQL.'
+        ].join('\n'),
+        userPrompt: buildAnswerPrompt({
+          question: latestQuestion,
+          querySummary: planning.querySummary,
+          answerPlan: planning.answerPlan,
+          rows: result.rows,
+          rowCount: result.rowCount,
+          truncated: result.truncated
+        })
       })
-    })
+    } catch (error) {
+      return buildProviderErrorResponse(error, requestId)
+    }
 
     return {
       message: buildAssistantMessage(explanation),

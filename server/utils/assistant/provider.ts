@@ -1,3 +1,4 @@
+import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { externalFetch, isExternalFetchError } from '../external-fetch'
 
@@ -31,16 +32,21 @@ const DEFAULT_MINIMAX_MODEL = 'MiniMax-M2.7'
 const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimax.io/v1'
 const STRUCTURED_FALLBACK_STATUS_CODES = new Set([400, 422, 502])
 
-function getProviderConfig() {
-  const config = useRuntimeConfig()
-  const apiKey = config.minimaxApiKey
-  const model = config.minimaxModel || DEFAULT_MINIMAX_MODEL
-  const baseUrl = (config.minimaxBaseUrl || DEFAULT_MINIMAX_BASE_URL).replace(/\/$/, '')
+function getProviderConfig(event: H3Event) {
+  const config = useRuntimeConfig(event)
+  const bindings = event.context.cloudflare?.env || event.context._platform?.cloudflare?.env
+  const env = (bindings || {}) as Record<string, unknown>
+  const value = (...candidates: unknown[]) => candidates
+    .find(candidate => typeof candidate === 'string' && candidate.trim()) as string | undefined
+  const apiKey = value(env.NUXT_MINIMAX_API_KEY, env.MINIMAX_API_KEY, config.minimaxApiKey, process.env.NUXT_MINIMAX_API_KEY, process.env.MINIMAX_API_KEY)?.trim()
+  const model = value(env.NUXT_MINIMAX_MODEL, env.MINIMAX_MODEL, config.minimaxModel, process.env.NUXT_MINIMAX_MODEL, process.env.MINIMAX_MODEL)?.trim() || DEFAULT_MINIMAX_MODEL
+  const baseUrl = (value(env.NUXT_MINIMAX_BASE_URL, env.MINIMAX_BASE_URL, config.minimaxBaseUrl, process.env.NUXT_MINIMAX_BASE_URL, process.env.MINIMAX_BASE_URL)?.trim() || DEFAULT_MINIMAX_BASE_URL).replace(/\/$/, '')
 
   if (!apiKey) {
     throw createError({
-      statusCode: 500,
-      statusMessage: 'MiniMax configuration is missing'
+      statusCode: 503,
+      statusMessage: 'MiniMax configuration is missing',
+      data: { code: 'assistant_not_configured' }
     })
   }
 
@@ -181,8 +187,8 @@ async function requestChatCompletion(
   return payload || {}
 }
 
-async function createChatCompletion(requestId: string, body: Record<string, unknown>) {
-  const { apiKey, baseUrl } = getProviderConfig()
+async function createChatCompletion(event: H3Event, requestId: string, body: Record<string, unknown>) {
+  const { apiKey, baseUrl } = getProviderConfig(event)
   const headers = buildHeaders(apiKey, requestId)
 
   try {
@@ -214,8 +220,8 @@ function getCompletionText(response: ChatCompletionResponse) {
   return stripReasoning(content).trim()
 }
 
-export async function requestStructuredResponse<T>(options: StructuredResponseOptions): Promise<T> {
-  const { model } = getProviderConfig()
+export async function requestStructuredResponse<T>(event: H3Event, options: StructuredResponseOptions): Promise<T> {
+  const { model } = getProviderConfig(event)
   const messages = [
     {
       role: 'system',
@@ -228,7 +234,7 @@ export async function requestStructuredResponse<T>(options: StructuredResponseOp
   ]
 
   try {
-    const response = await createChatCompletion(options.requestId, {
+    const response = await createChatCompletion(event, options.requestId, {
       model,
       messages,
       response_format: {
@@ -247,7 +253,7 @@ export async function requestStructuredResponse<T>(options: StructuredResponseOp
       throw error
     }
 
-    const fallbackResponse = await createChatCompletion(options.requestId, {
+    const fallbackResponse = await createChatCompletion(event, options.requestId, {
       model,
       messages: [
         {
@@ -276,9 +282,9 @@ export async function requestStructuredResponse<T>(options: StructuredResponseOp
   }
 }
 
-export async function requestTextResponse(options: TextResponseOptions) {
-  const { model } = getProviderConfig()
-  const response = await createChatCompletion(options.requestId, {
+export async function requestTextResponse(event: H3Event, options: TextResponseOptions) {
+  const { model } = getProviderConfig(event)
+  const response = await createChatCompletion(event, options.requestId, {
     model,
     messages: [
       {

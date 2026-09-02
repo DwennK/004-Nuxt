@@ -126,27 +126,25 @@ async function submitPrompt() {
       ...response.message,
       query: response.query,
       error: response.error,
-      includeInRequest: true
+      includeInRequest: !response.error
     })
 
     status.value = response.error ? 'error' : 'ready'
     requestError.value = response.error?.message || null
-  } catch (error) {
+  } catch {
     status.value = 'error'
-    requestError.value = error instanceof Error
-      ? error.message
-      : 'Impossible de contacter le service assistant.'
+    requestError.value = 'Impossible de contacter le service assistant. Réessayez dans quelques instants.'
 
     messages.value.push({
       id: crypto.randomUUID(),
       role: 'assistant',
       content: 'Le service assistant n’a pas répondu correctement. Vérifiez la configuration serveur puis réessayez.',
       error: {
-        code: 'sql_execution_failed',
+        code: 'service_unavailable',
         message: requestError.value,
         retryable: true
       },
-      includeInRequest: true
+      includeInRequest: false
     })
   }
 }
@@ -288,8 +286,8 @@ async function submitPrompt() {
                     v-if="message.error"
                     color="error"
                     variant="subtle"
-                    icon="i-lucide-shield-alert"
-                    title="Réponse contrainte par les garde-fous"
+                    :icon="message.error.code === 'sql_rejected' ? 'i-lucide-shield-alert' : 'i-lucide-triangle-alert'"
+                    :title="message.error.code === 'sql_rejected' ? 'Réponse contrainte par les garde-fous' : 'Assistant indisponible'"
                     :description="message.error.message"
                   />
 
