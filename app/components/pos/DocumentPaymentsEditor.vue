@@ -471,36 +471,6 @@ async function removePayment(payment: PaymentRecord) {
         </template>
       </UCard>
 
-      <UCard
-        v-if="payments.length"
-        :ui="{ body: 'space-y-3 p-4', header: 'p-4 pb-0' }"
-      >
-        <template #header>
-          <div>
-            <h2 class="text-base font-semibold text-highlighted">
-              Dernier paiement
-            </h2>
-          </div>
-        </template>
-
-        <div class="rounded-2xl border border-default px-4 py-3">
-          <div class="flex flex-wrap items-center gap-2">
-            <UBadge :color="paymentMethodColors[payments[0]!.method]" variant="subtle" size="sm">
-              {{ paymentMethodLabels[payments[0]!.method] }}
-            </UBadge>
-            <UBadge :color="paymentStatusColors[payments[0]!.status]" variant="subtle" size="sm">
-              {{ paymentStatusLabels[payments[0]!.status] }}
-            </UBadge>
-          </div>
-          <p class="mt-3 text-lg font-semibold text-highlighted">
-            {{ formatCurrency(payments[0]!.amount) }}
-          </p>
-          <p v-if="payments[0]!.notes" class="mt-2 text-sm text-toned">
-            {{ payments[0]!.notes }}
-          </p>
-        </div>
-      </UCard>
-
       <PosDocumentPaymentSlideover
         v-if="isPayableDocument"
         v-model:open="paymentOpen"
