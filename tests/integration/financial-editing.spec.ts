@@ -10,6 +10,9 @@ describe('editing recorded financial data', () => {
   let temporaryDirectory: string
   let updateDocumentRecord: typeof import('../../server/utils/pos/documents').updateDocumentRecord
   let updatePaymentRecord: typeof import('../../server/utils/pos/payments').updatePaymentRecord
+  let createPaymentRecord: typeof import('../../server/utils/pos/payments').createPaymentRecord
+  let markDocumentAsPaid: typeof import('../../server/utils/pos/documents').markDocumentAsPaid
+  let createAndPayDocumentRecord: typeof import('../../server/utils/pos/documents').createAndPayDocumentRecord
 
   beforeAll(async () => {
     temporaryDirectory = await mkdtemp(join(tmpdir(), 'pos-financial-editing-'))
@@ -18,6 +21,12 @@ describe('editing recorded financial data', () => {
 
     await client.batch([
       `CREATE TABLE document_imports (id INTEGER PRIMARY KEY, document_id INTEGER NOT NULL, source TEXT NOT NULL, external_id TEXT NOT NULL, external_number TEXT NOT NULL, created_at TEXT NOT NULL)`,
+      'CREATE UNIQUE INDEX document_imports_source_external_id_idx ON document_imports(source, external_id)',
+      'CREATE TABLE number_sequences (scope TEXT PRIMARY KEY, last_value INTEGER NOT NULL)',
+      `CREATE TABLE ticket_events (
+        id INTEGER PRIMARY KEY, ticket_id INTEGER NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL,
+        note TEXT, metadata_json TEXT, occurred_at TEXT NOT NULL, created_at TEXT NOT NULL
+      )`,
       `CREATE TABLE customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         first_name TEXT NOT NULL,
@@ -92,8 +101,8 @@ describe('editing recorded financial data', () => {
       )`
     ], 'write')
 
-    ;({ updateDocumentRecord } = await import('../../server/utils/pos/documents'))
-    ;({ updatePaymentRecord } = await import('../../server/utils/pos/payments'))
+    ;({ updateDocumentRecord, markDocumentAsPaid, createAndPayDocumentRecord } = await import('../../server/utils/pos/documents'))
+    ;({ updatePaymentRecord, createPaymentRecord } = await import('../../server/utils/pos/payments'))
   })
 
   beforeEach(async () => {
@@ -112,9 +121,13 @@ describe('editing recorded financial data', () => {
 
     const now = '2026-08-20T12:00:00.000Z'
     await client.batch([
+      'DELETE FROM document_imports',
+      'DELETE FROM ticket_events',
+      'DELETE FROM number_sequences',
       'DELETE FROM payments',
       'DELETE FROM document_lines',
       'DELETE FROM documents',
+      'DELETE FROM tickets',
       'DELETE FROM customers',
       {
         sql: `INSERT INTO customers (
@@ -148,6 +161,97 @@ describe('editing recorded financial data', () => {
   afterAll(async () => {
     client.close()
     await rm(temporaryDirectory, { recursive: true, force: true })
+  })
+
+  const paymentInput = { method: 'cash' as const, paidAt: '2026-08-20T12:30:00.000Z', notes: ' Encaissement ' }
+
+  async function prepareUnpaidTicketDocument() {
+    await client.batch([
+      'DELETE FROM payments',
+      `UPDATE documents SET status = 'issued', ticket_id = 7 WHERE id = 1`,
+      `INSERT INTO tickets (id, ticket_number, customer_id, type, status, issue_description, opened_at, created_at, updated_at)
+       VALUES (7, 'TIC-7', 1, 'repair', 'in_progress', 'Réparation', '2026-08-20', '2026-08-20', '2026-08-20')`
+    ], 'write')
+  }
+
+  function recordThrough(path: 'payment' | 'mark-paid', amount: number, key: string) {
+    return path === 'payment'
+      ? createPaymentRecord({ ...paymentInput, customerId: 1, documentId: 1, status: 'paid', amount }, key)
+      : markDocumentAsPaid(1, { ...paymentInput, amount }, key)
+  }
+
+  it.each(['payment', 'mark-paid'] as const)('%s shares partial/full payment rules and records each event once', async (path) => {
+    await prepareUnpaidTicketDocument()
+    await recordThrough(path, 2500, 'partial-payment-key')
+    await recordThrough(path, 2500, 'partial-payment-key')
+    expect((await client.execute('SELECT status FROM documents WHERE id = 1')).rows[0]?.status).toBe('issued')
+    expect((await client.execute('SELECT COUNT(*) AS n FROM ticket_events')).rows[0]?.n).toBe(1)
+
+    await recordThrough(path, 10000, 'remaining-payment-key')
+    expect((await client.execute('SELECT status FROM documents WHERE id = 1')).rows[0]?.status).toBe('paid')
+    expect((await client.execute('SELECT SUM(amount) AS total FROM payments')).rows[0]?.total).toBe(12500)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM ticket_events')).rows[0]?.n).toBe(2)
+  })
+
+  it.each(['payment', 'mark-paid'] as const)('%s rejects overpayment and cancelled documents with the same policy codes', async (path) => {
+    await prepareUnpaidTicketDocument()
+    await expect(recordThrough(path, 12501, 'overpayment-key')).rejects.toMatchObject({
+      statusCode: 400, data: { code: 'PAYMENT_EXCEEDS_BALANCE' }
+    })
+    await client.execute(`UPDATE documents SET status = 'cancelled' WHERE id = 1`)
+    await expect(recordThrough(path, 100, 'cancelled-key')).rejects.toMatchObject({
+      statusCode: 409, data: { code: 'DOCUMENT_CANCELLED' }
+    })
+    expect((await client.execute('SELECT COUNT(*) AS n FROM document_imports')).rows[0]?.n).toBe(0)
+  })
+
+  it('resolves the omitted amount to the remaining balance inside the transaction', async () => {
+    await prepareUnpaidTicketDocument()
+    await recordThrough('payment', 2500, 'partial-payment-key')
+    const document = await markDocumentAsPaid(1, paymentInput, 'pay-remaining-key')
+    expect(document.status).toBe('paid')
+    expect(document.payments.map(payment => payment.amount).sort((a, b) => a - b)).toEqual([2500, 10000])
+  })
+
+  it('creates a sale and payment atomically and replays the original result', async () => {
+    const input = {
+      type: 'invoice' as const, customerId: 1, issuedAt: paymentInput.paidAt,
+      lines: [{ label: 'Article', quantity: 1, unitPrice: 10810, vatRate: 8.1 }]
+    }
+    const sale = await createAndPayDocumentRecord(input, paymentInput, 'sale-payment-key')
+    const replay = await createAndPayDocumentRecord(input, paymentInput, 'sale-payment-key')
+    expect(replay.id).toBe(sale.id)
+    expect(sale).toMatchObject({ status: 'paid', total: 10810 })
+    expect(sale.payments).toHaveLength(1)
+    expect(sale.payments[0]).toMatchObject({ amount: 10810, notes: 'Encaissement' })
+  })
+
+  it('rolls back payment, status and receipt if the ticket event cannot be recorded', async () => {
+    await prepareUnpaidTicketDocument()
+    await client.execute(`CREATE TRIGGER fail_payment_event BEFORE INSERT ON ticket_events BEGIN SELECT RAISE(ABORT, 'event unavailable'); END`)
+    try {
+      await expect(recordThrough('mark-paid', 12500, 'rollback-payment-key')).rejects.toMatchObject({
+        cause: { message: expect.stringContaining('event unavailable') }
+      })
+      expect((await client.execute('SELECT COUNT(*) AS n FROM payments')).rows[0]?.n).toBe(0)
+      expect((await client.execute('SELECT COUNT(*) AS n FROM document_imports')).rows[0]?.n).toBe(0)
+      expect((await client.execute('SELECT status FROM documents WHERE id = 1')).rows[0]?.status).toBe('issued')
+    } finally {
+      await client.execute('DROP TRIGGER fail_payment_event')
+    }
+  })
+
+  it('checks competing payments against the serialized remaining balance', async () => {
+    await prepareUnpaidTicketDocument()
+    const results = await Promise.allSettled([
+      recordThrough('payment', 10000, 'competing-payment-a'),
+      recordThrough('mark-paid', 10000, 'competing-payment-b')
+    ])
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+    expect(results.find(result => result.status === 'rejected')).toMatchObject({
+      reason: { data: { code: 'PAYMENT_EXCEEDS_BALANCE' } }
+    })
+    expect((await client.execute('SELECT SUM(amount) AS total FROM payments')).rows[0]?.total).toBe(10000)
   })
 
   it('edits a paid invoice and its recorded payment while deriving the balance status', async () => {

@@ -9,7 +9,7 @@ import {
   payments,
   tickets
 } from '~~/server/db/schema'
-import { payableDocumentTypes, paymentMethodLabels } from '~~/shared/constants/pos'
+import { payableDocumentTypes } from '~~/shared/constants/pos'
 import { evaluateDocumentRevision } from '~~/shared/domain/documents/revision'
 import { canCreateTicketDocument } from '~~/shared/domain/tickets/document-policy'
 import type {
@@ -29,10 +29,10 @@ import {
   createTicketEvent,
   ensurePosSchema,
   generateDocumentNumber,
-  getDocumentPaymentTotals,
   mapCustomer,
   normalizeOptionalText
 } from './core'
+import { getPayablePaymentDocument, recordDocumentPayment } from './payment-writes'
 
 export function mapDocument(row: typeof documents.$inferSelect): DocumentRecord {
   return {
@@ -320,33 +320,6 @@ async function createDocumentCreatedEvent(
       documentStatus: document.status
     },
     occurredAt: document.issuedAt
-  }, executor)
-}
-
-async function createPaymentRecordedEvent(
-  executor: PosDatabaseExecutor,
-  document: typeof documents.$inferSelect,
-  payment: typeof payments.$inferSelect
-) {
-  if (!document.ticketId) {
-    return
-  }
-
-  await createTicketEvent({
-    ticketId: document.ticketId,
-    kind: 'payment_recorded',
-    label: 'Paiement enregistré',
-    note: payment.notes,
-    metadata: {
-      paymentId: payment.id,
-      documentId: document.id,
-      documentNumber: document.documentNumber,
-      documentType: document.type,
-      amount: payment.amount,
-      method: payment.method,
-      methodLabel: paymentMethodLabels[payment.method]
-    },
-    occurredAt: payment.paidAt
   }, executor)
 }
 
@@ -702,29 +675,11 @@ export async function createAndPayDocumentRecord(
 
       await createDocumentCreatedEvent(tx, createdDocument)
 
-      const now = new Date().toISOString()
-      const paymentRows = await tx.insert(payments).values({
-        customerId: createdDocument.customerId,
-        documentId: createdDocument.id,
-        method: paymentInput.method,
+      const payment = await recordDocumentPayment(tx, createdDocument, {
+        ...paymentInput,
         status: 'paid',
-        amount: createdDocument.total,
-        paidAt: paymentInput.paidAt,
-        notes: normalizeOptionalText(paymentInput.notes),
-        createdAt: now,
-        updatedAt: now
-      }).returning()
-      const payment = paymentRows[0]
-
-      if (!payment) {
-        throw createError({
-          statusCode: 500,
-          statusMessage: 'Could not create payment'
-        })
-      }
-
-      await syncDocumentStatus(createdDocument.id, tx)
-      await createPaymentRecordedEvent(tx, createdDocument, payment)
+        amount: createdDocument.total
+      })
 
       return {
         value: createdDocument.id,
@@ -936,73 +891,8 @@ export async function markDocumentAsPaid(id: number, input: DocumentPaymentInput
     key: `${id}:${idempotencyKey}`,
     payload: { documentId: id, payment: input },
     async execute(tx) {
-      const documentRows = await tx.select().from(documents).where(eq(documents.id, id)).limit(1)
-      const document = documentRows[0]
-
-      if (!document) {
-        throw createError({
-          statusCode: 404,
-          statusMessage: 'Document not found'
-        })
-      }
-
-      if (!isPayableDocumentType(document.type)) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'This document type cannot be paid directly'
-        })
-      }
-
-      if (document.status === 'cancelled') {
-        throw createError({
-          statusCode: 409,
-          statusMessage: 'Cancelled documents cannot receive payments',
-          data: { code: 'DOCUMENT_CANCELLED' }
-        })
-      }
-
-      const paidTotal = await getDocumentPaymentTotals(id, 'paid', tx)
-      const balance = Math.max(document.total - paidTotal, 0)
-
-      if (balance <= 0) {
-        throw createError({
-          statusCode: 409,
-          statusMessage: 'Document is already fully paid'
-        })
-      }
-
-      const amount = input.amount ?? balance
-
-      if (amount <= 0 || amount > balance) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'Payment amount must be positive and cannot exceed the remaining balance'
-        })
-      }
-
-      const now = new Date().toISOString()
-      const rows = await tx.insert(payments).values({
-        customerId: document.customerId,
-        documentId: document.id,
-        method: input.method,
-        status: 'paid',
-        amount,
-        paidAt: input.paidAt,
-        notes: normalizeOptionalText(input.notes),
-        createdAt: now,
-        updatedAt: now
-      }).returning()
-      const payment = rows[0]
-
-      if (!payment) {
-        throw createError({
-          statusCode: 500,
-          statusMessage: 'Could not create payment'
-        })
-      }
-
-      await syncDocumentStatus(id, tx)
-      await createPaymentRecordedEvent(tx, document, payment)
+      const document = await getPayablePaymentDocument(tx, id)
+      const payment = await recordDocumentPayment(tx, document, { ...input, status: 'paid' })
 
       return {
         value: document.id,

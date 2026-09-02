@@ -1,19 +1,17 @@
 import { and, asc, desc, eq, gte, lte, or, sql } from 'drizzle-orm'
-import { paymentMethodLabels } from '~~/shared/constants/pos'
 import { customers, documents, payments } from '~~/server/db/schema'
 import {
   canChangePaymentStatus,
   canDeletePayment,
-  canEditPayment,
-  evaluateDocumentPayment
+  canEditPayment
 } from '~~/shared/domain/payments/rules'
 import type { PaymentListItem, PaymentListResponse, PaymentRecord } from '~~/shared/types/pos'
-import { buildZonedDayRange, isPayableDocumentType } from '~~/shared/utils/pos'
-import type { PosDatabaseExecutor } from '../turso'
+import { buildZonedDayRange } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
 import { runIdempotentDocumentOperation } from '../idempotency'
-import { createTicketEvent, ensurePosSchema, normalizeOptionalText, syncDocumentStatus } from './core'
+import { ensurePosSchema, normalizeOptionalText, syncDocumentStatus } from './core'
 import { mapPayment } from './documents'
+import { assertPaymentFitsDocument, createPaymentRecordedEvent, getPayablePaymentDocument, recordDocumentPayment } from './payment-writes'
 
 function normalizePaymentDateFrom(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -25,78 +23,6 @@ function normalizePaymentDateTo(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
     ? buildZonedDayRange(value).end
     : value
-}
-
-async function assertPayablePaymentDocument(documentId: number, executor?: PosDatabaseExecutor) {
-  const db = executor || useDb()
-  const [document] = await db.select({
-    id: documents.id,
-    type: documents.type,
-    status: documents.status,
-    customerId: documents.customerId,
-    total: documents.total,
-    ticketId: documents.ticketId,
-    documentNumber: documents.documentNumber
-  }).from(documents).where(eq(documents.id, documentId)).limit(1)
-
-  if (!document) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Document not found'
-    })
-  }
-
-  if (!isPayableDocumentType(document.type)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Only customer orders and invoices can receive payments'
-    })
-  }
-
-  return document
-}
-
-async function assertPaymentFitsDocument(
-  document: Awaited<ReturnType<typeof assertPayablePaymentDocument>>,
-  amount: number,
-  executor: PosDatabaseExecutor,
-  excludedPaymentId?: number
-) {
-  const [summary] = await executor.select({
-    paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
-  })
-    .from(payments)
-    .where(and(
-      eq(payments.documentId, document.id),
-      excludedPaymentId ? sql`${payments.id} <> ${excludedPaymentId}` : undefined
-    ))
-
-  const result = evaluateDocumentPayment({
-    documentStatus: document.status,
-    documentTotal: document.total,
-    paidTotal: Number(summary?.paidTotal || 0),
-    amount
-  })
-
-  if (result.ok) {
-    return result
-  }
-
-  const messages = {
-    DOCUMENT_CANCELLED: 'Cancelled documents cannot receive payments',
-    DOCUMENT_ALREADY_PAID: 'Document is already fully paid',
-    PAYMENT_AMOUNT_INVALID: 'Payment amount must be a positive integer number of cents',
-    PAYMENT_EXCEEDS_BALANCE: 'Payment amount cannot exceed the remaining balance'
-  } satisfies Record<typeof result.code, string>
-
-  throw createError({
-    statusCode: result.code === 'DOCUMENT_CANCELLED' || result.code === 'DOCUMENT_ALREADY_PAID' ? 409 : 400,
-    statusMessage: messages[result.code],
-    data: {
-      code: result.code,
-      remainingBalance: result.balanceBeforePayment
-    }
-  })
 }
 
 function assertPositivePaymentAmount(amount: number) {
@@ -223,6 +149,7 @@ export async function createPaymentRecord(
     })
   }
 
+  const paymentStatus = input.status
   const db = useDb()
   const result = await runIdempotentDocumentOperation({
     database: db,
@@ -230,7 +157,7 @@ export async function createPaymentRecord(
     key: idempotencyKey,
     payload: input,
     async execute(tx) {
-      const document = await assertPayablePaymentDocument(input.documentId, tx)
+      const document = await getPayablePaymentDocument(tx, input.documentId)
 
       if (input.customerId !== null && input.customerId !== document.customerId) {
         throw createError({
@@ -240,49 +167,10 @@ export async function createPaymentRecord(
         })
       }
 
-      await assertPaymentFitsDocument(document, input.amount, tx)
-
-      const now = new Date().toISOString()
-      const rows = await tx.insert(payments).values({
-        customerId: document.customerId,
-        documentId: input.documentId,
-        method: input.method,
-        status: input.status,
-        amount: input.amount,
-        paidAt: input.paidAt,
-        notes: normalizeOptionalText(input.notes),
-        createdAt: now,
-        updatedAt: now
-      }).returning()
-      const createdPayment = rows[0]
-
-      if (!createdPayment) {
-        throw createError({
-          statusCode: 500,
-          statusMessage: 'Could not create payment'
-        })
-      }
-
-      await syncDocumentStatus(input.documentId, tx)
-
-      if (document.ticketId && input.status === 'paid') {
-        await createTicketEvent({
-          ticketId: document.ticketId,
-          kind: 'payment_recorded',
-          label: 'Paiement enregistré',
-          note: input.notes,
-          metadata: {
-            paymentId: createdPayment.id,
-            documentId: document.id,
-            documentNumber: document.documentNumber,
-            documentType: document.type,
-            amount: input.amount,
-            method: input.method,
-            methodLabel: paymentMethodLabels[input.method]
-          },
-          occurredAt: input.paidAt
-        }, tx)
-      }
+      const createdPayment = await recordDocumentPayment(tx, document, {
+        ...input,
+        status: paymentStatus
+      })
 
       return {
         value: createdPayment,
@@ -367,7 +255,7 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
       })
     }
 
-    const document = await assertPayablePaymentDocument(input.documentId, tx)
+    const document = await getPayablePaymentDocument(tx, input.documentId)
 
     if (input.customerId !== null && input.customerId !== document.customerId) {
       throw createError({
@@ -381,7 +269,7 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
       (existing.status === 'paid' && input.amount !== existing.amount)
       || (existing.status === 'pending' && (input.status === 'paid' || input.status === 'pending'))
     ) {
-      await assertPaymentFitsDocument(document, input.amount, tx, existing.id)
+      await assertPaymentFitsDocument(tx, document, input.amount, existing.id)
     }
 
     const rows = await tx.update(payments)
@@ -409,22 +297,7 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
     await syncDocumentStatus(updatedPayment.documentId, tx)
 
     if (existing.status === 'pending' && updatedPayment.status === 'paid' && document.ticketId) {
-      await createTicketEvent({
-        ticketId: document.ticketId,
-        kind: 'payment_recorded',
-        label: 'Paiement enregistré',
-        note: updatedPayment.notes,
-        metadata: {
-          paymentId: updatedPayment.id,
-          documentId: document.id,
-          documentNumber: document.documentNumber,
-          documentType: document.type,
-          amount: updatedPayment.amount,
-          method: updatedPayment.method,
-          methodLabel: paymentMethodLabels[updatedPayment.method]
-        },
-        occurredAt: updatedPayment.paidAt
-      }, tx)
+      await createPaymentRecordedEvent(tx, document, updatedPayment)
     }
 
     return updatedPayment

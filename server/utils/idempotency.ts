@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { createError, getHeader, type H3Event } from 'h3'
 import { documentImports } from '~~/server/db/schema'
 import { serializeIdempotencyPayload } from '~~/shared/lib/idempotency'
-import type { PosDatabase, PosDatabaseExecutor } from './turso'
+import type { PosDatabase, PosTransaction } from './turso'
 import { useDb } from './turso'
 
 export type OperationReceiptSource = Exclude<
@@ -79,12 +79,12 @@ export async function runIdempotentDocumentOperation<T>(options: {
   key: string
   payload: unknown
   database?: PosDatabase
-  execute: (executor: PosDatabaseExecutor) => Promise<{
+  execute: (executor: PosTransaction) => Promise<{
     value: T
     documentId: number
     resourceId: number
   }>
-  replay: (executor: PosDatabaseExecutor, receipt: {
+  replay: (executor: PosTransaction, receipt: {
     documentId: number
     resourceId: number
   }) => Promise<T>
