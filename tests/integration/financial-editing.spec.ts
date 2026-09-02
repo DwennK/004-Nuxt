@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -101,6 +101,8 @@ describe('editing recorded financial data', () => {
       )`
     ], 'write')
 
+    await client.executeMultiple(await readFile(new URL('../../docs/sql/counter-customer-additive.sql', import.meta.url), 'utf8'))
+
     ;({ updateDocumentRecord, markDocumentAsPaid, createAndPayDocumentRecord } = await import('../../server/utils/pos/documents'))
     ;({ updatePaymentRecord, createPaymentRecord } = await import('../../server/utils/pos/payments'))
   })
@@ -122,6 +124,7 @@ describe('editing recorded financial data', () => {
     const now = '2026-08-20T12:00:00.000Z'
     await client.batch([
       'DELETE FROM document_imports',
+      'DELETE FROM counter_customer',
       'DELETE FROM ticket_events',
       'DELETE FROM number_sequences',
       'DELETE FROM payments',
@@ -164,6 +167,58 @@ describe('editing recorded financial data', () => {
   })
 
   const paymentInput = { method: 'cash' as const, paidAt: '2026-08-20T12:30:00.000Z', notes: ' Encaissement ' }
+
+  const anonymousSale = {
+    type: 'invoice' as const, customerId: null, issuedAt: paymentInput.paidAt,
+    lines: [{ label: 'Article', quantity: 1, unitPrice: 1000, vatRate: 8.1 }]
+  }
+
+  it('adopts an existing walk-in customer outside the first page without changing legacy duplicates', async () => {
+    const now = paymentInput.paidAt
+    await client.batch(Array.from({ length: 75 }, (_, index) => ({
+      sql: `INSERT INTO customers (id, first_name, last_name, phone, email, created_at, updated_at) VALUES (?, 'A', 'A', '', '', ?, ?)`,
+      args: [index + 2, now, now]
+    })), 'write')
+    await client.batch([100, 101].map(id => ({
+      sql: `INSERT INTO customers (id, first_name, last_name, phone, email, created_at, updated_at) VALUES (?, 'Client', 'comptoir', '', '', ?, ?)`,
+      args: [id, now, now]
+    })), 'write')
+    const sale = await createAndPayDocumentRecord(anonymousSale, paymentInput, 'adopt-counter-key')
+    expect(sale.customerId).toBe(100)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM customers')).rows[0]?.n).toBe(78)
+    await client.execute(`UPDATE customers SET first_name = 'Passage', last_name = 'renommé' WHERE id = 100`)
+    const nextSale = await createAndPayDocumentRecord(anonymousSale, paymentInput, 'renamed-counter-key')
+    expect(nextSale.customerId).toBe(100)
+  })
+
+  it('creates one stable counter customer for concurrent distinct sales and an identical retry', async () => {
+    const [first, second] = await Promise.all([
+      createAndPayDocumentRecord(anonymousSale, paymentInput, 'counter-sale-key-a'),
+      createAndPayDocumentRecord(anonymousSale, paymentInput, 'counter-sale-key-b')
+    ])
+    const retry = await createAndPayDocumentRecord(anonymousSale, paymentInput, 'counter-sale-key-a')
+    expect(first.customerId).toBe(second.customerId)
+    expect(first.id).not.toBe(second.id)
+    expect(retry.id).toBe(first.id)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM customers')).rows[0]?.n).toBe(2)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM counter_customer')).rows[0]?.n).toBe(1)
+  })
+
+  it('rolls back the new counter identity together with a failed sale', async () => {
+    await client.execute(`CREATE TRIGGER fail_sale_payment BEFORE INSERT ON payments BEGIN SELECT RAISE(ABORT, 'payment unavailable'); END`)
+    try {
+      await expect(createAndPayDocumentRecord(anonymousSale, paymentInput, 'counter-rollback-key')).rejects.toMatchObject({
+        cause: { message: expect.stringContaining('payment unavailable') }
+      })
+      expect((await client.execute('SELECT COUNT(*) AS n FROM customers')).rows[0]?.n).toBe(1)
+      expect((await client.execute('SELECT COUNT(*) AS n FROM counter_customer')).rows[0]?.n).toBe(0)
+      expect((await client.execute('SELECT COUNT(*) AS n FROM documents')).rows[0]?.n).toBe(1)
+      expect((await client.execute('SELECT COUNT(*) AS n FROM document_imports')).rows[0]?.n).toBe(0)
+    } finally {
+      await client.execute('DROP TRIGGER fail_sale_payment')
+    }
+    await expect(createAndPayDocumentRecord(anonymousSale, paymentInput, 'counter-rollback-key')).resolves.toMatchObject({ status: 'paid' })
+  })
 
   async function prepareUnpaidTicketDocument() {
     await client.batch([

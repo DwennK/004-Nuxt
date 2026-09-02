@@ -316,29 +316,6 @@ async function handleBarcodeScan(value: string) {
   }
 }
 
-async function ensureCounterCustomer() {
-  const existing = customerPool.value.find((customer) => {
-    return customer.displayName === 'Client comptoir'
-      && !customer.phone
-      && !customer.email
-  })
-
-  if (existing) {
-    return existing.id
-  }
-
-  const created = await $fetch<CustomerRecord>('/api/customers', {
-    method: 'POST',
-    body: {
-      displayName: 'Client comptoir',
-      notes: 'Client créé automatiquement pour les ventes rapides sans client nominatif.'
-    }
-  })
-
-  customerPool.value = [...customerPool.value, created]
-  return created.id
-}
-
 function resetSaleState() {
   resetSearch()
   lines.value = []
@@ -411,7 +388,7 @@ async function completeSale(method: PaymentMethod) {
   isSaving.value = method
 
   try {
-    const customerId = selectedCustomerId.value || await ensureCounterCustomer()
+    const customerId = selectedCustomerId.value
     const attempt = saleMutation.getAttempt('complete-sale', {
       customerId,
       method,

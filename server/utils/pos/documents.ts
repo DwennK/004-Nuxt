@@ -33,6 +33,7 @@ import {
   normalizeOptionalText
 } from './core'
 import { getPayablePaymentDocument, recordDocumentPayment } from './payment-writes'
+import { resolveCounterCustomer } from './counter-customer'
 
 export function mapDocument(row: typeof documents.$inferSelect): DocumentRecord {
   return {
@@ -628,7 +629,7 @@ export async function createDocumentRecord(input: DocumentWriteInput, idempotenc
 }
 
 export async function createAndPayDocumentRecord(
-  input: DocumentWriteInput,
+  input: Omit<DocumentWriteInput, 'customerId'> & { customerId: number | null },
   paymentInput: Omit<DocumentPaymentInput, 'amount'>,
   idempotencyKey: string
 ) {
@@ -639,6 +640,10 @@ export async function createAndPayDocumentRecord(
       statusCode: 400,
       statusMessage: 'Only customer orders and invoices can be created and paid'
     })
+  }
+
+  if (input.customerId === null && input.ticketId) {
+    throw createError({ statusCode: 400, statusMessage: 'A ticket document must retain its customer' })
   }
 
   const totals = calculateDocumentTotals(input.lines)
@@ -659,17 +664,19 @@ export async function createAndPayDocumentRecord(
     key: idempotencyKey,
     payload: { document: input, payment: paymentInput },
     async execute(tx) {
+      const customerId = input.customerId ?? await resolveCounterCustomer(tx)
       if (input.ticketId) {
         await assertTicketDocumentCreationAllowed(tx, {
           ticketId: input.ticketId,
           documentType: input.type,
-          customerId: input.customerId
+          customerId
         })
       }
 
       const documentNumber = await generateDocumentNumber(input.type, tx)
       const createdDocument = await insertDocumentWithLines(tx, {
         ...input,
+        customerId,
         status: 'issued'
       }, documentNumber)
 

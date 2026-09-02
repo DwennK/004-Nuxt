@@ -178,7 +178,11 @@ export const markDocumentPaidSchema = z.object({
 
 export const createAndPayDocumentSchema = z.object({
   document: documentInputSchema.omit({ status: true }).extend({
-    type: z.enum(payableDocumentTypes)
+    type: z.enum(payableDocumentTypes),
+    customerId: z.coerce.number().int().positive().nullable()
+  }).refine(value => value.customerId !== null || !value.ticketId, {
+    message: 'Un document lié à un ticket doit conserver son client',
+    path: ['customerId']
   }),
   payment: markDocumentPaidSchema.omit({ amount: true })
 })

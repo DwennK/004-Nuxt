@@ -11,6 +11,19 @@ import { postalCodeLookupQuerySchema } from '../../shared/validation/lookups'
 import { queryBooleanSchema } from '../../shared/validation/api'
 
 describe('commercial validation', () => {
+  it('requires an explicit nullable customer only on a ticketless quick sale', () => {
+    const document = {
+      type: 'invoice', customerId: null, issuedAt: '2026-09-02T12:00:00.000Z',
+      lines: [{ label: 'Article', quantity: 1, unitPrice: 1000, vatRate: 8.1 }]
+    }
+    const payment = { method: 'cash', paidAt: document.issuedAt }
+    expect(createAndPayDocumentSchema.parse({ document, payment }).document.customerId).toBeNull()
+    expect(createAndPayDocumentSchema.safeParse({ document: { ...document, customerId: undefined }, payment }).success).toBe(false)
+    expect(createAndPayDocumentSchema.safeParse({ document: { ...document, ticketId: 7 }, payment }).success).toBe(false)
+    expect(createAndPayDocumentSchema.safeParse({ document: { ...document, customerId: 1, ticketId: 7 }, payment }).success).toBe(true)
+    expect(documentInputSchema.safeParse(document).success).toBe(false)
+  })
+
   it('accepts negative TTC unit prices but keeps quantity positive', () => {
     expect(commercialLineInputSchema.parse({
       label: 'Remise commerciale',

@@ -30,6 +30,26 @@ to this branch.
 Receipts are inserted in the same database transaction as the financial
 mutation. A rollback therefore leaves neither business rows nor a receipt.
 
+## Quick-sale walk-in customer
+
+`POST /api/sales/create-and-pay` accepts an explicit `document.customerId: null`
+for a sale without a named customer or ticket. Existing numeric customer IDs
+keep their meaning; omitting the field or using null with a ticket is rejected.
+Keep null in the retry payload: the server resolves the customer only inside
+the idempotent financial transaction, together with the invoice and payment.
+
+The singleton `counter_customer` row pins the selected customer ID even if the
+customer's name changes. First use adopts the oldest matching legacy walk-in
+customer across the database, or creates one. It never merges or removes
+existing duplicates. Its foreign key prevents deleting the assigned customer.
+
+Deployment requires the additive `counter_customer` table BEFORE switching the
+Worker. `docs/sql/counter-customer-additive.sql` is a local/rehearsal candidate,
+not a production migration. Follow `docs/database-migrations.md`: adopt the
+real baseline, generate/review the reconciliation migration, rehearse it and
+verify the target before an authorized remote apply. Leave the table in place
+on Worker rollback. Never create it implicitly in a production request.
+
 ## Payment list pagination
 
 `GET /api/payments` returns the shared pagination envelope:

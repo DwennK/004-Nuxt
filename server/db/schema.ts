@@ -22,6 +22,12 @@ export const customers = sqliteTable('customers', {
   phoneIdx: index('customers_phone_idx').on(table.phone)
 }))
 
+// One stable walk-in identity, independent of its editable customer name or notes.
+export const counterCustomer = sqliteTable('counter_customer', {
+  id: integer('id').primaryKey(),
+  customerId: integer('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' })
+})
+
 export const companySettings = sqliteTable('company_settings', {
   id: integer('id').primaryKey(),
   name: text('name').notNull(),
