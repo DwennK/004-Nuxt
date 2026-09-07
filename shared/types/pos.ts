@@ -69,10 +69,21 @@ export interface CustomerRecord {
   displayName: string
 }
 
+export interface CatalogMobileSentrix {
+  status: 'matched' | 'variant_required' | 'not_found' | 'unlinked'
+  sku: string | null
+  productId: string | null
+  url: string | null
+  note: string | null
+  source?: 'manual' | 'api'
+  verifiedAt?: string | null
+}
+
 export interface CatalogItemRecord {
   id: number
   name: string
   sku: string | null
+  mobileSentrix?: CatalogMobileSentrix | null
   type: CatalogItemType
   category: string
   brand: string | null
@@ -89,6 +100,7 @@ export interface CatalogItemRecord {
 export interface CatalogItemInput {
   name: string
   sku: string | null
+  mobileSentrix?: CatalogMobileSentrix | null
   type: CatalogItemType
   category: string
   brand: string | null

@@ -249,6 +249,7 @@ const editingItemForm = computed(() => {
   return {
     name: editingItem.value.name,
     sku: editingItem.value.sku,
+    mobileSentrix: editingItem.value.mobileSentrix,
     type: editingItem.value.type,
     category: editingItem.value.category,
     brand: editingItem.value.brand,
@@ -357,6 +358,17 @@ const repairColumns: TableColumn<CatalogItemRecord>[] = [
           'p',
           { class: 'truncate text-xs text-toned' },
           row.original.serviceKind || 'Intervention non précisée'
+        ),
+        h(
+          'p',
+          { class: 'truncate text-xs text-muted' },
+          row.original.mobileSentrix?.sku
+            ? `MobileSentrix · ${row.original.mobileSentrix.sku}`
+            : row.original.mobileSentrix?.status === 'variant_required'
+              ? 'MobileSentrix · Variante à choisir'
+              : row.original.mobileSentrix?.status === 'not_found'
+                ? 'MobileSentrix · Aucune correspondance'
+                : 'MobileSentrix · Non associée'
         )
       ])
   },

@@ -67,6 +67,7 @@ async function createPosTables() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         sku TEXT,
+        mobilesentrix_json TEXT,
         type TEXT NOT NULL,
         category TEXT NOT NULL DEFAULT 'Autre',
         brand TEXT,

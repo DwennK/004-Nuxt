@@ -68,9 +68,32 @@ export const customerInputSchema = z.object({
   }
 })
 
+export const catalogMobileSentrixSchema = z.object({
+  status: z.enum(['matched', 'variant_required', 'not_found', 'unlinked']),
+  sku: z.string().trim().min(1).max(128).nullable(),
+  productId: z.string().trim().regex(/^\d+$/).nullable(),
+  url: z.string().url().refine((value) => {
+    try {
+      const url = new URL(value)
+      return url.protocol === 'https:' && ['www.mobilesentrix.eu', 'www.mobilesentrix.com'].includes(url.hostname)
+        && !url.username && !url.password && !url.port
+    } catch {
+      return false
+    }
+  }, 'Utilisez une fiche HTTPS MobileSentrix (.com ou .eu).').nullable(),
+  note: z.string().trim().max(500).nullable(),
+  source: z.enum(['manual', 'api']).optional(),
+  verifiedAt: z.string().datetime().nullable().optional()
+}).superRefine((value, ctx) => {
+  if (value.status === 'matched' ? !value.sku : Boolean(value.sku || value.productId || value.url)) {
+    ctx.addIssue({ code: 'custom', path: ['sku'], message: 'Une référence précise exige un SKU ; les autres états ne doivent pas désigner une variante.' })
+  }
+})
+
 export const catalogItemInputSchema = z.object({
   name: z.string().trim().min(1, 'Le nom est obligatoire'),
   sku: optionalText,
+  mobileSentrix: catalogMobileSentrixSchema.nullable().optional(),
   type: z.enum(catalogItemTypes),
   category: z.string().trim().min(1, 'La catégorie est obligatoire'),
   brand: optionalText,

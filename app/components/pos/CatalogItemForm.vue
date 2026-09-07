@@ -9,12 +9,14 @@ import {
   catalogServiceCategories,
   catalogServiceKindSuggestions
 } from '~~/shared/constants/pos'
-import type { CatalogItemInput } from '~~/shared/types/pos'
+import type { CatalogItemInput, CatalogMobileSentrix } from '~~/shared/types/pos'
+import { catalogMobileSentrixSchema } from '~~/shared/validation/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
 
 type FormState = {
   name: string
   sku: string
+  mobileSentrix: CatalogMobileSentrix
   type: (typeof catalogItemTypes)[number]
   category: string
   brand: string
@@ -49,6 +51,7 @@ const emit = defineEmits<{
 const schema = z.object({
   name: z.string().trim().min(1, 'Le nom est obligatoire'),
   sku: z.string().optional().default(''),
+  mobileSentrix: catalogMobileSentrixSchema,
   type: z.enum(catalogItemTypes),
   category: z.string().trim().min(1, 'La catégorie est obligatoire'),
   brand: z.string().optional().default(''),
@@ -80,6 +83,7 @@ const typeItems = catalogItemTypes.map(type => ({
 const state = reactive<FormState>({
   name: '',
   sku: '',
+  mobileSentrix: emptyMobileSentrix(),
   type: 'product',
   category: 'Autre',
   brand: '',
@@ -94,6 +98,7 @@ const state = reactive<FormState>({
 watchEffect(() => {
   state.name = props.initialValue.name || ''
   state.sku = props.initialValue.sku || ''
+  state.mobileSentrix = { ...(props.initialValue.mobileSentrix || emptyMobileSentrix()) }
   state.type = props.initialValue.type || 'product'
   state.category = props.initialValue.category
     || (state.type === 'repair' ? 'iPhone' : state.type === 'service' ? 'Diagnostic' : 'Autre')
@@ -107,6 +112,24 @@ watchEffect(() => {
 })
 
 const isRepair = computed(() => state.type === 'repair')
+const mobileSentrixStatuses = [
+  { label: 'Non associée', value: 'unlinked' },
+  { label: 'Référence sélectionnée', value: 'matched' },
+  { label: 'Variante à choisir', value: 'variant_required' },
+  { label: 'Aucune correspondance', value: 'not_found' }
+]
+
+function emptyMobileSentrix(): CatalogMobileSentrix {
+  return { status: 'unlinked', sku: null, productId: null, url: null, note: null }
+}
+
+watch(() => state.mobileSentrix.status, (status) => {
+  if (status !== 'matched') {
+    state.mobileSentrix.sku = null
+    state.mobileSentrix.productId = null
+    state.mobileSentrix.url = null
+  }
+})
 const isService = computed(() => state.type === 'service')
 const isCatalogService = computed(() => state.type === 'service' || state.type === 'repair')
 const preview = computed(() => formatCurrency(Math.round((state.defaultPrice || 0) * 100)))
@@ -177,6 +200,9 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
   emit('save', {
     name: event.data.name.trim(),
     sku: event.data.sku.trim() || null,
+    ...(isRepairType && (props.initialValue.mobileSentrix || event.data.mobileSentrix.status !== 'unlinked' || event.data.mobileSentrix.note)
+      ? { mobileSentrix: event.data.mobileSentrix }
+      : {}),
     type: event.data.type,
     category: event.data.category.trim(),
     brand: isRepairType ? (event.data.brand.trim() || null) : null,
@@ -480,6 +506,63 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         <USwitch v-model="state.isActive" label="Actif et vendable" />
       </UFormField>
     </template>
+
+    <section v-if="isRepair" class="space-y-3 rounded-lg border border-default p-3" aria-label="Pièce MobileSentrix">
+      <div class="flex items-center justify-between gap-2">
+        <h3 class="text-sm font-semibold text-highlighted">
+          Pièce MobileSentrix
+        </h3>
+        <UButton
+          type="button"
+          label="Effacer"
+          color="neutral"
+          variant="ghost"
+          size="xs"
+          @click="state.mobileSentrix = emptyMobileSentrix()"
+        />
+      </div>
+      <UFormField label="Correspondance" name="mobileSentrix.status">
+        <USelect v-model="state.mobileSentrix.status" :items="mobileSentrixStatuses" class="w-full" />
+      </UFormField>
+      <template v-if="state.mobileSentrix.status === 'matched'">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <UFormField label="SKU fournisseur" name="mobileSentrix.sku" required>
+            <UInput :model-value="state.mobileSentrix.sku || undefined" class="w-full" @update:model-value="state.mobileSentrix.sku = $event || null" />
+          </UFormField>
+          <UFormField label="Identifiant produit" name="mobileSentrix.productId">
+            <UInput :model-value="state.mobileSentrix.productId || undefined" class="w-full" @update:model-value="state.mobileSentrix.productId = $event || null" />
+          </UFormField>
+        </div>
+        <UFormField label="Fiche produit" name="mobileSentrix.url">
+          <UInput
+            :model-value="state.mobileSentrix.url || undefined"
+            placeholder="https://www.mobilesentrix.com/…"
+            class="w-full"
+            @update:model-value="state.mobileSentrix.url = $event || null"
+          />
+        </UFormField>
+        <UButton
+          v-if="catalogMobileSentrixSchema.safeParse(state.mobileSentrix).success && state.mobileSentrix.url"
+          :to="state.mobileSentrix.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          label="Ouvrir la pièce"
+          icon="i-lucide-external-link"
+          color="neutral"
+          variant="link"
+          size="xs"
+        />
+      </template>
+      <UFormField label="Note / variante à choisir" name="mobileSentrix.note">
+        <UInput
+          :model-value="state.mobileSentrix.note || undefined"
+          :maxlength="500"
+          placeholder="Couleur, cadre, compatibilité Europe…"
+          class="w-full"
+          @update:model-value="state.mobileSentrix.note = $event || null"
+        />
+      </UFormField>
+    </section>
 
     <PosFormFeedback :saving="props.saving" :error="props.saveError" />
 

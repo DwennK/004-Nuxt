@@ -5,6 +5,7 @@ import type { CatalogItemInput, CatalogItemListResponse, CatalogItemRecord, Cata
 import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
 import { normalizeOptionalText, normalizeRequiredText } from '~~/shared/lib/text'
+import { catalogMobileSentrixSchema } from '~~/shared/validation/pos'
 
 type ListCatalogItemsOptions = {
   search?: string
@@ -13,6 +14,31 @@ type ListCatalogItemsOptions = {
   category?: string
   page?: number
   pageSize?: number
+}
+
+function parseMobileSentrix(value: string | null) {
+  if (!value) return null
+  try {
+    const result = catalogMobileSentrixSchema.safeParse(JSON.parse(value))
+    return result.success ? result.data : null
+  } catch {
+    return null
+  }
+}
+
+function mobileSentrixUpdate(input: CatalogItemInput, previous?: CatalogItemRecord['mobileSentrix']) {
+  if (input.mobileSentrix === undefined) return {}
+  const value = input.mobileSentrix
+  const fields = ['status', 'sku', 'productId', 'url', 'note'] as const
+  if (value && previous && fields.every(key => value[key] === previous[key])) return {}
+  // Keep an explicit manual removal so future automatic matching cannot restore it.
+  return {
+    mobileSentrixJson: JSON.stringify({
+      ...(value || { status: 'unlinked', sku: null, productId: null, url: null, note: null }),
+      source: 'manual',
+      verifiedAt: null
+    })
+  }
 }
 
 function normalizeKeywords(value: string[] | null | undefined) {
@@ -69,6 +95,7 @@ function mapCatalogItem(row: typeof catalogItems.$inferSelect): CatalogItemRecor
     id: row.id,
     name: row.name,
     sku: row.sku,
+    mobileSentrix: parseMobileSentrix(row.mobileSentrixJson),
     type: row.type,
     category: row.category,
     brand: row.brand,
@@ -96,6 +123,7 @@ export async function listCatalogItems(options: ListCatalogItemsOptions = {}): P
   const searchableColumns = [
     sql`lower(${catalogItems.name})`,
     sql`lower(coalesce(${catalogItems.sku}, ''))`,
+    sql`lower(coalesce(json_extract(${catalogItems.mobileSentrixJson}, '$.sku'), ''))`,
     sql`lower(${catalogItems.type})`,
     sql`lower(${catalogItems.category})`,
     sql`lower(coalesce(${catalogItems.brand}, ''))`,
@@ -173,6 +201,7 @@ export async function createCatalogItem(input: CatalogItemInput) {
   const normalized = normalizeCatalogItemInput(input)
   const rows = await db.insert(catalogItems).values({
     ...normalized,
+    ...mobileSentrixUpdate(input),
     createdAt: now,
     updatedAt: now
   }).returning()
@@ -185,9 +214,11 @@ export async function updateCatalogItem(id: number, input: CatalogItemInput) {
 
   const db = useDb()
   const normalized = normalizeCatalogItemInput(input)
+  const current = input.mobileSentrix === undefined ? null : await getCatalogItemById(id)
   const rows = await db.update(catalogItems)
     .set({
       ...normalized,
+      ...mobileSentrixUpdate(input, current?.mobileSentrix),
       updatedAt: new Date().toISOString()
     })
     .where(eq(catalogItems.id, id))
