@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import '~/assets/css/thermal-print.css'
 import { ticketStatusLabels, ticketTypeLabels } from '~~/shared/constants/pos'
 import type { TicketDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
-import { supportsTicketPrintProfile } from '~~/shared/utils/print'
+import { printProfileLabels, supportsTicketPrintProfile } from '~~/shared/utils/print'
 import { formatDateTime } from '~~/shared/utils/pos'
 
 definePageMeta({
@@ -83,12 +84,12 @@ function printTicket() {
 </script>
 
 <template>
-  <div class="print-preview min-h-screen bg-muted/20 text-default">
+  <div class="print-preview print-preview--thermal min-h-screen bg-muted/20 text-default">
     <div class="print-toolbar border-b border-default bg-default/95 backdrop-blur print:hidden">
       <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div>
           <p class="text-xs uppercase tracking-[0.24em] text-toned">
-            Ticket atelier · Thermique POS-58
+            Ticket atelier · {{ printProfileLabels.thermal }}
           </p>
           <h1 class="text-lg font-semibold text-highlighted">
             {{ ticket?.ticketNumber || 'Ticket atelier' }}
@@ -115,19 +116,19 @@ function printTicket() {
     <main class="mx-auto flex max-w-5xl justify-center px-3 py-4 sm:px-6 sm:py-6 print:max-w-none print:px-0 print:py-0">
       <article
         v-if="ticket && company && canRenderThermal"
-        class="ticket-sheet bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:shadow-none print:ring-0"
+        class="thermal-sheet bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:shadow-none print:ring-0"
       >
-        <header class="ticket-header">
-          <div class="ticket-brand-row">
-            <div v-if="company.logoDataUrl" class="ticket-logo">
+        <header class="thermal-header">
+          <div class="thermal-brand-row">
+            <div v-if="company.logoDataUrl" class="thermal-logo">
               <img :src="company.logoDataUrl" :alt="company.name" class="max-h-full max-w-full object-contain">
             </div>
 
-            <div class="ticket-brand-copy">
-              <p class="ticket-kicker">
+            <div class="thermal-brand-copy">
+              <p class="thermal-kicker">
                 Réception atelier
               </p>
-              <h2 class="ticket-company">
+              <h2 class="thermal-company">
                 {{ company.name }}
               </h2>
               <p v-for="line in companyAddress" :key="`company-${line}`">
@@ -139,20 +140,20 @@ function printTicket() {
             </div>
           </div>
 
-          <div class="ticket-divider" />
+          <div class="thermal-divider" />
 
-          <div class="ticket-summary-grid">
+          <div class="thermal-meta">
             <div>
-              <p class="ticket-kicker">
+              <p class="thermal-kicker">
                 Ticket
               </p>
-              <p class="ticket-strong">
+              <p class="thermal-reference">
                 {{ ticket.ticketNumber }}
               </p>
               <p>{{ ticketTypeLabels[ticket.type] }}</p>
             </div>
 
-            <div class="ticket-summary-right">
+            <div class="thermal-meta-right">
               <p>{{ formatDateTime(ticket.openedAt) }}</p>
               <p>{{ ticketStatusLabels[ticket.status] }}</p>
             </div>
@@ -161,11 +162,11 @@ function printTicket() {
 
         <PosRecordLookupQr :id="id" type="tickets" compact />
 
-        <section class="ticket-block">
-          <p class="ticket-kicker">
+        <section class="thermal-block">
+          <p class="thermal-kicker">
             Client
           </p>
-          <p class="ticket-strong">
+          <p class="thermal-strong">
             {{ ticket.customer.displayName }}
           </p>
           <p v-if="ticket.customer.phone">
@@ -176,11 +177,11 @@ function printTicket() {
           </p>
         </section>
 
-        <section class="ticket-block">
-          <p class="ticket-kicker">
+        <section class="thermal-block">
+          <p class="thermal-kicker">
             Appareil
           </p>
-          <p class="ticket-strong">
+          <p class="thermal-strong">
             {{ deviceLabel }}
           </p>
           <p>
@@ -188,13 +189,13 @@ function printTicket() {
           </p>
         </section>
 
-        <section v-if="hasCodesSection" class="ticket-block ticket-codes">
-          <p class="ticket-kicker">
+        <section v-if="hasCodesSection" class="thermal-block">
+          <p class="thermal-kicker">
             Codes
           </p>
 
           <div v-if="ticket.accessCode" class="ticket-code-row">
-            <p class="ticket-code-label">
+            <p class="thermal-kicker">
               Déverrouillage
             </p>
             <div v-if="isAccessPattern" class="ticket-pattern">
@@ -214,7 +215,7 @@ function printTicket() {
                       :cx="20 + ((point - 1) % 3) * 30"
                       :cy="20 + Math.floor((point - 1) / 3) * 30"
                       r="4"
-                      fill="#0f172a"
+                      fill="#000"
                     />
                     <text
                       :x="20 + ((point - 1) % 3) * 30"
@@ -238,7 +239,7 @@ function printTicket() {
           </div>
 
           <div v-if="ticket.simCode" class="ticket-code-row">
-            <p class="ticket-code-label">
+            <p class="thermal-kicker">
               SIM (PIN/PUK)
             </p>
             <p class="ticket-code-value">
@@ -247,8 +248,8 @@ function printTicket() {
           </div>
         </section>
 
-        <section class="ticket-block">
-          <p class="ticket-kicker">
+        <section class="thermal-block">
+          <p class="thermal-kicker">
             Suivi
           </p>
           <p>
@@ -259,7 +260,7 @@ function printTicket() {
           </p>
         </section>
 
-        <footer class="ticket-footer">
+        <footer class="thermal-footer">
           <p>
             Présentez ce ticket lors du retrait ou du suivi en magasin.
           </p>
@@ -280,185 +281,37 @@ function printTicket() {
 </template>
 
 <style>
-body {
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
-}
-
-.ticket-sheet {
-  box-sizing: border-box;
-  width: 48mm;
-  max-width: 48mm;
-  padding: 2mm 1.8mm 3mm;
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 12.5px;
-  line-height: 1.28;
-  font-weight: 600;
-  color: #000;
-  font-variant-numeric: tabular-nums;
-}
-
-.ticket-header {
-  border-bottom: 0.35mm solid #000;
-  padding-bottom: 2mm;
-}
-
-.ticket-brand-row {
-  display: flex;
-  gap: 2mm;
-  align-items: flex-start;
-}
-
-.ticket-logo {
-  width: 10mm;
-  height: 10mm;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0.25mm solid #000;
-  border-radius: 0;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.ticket-kicker {
-  margin: 0 0 0.8mm;
-  font-size: 8.5px;
-  line-height: 1.15;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #000;
-  font-weight: 800;
-}
-
-.ticket-company {
-  margin: 0 0 1mm;
-  font-size: 16px;
-  line-height: 1.05;
-  font-weight: 900;
-  color: #000;
-}
-
-.ticket-brand-copy p,
-.ticket-block p,
-.ticket-footer p,
-.ticket-summary-grid p {
-  margin: 0 0 1mm;
-}
-
-.ticket-divider {
-  margin-block: 2mm 1.6mm;
-  border-top: 0.35mm solid #000;
-}
-
-.ticket-summary-grid {
-  display: flex;
-  justify-content: space-between;
-  gap: 2mm;
-}
-
-.ticket-summary-right {
-  text-align: right;
-}
-
-.ticket-strong {
-  font-weight: 900;
-  color: #000;
-}
-
-.ticket-block {
-  padding-block: 2.2mm;
-  border-bottom: 0.35mm solid #000;
-}
-
-.ticket-codes {
-  background: #fff;
-  border-radius: 0;
-  padding-inline: 0;
-}
-
 .ticket-code-row {
-  display: block;
-  padding-block: 1.4mm;
+  padding-block: 1.5mm;
+  break-inside: avoid;
 }
 
 .ticket-code-row + .ticket-code-row {
-  border-top: 0.3mm solid #000;
-}
-
-.ticket-code-label {
-  margin-bottom: 0.8mm;
-  font-size: 9px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: #000;
-  font-weight: 800;
+  border-top: 0.125mm solid #000;
 }
 
 .ticket-code-value {
-  font-size: 17px;
-  line-height: 1.1;
-  font-weight: 900;
-  color: #000;
-  letter-spacing: 0.03em;
-  font-variant-numeric: tabular-nums;
+  font-size: 14pt;
+  line-height: 1.2;
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
 .ticket-pattern {
   display: flex;
   align-items: center;
-  gap: 2mm;
+  gap: 3mm;
+  break-inside: avoid;
 }
 
 .ticket-pattern-svg {
-  width: 20mm;
-  height: 20mm;
+  width: 24mm;
+  height: 24mm;
   flex-shrink: 0;
 }
 
 .ticket-pattern-sequence {
-  font-size: 13px;
-  font-weight: 900;
-  color: #000;
-  letter-spacing: 0.03em;
-}
-
-.ticket-footer {
-  padding-top: 2.4mm;
-  text-align: center;
-  font-size: 11.5px;
-  color: #000;
-  font-weight: 600;
-}
-
-@media print {
-  html,
-  body {
-    background: #fff;
-    margin: 0;
-  }
-
-  .print-preview {
-    background: #fff !important;
-    min-height: 0 !important;
-  }
-
-  .print-preview > main {
-    display: block !important;
-    max-width: none !important;
-    padding: 0 !important;
-  }
-
-  .ticket-sheet {
-    margin: 0;
-    box-shadow: none;
-  }
-
-  .ticket-header,
-  .ticket-block,
-  .ticket-footer {
-    break-inside: avoid;
-  }
+  font-size: 12pt;
+  font-weight: 700;
 }
 </style>

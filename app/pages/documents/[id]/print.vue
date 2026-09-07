@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import QRCode from 'qrcode'
+import '~/assets/css/thermal-print.css'
 import { documentStatusLabels, documentTypeLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail, PrintProfile } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
@@ -436,7 +437,7 @@ useHead(() => ({
 
       <article
         v-else-if="document && company && canRenderSelectedProfile && profile === 'thermal'"
-        class="sheet sheet--thermal thermal-sheet bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:shadow-none print:ring-0"
+        class="sheet thermal-sheet bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:shadow-none print:ring-0"
       >
         <header class="thermal-header">
           <div class="thermal-brand-row">
@@ -467,7 +468,9 @@ useHead(() => ({
               <p class="thermal-strong">
                 {{ documentTitle }}
               </p>
-              <p>{{ document.documentNumber }}</p>
+              <p class="thermal-reference">
+                {{ document.documentNumber }}
+              </p>
             </div>
 
             <div class="thermal-meta-right">
@@ -500,9 +503,9 @@ useHead(() => ({
           </p>
         </section>
 
-        <section class="thermal-block">
+        <section class="thermal-block thermal-lines">
           <p class="thermal-kicker">
-            Lignes
+            Articles et prestations
           </p>
 
           <div v-for="line in document.lines" :key="line.id" class="thermal-line">
@@ -602,16 +605,6 @@ body {
   line-height: 1.25;
 }
 
-.sheet--thermal {
-  box-sizing: border-box;
-  width: 48mm;
-  max-width: 48mm;
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 12.5px;
-  line-height: 1.28;
-  font-weight: 600;
-}
-
 .invoice-header,
 .invoice-lines,
 .invoice-summary,
@@ -658,22 +651,13 @@ body {
 
 .invoice-kicker,
 .invoice-label,
-.qr-bill-label,
-.thermal-kicker {
+.qr-bill-label {
   margin: 0 0 1mm;
   font-size: 7.3px;
   line-height: 1.2;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: #607393;
-}
-
-.thermal-kicker {
-  font-size: 8.5px;
-  line-height: 1.15;
-  letter-spacing: 0.04em;
-  color: #000;
-  font-weight: 800;
 }
 
 .invoice-company {
@@ -756,15 +740,9 @@ body {
   overflow: hidden;
 }
 
-.invoice-strong,
-.thermal-strong {
+.invoice-strong {
   font-weight: 700;
   color: #0f172a;
-}
-
-.thermal-strong {
-  font-weight: 900;
-  color: #000;
 }
 
 .invoice-lines {
@@ -1001,146 +979,6 @@ body {
   font-size: 9px;
 }
 
-.thermal-sheet {
-  padding: 2mm 1.8mm 3mm;
-  color: #000;
-}
-
-.thermal-header {
-  border-bottom: 0.35mm solid #000;
-  padding-bottom: 2mm;
-}
-
-.thermal-brand-row {
-  display: flex;
-  gap: 2mm;
-  align-items: flex-start;
-}
-
-.thermal-logo {
-  width: 10mm;
-  height: 10mm;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0.25mm solid #000;
-  border-radius: 0;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.thermal-brand-copy p,
-.thermal-meta p,
-.thermal-block p,
-.thermal-footer p {
-  margin: 0 0 1mm;
-}
-
-.thermal-company {
-  margin: 0 0 1mm;
-  font-size: 16px;
-  line-height: 1.05;
-  font-weight: 900;
-  color: #000;
-}
-
-.thermal-divider {
-  margin-block: 2mm 1.6mm;
-  border-top: 0.35mm solid #000;
-}
-
-.thermal-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 2mm;
-}
-
-.thermal-meta-right {
-  text-align: right;
-}
-
-.thermal-block {
-  padding-block: 2.2mm;
-  border-bottom: 0.35mm solid #000;
-}
-
-.thermal-line + .thermal-line {
-  margin-top: 2mm;
-  padding-top: 2mm;
-  border-top: 0.3mm solid #000;
-}
-
-.thermal-line-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1.5mm;
-}
-
-.thermal-line-label {
-  margin: 0;
-  font-weight: 800;
-  color: #000;
-  overflow-wrap: anywhere;
-}
-
-.thermal-line-total {
-  margin: 0;
-  font-weight: 900;
-  color: #000;
-  white-space: nowrap;
-}
-
-.thermal-line-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 2mm;
-  margin-top: 0.8mm;
-  font-size: 11px;
-  color: #000;
-  font-weight: 600;
-}
-
-.thermal-totals {
-  border-bottom: 0;
-}
-
-.thermal-total-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 2mm;
-  padding-block: 0.7mm;
-}
-
-.thermal-total-row--grand {
-  margin-top: 1mm;
-  padding-top: 1.5mm;
-  border-top: 0.45mm solid #000;
-  font-size: 14px;
-  color: #000;
-}
-
-.thermal-total-row strong {
-  color: #000;
-  font-weight: 900;
-}
-
-.thermal-note {
-  margin-top: 2.4mm;
-  padding-top: 2mm;
-  border-top: 0.3mm solid #000;
-  font-size: 11.5px;
-  color: #000;
-}
-
-.thermal-footer {
-  padding-top: 2.4mm;
-  text-align: center;
-  font-size: 11.5px;
-  color: #000;
-  font-weight: 600;
-}
-
 @media print {
   html,
   body {
@@ -1173,12 +1011,6 @@ body {
     max-width: none;
   }
 
-  .sheet--thermal {
-    width: 48mm;
-    max-width: 48mm;
-    margin: 0;
-  }
-
   .invoice-window-label {
     visibility: hidden;
   }
@@ -1189,11 +1021,7 @@ body {
   .invoice-footer,
   .qr-bill,
   .qr-bill-receipt,
-  .qr-bill-payment,
-  .thermal-header,
-  .thermal-block,
-  .thermal-line,
-  .thermal-footer {
+  .qr-bill-payment {
     break-inside: avoid;
   }
 }

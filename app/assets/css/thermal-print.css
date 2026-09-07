@@ -1,0 +1,229 @@
+/* Epson TM-T20IV: 80 mm roll, 72 mm printable width (576 dots at 203 dpi).
+   The preview includes paper margins; print leaves hardware margins to the driver. */
+.thermal-sheet {
+  box-sizing: border-box;
+  width: 80mm;
+  max-width: 80mm;
+  flex-shrink: 0;
+  padding: 3mm 4mm 4mm;
+  background: #fff;
+  color: #000;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10pt;
+  line-height: 1.3;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.thermal-sheet p {
+  margin: 0 0 1mm;
+}
+
+.thermal-header {
+  padding-bottom: 2.5mm;
+  border-bottom: 0.25mm solid #000;
+}
+
+.thermal-brand-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 3mm;
+}
+
+.thermal-brand-copy {
+  min-width: 0;
+}
+
+.thermal-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12mm;
+  height: 12mm;
+  flex-shrink: 0;
+}
+
+.thermal-company {
+  margin: 0 0 1.5mm;
+  font-size: 14pt;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.thermal-sheet .thermal-kicker {
+  margin-bottom: 1mm;
+  font-size: 9pt;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.thermal-strong {
+  font-weight: 700;
+}
+
+.thermal-reference {
+  font-size: 12pt;
+  font-weight: 700;
+}
+
+.thermal-divider {
+  margin-block: 2.5mm;
+  border-top: 0.125mm solid #000;
+}
+
+.thermal-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 3mm;
+}
+
+.thermal-meta-right {
+  text-align: right;
+  font-size: 9pt;
+}
+
+.thermal-block {
+  padding-block: 2.5mm;
+  border-bottom: 0.125mm solid #000;
+}
+
+.thermal-line {
+  padding-block: 1.5mm;
+}
+
+.thermal-line + .thermal-line {
+  border-top: 0.125mm solid #000;
+}
+
+.thermal-line-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: 3mm;
+}
+
+.thermal-line-total {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.thermal-line-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5mm 3mm;
+  font-size: 9pt;
+}
+
+.thermal-line-meta span:last-child {
+  margin-left: auto;
+  text-align: right;
+}
+
+.thermal-totals {
+  border-bottom: 0;
+}
+
+.thermal-total-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 3mm;
+  padding-block: 0.8mm;
+}
+
+.thermal-total-row strong {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+.thermal-total-row--grand {
+  margin-block: 1mm;
+  padding-block: 2mm;
+  border-block: 0.25mm solid #000;
+  font-size: 12pt;
+  font-weight: 700;
+}
+
+.thermal-total-row--grand strong {
+  font-weight: 700;
+}
+
+.thermal-note {
+  margin-top: 2.5mm;
+  padding-top: 2mm;
+  border-top: 0.125mm solid #000;
+}
+
+.thermal-footer {
+  padding-top: 2.5mm;
+  text-align: center;
+  font-size: 9pt;
+}
+
+.thermal-sheet .record-lookup--compact {
+  margin-top: 0;
+  border-bottom: 0.125mm solid #000;
+  font-size: 9pt;
+  font-weight: 400;
+}
+
+/* Allow a narrow screen to scroll the full-size paper without shrinking text. */
+@media screen {
+  .print-preview--thermal > main {
+    justify-content: safe center;
+    overflow-x: auto;
+  }
+}
+
+@media print {
+  .print-preview--thermal {
+    min-height: 0 !important;
+    background: #fff !important;
+  }
+
+  body:has(.print-preview--thermal) {
+    margin: 0;
+    background: #fff;
+  }
+
+  .print-preview--thermal .print-toolbar {
+    display: none !important;
+  }
+
+  .print-preview--thermal > main {
+    display: block !important;
+    max-width: none !important;
+    padding: 0 !important;
+    overflow: visible;
+  }
+
+  .print-preview--thermal .thermal-sheet {
+    width: 72mm;
+    max-width: 72mm;
+    margin: 0;
+    padding-inline: 0;
+    box-shadow: none;
+  }
+
+  .thermal-header,
+  .thermal-line,
+  .thermal-total-row,
+  .thermal-footer {
+    break-inside: avoid;
+  }
+
+  /* Containers may span pages; individual lines and QR codes stay together. */
+  .thermal-block {
+    break-inside: auto;
+    orphans: 2;
+    widows: 2;
+  }
+
+  .thermal-kicker {
+    break-after: avoid;
+  }
+}
