@@ -6,6 +6,8 @@ const props = withDefaults(defineProps<{
   customers: CustomerRecord[]
   catalogItems?: CatalogItemRecord[]
   initialValue?: DocumentInitialValue
+  saving?: boolean
+  saveError?: string | null
   submitLabel?: string
   formId?: string
   showSubmitButton?: boolean
@@ -62,6 +64,7 @@ watch(editor.isDirty, (value) => {
 defineExpose({ acceptSaved: editor.acceptSaved })
 
 function onSubmit() {
+  if (props.saving) return
   emit('save', editor.serialize())
 }
 
@@ -87,6 +90,8 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
   <UForm
     :id="resolvedFormId"
     :schema="schema"
+    :disabled="props.saving"
+    :aria-busy="props.saving"
     :state="state"
     class="min-w-0 space-y-4"
     @submit="onSubmit"
@@ -153,11 +158,14 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
           v-if="showSubmitButton"
           type="submit"
           icon="i-lucide-save"
-          :label="resolvedSubmitLabel"
+          :label="props.saving ? 'Enregistrement…' : resolvedSubmitLabel"
+          :loading="props.saving"
           class="shrink-0"
         />
       </div>
     </div>
+
+    <PosFormFeedback :saving="props.saving" :error="props.saveError" />
 
     <PosDocumentLinesEditor
       :editor="editor"
@@ -170,6 +178,8 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
       :customers="customers"
       :fixed-customer-id="fixedCustomerId"
       :form-id="resolvedFormId"
+      :saving="props.saving"
+      :save-error="props.saveError"
       :submit-label="resolvedSubmitLabel"
     />
   </UForm>

@@ -30,6 +30,8 @@ const props = withDefaults(defineProps<{
   formId?: string
   layout?: 'compact' | 'page' | 'intake'
   showSubmit?: boolean
+  saving?: boolean
+  saveError?: string | null
   submitLabel?: string
 }>(), {
   catalogItems: () => [],
@@ -327,6 +329,7 @@ watch(intakeQuery, (value) => {
 })
 
 function onSubmit(event: FormSubmitEvent<Schema>) {
+  if (props.saving) return
   const lines = lineEditor.serializeLines().filter((line) => {
     return line.catalogItemId !== null
       || Boolean(line.label.trim())
@@ -462,6 +465,8 @@ async function handleIntakeScan(value: string) {
   <UForm
     :id="formId"
     :schema="schema"
+    :disabled="props.saving"
+    :aria-busy="props.saving"
     :state="state"
     :class="props.layout === 'page' ? 'space-y-4' : props.layout === 'intake' ? 'space-y-4' : 'space-y-5'"
     @submit="onSubmit"
@@ -1016,8 +1021,15 @@ async function handleIntakeScan(value: string) {
       />
     </template>
 
+    <PosFormFeedback :saving="props.saving" :error="props.saveError" />
+
     <div v-if="props.showSubmit && props.layout !== 'intake'" class="flex justify-end">
-      <UButton type="submit" :label="props.submitLabel" icon="i-lucide-save" />
+      <UButton
+        type="submit"
+        :label="props.saving ? 'Enregistrement…' : props.submitLabel"
+        :loading="props.saving"
+        icon="i-lucide-save"
+      />
     </div>
   </UForm>
 

@@ -25,11 +25,13 @@ const route = useRoute()
 const router = useRouter()
 const confirmDelete = useConfirmDelete()
 const runApiAction = useApiAction()
+const { isSaving, saveError, save, clearSaveError } = useFormAction()
 const { can } = useCapabilities()
 
 const activeView = ref<CatalogView>('articles')
 const createOpen = ref(false)
 const editOpen = ref(false)
+watch([createOpen, editOpen], clearSaveError)
 const editingItem = ref<CatalogItemRecord | null>(null)
 const createType = ref<CatalogItemType>('product')
 
@@ -510,30 +512,30 @@ const serviceColumns: TableColumn<CatalogItemRecord>[] = [
 
 async function saveItem(payload: CatalogItemInput) {
   if (editingItem.value) {
-    const result = await runApiAction(
+    const result = await save(
       () => $fetch(`/api/catalog-items/${editingItem.value!.id}`, {
         method: 'PATCH',
         body: payload
       }),
-      { success: getCreateUpdateTitle(payload.type, 'updated'), errorTitle: 'Mise à jour impossible' }
+      { success: getCreateUpdateTitle(payload.type, 'updated'), errorTitle: 'Enregistrement impossible' }
     )
 
-    if (!result.ok) {
+    if (!result?.ok) {
       return
     }
 
     editOpen.value = false
     editingItem.value = null
   } else {
-    const result = await runApiAction(
+    const result = await save(
       () => $fetch('/api/catalog-items', {
         method: 'POST',
         body: payload
       }),
-      { success: getCreateUpdateTitle(payload.type, 'created'), errorTitle: 'Création impossible' }
+      { success: getCreateUpdateTitle(payload.type, 'created'), errorTitle: 'Enregistrement impossible' }
     )
 
-    if (!result.ok) {
+    if (!result?.ok) {
       return
     }
 
@@ -948,6 +950,8 @@ watch(editOpen, (open) => {
 
   <PosCatalogItemSlideover
     v-model:open="createOpen"
+    :saving="isSaving"
+    :save-error="saveError"
     :title="
       createType === 'repair'
         ? 'Nouvelle réparation'
@@ -975,6 +979,8 @@ watch(editOpen, (open) => {
 
   <PosCatalogItemSlideover
     v-model:open="editOpen"
+    :saving="isSaving"
+    :save-error="saveError"
     :title="
       editingItem?.type === 'repair'
         ? 'Modifier la réparation'

@@ -8,6 +8,7 @@ import { formatCurrency } from '~~/shared/utils/pos'
 const props = defineProps<{
   balanceDue: number
   loading?: boolean
+  saveError?: string | null
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -41,6 +42,7 @@ watchEffect(() => {
 })
 
 function onSubmit(event: FormSubmitEvent<Schema>) {
+  if (props.loading) return
   emit('save', {
     method: event.data.method,
     amount: Math.round((event.data.amount || 0) * 100),
@@ -53,6 +55,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
   <USlideover
     v-model:open="open"
     :content="focusReturn"
+    :dismissible="!props.loading"
+    :close="!props.loading"
     title="Enregistrer un paiement"
     description="Les paiements restent séparés du document pour permettre un reporting de caisse fiable."
     side="right"
@@ -62,6 +66,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       <UForm
         :schema="schema"
         :state="state"
+        :disabled="props.loading"
+        :aria-busy="props.loading"
         class="space-y-4"
         @submit="onSubmit"
       >
@@ -103,10 +109,12 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           />
         </UFormField>
 
+        <PosFormFeedback :saving="props.loading" :error="props.saveError" />
+
         <div class="flex justify-end">
           <UButton
             type="submit"
-            label="Enregistrer le paiement"
+            :label="props.loading ? 'Enregistrement…' : 'Enregistrer le paiement'"
             icon="i-lucide-wallet"
             :loading="props.loading"
             :disabled="props.loading"

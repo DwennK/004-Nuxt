@@ -7,6 +7,8 @@ const props = withDefaults(defineProps<{
   customers: CustomerRecord[]
   fixedCustomerId?: number | null
   formId: string
+  saving?: boolean
+  saveError?: string | null
   submitLabel?: string
 }>(), {
   fixedCustomerId: null,
@@ -25,6 +27,8 @@ const documentStatusItems = props.editor.documentStatusItems
   <USlideover
     v-model:open="open"
     :content="focusReturn"
+    :dismissible="!saving"
+    :close="!saving"
     title="Modifier le contexte"
     description="Type, statut, client, date et notes restent modifiables sans encombrer l’écran principal."
     side="right"
@@ -100,20 +104,25 @@ const documentStatusItems = props.editor.documentStatusItems
     </template>
 
     <template #footer>
-      <div class="flex items-center justify-end gap-2">
-        <UButton
-          type="button"
-          color="neutral"
-          variant="soft"
-          label="Fermer"
-          @click="open = false"
-        />
-        <UButton
-          :form="props.formId"
-          type="submit"
-          icon="i-lucide-save"
-          :label="props.submitLabel"
-        />
+      <div class="w-full space-y-3">
+        <PosFormFeedback :saving="saving" :error="saveError" />
+        <div class="flex items-center justify-end gap-2">
+          <UButton
+            type="button"
+            color="neutral"
+            variant="soft"
+            label="Fermer"
+            :disabled="saving"
+            @click="open = false"
+          />
+          <UButton
+            :form="props.formId"
+            type="submit"
+            icon="i-lucide-save"
+            :label="saving ? 'Enregistrement…' : props.submitLabel"
+            :loading="saving"
+          />
+        </div>
       </div>
     </template>
   </USlideover>

@@ -3,7 +3,7 @@ import { documentTypes, documentTypeLabels } from '~~/shared/constants/pos'
 import type { CustomerListResponse, DocumentDetail, DocumentStatus, DocumentType } from '~~/shared/types/pos'
 
 const route = useRoute()
-const toast = useToast()
+const { isSaving, saveError, save } = useFormAction()
 const documentMutation = useIdempotentMutation()
 const customerId = computed(() => Number(route.query.customerId || 0) || null)
 const ticketId = computed(() => Number(route.query.ticketId || 0) || null)
@@ -45,18 +45,13 @@ async function saveDocument(payload: {
   }>
 }) {
   const attempt = documentMutation.getAttempt('create-document', payload, () => payload)
-  const document = await $fetch<DocumentDetail>('/api/documents', {
+  const result = await save(() => $fetch<DocumentDetail>('/api/documents', {
     method: 'POST',
     headers: { 'Idempotency-Key': attempt.key },
     body: attempt.payload
-  })
-
-  toast.add({
-    title: 'Document créé',
-    color: 'success'
-  })
-
-  await navigateTo(`/documents/${document.id}`)
+  }), { success: 'Document créé' })
+  if (!result?.ok) return
+  await navigateTo(`/documents/${result.data.id}`)
   documentMutation.complete('create-document')
 }
 </script>
@@ -85,6 +80,8 @@ async function saveDocument(payload: {
         <PosDocumentEditor
           v-if="customers?.items"
           :customers="customers.items"
+          :saving="isSaving"
+          :save-error="saveError"
           :initial-value="initialDocumentValue"
           :allowed-types="allowedDocumentTypes"
           :fixed-customer-id="customerId"

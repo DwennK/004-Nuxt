@@ -9,6 +9,7 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const confirmDelete = useConfirmDelete()
 const runApiAction = useApiAction()
+const { isSaving, saveError, save, clearSaveError } = useFormAction()
 const { can } = useCapabilities()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
@@ -16,6 +17,7 @@ const search = ref('')
 const debouncedSearch = refDebounced(search, 250)
 const createOpen = ref(false)
 const editOpen = ref(false)
+watch([createOpen, editOpen], clearSaveError)
 const editingCustomer = ref<CustomerRecord | null>(null)
 const pagination = ref({
   pageIndex: 0,
@@ -91,30 +93,30 @@ const editingCustomerForm = computed(() => {
 
 async function saveCustomer(payload: CustomerFormValue) {
   if (editingCustomer.value) {
-    const result = await runApiAction(
+    const result = await save(
       () => $fetch(`/api/customers/${editingCustomer.value!.id}`, {
         method: 'PATCH',
         body: payload
       }),
-      { success: 'Client mis à jour', errorTitle: 'Mise à jour impossible' }
+      { success: 'Client mis à jour', errorTitle: 'Enregistrement impossible' }
     )
 
-    if (!result.ok) {
+    if (!result?.ok) {
       return
     }
 
     editOpen.value = false
     editingCustomer.value = null
   } else {
-    const result = await runApiAction(
+    const result = await save(
       () => $fetch('/api/customers', {
         method: 'POST',
         body: payload
       }),
-      { success: 'Client créé', errorTitle: 'Création impossible' }
+      { success: 'Client créé', errorTitle: 'Enregistrement impossible' }
     )
 
-    if (!result.ok) {
+    if (!result?.ok) {
       return
     }
 
@@ -385,6 +387,8 @@ const columns: TableColumn<CustomerRecord>[] = [
 
   <PosCustomerSlideover
     v-model:open="createOpen"
+    :saving="isSaving"
+    :save-error="saveError"
     title="Client rapide"
     description="Créez une fiche client réutilisable sans quitter la liste."
     submit-label="Créer le client"
@@ -393,6 +397,8 @@ const columns: TableColumn<CustomerRecord>[] = [
 
   <PosCustomerSlideover
     v-model:open="editOpen"
+    :saving="isSaving"
+    :save-error="saveError"
     title="Modifier le client"
     description="Mettez à jour les coordonnées sans quitter la liste opérateur."
     submit-label="Enregistrer les modifications"

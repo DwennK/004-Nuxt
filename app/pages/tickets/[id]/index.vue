@@ -53,11 +53,14 @@ const documentMutation = useIdempotentMutation()
 const id = computed(() => Number(route.params.id))
 
 const workflowOpen = ref(false)
+const { isSaving: actionSaving, saveError: actionError, save: saveAction, clearSaveError: clearActionError } = useFormAction()
+watch(workflowOpen, clearActionError)
 const paymentOpen = ref(false)
 const smsModalOpen = ref(false)
 const noteModalOpen = ref(false)
 const noteDraft = ref('')
 const noteSaving = ref(false)
+const noteError = ref<string | null>(null)
 const noteFocusReturn = usePosFocusReturn(noteModalOpen)
 const createdDocumentActionsOpen = ref(false)
 const selectedWorkflowAction = ref<TicketWorkflowAction | null>(null)
@@ -402,6 +405,7 @@ function openWorkflowAction(action: TicketWorkflowAction) {
 
 function openInternalNote() {
   noteDraft.value = ''
+  noteError.value = null
   noteModalOpen.value = true
 }
 
@@ -412,6 +416,7 @@ async function addInternalNote() {
     return
   }
 
+  noteError.value = null
   noteSaving.value = true
 
   try {
@@ -428,8 +433,9 @@ async function addInternalNote() {
       color: 'success'
     })
   } catch (error) {
+    noteError.value = getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.'
     toast.add({
-      title: 'Note impossible à enregistrer',
+      title: 'Enregistrement impossible',
       description: getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.',
       color: 'error'
     })
@@ -466,13 +472,14 @@ async function changeTicketStatus(status: TicketStatus, internalNotes?: string) 
     return
   }
 
-  await $fetch(`/api/tickets/${id.value}/status`, {
+  const result = await saveAction(() => $fetch(`/api/tickets/${id.value}/status`, {
     method: 'POST',
     body: {
       status,
-      internalNotes: internalNotes ?? ticket.value.internalNotes
+      internalNotes: internalNotes ?? ticket.value?.internalNotes
     }
-  })
+  }))
+  if (!result?.ok) return false
 
   toast.add({
     title: `Statut mis à jour · ${ticketStatusLabels[status]}`,
@@ -480,6 +487,7 @@ async function changeTicketStatus(status: TicketStatus, internalNotes?: string) 
   })
 
   await refreshTicket()
+  return true
 }
 
 async function handleWorkflowSubmit(payload: {
@@ -491,12 +499,13 @@ async function handleWorkflowSubmit(payload: {
   }
 
   if (payload.action.kind === 'close') {
-    await $fetch(`/api/tickets/${id.value}/close`, {
+    const result = await saveAction(() => $fetch(`/api/tickets/${id.value}/close`, {
       method: 'POST',
       body: {
         internalNotes: payload.internalNotes
       }
-    })
+    }))
+    if (!result?.ok) return
 
     toast.add({
       title: 'Ticket clôturé',
@@ -505,7 +514,8 @@ async function handleWorkflowSubmit(payload: {
 
     await refreshTicket()
   } else if (payload.action.targetStatus) {
-    await changeTicketStatus(payload.action.targetStatus, payload.internalNotes)
+    const changed = await changeTicketStatus(payload.action.targetStatus, payload.internalNotes)
+    if (!changed) return
   }
 
   workflowOpen.value = false
@@ -515,10 +525,12 @@ async function handleWorkflowSubmit(payload: {
 async function createQuote() {
   const scope = `ticket-document:${id.value}:quote`
   const attempt = documentMutation.getAttempt(scope, { ticketId: id.value, type: 'quote' }, () => null)
-  const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/quote`, {
+  const result = await saveAction(() => $fetch<DocumentDetail>(`/api/tickets/${id.value}/quote`, {
     method: 'POST',
     headers: { 'Idempotency-Key': attempt.key }
-  })
+  }))
+  if (!result?.ok) return false
+  const document = result.data
 
   toast.add({
     title: 'Devis créé',
@@ -534,10 +546,12 @@ async function createQuote() {
 async function createOrder() {
   const scope = `ticket-document:${id.value}:customer-order`
   const attempt = documentMutation.getAttempt(scope, { ticketId: id.value, type: 'customer_order' }, () => null)
-  const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/order`, {
+  const result = await saveAction(() => $fetch<DocumentDetail>(`/api/tickets/${id.value}/order`, {
     method: 'POST',
     headers: { 'Idempotency-Key': attempt.key }
-  })
+  }))
+  if (!result?.ok) return false
+  const document = result.data
 
   toast.add({
     title: 'Commande créée',
@@ -553,10 +567,12 @@ async function createOrder() {
 async function createInvoice() {
   const scope = `ticket-document:${id.value}:invoice`
   const attempt = documentMutation.getAttempt(scope, { ticketId: id.value, type: 'invoice' }, () => null)
-  const document = await $fetch<DocumentDetail>(`/api/tickets/${id.value}/invoice`, {
+  const result = await saveAction(() => $fetch<DocumentDetail>(`/api/tickets/${id.value}/invoice`, {
     method: 'POST',
     headers: { 'Idempotency-Key': attempt.key }
-  })
+  }))
+  if (!result?.ok) return false
+  const document = result.data
 
   toast.add({
     title: 'Facture créée',
@@ -584,11 +600,12 @@ async function markPaid(payload: {
     paidAt: new Date().toISOString()
   }))
 
-  await $fetch(`/api/documents/${documentId}/mark-paid`, {
+  const result = await saveAction(() => $fetch(`/api/documents/${documentId}/mark-paid`, {
     method: 'POST',
     headers: { 'Idempotency-Key': attempt.key },
     body: attempt.payload
-  })
+  }))
+  if (!result?.ok) return false
 
   paymentOpen.value = false
   toast.add({
@@ -727,6 +744,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
 
     <template #body>
       <div v-if="ticket" class="space-y-3">
+        <PosFormFeedback :saving="actionSaving" :error="actionError" />
         <UAlert
           v-if="!canSendSms"
           color="neutral"
@@ -1147,6 +1165,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                   size="md"
                   block
                   class="justify-start rounded-xl"
+                  :loading="actionSaving"
                   @click="createQuote"
                 />
                 <UButton
@@ -1158,6 +1177,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                   size="md"
                   block
                   class="justify-start rounded-xl"
+                  :loading="actionSaving"
                   @click="createOrder"
                 />
                 <UButton
@@ -1167,6 +1187,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                   size="md"
                   block
                   class="justify-start rounded-xl"
+                  :loading="actionSaving"
                   @click="createInvoice"
                 />
                 <UButton
@@ -1256,6 +1277,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             color="neutral"
             variant="soft"
             block
+            :loading="actionSaving"
             @click="createInvoice"
           />
           <UButton
@@ -1286,6 +1308,8 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
   <PosTicketWorkflowSlideover
     v-model:open="workflowOpen"
     :action="selectedWorkflowAction"
+    :saving="actionSaving"
+    :save-error="actionError"
     :initial-notes="ticket?.internalNotes"
     @submit="handleWorkflowSubmit"
   />
@@ -1293,6 +1317,8 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
   <UModal
     v-model:open="noteModalOpen"
     :content="noteFocusReturn"
+    :dismissible="!noteSaving"
+    :close="!noteSaving"
     title="Ajouter une note interne"
     description="Cette note sera horodatée dans le suivi du ticket."
     :ui="{ content: 'sm:max-w-xl' }"
@@ -1301,6 +1327,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
       <UFormField label="Note" required>
         <UTextarea
           v-model="noteDraft"
+          :disabled="noteSaving"
           :rows="5"
           maxlength="2000"
           autofocus
@@ -1310,6 +1337,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           @keydown.ctrl.enter="addInternalNote"
         />
       </UFormField>
+      <PosFormFeedback class="mt-3" :saving="noteSaving" :error="noteError" />
     </template>
 
     <template #footer>
@@ -1322,7 +1350,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           @click="noteModalOpen = false"
         />
         <UButton
-          label="Ajouter la note"
+          :label="noteSaving ? 'Enregistrement…' : 'Ajouter la note'"
           icon="i-lucide-message-square-plus"
           :loading="noteSaving"
           :disabled="!noteDraft.trim()"
@@ -1336,6 +1364,8 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
     v-if="payableDocument"
     v-model:open="paymentOpen"
     :balance-due="ticket?.commercialSummary.balanceDue || 0"
+    :loading="actionSaving"
+    :save-error="actionError"
     @save="markPaid"
   />
 

@@ -2,7 +2,7 @@
 import type { CustomerListResponse, TicketDetail } from '~~/shared/types/pos'
 
 const route = useRoute()
-const toast = useToast()
+const { isSaving, saveError, save } = useFormAction()
 const id = computed(() => Number(route.params.id))
 const formId = 'ticket-editor-form'
 
@@ -36,16 +36,11 @@ async function saveTicket(payload: {
     categoryHint: 'accessory' | 'repair' | 'service' | null
   }>
 }) {
-  await $fetch(`/api/tickets/${id.value}`, {
+  const result = await save(() => $fetch(`/api/tickets/${id.value}`, {
     method: 'PATCH',
     body: payload
-  })
-
-  toast.add({
-    title: 'Ticket mis à jour',
-    color: 'success'
-  })
-
+  }), { success: 'Ticket enregistré' })
+  if (!result?.ok) return
   await navigateTo(`/tickets/${id.value}`)
 }
 </script>
@@ -82,8 +77,9 @@ async function saveTicket(payload: {
             <UButton
               :form="formId"
               type="submit"
-              label="Valider"
-              aria-label="Valider"
+              :label="isSaving ? 'Enregistrement…' : 'Enregistrer les modifications'"
+              :loading="isSaving"
+              aria-label="Enregistrer les modifications"
               icon="i-lucide-check"
               :ui="{ label: 'hidden sm:inline' }"
             />
@@ -97,6 +93,8 @@ async function saveTicket(payload: {
         <PosTicketForm
           v-if="ticket && customers?.items"
           :form-id="formId"
+          :saving="isSaving"
+          :save-error="saveError"
           layout="intake"
           :show-submit="false"
           :customers="customers.items"

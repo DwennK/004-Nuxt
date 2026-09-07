@@ -25,6 +25,7 @@ const lineEditor = useCommercialLinesDraft({
 const lines = toRef(lineEditor.state, 'lines')
 const { incrementLine, decrementLine, removeLine, cloneLine, moveLine, updateLineLabel, updateLineUnitPrice, selectAllOnFocus } = lineEditor
 const isSaving = ref<PaymentMethod | null>(null)
+const saveError = ref<string | null>(null)
 const lastCreatedDocument = ref<DocumentDetail | null>(null)
 const lastCompletedPaymentMethod = ref<PaymentMethod | null>(null)
 const saleCompletionOpen = ref(false)
@@ -201,6 +202,7 @@ function resetSaleState() {
   lineEditor.resetLines([])
   selectedCustomerId.value = null
   cashReceived.value = null
+  saveError.value = null
 }
 
 function closeSaleCompletionModal() {
@@ -219,6 +221,8 @@ async function navigateToCompletedDocument(path: string) {
 }
 
 async function completeSale(method: PaymentMethod) {
+  if (isSaving.value) return
+  saveError.value = null
   const linesToSubmit = lineEditor.serializeLines(payableLines.value).map(line => ({
     ...line,
     label: line.label.trim()
@@ -293,6 +297,7 @@ async function completeSale(method: PaymentMethod) {
     saleCompletionOpen.value = true
     resetSaleState()
   } catch (error) {
+    saveError.value = getRequestErrorMessage(error) || 'Vérifiez le panier puis réessayez.'
     toast.add({
       title: 'Encaissement impossible',
       description: getRequestErrorMessage(error) || 'Vérifiez le panier puis réessayez.',
@@ -847,6 +852,8 @@ defineShortcuts({
                 </div>
 
                 <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                  <PosFormFeedback :saving="Boolean(isSaving)" :error="saveError" />
+
                   <UButton
                     type="button"
                     label="Encaisser · Espèces (F2)"

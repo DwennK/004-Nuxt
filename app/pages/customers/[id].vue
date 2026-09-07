@@ -8,11 +8,12 @@ const UBadge = resolveComponent('UBadge')
 const NuxtLink = resolveComponent('NuxtLink')
 
 const route = useRoute()
-const toast = useToast()
+const { isSaving, saveError, save, clearSaveError } = useFormAction()
 const id = computed(() => Number(route.params.id))
 const activeTab = ref('tickets')
 const editOpen = ref(false)
 const focusReturn = usePosFocusReturn(editOpen)
+watch(editOpen, clearSaveError)
 const paymentPagination = ref({
   pageIndex: 0,
   pageSize: 50
@@ -73,16 +74,11 @@ const customerAddressLine = computed(() => {
 })
 
 async function saveCustomer(payload: CustomerFormValue) {
-  await $fetch(`/api/customers/${id.value}`, {
+  const result = await save(() => $fetch(`/api/customers/${id.value}`, {
     method: 'PATCH',
     body: payload
-  })
-
-  toast.add({
-    title: 'Client mis à jour',
-    color: 'success'
-  })
-
+  }), { success: 'Client enregistré' })
+  if (!result?.ok) return
   editOpen.value = false
   await Promise.all([refreshCustomer(), refreshTickets(), refreshDocuments(), refreshPayments()])
 }
@@ -398,6 +394,8 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
   <USlideover
     v-model:open="editOpen"
     :content="focusReturn"
+    :dismissible="!isSaving"
+    :close="!isSaving"
     title="Modifier le client"
     description="Mettre à jour les informations de la fiche client."
     :ui="{ content: 'max-w-2xl' }"
@@ -406,6 +404,8 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
       <PosCustomerForm
         v-if="customer"
         :initial-value="customer"
+        :saving="isSaving"
+        :save-error="saveError"
         submit-label="Enregistrer les modifications"
         @save="saveCustomer"
       />

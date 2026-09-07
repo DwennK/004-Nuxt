@@ -29,6 +29,7 @@ const createOpen = ref(false)
 const customerSelect = useTemplateRef<{ triggerRef?: HTMLElement }>('customerSelect')
 const focusReturn = usePosFocusReturn(createOpen, () => customerSelect.value?.triggerRef)
 const isSaving = ref(false)
+const saveError = ref<string | null>(null)
 const searchTerm = ref('')
 const createdCustomers = ref<CustomerRecord[]>([])
 
@@ -145,11 +146,14 @@ function openCreate() {
     return
   }
 
+  saveError.value = null
   menuOpen.value = false
   createOpen.value = true
 }
 
 async function createCustomer(payload: CustomerFormValue) {
+  if (isSaving.value) return
+  saveError.value = null
   isSaving.value = true
 
   try {
@@ -169,6 +173,7 @@ async function createCustomer(payload: CustomerFormValue) {
       color: 'success'
     })
   } catch (error) {
+    saveError.value = getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.'
     toast.add({
       title: 'Création du client impossible',
       description: getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.',
@@ -344,6 +349,8 @@ onBeforeUnmount(() => {
 
         <PosCustomerForm
           :form-id="formId"
+          :saving="isSaving"
+          :save-error="saveError"
           mode="quick"
           :show-submit="false"
           submit-label="Créer et sélectionner"
@@ -364,7 +371,7 @@ onBeforeUnmount(() => {
           <UButton
             :form="formId"
             type="submit"
-            label="Créer et sélectionner"
+            :label="isSaving ? 'Enregistrement…' : 'Créer et sélectionner'"
             icon="i-lucide-user-plus"
             :loading="isSaving"
           />

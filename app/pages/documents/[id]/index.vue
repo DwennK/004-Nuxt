@@ -25,7 +25,7 @@ const emailStorageKey = computed(() => `pos:pending-email:${user.value?.id}:${id
 const emailAttemptLocked = ref(false)
 const emailFeedback = ref<string | null>(null)
 const emailFailed = ref(false)
-const isSavingDocument = ref(false)
+const { isSaving: isSavingDocument, saveError, save } = useFormAction()
 const isContextOpen = ref(false)
 const hasUnsavedDocumentChanges = ref(false)
 const hasOpenedInitialEmailModal = ref(false)
@@ -65,7 +65,7 @@ const balanceDue = computed(() => isPayableDocument.value ? Math.max((document.v
 const supportsA4Print = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'a4') : false)
 const supportsThermalPrint = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'thermal') : false)
 const documentActionsDisabled = computed(() => hasUnsavedDocumentChanges.value || isSavingDocument.value)
-const saveButtonLabel = computed(() => hasUnsavedDocumentChanges.value ? 'Enregistrer les modifications' : 'Enregistrer')
+const saveButtonLabel = computed(() => isSavingDocument.value ? 'Enregistrement…' : hasUnsavedDocumentChanges.value ? 'Enregistrer les modifications' : 'Enregistrer')
 
 async function saveDocument(payload: DocumentSavePayload) {
   if (!canEditDocument.value) {
@@ -77,27 +77,14 @@ async function saveDocument(payload: DocumentSavePayload) {
     return
   }
 
-  isSavingDocument.value = true
   const documentId = id.value
-
-  try {
-    const saved = await $fetch<DocumentDetail>(`/api/documents/${documentId}`, {
-      method: 'PATCH',
-      body: payload
-    })
-    if (id.value !== documentId) return
-    documentEditor.value?.acceptSaved(saved, payload)
-    document.value = saved
-
-    toast.add({
-      title: 'Document mis à jour',
-      color: 'success'
-    })
-
-    await refresh()
-  } finally {
-    isSavingDocument.value = false
-  }
+  const result = await save(() => $fetch<DocumentDetail>(`/api/documents/${documentId}`, {
+    method: 'PATCH',
+    body: payload
+  }), { success: 'Document enregistré' })
+  if (!result?.ok || id.value !== documentId) return
+  documentEditor.value?.acceptSaved(result.data, payload)
+  document.value = result.data
 }
 
 async function openContextEditor() {
@@ -379,7 +366,7 @@ function startNewEmailAttempt() {
           <UButton
             :form="documentFormId"
             type="submit"
-            label="Enregistrer"
+            :label="saveButtonLabel"
             icon="i-lucide-save"
             color="warning"
             :loading="isSavingDocument"
@@ -405,6 +392,8 @@ function startNewEmailAttempt() {
             v-model:dirty="hasUnsavedDocumentChanges"
             :form-id="documentFormId"
             :show-submit-button="false"
+            :saving="isSavingDocument"
+            :save-error="saveError"
             :customers="customers.items"
             :initial-value="document"
             :fixed-ticket-id="document.ticketId"

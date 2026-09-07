@@ -6,6 +6,8 @@ import type { TicketWorkflowAction } from '~~/shared/types/pos'
 const props = defineProps<{
   action: TicketWorkflowAction | null
   initialNotes?: string | null
+  saving?: boolean
+  saveError?: string | null
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -30,7 +32,7 @@ watchEffect(() => {
 })
 
 function onSubmit(event: FormSubmitEvent<Schema>) {
-  if (!props.action) {
+  if (!props.action || props.saving) {
     return
   }
 
@@ -45,6 +47,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
   <USlideover
     v-model:open="open"
     :content="focusReturn"
+    :dismissible="!saving"
+    :close="!saving"
     :title="action?.label || 'Action de suivi'"
     :description="action?.description || 'Confirmez l’action de suivi et ajoutez une note si besoin.'"
     side="right"
@@ -54,6 +58,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       <UForm
         :schema="schema"
         :state="state"
+        :disabled="saving"
+        :aria-busy="saving"
         class="space-y-5"
         @submit="onSubmit"
       >
@@ -86,10 +92,13 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           />
         </UFormField>
 
+        <PosFormFeedback :saving="saving" :error="saveError" />
+
         <div class="flex justify-end">
           <UButton
             type="submit"
-            :label="action ? `Confirmer · ${action.label}` : 'Confirmer l’action'"
+            :label="saving ? 'Enregistrement…' : action ? `Confirmer · ${action.label}` : 'Confirmer l’action'"
+            :loading="saving"
             :icon="action?.icon || 'i-lucide-check'"
             :color="action?.color || 'primary'"
             :disabled="!action"

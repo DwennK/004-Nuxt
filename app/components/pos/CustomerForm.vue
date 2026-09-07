@@ -10,6 +10,8 @@ const props = withDefaults(defineProps<{
   layout?: 'compact' | 'page'
   mode?: 'quick' | 'full'
   showSubmit?: boolean
+  saving?: boolean
+  saveError?: string | null
   submitLabel?: string
 }>(), {
   initialValue: () => ({}),
@@ -189,6 +191,7 @@ function applySuggestedCity(city: string) {
 }
 
 function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
+  if (props.saving) return
   emit('save', {
     ...state,
     displayName: state.displayName.trim(),
@@ -210,6 +213,8 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
   <UForm
     :id="formId"
     :schema="schema"
+    :disabled="props.saving"
+    :aria-busy="props.saving"
     :state="state"
     :class="props.mode === 'quick' ? 'space-y-5' : props.layout === 'page' ? 'space-y-4' : 'space-y-5'"
     @submit="onSubmit"
@@ -470,8 +475,15 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
       </UFormField>
     </template>
 
+    <PosFormFeedback :saving="props.saving" :error="props.saveError" />
+
     <div v-if="props.showSubmit" class="flex justify-end">
-      <UButton type="submit" :label="submitLabel" icon="i-lucide-save" />
+      <UButton
+        type="submit"
+        :label="props.saving ? 'Enregistrement…' : submitLabel"
+        :loading="props.saving"
+        icon="i-lucide-save"
+      />
     </div>
   </UForm>
 </template>

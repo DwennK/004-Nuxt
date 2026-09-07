@@ -1,21 +1,16 @@
 <script setup lang="ts">
 import type { CustomerFormValue } from '~~/shared/types/pos'
 
-const toast = useToast()
+const { isSaving, saveError, save } = useFormAction()
 const formId = 'customer-create-form'
 
 async function saveCustomer(payload: CustomerFormValue) {
-  const customer = await $fetch('/api/customers', {
+  const result = await save(() => $fetch(`/api/customers`, {
     method: 'POST',
     body: payload
-  })
-
-  toast.add({
-    title: 'Client créé',
-    color: 'success'
-  })
-
-  await navigateTo(`/customers/${customer.id}`)
+  }), { success: 'Client créé' })
+  if (!result?.ok) return
+  await navigateTo(`/customers/${result.data.id}`)
 }
 </script>
 
@@ -50,7 +45,8 @@ async function saveCustomer(payload: CustomerFormValue) {
             <UButton
               :form="formId"
               type="submit"
-              label="Créer le client"
+              :label="isSaving ? 'Enregistrement…' : 'Créer le client'"
+              :loading="isSaving"
               icon="i-lucide-save"
               class="w-fit lg:ms-auto"
             />
@@ -59,6 +55,8 @@ async function saveCustomer(payload: CustomerFormValue) {
 
         <PosCustomerForm
           :form-id="formId"
+          :saving="isSaving"
+          :save-error="saveError"
           layout="page"
           :show-submit="false"
           submit-label="Créer le client"

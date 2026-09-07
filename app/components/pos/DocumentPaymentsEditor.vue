@@ -44,6 +44,16 @@ const paymentDrafts = paymentDraftController.drafts
 const deletingId = ref<number | null>(null)
 const savingId = ref<number | null>(null)
 const creatingMethod = ref<PaymentMethod | 'details' | null>(null)
+const createError = ref<string | null>(null)
+const paymentErrors = ref<Record<number, string | null>>({})
+const mutationPending = computed(() => Boolean(creatingMethod.value) || savingId.value !== null || deletingId.value !== null)
+watch(paymentOpen, () => {
+  createError.value = null
+})
+watch(() => props.documentId, () => {
+  createError.value = null
+  paymentErrors.value = {}
+})
 const paidTotal = computed(() => props.payments
   .filter(payment => payment.status === 'paid')
   .reduce((sum, payment) => sum + payment.amount, 0))
@@ -68,6 +78,8 @@ async function addPayment(input: {
   amount?: number
   notes?: string
 }, source: PaymentMethod | 'details') {
+  if (mutationPending.value) return
+  createError.value = null
   creatingMethod.value = source
 
   try {
@@ -85,12 +97,13 @@ async function addPayment(input: {
 
     paymentMutation.complete(scope)
     toast.add({
-      title: 'Paiement ajouté',
+      title: 'Paiement enregistré',
       color: 'success'
     })
     paymentOpen.value = false
     emit('refresh')
   } catch (error) {
+    createError.value = getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.'
     toast.add({
       title: 'Encaissement impossible',
       description: getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.',
@@ -114,10 +127,11 @@ function resetDraft(payment: PaymentRecord) {
 }
 
 async function savePayment(payment: PaymentRecord) {
-  if (!isPaymentEditable(payment)) {
+  if (!isPaymentEditable(payment) || mutationPending.value) {
     return
   }
 
+  paymentErrors.value[payment.id] = null
   const draft = paymentDrafts.value[payment.id]
 
   if (!draft) {
@@ -148,8 +162,9 @@ async function savePayment(payment: PaymentRecord) {
     })
     emit('refresh')
   } catch (error) {
+    paymentErrors.value[payment.id] = getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.'
     toast.add({
-      title: 'Mise à jour impossible',
+      title: 'Enregistrement impossible',
       description: getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.',
       color: 'error'
     })
@@ -159,7 +174,7 @@ async function savePayment(payment: PaymentRecord) {
 }
 
 async function removePayment(payment: PaymentRecord) {
-  if (!isPaymentDeletable(payment)) {
+  if (!isPaymentDeletable(payment) || mutationPending.value) {
     return
   }
 
@@ -168,7 +183,7 @@ async function removePayment(payment: PaymentRecord) {
     description: 'Le paiement sera définitivement supprimé et le solde du document recalculé.'
   })
 
-  if (!confirmed) {
+  if (!confirmed || mutationPending.value) {
     return
   }
 
@@ -185,6 +200,7 @@ async function removePayment(payment: PaymentRecord) {
     })
     emit('refresh')
   } catch (error) {
+    paymentErrors.value[payment.id] = getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.'
     toast.add({
       title: 'Suppression impossible',
       description: getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.',
@@ -242,7 +258,7 @@ async function removePayment(payment: PaymentRecord) {
                   value-key="value"
                   size="sm"
                   class="w-full"
-                  :disabled="!isPaymentEditable(payment)"
+                  :disabled="!isPaymentEditable(payment) || mutationPending"
                 />
               </UFormField>
 
@@ -253,7 +269,7 @@ async function removePayment(payment: PaymentRecord) {
                   value-key="value"
                   size="sm"
                   class="w-full"
-                  :disabled="!isPaymentStatusEditable(payment)"
+                  :disabled="!isPaymentStatusEditable(payment) || mutationPending"
                 />
               </UFormField>
 
@@ -264,7 +280,7 @@ async function removePayment(payment: PaymentRecord) {
                   :step="0.05"
                   size="sm"
                   class="w-full"
-                  :disabled="!isPaymentEditable(payment)"
+                  :disabled="!isPaymentEditable(payment) || mutationPending"
                   :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
                 />
               </UFormField>
@@ -275,7 +291,7 @@ async function removePayment(payment: PaymentRecord) {
                   type="datetime-local"
                   size="sm"
                   class="w-full"
-                  :disabled="!isPaymentEditable(payment)"
+                  :disabled="!isPaymentEditable(payment) || mutationPending"
                 />
               </UFormField>
             </div>
@@ -299,7 +315,7 @@ async function removePayment(payment: PaymentRecord) {
                 size="sm"
                 class="w-full"
                 placeholder="Note de paiement optionnelle"
-                :disabled="!isPaymentEditable(payment)"
+                :disabled="!isPaymentEditable(payment) || mutationPending"
               />
             </UFormField>
 
@@ -311,7 +327,7 @@ async function removePayment(payment: PaymentRecord) {
                 variant="ghost"
                 size="sm"
                 aria-label="Réinitialiser le paiement"
-                :disabled="savingId === payment.id"
+                :disabled="mutationPending"
                 @click="resetDraft(payment)"
               />
               <UButton
@@ -323,11 +339,13 @@ async function removePayment(payment: PaymentRecord) {
                 size="sm"
                 aria-label="Supprimer le paiement"
                 :loading="deletingId === payment.id"
+                :disabled="mutationPending"
                 @click="removePayment(payment)"
               />
               <UButton
                 type="button"
-                label="Enregistrer"
+                :label="savingId === payment.id ? 'Enregistrement…' : 'Enregistrer les modifications'"
+                :disabled="mutationPending"
                 icon="i-lucide-save"
                 size="sm"
                 :loading="savingId === payment.id"
@@ -340,6 +358,7 @@ async function removePayment(payment: PaymentRecord) {
               </p>
             </div>
           </div>
+          <PosFormFeedback class="mt-2" :saving="savingId === payment.id" :error="paymentErrors[payment.id]" />
         </div>
       </div>
     </UCard>
@@ -398,13 +417,15 @@ async function removePayment(payment: PaymentRecord) {
                 :label="`Encaisser · ${paymentMethodLabels[method]}`"
                 :icon="creatingMethod === method ? 'i-lucide-loader-circle' : 'i-lucide-badge-check'"
                 :loading="creatingMethod === method"
-                :disabled="!canCreatePayment || Boolean(creatingMethod)"
+                :disabled="!canCreatePayment || mutationPending"
                 size="lg"
                 class="justify-center"
                 @click="createQuickPayment(method)"
               />
             </div>
           </div>
+
+          <PosFormFeedback :saving="Boolean(creatingMethod)" :error="createError" />
 
           <UButton
             type="button"
@@ -414,7 +435,7 @@ async function removePayment(payment: PaymentRecord) {
             variant="soft"
             block
             :loading="creatingMethod === 'details'"
-            :disabled="!canCreatePayment || Boolean(creatingMethod)"
+            :disabled="!canCreatePayment || mutationPending"
             @click="paymentOpen = true"
           />
         </template>
@@ -434,6 +455,7 @@ async function removePayment(payment: PaymentRecord) {
         v-if="isPayableDocument"
         v-model:open="paymentOpen"
         :balance-due="balanceDue"
+        :save-error="createError"
         :loading="creatingMethod === 'details'"
         @save="addPayment($event, 'details')"
       />
