@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import QRCode from 'qrcode'
 import { ticketStatusLabels, ticketTypeLabels } from '~~/shared/constants/pos'
 import type { TicketDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
@@ -13,8 +12,6 @@ definePageMeta({
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
 const canRenderThermal = supportsTicketPrintProfile('thermal')
-const requestUrl = useRequestURL()
-const ticketUrl = computed(() => new URL(`/tickets/${id.value}`, requestUrl.origin).toString())
 
 const [{ data: ticket }, { data: company }] = await Promise.all([
   useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
@@ -79,15 +76,6 @@ const patternPath = computed(() => {
 const hasCodesSection = computed(() => {
   return Boolean(ticket.value?.accessCode || ticket.value?.simCode)
 })
-
-const { data: ticketQrDataUrl } = await useAsyncData(
-  () => `ticket-print-qr-${id.value}`,
-  () => QRCode.toDataURL(ticketUrl.value, {
-    errorCorrectionLevel: 'M',
-    margin: 0,
-    width: 180
-  })
-)
 
 function printTicket() {
   window.print()
@@ -171,15 +159,7 @@ function printTicket() {
           </div>
         </header>
 
-        <section v-if="ticketQrDataUrl" class="ticket-lookup">
-          <img :src="ticketQrDataUrl" :alt="`QR du ticket ${ticket.ticketNumber}`" class="ticket-lookup-qr">
-          <div>
-            <p class="ticket-kicker">
-              Ouvrir le ticket
-            </p>
-            <p>Scannez pour accéder directement au dossier.</p>
-          </div>
-        </section>
+        <PosRecordLookupQr :id="id" type="tickets" compact />
 
         <section class="ticket-block">
           <p class="ticket-kicker">
@@ -384,24 +364,6 @@ body {
 .ticket-strong {
   font-weight: 900;
   color: #000;
-}
-
-.ticket-lookup {
-  display: flex;
-  align-items: center;
-  gap: 2.4mm;
-  padding-block: 2mm;
-  border-bottom: 0.35mm solid #000;
-}
-
-.ticket-lookup p {
-  margin: 0 0 1mm;
-}
-
-.ticket-lookup-qr {
-  width: 19mm;
-  height: 19mm;
-  flex-shrink: 0;
 }
 
 .ticket-block {

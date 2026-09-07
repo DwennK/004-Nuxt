@@ -131,6 +131,9 @@ const footerLinks = [{
 }] satisfies NavigationMenuItem[]
 
 const dashboardSearchTerm = ref('')
+const handleRecordScan = useRecordScan(dashboardSearchTerm, () => {
+  dashboardSearchOpen.value = false
+})
 const {
   canSearch: canRunDashboardSearch,
   results: dashboardSearchResults,
@@ -336,7 +339,20 @@ const groups = computed(() => {
       placeholder="Nom, téléphone, TIC-…, IMEI, facture, SKU…"
       :color-mode="false"
       preserve-group-order
-    />
+    >
+      <template #footer>
+        <div class="flex justify-end p-2">
+          <PosBarcodeScanner
+            title="Scanner un document"
+            description="Placez le QR « Ouvrir le ticket » ou « Ouvrir le document » dans le cadre."
+            trigger-label="Scanner un document"
+            trigger-icon="i-lucide-qr-code"
+            trigger-aria-label="Scanner un document avec la caméra"
+            @scanned="handleRecordScan"
+          />
+        </div>
+      </template>
+    </UDashboardSearch>
 
     <slot />
   </UDashboardGroup>

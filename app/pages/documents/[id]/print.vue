@@ -230,6 +230,7 @@ useHead(() => ({
               <p v-for="line in a4PrintModel?.referenceLines || []" :key="line">
                 {{ line }}
               </p>
+              <PosRecordLookupQr :id="id" type="documents" />
             </section>
 
             <section class="invoice-window-wrap">
@@ -479,6 +480,8 @@ useHead(() => ({
           </div>
         </header>
 
+        <PosRecordLookupQr :id="id" type="documents" compact />
+
         <section v-if="showThermalCustomer" class="thermal-block">
           <p class="thermal-kicker">
             Client
@@ -619,6 +622,8 @@ body {
 
 .invoice-header {
   position: relative;
+  display: grid;
+  grid-template-rows: calc(var(--a4-envelope-window-top) - 4.8mm) auto;
   box-sizing: border-box;
   min-height: 96mm;
   padding-top: 4.8mm;
@@ -726,9 +731,7 @@ body {
 }
 
 .invoice-party--compact {
-  position: absolute;
-  top: var(--a4-envelope-window-top);
-  left: var(--a4-reference-left);
+  margin-left: calc(var(--a4-reference-left) - 5.8mm);
   width: 62mm;
 }
 

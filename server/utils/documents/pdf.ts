@@ -13,6 +13,7 @@ import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
 import { calculateIncludedVatAmount, formatCurrency, formatDate } from '~~/shared/utils/pos'
 import type { SwissQrAddress } from '~~/shared/utils/qr-bill'
+import { buildRecordQrUrl } from '~~/shared/utils/record-qr'
 
 const MM = 72 / 25.4
 
@@ -268,12 +269,12 @@ function drawImageCentered(page: PDFPage, image: PDFImage, boxX: number, boxY: n
   })
 }
 
-function drawQrCode(page: PDFPage, payload: string, x: number, y: number, size: number) {
+function drawQrCode(page: PDFPage, payload: string, x: number, y: number, size: number, margin = 0) {
   const qrCode = QRCodeCore.create(payload, {
     errorCorrectionLevel: 'M'
   }) as QrCodeMatrix
   const modules = qrCode.modules
-  const cellSize = size / modules.size
+  const cellSize = size / (modules.size + margin * 2)
 
   page.drawRectangle({
     x,
@@ -290,8 +291,8 @@ function drawQrCode(page: PDFPage, payload: string, x: number, y: number, size: 
       }
 
       page.drawRectangle({
-        x: x + (column * cellSize),
-        y: y + ((modules.size - row - 1) * cellSize),
+        x: x + ((column + margin) * cellSize),
+        y: y + ((modules.size - row - 1 + margin) * cellSize),
         width: cellSize,
         height: cellSize,
         color: COLORS.dark
@@ -308,7 +309,7 @@ function formatQrLocation(address: SwissQrAddress) {
   return [address.postalCode, address.city].filter(Boolean).join(' ')
 }
 
-function drawHeader(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord, logoImage: PDFImage | null) {
+function drawHeader(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord, logoImage: PDFImage | null, lookupUrl: string) {
   const model = buildDocumentA4PrintModel(document, company)
   const topY = context.cursorY - (4.8 * MM)
   const rightColumnWidth = 49 * MM
@@ -406,6 +407,14 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     lineHeight: 8.8
   })
 
+  const lookupSize = 25 * MM
+  const lookupY = referencesBottom - (2 * MM) - lookupSize
+  drawQrCode(context.page, lookupUrl, SWISS_REFERENCE_LEFT, lookupY, lookupSize, 4)
+  const lookupBottom = drawTextBlock(context, 'Ouvrir le document', SWISS_REFERENCE_LEFT, lookupY - 2, referencesWidth, {
+    size: FONT_SMALL,
+    color: COLORS.strong
+  })
+
   let windowBottom = drawTextBlock(context, model.windowLines[0] || document.customer.displayName, windowContentX, windowContentTop, windowContentWidth, {
     font: context.boldFont,
     size: FONT_BODY,
@@ -421,7 +430,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     })
   }
 
-  const headerBottom = Math.min(referencesBottom, windowBottom, windowBottomY)
+  const headerBottom = Math.min(lookupBottom, windowBottom, windowBottomY)
   const ruleY = headerBottom - (3.2 * MM)
   drawHorizontalRule(context, ruleY)
   context.cursorY = ruleY - (3 * MM)
@@ -856,7 +865,8 @@ function drawFooter(context: PdfContext, document: DocumentDetail, company: Comp
   context.cursorY = footerBottom - (3 * MM)
 }
 
-export async function generateDocumentPdf(document: DocumentDetail, company: CompanySettingsRecord) {
+export async function generateDocumentPdf(document: DocumentDetail, company: CompanySettingsRecord, appOrigin: string) {
+  const lookupUrl = buildRecordQrUrl('documents', document.id, appOrigin)
   const pdfDoc = await PDFDocument.create()
   pdfDoc.setTitle(document.documentNumber)
 
@@ -871,7 +881,7 @@ export async function generateDocumentPdf(document: DocumentDetail, company: Com
     cursorY: TOP_START
   }
 
-  drawHeader(context, document, company, logoImage)
+  drawHeader(context, document, company, logoImage, lookupUrl)
   drawDocumentLines(context, document)
   drawSummary(context, document, company)
 

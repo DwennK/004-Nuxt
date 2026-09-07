@@ -51,21 +51,29 @@ export function useBarcodeScanner(options: BarcodeScannerOptions = {}) {
 
     try {
       await prepareScannerEngine()
+      if (sessionId !== scanSessionId) return
       detector = new BarcodeDetector({ formats })
     } catch {
+      if (sessionId !== scanSessionId) return
       isSupported.value = false
       error.value = 'Lecteur de code-barres indisponible. Rechargez la page et réessayez.'
       return
     }
 
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      const cameraStream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'environment' },
           width: { ideal: 1920 },
           height: { ideal: 1080 }
         }
       })
+
+      if (sessionId !== scanSessionId) {
+        cameraStream.getTracks().forEach(track => track.stop())
+        return
+      }
+      stream = cameraStream
 
       video.srcObject = stream
       await waitForVideo(video)
@@ -78,6 +86,7 @@ export function useBarcodeScanner(options: BarcodeScannerOptions = {}) {
       isScanning.value = true
       detect(sessionId)
     } catch {
+      if (sessionId !== scanSessionId) return
       error.value = 'Impossible d\'accéder à la caméra. Vérifiez les permissions.'
       stop()
     }

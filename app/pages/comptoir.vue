@@ -57,6 +57,7 @@ type CounterWorkItem = {
 }
 
 const search = ref('')
+const handleRecordScan = useRecordScan(search)
 const selectedQueueFilter = ref<QueueFilter>('all')
 const {
   searchTerm,
@@ -300,8 +301,9 @@ useHead({
                 />
                 <PosBarcodeScanner
                   trigger-size="xl"
-                  trigger-aria-label="Scanner un code-barres avec la caméra"
-                  @scanned="search = $event"
+                  title="Scanner un document ou un code-barres"
+                  trigger-aria-label="Scanner un document ou un code-barres avec la caméra"
+                  @scanned="handleRecordScan"
                 />
               </div>
 

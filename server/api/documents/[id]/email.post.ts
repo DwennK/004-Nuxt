@@ -34,7 +34,7 @@ export default eventHandler(async (event) => {
     })
   }
 
-  const pdfBytes = await generateDocumentPdf(document, company)
+  const pdfBytes = await generateDocumentPdf(document, company, getRequestURL(event).origin)
   const result = await sendDocumentEmail({
     event,
     actorId: auth.user.id,
