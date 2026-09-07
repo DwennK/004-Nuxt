@@ -277,7 +277,7 @@ function externalMobileSentrixUrlValue(value: string | null, kind: 'page' | 'ima
   }
 
   const allowedHost = candidate.hostname === baseUrl.hostname
-    || (kind === 'image' && candidate.hostname === 'static.mobilesentrix.com')
+    || (kind === 'image' && ['static.mobilesentrix.com', 'static.mobilesentrix.eu'].includes(candidate.hostname))
 
   if (candidate.protocol !== 'https:' || !allowedHost) {
     return null
@@ -343,7 +343,7 @@ function mapProduct(value: unknown): MobileSentrixProductSummary {
     manufacturer: textValue(record, ['manufacturer_text', 'device_manufacturer_text', 'manufacturer']),
     model: textValue(record, ['model_text', 'device_model_text', 'model']),
     frontPosition: textValue(record, ['front_position', 'front_position_text']),
-    imageUrl: externalMobileSentrixUrlValue(textValue(record, ['image_link', 'default_image', 'image']), 'image'),
+    imageUrl: externalMobileSentrixUrlValue(textValue(record, ['image_link', 'image_url', 'default_image', 'image']), 'image'),
     url: externalMobileSentrixUrlValue(textValue(record, ['link', 'url'])),
     tags: stringArrayValue(record.tags),
     raw: record
@@ -605,9 +605,11 @@ export async function listMobileSentrixProducts(query: {
   const dataRecord = asRecord(data)
   const itemSource = Array.isArray(data)
     ? data
-    : Array.isArray(dataRecord.items)
-      ? dataRecord.items
-      : data
+    : dataRecord.entity_id || dataRecord.product_id
+      ? [dataRecord]
+      : Array.isArray(dataRecord.items)
+        ? dataRecord.items
+        : data
 
   return {
     page: query.page,

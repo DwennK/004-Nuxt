@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { externalFetch } from '../../server/utils/external-fetch'
-import { listMobileSentrixCategories, searchMobileSentrixProducts } from '../../server/utils/mobilesentrix'
+import { listMobileSentrixCategories, listMobileSentrixProducts, searchMobileSentrixProducts } from '../../server/utils/mobilesentrix'
 
 vi.mock('../../server/utils/external-fetch', () => ({ externalFetch: vi.fn() }))
 
@@ -45,6 +45,15 @@ describe('MobileSentrix image URLs', () => {
       { imageUrl: cdnImage, url: 'https://www.mobilesentrix.com/replacement-parts' },
       { imageUrl: 'https://www.mobilesentrix.com/media/tools.webp', url: 'https://www.mobilesentrix.com/tools' }
     ])
+  })
+
+  it('maps a single Europe product detail as one product, not its attribute values', async () => {
+    const config = useRuntimeConfig()
+    vi.stubGlobal('useRuntimeConfig', () => ({ ...config, mobilesentrixBaseUrl: 'https://www.mobilesentrix.eu' }))
+    mockResponse({ entity_id: 10, sku: '000123', name: 'Battery', url: 'https://www.mobilesentrix.eu/battery', image_url: 'https://static.mobilesentrix.eu/battery.webp' })
+    const result = await listMobileSentrixProducts({ productId: '10', sku: null, categoryId: null, deviceProducts: false, page: 1, limit: 20 })
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]).toMatchObject({ id: '10', sku: '000123', url: 'https://www.mobilesentrix.eu/battery', imageUrl: 'https://static.mobilesentrix.eu/battery.webp' })
   })
 
   it.each([
