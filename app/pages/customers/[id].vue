@@ -12,6 +12,7 @@ const toast = useToast()
 const id = computed(() => Number(route.params.id))
 const activeTab = ref('tickets')
 const editOpen = ref(false)
+const focusReturn = usePosFocusReturn(editOpen)
 const paymentPagination = ref({
   pageIndex: 0,
   pageSize: 50
@@ -396,6 +397,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
 
   <USlideover
     v-model:open="editOpen"
+    :content="focusReturn"
     title="Modifier le client"
     description="Mettre à jour les informations de la fiche client."
     :ui="{ content: 'max-w-2xl' }"

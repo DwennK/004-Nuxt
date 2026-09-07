@@ -119,6 +119,8 @@ const intakeSectionTabs: TabsItem[] = [
 const toast = useToast()
 const patternOpen = ref(false)
 const {
+  searchInput,
+  focusSearch,
   search: intakeQuery,
   searchOpen,
   highlightedItemIndex: highlightedSuggestionIndex,
@@ -368,6 +370,7 @@ function applyCatalogSuggestion(item: CatalogItemRecord) {
   setSearchValue(item.name, { open: false })
   applySuggestionContext(item, true)
   lineEditor.addCatalogItem(item)
+  void focusSearch()
 }
 
 function applyFirstSearchResult() {
@@ -503,6 +506,7 @@ async function handleIntakeScan(value: string) {
                 <UFormField label="Diagnostic rapide">
                   <div class="flex gap-2">
                     <UInput
+                      ref="searchInput"
                       v-model="intakeQuery"
                       icon="i-lucide-scan-search"
                       size="lg"
@@ -604,7 +608,6 @@ async function handleIntakeScan(value: string) {
                     color="neutral"
                     variant="soft"
                     size="sm"
-                    tabindex="-1"
                     class="justify-center"
                     @click="patternOpen = true"
                   />
@@ -861,7 +864,6 @@ async function handleIntakeScan(value: string) {
                 icon="i-lucide-grid-3x3"
                 color="neutral"
                 variant="soft"
-                tabindex="-1"
                 @click="patternOpen = true"
               />
             </div>
@@ -985,7 +987,6 @@ async function handleIntakeScan(value: string) {
               icon="i-lucide-grid-3x3"
               color="neutral"
               variant="soft"
-              tabindex="-1"
               @click="patternOpen = true"
             />
           </div>

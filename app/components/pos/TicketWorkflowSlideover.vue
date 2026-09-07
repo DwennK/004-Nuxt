@@ -9,6 +9,7 @@ const props = defineProps<{
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
+const focusReturn = usePosFocusReturn(open)
 
 const emit = defineEmits<{
   submit: [payload: { action: TicketWorkflowAction, internalNotes: string }]
@@ -43,6 +44,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 <template>
   <USlideover
     v-model:open="open"
+    :content="focusReturn"
     :title="action?.label || 'Action de suivi'"
     :description="action?.description || 'Confirmez l’action de suivi et ajoutez une note si besoin.'"
     side="right"

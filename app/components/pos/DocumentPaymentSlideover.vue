@@ -11,6 +11,7 @@ const props = defineProps<{
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
+const focusReturn = usePosFocusReturn(open)
 
 const emit = defineEmits<{
   save: [payload: { method: PaymentMethod, amount: number, notes: string }]
@@ -51,6 +52,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 <template>
   <USlideover
     v-model:open="open"
+    :content="focusReturn"
     title="Enregistrer un paiement"
     description="Les paiements restent séparés du document pour permettre un reporting de caisse fiable."
     side="right"

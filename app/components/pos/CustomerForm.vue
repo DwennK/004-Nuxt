@@ -277,7 +277,7 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
             name="firstName"
             description="Optionnel si vous utilisez surtout la société ou un nom d’affichage."
           >
-            <UInput v-model="state.firstName" class="w-full" />
+            <UInput v-model="state.firstName" autofocus class="w-full" />
           </UFormField>
 
           <UFormField
@@ -399,7 +399,7 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
     <template v-else>
       <div class="grid gap-4 md:grid-cols-2">
         <UFormField label="Prénom" name="firstName">
-          <UInput v-model="state.firstName" class="w-full" />
+          <UInput v-model="state.firstName" autofocus class="w-full" />
         </UFormField>
 
         <UFormField label="Nom" name="lastName">

@@ -204,7 +204,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         <div class="space-y-4">
           <div class="grid gap-4 md:grid-cols-2">
             <UFormField :label="currentItemNameLabel" name="name" required>
-              <UInput v-model="state.name" class="w-full" />
+              <UInput v-model="state.name" autofocus class="w-full" />
             </UFormField>
 
             <UFormField label="Type" name="type" required>
@@ -359,7 +359,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
     <template v-else>
       <UFormField :label="currentItemNameLabel" name="name" required>
-        <UInput v-model="state.name" class="w-full" />
+        <UInput v-model="state.name" autofocus class="w-full" />
       </UFormField>
 
       <div class="grid gap-4 md:grid-cols-2">

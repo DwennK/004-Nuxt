@@ -16,6 +16,7 @@ const props = withDefaults(defineProps<{
 })
 
 const open = ref(false)
+const scannedValue = ref<string | null>(null)
 
 const emit = defineEmits<{
   scanned: [value: string]
@@ -25,10 +26,16 @@ const videoEl = ref<HTMLVideoElement | null>(null)
 
 const { isScanning, error, start, stop } = useBarcodeScanner({
   onDetected(value) {
-    emit('scanned', value)
+    scannedValue.value = value
     close()
   }
 })
+
+function handleClosed() {
+  const value = scannedValue.value
+  scannedValue.value = null
+  if (value !== null) emit('scanned', value)
+}
 
 function close() {
   stop()
@@ -52,6 +59,7 @@ watch(open, async (value) => {
     v-model:open="open"
     :title="props.title"
     :description="props.description"
+    @after:leave="handleClosed"
   >
     <UButton
       type="button"

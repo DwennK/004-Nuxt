@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<{
 })
 
 const open = defineModel<boolean>('open', { default: false })
+const focusReturn = usePosFocusReturn(open)
 
 const state = props.editor.state
 const documentTypeItems = props.editor.documentTypeItems
@@ -23,6 +24,7 @@ const documentStatusItems = props.editor.documentStatusItems
 <template>
   <USlideover
     v-model:open="open"
+    :content="focusReturn"
     title="Modifier le contexte"
     description="Type, statut, client, date et notes restent modifiables sans encombrer l’écran principal."
     side="right"

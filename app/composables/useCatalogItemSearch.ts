@@ -7,6 +7,13 @@ type UseCatalogItemSearchOptions = {
 }
 
 export function useCatalogItemSearch(options: UseCatalogItemSearchOptions = {}) {
+  const searchInput = ref<{ inputRef?: HTMLInputElement } | null>(null)
+
+  async function focusSearch() {
+    await nextTick()
+    searchInput.value?.inputRef?.focus({ preventScroll: true })
+  }
+
   const search = ref('')
   const debouncedSearch = refDebounced(search, 200)
   const searchOpen = ref(false)
@@ -159,6 +166,8 @@ export function useCatalogItemSearch(options: UseCatalogItemSearchOptions = {}) 
   }
 
   return {
+    searchInput,
+    focusSearch,
     search,
     searchOpen,
     highlightedItemIndex,

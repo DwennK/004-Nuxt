@@ -26,6 +26,8 @@ const toast = useToast()
 const formId = `customer-inline-${useId()}`
 const menuOpen = ref(false)
 const createOpen = ref(false)
+const customerSelect = useTemplateRef<{ triggerRef?: HTMLElement }>('customerSelect')
+const focusReturn = usePosFocusReturn(createOpen, () => customerSelect.value?.triggerRef)
 const isSaving = ref(false)
 const searchTerm = ref('')
 const createdCustomers = ref<CustomerRecord[]>([])
@@ -237,6 +239,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="space-y-2">
     <USelectMenu
+      ref="customerSelect"
       v-model:open="menuOpen"
       v-model:search-term="searchTerm"
       :model-value="modelValue ?? undefined"
@@ -317,6 +320,7 @@ onBeforeUnmount(() => {
 
     <USlideover
       v-model:open="createOpen"
+      :content="focusReturn"
       title="Créer un client"
       description="Ajoutez une fiche légère puis continuez immédiatement votre ticket ou votre document."
       side="right"

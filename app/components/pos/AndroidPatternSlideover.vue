@@ -2,6 +2,7 @@
 import type { ComponentPublicInstance } from 'vue'
 
 const open = defineModel<boolean>('open', { default: false })
+const focusReturn = usePosFocusReturn(open)
 
 const props = defineProps<{
   modelValue?: string | null
@@ -300,6 +301,7 @@ defineShortcuts({
 <template>
   <USlideover
     v-model:open="open"
+    :content="focusReturn"
     title="Pattern Android"
     description="Dessinez le schéma de déverrouillage comme sur l’appareil, puis validez pour remplir le code d’accès."
     side="right"

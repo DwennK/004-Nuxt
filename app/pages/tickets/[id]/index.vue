@@ -58,6 +58,7 @@ const smsModalOpen = ref(false)
 const noteModalOpen = ref(false)
 const noteDraft = ref('')
 const noteSaving = ref(false)
+const noteFocusReturn = usePosFocusReturn(noteModalOpen)
 const createdDocumentActionsOpen = ref(false)
 const selectedWorkflowAction = ref<TicketWorkflowAction | null>(null)
 const createdCommercialDocument = ref<DocumentDetail | null>(null)
@@ -1291,6 +1292,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
 
   <UModal
     v-model:open="noteModalOpen"
+    :content="noteFocusReturn"
     title="Ajouter une note interne"
     description="Cette note sera horodatée dans le suivi du ticket."
     :ui="{ content: 'sm:max-w-xl' }"

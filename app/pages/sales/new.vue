@@ -31,6 +31,8 @@ const saleCompletionOpen = ref(false)
 const customerPool = ref<CustomerRecord[]>([])
 const cashReceived = ref<number | null>(null)
 const {
+  searchInput,
+  focusSearch,
   search,
   highlightedItemIndex,
   remoteSearchPending,
@@ -109,6 +111,7 @@ function isEmptyLine(line: CommercialDraftLine) {
 function addCatalogItem(item: CatalogItemRecord) {
   lineEditor.addCatalogItem(item)
   resetSearch()
+  void focusSearch()
 }
 
 async function createNewLine() {
@@ -200,16 +203,6 @@ function resetSaleState() {
   cashReceived.value = null
 }
 
-function focusSearchInput() {
-  if (typeof document === 'undefined') {
-    return
-  }
-
-  requestAnimationFrame(() => {
-    document.querySelector<HTMLInputElement>('input[name="sale-search"]')?.focus()
-  })
-}
-
 function closeSaleCompletionModal() {
   saleCompletionOpen.value = false
 }
@@ -217,7 +210,7 @@ function closeSaleCompletionModal() {
 function handleSaleCompletionClosed() {
   lastCreatedDocument.value = null
   lastCompletedPaymentMethod.value = null
-  focusSearchInput()
+  void focusSearch()
 }
 
 async function navigateToCompletedDocument(path: string) {
@@ -506,6 +499,7 @@ defineShortcuts({
               >
                 <div class="flex gap-2">
                   <UInput
+                    ref="searchInput"
                     v-model="search"
                     name="sale-search"
                     icon="i-lucide-search"
@@ -671,6 +665,7 @@ defineShortcuts({
                       variant="soft"
                       size="xs"
                       :disabled="line.quantity <= 1"
+                      aria-label="Diminuer la quantité"
                       @click="decrementLine(index)"
                     />
                     <span class="w-8 text-center text-sm font-medium text-highlighted">
@@ -682,6 +677,7 @@ defineShortcuts({
                       color="neutral"
                       variant="soft"
                       size="xs"
+                      aria-label="Augmenter la quantité"
                       @click="incrementLine(index)"
                     />
                   </div>

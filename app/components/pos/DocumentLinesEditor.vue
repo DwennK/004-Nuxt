@@ -22,6 +22,8 @@ const categoryItems = props.editor.categoryItems
 const resolvedMode = computed(() => props.mode || 'document')
 const hasNegativeTotal = computed(() => totals.value.total < 0)
 const {
+  searchInput,
+  focusSearch,
   search,
   highlightedItemIndex,
   remoteSearchPending,
@@ -60,14 +62,17 @@ const emptyDescription = computed(() => {
 
 const catalogItemById = computed(() => new Map(props.catalogItems.map(item => [item.id, item])))
 
-function createNewLine() {
+async function createNewLine() {
   resetSearch()
-  props.editor.addEmptyLine()
+  const line = props.editor.addEmptyLine()
+  await nextTick()
+  document.getElementById(`document-line-label-${line.id}`)?.focus()
 }
 
 function addCatalogItem(item: CatalogItemRecord) {
   props.editor.addCatalogItem(item)
   resetSearch()
+  void focusSearch()
 }
 
 function addFirstMatch() {
@@ -141,6 +146,7 @@ async function handleBarcodeScan(value: string) {
         >
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
             <UInput
+              ref="searchInput"
               v-model="search"
               icon="i-lucide-search"
               size="lg"

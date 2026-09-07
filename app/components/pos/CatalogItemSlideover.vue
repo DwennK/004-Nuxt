@@ -9,6 +9,7 @@ defineProps<{
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
+const focusReturn = usePosFocusReturn(open)
 
 const emit = defineEmits<{
   save: [payload: CatalogItemInput]
@@ -18,6 +19,7 @@ const emit = defineEmits<{
 <template>
   <USlideover
     v-model:open="open"
+    :content="focusReturn"
     :title="title"
     :description="description"
     side="right"
