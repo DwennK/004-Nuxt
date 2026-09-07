@@ -2,6 +2,33 @@ import { sql } from 'drizzle-orm'
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { sentMailStatuses } from '../../shared/constants/email'
 
+// Scope rows retain their monotonically increasing revision after lease expiry.
+export const dossierScopes = sqliteTable('dossier_scopes', {
+  key: text('key').primaryKey(),
+  revision: integer('revision').notNull().default(0),
+  generation: integer('generation').notNull().default(0),
+  token: text('token'),
+  ownerTabId: text('owner_tab_id'),
+  ownerUserId: integer('owner_user_id'),
+  ownerName: text('owner_name'),
+  ownerStation: text('owner_station'),
+  expiresAt: integer('expires_at').notNull().default(0)
+})
+
+export const dossierPresences = sqliteTable('dossier_presences', {
+  id: text('id').primaryKey(),
+  scopeKey: text('scope_key').notNull(),
+  tabId: text('tab_id').notNull(),
+  userId: integer('user_id').notNull(),
+  name: text('name').notNull(),
+  station: text('station').notNull(),
+  dirty: integer('dirty', { mode: 'boolean' }).notNull().default(false),
+  expiresAt: integer('expires_at').notNull()
+}, table => ({
+  scopeIdx: index('dossier_presences_scope_idx').on(table.scopeKey, table.expiresAt),
+  expiryIdx: index('dossier_presences_expiry_idx').on(table.expiresAt)
+}))
+
 export const customers = sqliteTable('customers', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   firstName: text('first_name').notNull(),

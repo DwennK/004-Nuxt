@@ -1,3 +1,4 @@
+import { readDossierWriteContext } from '~~/server/utils/pos/dossiers'
 import { numericIdParamsSchema } from '~~/shared/validation/api'
 import { ticketNoteInputSchema } from '~~/shared/validation/pos'
 import { getUseCaseContext } from '~~/server/utils/auth/session'
@@ -11,5 +12,5 @@ export default eventHandler(async (event) => {
   return addTicketNote(params.id, body.note, {
     userId: actor.userId,
     name: actor.name
-  })
+  }, readDossierWriteContext(event))
 })

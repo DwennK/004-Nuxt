@@ -1,3 +1,4 @@
+import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { getShopifyProvenance } from '../shopify/import'
 import { and, asc, desc, eq, gte, inArray, lte, ne, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
@@ -577,6 +578,7 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
 export async function createDocumentRecord(input: DocumentWriteInput, idempotency: {
   key: string
   payload?: unknown
+  dossier?: DossierWriteContext
 }) {
   await ensurePosSchema()
 
@@ -588,6 +590,7 @@ export async function createDocumentRecord(input: DocumentWriteInput, idempotenc
     payload: idempotency.payload ?? input,
     async execute(tx) {
       if (input.ticketId) {
+        await guardDossierWrite(tx, [{ kind: 'ticket', id: input.ticketId }], idempotency.dossier)
         await assertTicketDocumentCreationAllowed(tx, {
           ticketId: input.ticketId,
           documentType: input.type,
@@ -629,7 +632,8 @@ export async function createDocumentRecord(input: DocumentWriteInput, idempotenc
 export async function createAndPayDocumentRecord(
   input: Omit<DocumentWriteInput, 'customerId'> & { customerId: number | null },
   paymentInput: Omit<DocumentPaymentInput, 'amount'>,
-  idempotencyKey: string
+  idempotencyKey: string,
+  dossier?: DossierWriteContext
 ) {
   await ensurePosSchema()
 
@@ -664,6 +668,7 @@ export async function createAndPayDocumentRecord(
     async execute(tx) {
       const customerId = input.customerId ?? await resolveCounterCustomer(tx)
       if (input.ticketId) {
+        await guardDossierWrite(tx, [{ kind: 'ticket', id: input.ticketId }], dossier)
         await assertTicketDocumentCreationAllowed(tx, {
           ticketId: input.ticketId,
           documentType: input.type,
@@ -713,7 +718,7 @@ export async function createAndPayDocumentRecord(
   return getDocumentById(result.value)
 }
 
-export async function updateDocumentRecord(id: number, input: DocumentWriteInput) {
+export async function updateDocumentRecord(id: number, input: DocumentWriteInput, dossier?: DossierWriteContext) {
   await ensurePosSchema()
 
   const db = useDb()
@@ -731,6 +736,7 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
   }
 
   await db.transaction(async (tx) => {
+    await guardDossierWrite(tx, [{ kind: 'document', id }, ...(input.ticketId ? [{ kind: 'ticket' as const, id: input.ticketId }] : [])], dossier, input.ticketId ? [] : [`document:${id}`])
     const [existingDocument] = await tx.select({
       id: documents.id,
       type: documents.type
@@ -869,11 +875,12 @@ export async function assertDocumentDeletionAllowed(executor: PosDatabaseExecuto
   return document
 }
 
-export async function deleteDocument(id: number) {
+export async function deleteDocument(id: number, dossier?: DossierWriteContext) {
   await ensurePosSchema()
 
   const db = useDb()
   return db.transaction(async (tx) => {
+    await guardDossierWrite(tx, [{ kind: 'document', id }], dossier)
     const document = await assertDocumentDeletionAllowed(tx, id)
 
     if (!document) {
@@ -886,7 +893,7 @@ export async function deleteDocument(id: number) {
   })
 }
 
-export async function markDocumentAsPaid(id: number, input: DocumentPaymentInput, idempotencyKey: string) {
+export async function markDocumentAsPaid(id: number, input: DocumentPaymentInput, idempotencyKey: string, dossier?: DossierWriteContext) {
   await ensurePosSchema()
 
   const db = useDb()
@@ -896,6 +903,7 @@ export async function markDocumentAsPaid(id: number, input: DocumentPaymentInput
     key: `${id}:${idempotencyKey}`,
     payload: { documentId: id, payment: input },
     async execute(tx) {
+      await guardDossierWrite(tx, [{ kind: 'document', id }], dossier)
       const document = await getPayablePaymentDocument(tx, id)
       const payment = await recordDocumentPayment(tx, document, { ...input, status: 'paid' })
 

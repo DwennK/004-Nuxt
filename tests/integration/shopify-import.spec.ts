@@ -1,3 +1,4 @@
+import { createDossierTables, testDossierContext } from '../fixtures/dossiers'
 import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
 import { createError } from 'h3'
@@ -5,9 +6,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { persistShopifyOrder, persistShopifyPaymentSync, getShopifyProvenance } from '../../server/utils/shopify/import'
+import { persistShopifyOrder, persistShopifyPaymentSync as syncPayments, getShopifyProvenance } from '../../server/utils/shopify/import'
 import type { PosDatabase } from '../../server/utils/turso'
 import { importTables, money, orderFixture, unpaidOrder } from '../fixtures/shopify'
+
+const persistShopifyPaymentSync: typeof syncPayments = async (domain, order, id, db) => syncPayments(domain, order, id, db, await testDossierContext(db!, { kind: 'document', id }))
 
 describe('Shopify atomic invoice and payment import', () => {
   let client: ReturnType<typeof createClient>
@@ -19,6 +22,7 @@ describe('Shopify atomic invoice and payment import', () => {
     client = createClient({ url: `file:${join(directory, 'shopify.db')}` })
     db = drizzle({ client }) as unknown as PosDatabase
     await client.batch(importTables, 'write')
+    await createDossierTables(client)
     vi.stubGlobal('useRuntimeConfig', () => ({ posAllowRuntimeSchemaBootstrap: false }))
     vi.stubGlobal('createError', createError)
   })

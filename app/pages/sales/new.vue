@@ -11,6 +11,8 @@ import {
   type CommercialDraftLine
 } from '~~/app/composables/useCommercialLinesDraft'
 
+const $fetch = useDossierFetch()
+
 const toast = useToast()
 const saleMutation = useIdempotentMutation()
 
@@ -31,6 +33,12 @@ const lastCompletedPaymentMethod = ref<PaymentMethod | null>(null)
 const saleCompletionOpen = ref(false)
 const customerPool = ref<CustomerRecord[]>([])
 const cashReceived = ref<number | null>(null)
+const saleDirty = computed(() => lines.value.length > 0 || selectedCustomerId.value !== null || cashReceived.value !== null)
+const saleSnapshot = computed(() => JSON.stringify({
+  customerId: selectedCustomerId.value,
+  lines: lineEditor.serializeLines(lines.value),
+  cashReceived: cashReceived.value
+}, null, 2))
 const {
   searchInput,
   focusSearch,
@@ -739,6 +747,7 @@ defineShortcuts({
           </div>
 
           <div class="space-y-4 xl:sticky xl:top-3">
+            <PosUnsavedChanges :dirty="saleDirty" :snapshot="saleSnapshot" :saving="Boolean(isSaving)" />
             <UCard
               variant="subtle"
               :ui="{

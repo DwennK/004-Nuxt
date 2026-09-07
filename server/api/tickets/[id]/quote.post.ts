@@ -1,3 +1,4 @@
+import { readDossierWriteContext } from '~~/server/utils/pos/dossiers'
 import { createQuoteFromTicket } from '~~/server/utils/pos/tickets'
 import { numericIdParamsSchema } from '~~/shared/validation/api'
 import { requireCapability } from '~~/server/utils/auth/session'
@@ -7,5 +8,5 @@ export default eventHandler(async (event) => {
   await requireCapability(event, 'financial:record')
   const idempotencyKey = requireIdempotencyKey(event)
   const params = await getValidatedRouterParams(event, numericIdParamsSchema.parse)
-  return createQuoteFromTicket(params.id, idempotencyKey)
+  return createQuoteFromTicket(params.id, idempotencyKey, readDossierWriteContext(event))
 })

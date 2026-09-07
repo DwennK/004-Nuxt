@@ -1,3 +1,4 @@
+import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { and, asc, desc, eq, gte, lte, or, sql } from 'drizzle-orm'
 import { customers, documents, payments } from '~~/server/db/schema'
 import {
@@ -137,7 +138,8 @@ export async function getPaymentById(id: number) {
 
 export async function createPaymentRecord(
   input: Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt'>,
-  idempotencyKey: string
+  idempotencyKey: string,
+  dossier?: DossierWriteContext
 ) {
   await ensurePosSchema()
 
@@ -159,6 +161,7 @@ export async function createPaymentRecord(
     key: idempotencyKey,
     payload: input,
     async execute(tx) {
+      await guardDossierWrite(tx, [{ kind: 'document', id: input.documentId }], dossier)
       const document = await getPayablePaymentDocument(tx, input.documentId)
 
       if (input.customerId !== null && input.customerId !== document.customerId) {
@@ -204,13 +207,14 @@ export async function createPaymentRecord(
   return mapPayment(result.value)
 }
 
-export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt'>) {
+export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt'>, dossier?: DossierWriteContext) {
   await ensurePosSchema()
 
   assertPositivePaymentAmount(input.amount)
 
   const db = useDb()
   const row = await db.transaction(async (tx) => {
+    await guardDossierWrite(tx, [{ kind: 'payment', id }], dossier)
     const [existing] = await tx.select({
       id: payments.id,
       documentId: payments.documentId,
@@ -308,11 +312,12 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
   return mapPayment(row)
 }
 
-export async function deletePayment(id: number) {
+export async function deletePayment(id: number, dossier?: DossierWriteContext) {
   await ensurePosSchema()
 
   const db = useDb()
   return db.transaction(async (tx) => {
+    await guardDossierWrite(tx, [{ kind: 'payment', id }], dossier)
     const existing = await tx.select().from(payments).where(eq(payments.id, id)).limit(1)
     const row = existing[0]
 

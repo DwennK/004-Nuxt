@@ -1,3 +1,4 @@
+import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { eq } from 'drizzle-orm'
 import { createError } from 'h3'
 import { tickets } from '~~/server/db/schema'
@@ -10,15 +11,16 @@ import { useDb } from '../turso'
 import { ensurePosSchema } from './schema'
 import { createTicketEvent } from './ticket-events'
 
-export function closeTicketRecord(ticketId: number, internalNotes?: string | null) {
-  return updateTicketStatusRecord(ticketId, 'closed', internalNotes)
+export function closeTicketRecord(ticketId: number, internalNotes?: string | null, dossier?: DossierWriteContext) {
+  return updateTicketStatusRecord(ticketId, 'closed', internalNotes, dossier)
 }
 
-export async function updateTicketStatusRecord(ticketId: number, status: TicketStatus, internalNotes?: string | null) {
+export async function updateTicketStatusRecord(ticketId: number, status: TicketStatus, internalNotes?: string | null, dossier?: DossierWriteContext) {
   await ensurePosSchema()
 
   const db = useDb()
   return db.transaction(async (tx) => {
+    await guardDossierWrite(tx, [{ kind: 'ticket', id: ticketId }], dossier)
     const existingRows = await tx.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1)
     const existing = existingRows[0]
 

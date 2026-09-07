@@ -61,7 +61,7 @@ function createAuthenticatedEvent(isAdmin: boolean) {
     capabilities: user.capabilities
   } satisfies AuthRequestContext
 
-  return { context: { auth } }
+  return { context: { auth }, node: { req: { headers: { 'x-dossier-tab': 'test-tab' } } } }
 }
 
 describe('capability-protected financial handlers', () => {
@@ -89,14 +89,14 @@ describe('capability-protected financial handlers', () => {
 
   it('allows an admin to update a document', async () => {
     await expect(updateDocumentHandler(createAuthenticatedEvent(true) as never)).resolves.toEqual({ id: 42 })
-    expect(documentRecords.update).toHaveBeenCalledWith(42, { customerId: undefined })
+    expect(documentRecords.update).toHaveBeenCalledWith(42, { customerId: undefined }, expect.objectContaining({ userId: 1, tabId: 'test-tab', proofs: [] }))
   })
 
   it('keeps document creation available to operators', async () => {
     await expect(createDocumentHandler(createAuthenticatedEvent(false) as never)).resolves.toEqual({ id: 101 })
     expect(documentRecords.create).toHaveBeenCalledWith(
       { customerId: undefined },
-      { key: 'test-idempotency-key' }
+      { key: 'test-idempotency-key', dossier: expect.objectContaining({ userId: 2, tabId: 'test-tab', proofs: [] }) }
     )
   })
 
@@ -108,13 +108,14 @@ describe('capability-protected financial handlers', () => {
     expect(paymentRecords.update).not.toHaveBeenCalled()
     expect(paymentRecords.create).toHaveBeenCalledWith(
       { customerId: null },
-      'test-idempotency-key'
+      'test-idempotency-key',
+      expect.objectContaining({ userId: 2, tabId: 'test-tab', proofs: [] })
     )
   })
 
   it('allows an admin to adjust a payment', async () => {
     await expect(updatePaymentHandler(createAuthenticatedEvent(true) as never)).resolves.toEqual({ id: 42 })
-    expect(paymentRecords.update).toHaveBeenCalledWith(42, { customerId: null })
+    expect(paymentRecords.update).toHaveBeenCalledWith(42, { customerId: null }, expect.objectContaining({ userId: 1, tabId: 'test-tab', proofs: [] }))
   })
 
   it('enforces the real capability helper against the authenticated request context', async () => {

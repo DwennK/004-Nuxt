@@ -1,3 +1,4 @@
+import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { customers, documents, ticketEvents, ticketLines, tickets } from '~~/server/db/schema'
 import {
@@ -28,7 +29,7 @@ import { createTicketEvent } from '~~/server/utils/pos/ticket-events'
 import { closeTicketRecord, updateTicketStatusRecord } from '~~/server/utils/pos/ticket-status'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
 import { generateTicketNumber } from '~~/server/utils/pos/numbers'
-import { getTicketPayments, syncDocumentStatus } from '~~/server/utils/pos/document-balances'
+import { getTicketPayments } from '~~/server/utils/pos/document-balances'
 import { mapCustomer } from '~~/server/modules/customers/mapper'
 import { normalizeOptionalText } from '~~/shared/lib/text'
 import { cloneDocumentLinesFromLatest, createDocumentRecord, mapDocument, mapPayment } from './documents'
@@ -717,11 +718,12 @@ export async function getTicketById(id: number): Promise<TicketDetail> {
 export async function addTicketNote(id: number, note: string, actor?: {
   userId: number
   name: string
-}) {
+}, dossier?: DossierWriteContext) {
   await ensurePosSchema()
 
   const db = useDb()
   await db.transaction(async (tx) => {
+    await guardDossierWrite(tx, [{ kind: 'ticket', id }], dossier)
     const [ticket] = await tx.select({ id: tickets.id }).from(tickets).where(eq(tickets.id, id)).limit(1)
 
     if (!ticket) {
@@ -805,11 +807,12 @@ export async function createTicket(input: Omit<TicketRecord, 'id' | 'ticketNumbe
 
 export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'> & {
   lines?: TicketLineInput[]
-}) {
+}, dossier?: DossierWriteContext) {
   await ensurePosSchema()
 
   const db = useDb()
   return db.transaction(async (tx) => {
+    await guardDossierWrite(tx, [{ kind: 'ticket', id }], dossier)
     const [existing] = await tx.select({
       status: tickets.status
     }).from(tickets).where(eq(tickets.id, id)).limit(1)
@@ -871,13 +874,18 @@ export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 
   })
 }
 
-export async function deleteTicket(id: number) {
+export async function deleteTicket(id: number, dossier?: DossierWriteContext) {
   await ensurePosSchema()
 
   const db = useDb()
-  const result = await db.delete(tickets).where(eq(tickets.id, id))
-
-  return result.rowsAffected
+  return db.transaction(async (tx) => {
+    // ON DELETE SET NULL detaches every linked document. Protect those
+    // destinations too, including leases held before an earlier attachment.
+    const linked = await tx.select({ id: documents.id }).from(documents).where(eq(documents.ticketId, id))
+    await guardDossierWrite(tx, [{ kind: 'ticket', id }], dossier, linked.map(document => `document:${document.id}`))
+    const result = await tx.delete(tickets).where(eq(tickets.id, id))
+    return result.rowsAffected
+  })
 }
 
 function buildFallbackLines(ticket: TicketRecord): Array<{
@@ -896,7 +904,7 @@ function buildFallbackLines(ticket: TicketRecord): Array<{
   }]
 }
 
-export async function createQuoteFromTicket(ticketId: number, idempotencyKey: string) {
+export async function createQuoteFromTicket(ticketId: number, idempotencyKey: string, dossier?: DossierWriteContext) {
   const ticket = await getTicketById(ticketId)
   const ticketLines = await cloneTicketLines(ticketId)
   const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
@@ -911,11 +919,11 @@ export async function createQuoteFromTicket(ticketId: number, idempotencyKey: st
     lines: ticketLines.length ? ticketLines : existingLines.length ? existingLines : buildFallbackLines(ticket)
   }, {
     key: `ticket:${ticketId}:quote:${idempotencyKey}`,
-    payload: { ticketId, documentType: 'quote' }
+    payload: { ticketId, documentType: 'quote' }, dossier
   })
 }
 
-export async function createCustomerOrderFromTicket(ticketId: number, idempotencyKey: string) {
+export async function createCustomerOrderFromTicket(ticketId: number, idempotencyKey: string, dossier?: DossierWriteContext) {
   const ticket = await getTicketById(ticketId)
   const ticketLines = await cloneTicketLines(ticketId)
   const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
@@ -930,11 +938,11 @@ export async function createCustomerOrderFromTicket(ticketId: number, idempotenc
     lines: ticketLines.length ? ticketLines : existingLines.length ? existingLines : buildFallbackLines(ticket)
   }, {
     key: `ticket:${ticketId}:customer-order:${idempotencyKey}`,
-    payload: { ticketId, documentType: 'customer_order' }
+    payload: { ticketId, documentType: 'customer_order' }, dossier
   })
 }
 
-export async function createInvoiceFromTicket(ticketId: number, idempotencyKey: string) {
+export async function createInvoiceFromTicket(ticketId: number, idempotencyKey: string, dossier?: DossierWriteContext) {
   const ticket = await getTicketById(ticketId)
   const ticketLines = await cloneTicketLines(ticketId)
   const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
@@ -948,20 +956,18 @@ export async function createInvoiceFromTicket(ticketId: number, idempotencyKey: 
     lines: ticketLines.length ? ticketLines : existingLines.length ? existingLines : buildFallbackLines(ticket)
   }, {
     key: `ticket:${ticketId}:invoice:${idempotencyKey}`,
-    payload: { ticketId, documentType: 'invoice' }
+    payload: { ticketId, documentType: 'invoice' }, dossier
   })
-
-  await syncDocumentStatus(invoice.id)
 
   return invoice
 }
 
-export async function updateTicketStatus(ticketId: number, status: typeof tickets.$inferSelect.status, internalNotes?: string | null) {
-  const row = await updateTicketStatusRecord(ticketId, status, internalNotes)
+export async function updateTicketStatus(ticketId: number, status: typeof tickets.$inferSelect.status, internalNotes?: string | null, dossier?: DossierWriteContext) {
+  const row = await updateTicketStatusRecord(ticketId, status, internalNotes, dossier)
   return mapTicket(row)
 }
 
-export async function closeTicket(ticketId: number, internalNotes?: string | null) {
-  const row = await closeTicketRecord(ticketId, internalNotes)
+export async function closeTicket(ticketId: number, internalNotes?: string | null, dossier?: DossierWriteContext) {
+  const row = await closeTicketRecord(ticketId, internalNotes, dossier)
   return mapTicket(row)
 }

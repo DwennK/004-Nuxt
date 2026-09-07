@@ -1,3 +1,4 @@
+import { readDossierWriteContext } from '~~/server/utils/pos/dossiers'
 import { documentInputSchema } from '~~/shared/validation/pos'
 import { createDocumentRecord } from '~~/server/utils/pos/documents'
 import { requireCapability } from '~~/server/utils/auth/session'
@@ -7,5 +8,5 @@ export default eventHandler(async (event) => {
   await requireCapability(event, 'financial:record')
   const idempotencyKey = requireIdempotencyKey(event)
   const body = await readValidatedBody(event, documentInputSchema.parse)
-  return createDocumentRecord(body, { key: idempotencyKey })
+  return createDocumentRecord(body, { key: idempotencyKey, dossier: readDossierWriteContext(event) })
 })

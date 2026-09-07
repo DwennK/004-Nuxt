@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { ShopifyImportResult } from '~~/shared/types/shopify'
 
+const $fetch = useDossierFetch()
+
 const props = defineProps<{ documentId: number }>()
 const emit = defineEmits<{ refresh: [] }>()
 const pending = ref(false)

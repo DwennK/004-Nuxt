@@ -1,3 +1,4 @@
+import type { DossierSnapshot } from './dossier'
 import type { ShopifyProvenance } from './shopify'
 import type {
   catalogItemTypes,
@@ -204,6 +205,7 @@ export interface DocumentLineRecord extends CommercialLineRecord {
 }
 
 export interface PaymentRecord {
+  dossier?: DossierSnapshot
   id: number
   customerId: number | null
   documentId: number
@@ -233,6 +235,7 @@ export interface DocumentRecord {
 }
 
 export interface DocumentDetail extends DocumentRecord {
+  dossier?: DossierSnapshot
   shopify?: ShopifyProvenance | null
   customer: CustomerRecord
   ticket: TicketRecord | null
@@ -241,6 +244,7 @@ export interface DocumentDetail extends DocumentRecord {
 }
 
 export interface TicketDetail extends TicketRecord {
+  dossier?: DossierSnapshot
   customer: CustomerRecord
   lines: TicketLineRecord[]
   documents: DocumentRecord[]

@@ -1,3 +1,4 @@
+import { guardDossierWrite, readDossierWriteContext, type DossierWriteContext } from '../pos/dossiers'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { H3Event } from 'h3'
 import { z } from 'zod'
@@ -141,7 +142,7 @@ export async function importShopifyOrder(event: H3Event, orderRef: string) {
   return persistShopifyOrder(config.domain, order)
 }
 
-export async function persistShopifyPaymentSync(domain: string, order: ShopifyOrder, documentId: number, db: PosDatabase = useDb()): Promise<ShopifyImportResult> {
+export async function persistShopifyPaymentSync(domain: string, order: ShopifyOrder, documentId: number, db: PosDatabase = useDb(), dossier?: DossierWriteContext): Promise<ShopifyImportResult> {
   const normalized = normalizeShopifyOrder(order)
   const remoteFingerprint = await fingerprintIdempotencyPayload(commercialPayload(normalized.lines, normalized.totals.total, normalized.totals.taxAmount))
   return db.transaction(async (tx) => {
@@ -173,6 +174,7 @@ export async function persistShopifyPaymentSync(domain: string, order: ShopifyOr
     const incoming = normalized.payments.filter(p => !existingIds.has(externalId(domain, p.transactionId)))
     const totalPaid = [...localPayments, ...incoming].reduce((sum, p) => sum + p.amount, 0)
     if (totalPaid > document.total) return shopifyError('Les paiements dépasseraient le solde de la facture.', 'SHOPIFY_PAYMENT_CONFLICT', 409)
+    await guardDossierWrite(tx, [{ kind: 'document', id: documentId }], dossier)
     await persistPayments(tx, domain, order, document, incoming)
     return { documentId, documentNumber: document.documentNumber, orderName: order.name, paymentsAdded: incoming.length, alreadyImported: true }
   })
@@ -183,5 +185,5 @@ export async function syncShopifyPayments(event: H3Event, documentId: number) {
   await ensurePosSchema()
   const origin = await getShopifyProvenance(documentId)
   if (!origin || origin.domain !== config.domain) return shopifyError('Cette facture ne provient pas de la boutique Shopify connectée.', 'SHOPIFY_SHOP_MISMATCH', 409)
-  return persistShopifyPaymentSync(config.domain, await fetchShopifyOrder(config, origin.orderId), documentId)
+  return persistShopifyPaymentSync(config.domain, await fetchShopifyOrder(config, origin.orderId), documentId, useDb(), readDossierWriteContext(event))
 }

@@ -1,3 +1,4 @@
+import { readDossierWriteContext } from '~~/server/utils/pos/dossiers'
 import { paymentInputSchema } from '~~/shared/validation/pos'
 import { updatePaymentRecord } from '~~/server/utils/pos/payments'
 import { numericIdParamsSchema } from '~~/shared/validation/api'
@@ -10,5 +11,5 @@ export default eventHandler(async (event) => {
   return updatePaymentRecord(params.id, {
     ...body,
     customerId: body.customerId ?? null
-  })
+  }, readDossierWriteContext(event))
 })

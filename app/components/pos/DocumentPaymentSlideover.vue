@@ -4,15 +4,21 @@ import type { FormSubmitEvent } from '@nuxt/ui'
 import { paymentMethodLabels, paymentMethods } from '~~/shared/constants/pos'
 import type { PaymentMethod } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
+import type { DossierClientState } from '~/utils/dossier-client'
 
 const props = defineProps<{
   balanceDue: number
+  disabled?: boolean
   loading?: boolean
   saveError?: string | null
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
 const focusReturn = usePosFocusReturn(open)
+const { $dossiers } = useNuxtApp()
+const dossier = inject<ComputedRef<DossierClientState | null> | null>('pos-dossier-state', null)
+const reserving = ref(false)
+const editingDisabled = computed(() => props.disabled || reserving.value)
 
 const emit = defineEmits<{
   save: [payload: { method: PaymentMethod, amount: number, notes: string }]
@@ -37,12 +43,23 @@ const state = reactive<Schema>({
   notes: ''
 })
 
-watchEffect(() => {
-  state.amount = Math.max(props.balanceDue / 100, 0)
+const snapshot = computed(() => JSON.stringify(state, null, 2))
+const initialSnapshot = ref(snapshot.value)
+const dirty = computed(() => open.value && snapshot.value !== initialSnapshot.value)
+
+watch(open, async (value) => {
+  if (!value) return
+  Object.assign(state, { method: 'cash', amount: Math.max(props.balanceDue / 100, 0), notes: '' })
+  initialSnapshot.value = snapshot.value
+  if (!dossier?.value) return
+  reserving.value = true
+  try {
+    await $dossiers.session(dossier.value, 'acquire')
+  } catch { /* The dossier banner preserves the connection/conflict state. */ } finally { reserving.value = false }
 })
 
 function onSubmit(event: FormSubmitEvent<Schema>) {
-  if (props.loading) return
+  if (props.loading || editingDisabled.value) return
   emit('save', {
     method: event.data.method,
     amount: Math.round((event.data.amount || 0) * 100),
@@ -66,7 +83,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       <UForm
         :schema="schema"
         :state="state"
-        :disabled="props.loading"
+        :disabled="props.loading || editingDisabled"
         :aria-busy="props.loading"
         class="space-y-4"
         @submit="onSubmit"
@@ -110,6 +127,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         </UFormField>
 
         <PosFormFeedback :saving="props.loading" :error="props.saveError" />
+        <PosUnsavedChanges :dirty="dirty" :snapshot="snapshot" :saving="props.loading" />
 
         <div class="flex justify-end">
           <UButton
@@ -117,7 +135,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             :label="props.loading ? 'Enregistrement…' : 'Enregistrer le paiement'"
             icon="i-lucide-wallet"
             :loading="props.loading"
-            :disabled="props.loading"
+            :disabled="props.loading || editingDisabled"
           />
         </div>
       </UForm>

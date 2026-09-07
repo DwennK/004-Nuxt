@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import type { CustomerListResponse, TicketDetail } from '~~/shared/types/pos'
 
+const $fetch = useDossierFetch()
+
 const route = useRoute()
 const { isSaving, saveError, save } = useFormAction()
 const id = computed(() => Number(route.params.id))
 const formId = 'ticket-editor-form'
+const dirty = ref(false)
 
 const [{ data: ticket }, { data: customers }] = await Promise.all([
   useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
@@ -12,6 +15,9 @@ const [{ data: ticket }, { data: customers }] = await Promise.all([
     query: { pageSize: 250 }
   })
 ])
+
+const dossier = useDossier(() => ({ kind: 'ticket', id: id.value }), { record: ticket, edit: true })
+provide('pos-dossier-state', dossier.current)
 
 async function saveTicket(payload: {
   customerId: number
@@ -41,6 +47,7 @@ async function saveTicket(payload: {
     body: payload
   }), { success: 'Ticket enregistré' })
   if (!result?.ok) return
+  dirty.value = false
   await navigateTo(`/tickets/${id.value}`)
 }
 </script>
@@ -79,6 +86,7 @@ async function saveTicket(payload: {
               type="submit"
               :label="isSaving ? 'Enregistrement…' : 'Enregistrer les modifications'"
               :loading="isSaving"
+              :disabled="dossier.blocked.value"
               aria-label="Enregistrer les modifications"
               icon="i-lucide-check"
               :ui="{ label: 'hidden sm:inline' }"
@@ -89,9 +97,13 @@ async function saveTicket(payload: {
     </template>
 
     <template #body>
+      <PosDossierBanner :state="dossier.current.value" />
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
         <PosTicketForm
           v-if="ticket && customers?.items"
+          :key="dossier.current.value?.epoch"
+          v-model:dirty="dirty"
+          :disabled="dossier.blocked.value"
           :form-id="formId"
           :saving="isSaving"
           :save-error="saveError"

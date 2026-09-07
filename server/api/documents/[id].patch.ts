@@ -1,3 +1,4 @@
+import { readDossierWriteContext } from '~~/server/utils/pos/dossiers'
 import { documentInputSchema } from '~~/shared/validation/pos'
 import { updateDocumentRecord } from '~~/server/utils/pos/documents'
 import { numericIdParamsSchema } from '~~/shared/validation/api'
@@ -7,5 +8,5 @@ export default eventHandler(async (event) => {
   await requireCapability(event, 'financial:adjust')
   const params = await getValidatedRouterParams(event, numericIdParamsSchema.parse)
   const body = await readValidatedBody(event, documentInputSchema.parse)
-  return updateDocumentRecord(params.id, body)
+  return updateDocumentRecord(params.id, body, readDossierWriteContext(event))
 })

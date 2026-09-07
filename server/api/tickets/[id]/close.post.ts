@@ -1,3 +1,4 @@
+import { readDossierWriteContext } from '~~/server/utils/pos/dossiers'
 import { z } from 'zod'
 import { closeTicket } from '~~/server/utils/pos/tickets'
 import { numericIdParamsSchema } from '~~/shared/validation/api'
@@ -9,5 +10,5 @@ const bodySchema = z.object({
 export default eventHandler(async (event) => {
   const params = await getValidatedRouterParams(event, numericIdParamsSchema.parse)
   const body = await readValidatedBody(event, bodySchema.parse)
-  return closeTicket(params.id, body.internalNotes)
+  return closeTicket(params.id, body.internalNotes, readDossierWriteContext(event))
 })

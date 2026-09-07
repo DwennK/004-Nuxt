@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import type { CustomerListResponse } from '~~/shared/types/pos'
 
+const $fetch = useDossierFetch()
+
 const route = useRoute()
 const { isSaving, saveError, save } = useFormAction()
 const customerId = computed(() => Number(route.query.customerId || 0))
 const formId = 'ticket-editor-form'
+const dirty = ref(false)
 
 const { data: customers } = await useFetch<CustomerListResponse>('/api/customers', {
   query: { pageSize: 250 }
@@ -38,6 +41,7 @@ async function saveTicket(payload: {
     body: { ...payload, customerId: payload.customerId || customerId.value }
   }), { success: 'Ticket créé' })
   if (!result?.ok) return
+  dirty.value = false
   await navigateTo(`/tickets/${result.data.id}`)
 }
 </script>
@@ -74,6 +78,7 @@ async function saveTicket(payload: {
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
         <PosTicketForm
           v-if="customers?.items"
+          v-model:dirty="dirty"
           :form-id="formId"
           :saving="isSaving"
           :save-error="saveError"

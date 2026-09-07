@@ -35,6 +35,8 @@ import { canCreateTicketDocument } from '~~/shared/domain/tickets/document-polic
 import { supportsDocumentPrintProfile, supportsTicketPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
+const $fetch = useDossierFetch()
+
 type TimelineItem = TicketEvent & {
   date: string
   title: string
@@ -74,6 +76,23 @@ const [{ data: ticket, refresh: refreshTicket }, { data: customerSmsSettings }] 
   useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
   useFetch<CustomerSmsSettingsRecord>('/api/settings/customer-sms')
 ])
+
+const dossier = useDossier(() => ({ kind: 'ticket', id: id.value }), { record: ticket })
+provide('pos-dossier-state', dossier.current)
+watch([workflowOpen, noteModalOpen], async (values) => {
+  if (values.some(Boolean) && dossier.current.value) {
+    try {
+      await dossier.manager.session(dossier.current.value, 'acquire')
+    } catch { /* Banner reports failures. */ }
+  }
+})
+
+watch(() => dossier.current.value?.epoch, () => {
+  noteDraft.value = ''
+  workflowOpen.value = false
+  paymentOpen.value = false
+  noteModalOpen.value = false
+})
 
 const activeTab = ref('suivi')
 
@@ -674,7 +693,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
               :color="ticket ? ticketStatusColors[ticket.status] : 'neutral'"
               variant="subtle"
               trailing-icon="i-lucide-chevron-down"
-              :disabled="!isTicketMutable"
+              :disabled="dossier.blocked.value || (!isTicketMutable)"
               :ui="{
                 trailingIcon: ['transition-transform duration-200', open ? 'rotate-180' : undefined].filter(Boolean).join(' ')
               }"
@@ -682,6 +701,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           </UDropdownMenu>
 
           <UButton
+            :disabled="dossier.blocked.value"
             label="Note interne"
             aria-label="Ajouter une note interne"
             icon="i-lucide-message-square-plus"
@@ -698,13 +718,14 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             icon="i-lucide-message-square-share"
             color="neutral"
             variant="subtle"
-            :disabled="!canSendSms"
+            :disabled="dossier.blocked.value || (!canSendSms)"
             class="hidden sm:inline-flex"
             :ui="{ label: 'hidden sm:inline' }"
             @click="openSmsModal"
           />
           <UButton
             v-if="supportsThermalPrint"
+            :disabled="dossier.blocked.value"
             :to="`/tickets/${id}/print`"
             label="Imprimer ticket atelier"
             aria-label="Imprimer ticket atelier"
@@ -721,7 +742,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             color="neutral"
             variant="ghost"
             :to="`/tickets/${id}/edit`"
-            :disabled="!isTicketMutable"
+            :disabled="dossier.blocked.value || (!isTicketMutable)"
             class="hidden sm:inline-flex"
             :ui="{ label: 'hidden sm:inline' }"
           />
@@ -732,6 +753,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             class="sm:hidden"
           >
             <UButton
+              :disabled="dossier.blocked.value"
               icon="i-lucide-ellipsis"
               aria-label="Actions du ticket"
               color="neutral"
@@ -743,8 +765,9 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
     </template>
 
     <template #body>
+      <PosDossierBanner :state="dossier.current.value" />
       <div v-if="ticket" class="space-y-3">
-        <PosFormFeedback :saving="actionSaving" :error="actionError" />
+        <PosFormFeedback :saving="actionSaving || dossier.blocked.value" :error="actionError" />
         <UAlert
           v-if="!canSendSms"
           color="neutral"
@@ -859,6 +882,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
 
                       <UButton
                         v-if="getEventDocumentId(event)"
+                        :disabled="dossier.blocked.value"
                         :to="`/documents/${getEventDocumentId(event)}`"
                         label="Ouvrir le document"
                         icon="i-lucide-arrow-up-right"
@@ -1021,7 +1045,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                     color="neutral"
                     variant="soft"
                     block
-                    :disabled="!canSendSms"
+                    :disabled="dossier.blocked.value || (!canSendSms)"
                     @click="openSmsModal"
                   />
                 </UCard>
@@ -1102,6 +1126,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                     </div>
                     <UButton
                       v-if="ticket.commercialSummary.quote"
+                      :disabled="dossier.blocked.value"
                       :to="`/documents/${ticket.commercialSummary.quote.id}`"
                       label="Ouvrir"
                       icon="i-lucide-arrow-up-right"
@@ -1122,6 +1147,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                     </div>
                     <UButton
                       v-if="ticket.commercialSummary.customerOrder"
+                      :disabled="dossier.blocked.value"
                       :to="`/documents/${ticket.commercialSummary.customerOrder.id}`"
                       label="Ouvrir"
                       icon="i-lucide-arrow-up-right"
@@ -1142,6 +1168,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                     </div>
                     <UButton
                       v-if="ticket.commercialSummary.invoice"
+                      :disabled="dossier.blocked.value"
                       :to="`/documents/${ticket.commercialSummary.invoice.id}`"
                       label="Ouvrir"
                       icon="i-lucide-arrow-up-right"
@@ -1159,6 +1186,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 </p>
                 <UButton
                   v-if="canCreateQuote"
+                  :disabled="dossier.blocked.value"
                   label="Créer un devis"
                   icon="i-lucide-scroll-text"
                   variant="soft"
@@ -1170,6 +1198,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 />
                 <UButton
                   v-if="canCreateCustomerOrder"
+                  :disabled="dossier.blocked.value"
                   label="Créer une commande"
                   icon="i-lucide-clipboard-plus"
                   color="warning"
@@ -1182,6 +1211,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 />
                 <UButton
                   v-if="canCreateInvoice"
+                  :disabled="dossier.blocked.value"
                   label="Créer une facture"
                   icon="i-lucide-file-text"
                   size="md"
@@ -1192,6 +1222,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 />
                 <UButton
                   v-if="canRecordPayment"
+                  :disabled="dossier.blocked.value"
                   label="Encaisser"
                   icon="i-lucide-wallet"
                   color="success"
@@ -1237,6 +1268,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
 
         <div class="grid gap-2 sm:grid-cols-2">
           <UButton
+            :disabled="dossier.blocked.value"
             label="Ouvrir le document"
             icon="i-lucide-arrow-up-right"
             color="primary"
@@ -1245,6 +1277,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           />
           <UButton
             v-if="createdDocumentSupportsA4Print"
+            :disabled="dossier.blocked.value"
             label="Envoyer par mail"
             icon="i-lucide-mail"
             color="neutral"
@@ -1254,6 +1287,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           />
           <UButton
             v-if="createdDocumentSupportsA4Print"
+            :disabled="dossier.blocked.value"
             label="Imprimer A4"
             icon="i-lucide-file-text"
             color="neutral"
@@ -1263,6 +1297,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           />
           <UButton
             v-if="createdDocumentSupportsThermalPrint"
+            :disabled="dossier.blocked.value"
             label="Imprimer thermique"
             icon="i-lucide-printer"
             color="neutral"
@@ -1272,6 +1307,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           />
           <UButton
             v-if="createdCommercialDocument.type !== 'invoice' && canCreateInvoice"
+            :disabled="dossier.blocked.value"
             label="Créer la facture"
             icon="i-lucide-file-text"
             color="neutral"
@@ -1282,6 +1318,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           />
           <UButton
             v-if="canChargeCreatedDocument"
+            :disabled="dossier.blocked.value"
             label="Encaisser"
             icon="i-lucide-wallet"
             color="success"
@@ -1296,6 +1333,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
     <template #footer>
       <div class="flex w-full justify-end">
         <UButton
+          :disabled="dossier.blocked.value"
           label="Rester sur le ticket"
           color="neutral"
           variant="ghost"
@@ -1306,9 +1344,10 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
   </UModal>
 
   <PosTicketWorkflowSlideover
+    :key="dossier.current.value?.epoch"
     v-model:open="workflowOpen"
     :action="selectedWorkflowAction"
-    :saving="actionSaving"
+    :saving="actionSaving || dossier.blocked.value"
     :save-error="actionError"
     :initial-notes="ticket?.internalNotes"
     @submit="handleWorkflowSubmit"
@@ -1327,7 +1366,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
       <UFormField label="Note" required>
         <UTextarea
           v-model="noteDraft"
-          :disabled="noteSaving"
+          :disabled="dossier.blocked.value || noteSaving"
           :rows="5"
           maxlength="2000"
           autofocus
@@ -1337,6 +1376,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           @keydown.ctrl.enter="addInternalNote"
         />
       </UFormField>
+      <PosUnsavedChanges :dirty="!!noteDraft" :snapshot="noteDraft" :saving="noteSaving" />
       <PosFormFeedback class="mt-3" :saving="noteSaving" :error="noteError" />
     </template>
 
@@ -1346,14 +1386,14 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           label="Annuler"
           color="neutral"
           variant="ghost"
-          :disabled="noteSaving"
+          :disabled="dossier.blocked.value || (noteSaving)"
           @click="noteModalOpen = false"
         />
         <UButton
           :label="noteSaving ? 'Enregistrement…' : 'Ajouter la note'"
           icon="i-lucide-message-square-plus"
           :loading="noteSaving"
-          :disabled="!noteDraft.trim()"
+          :disabled="dossier.blocked.value || (!noteDraft.trim())"
           @click="addInternalNote"
         />
       </div>
@@ -1362,7 +1402,9 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
 
   <PosDocumentPaymentSlideover
     v-if="payableDocument"
+    :key="dossier.current.value?.epoch"
     v-model:open="paymentOpen"
+    :disabled="dossier.blocked.value"
     :balance-due="ticket?.commercialSummary.balanceDue || 0"
     :loading="actionSaving"
     :save-error="actionError"
@@ -1385,6 +1427,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           <UButton
             v-for="template in smsTemplateItems"
             :key="template.id"
+            :disabled="dossier.blocked.value"
             :label="template.label"
             :icon="template.id === freeSmsTemplateId ? 'i-lucide-pencil-line' : 'i-lucide-message-circle-more'"
             :color="selectedSmsTemplateId === template.id ? 'primary' : 'neutral'"
@@ -1411,6 +1454,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
 
             <UButton
               v-if="smsHref"
+              :disabled="dossier.blocked.value"
               :to="smsHref"
               external
               target="_blank"

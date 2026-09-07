@@ -6,6 +6,8 @@ import { ticketStatusColors, ticketStatusLabels, ticketTypeLabels } from '~~/sha
 import type { TicketListItem, TicketListResponse } from '~~/shared/types/pos'
 import { formatDateTime } from '~~/shared/utils/pos'
 
+const $fetch = useDossierFetch()
+
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')

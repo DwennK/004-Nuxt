@@ -2,8 +2,11 @@
 import { documentTypes, documentTypeLabels } from '~~/shared/constants/pos'
 import type { CustomerListResponse, DocumentDetail, DocumentStatus, DocumentType } from '~~/shared/types/pos'
 
+const $fetch = useDossierFetch()
+
 const route = useRoute()
 const { isSaving, saveError, save } = useFormAction()
+const dirty = ref(false)
 const documentMutation = useIdempotentMutation()
 const customerId = computed(() => Number(route.query.customerId || 0) || null)
 const ticketId = computed(() => Number(route.query.ticketId || 0) || null)
@@ -28,6 +31,9 @@ const { data: customers } = await useFetch<CustomerListResponse>('/api/customers
   query: { pageSize: 250 }
 })
 
+const dossier = useDossier(() => ticketId.value ? { kind: 'ticket', id: ticketId.value } : null, { edit: true })
+provide('pos-dossier-state', dossier.current)
+
 async function saveDocument(payload: {
   type: DocumentType
   status: DocumentStatus
@@ -51,6 +57,7 @@ async function saveDocument(payload: {
     body: attempt.payload
   }), { success: 'Document créé' })
   if (!result?.ok) return
+  dirty.value = false
   await navigateTo(`/documents/${result.data.id}`)
   documentMutation.complete('create-document')
 }
@@ -67,6 +74,7 @@ async function saveDocument(payload: {
     </template>
 
     <template #body>
+      <PosDossierBanner :state="dossier.current.value" />
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-4">
         <div>
           <h2 class="text-lg font-semibold text-highlighted">
@@ -79,6 +87,9 @@ async function saveDocument(payload: {
 
         <PosDocumentEditor
           v-if="customers?.items"
+          :key="dossier.current.value?.epoch"
+          v-model:dirty="dirty"
+          :disabled="dossier.blocked.value"
           :customers="customers.items"
           :saving="isSaving"
           :save-error="saveError"

@@ -13,6 +13,8 @@ import { canDeletePayment, canEditPayment } from '~~/shared/domain/payments/rule
 import type { PaymentListItem, PaymentListResponse } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime, toDateInputValue } from '~~/shared/utils/pos'
 
+const $fetch = useDossierFetch()
+
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')

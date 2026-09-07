@@ -1,3 +1,4 @@
+import { readDossierWriteContext } from '~~/server/utils/pos/dossiers'
 import { paymentInputSchema } from '~~/shared/validation/pos'
 import { createPaymentRecord } from '~~/server/utils/pos/payments'
 import { requireCapability } from '~~/server/utils/auth/session'
@@ -10,5 +11,5 @@ export default eventHandler(async (event) => {
   return createPaymentRecord({
     ...body,
     customerId: body.customerId ?? null
-  }, idempotencyKey)
+  }, idempotencyKey, readDossierWriteContext(event))
 })

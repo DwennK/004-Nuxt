@@ -10,7 +10,10 @@ import { canDeletePayment, canEditPayment } from '~~/shared/domain/payments/rule
 import type { PaymentMethod, PaymentRecord, PaymentStatus } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
 
+const $fetch = useDossierFetch()
+
 const props = defineProps<{
+  disabled?: boolean
   documentId: number
   payments: PaymentRecord[]
   documentTotal: number
@@ -41,6 +44,8 @@ const statusItems = editablePaymentStatuses.map(status => ({
 
 const paymentDraftController = usePaymentDrafts(toRef(props, 'documentId'), toRef(props, 'payments'))
 const paymentDrafts = paymentDraftController.drafts
+const dirty = computed(() => props.payments.some(payment => paymentDraftController.isDirty(payment.id)))
+
 const deletingId = ref<number | null>(null)
 const savingId = ref<number | null>(null)
 const creatingMethod = ref<PaymentMethod | 'details' | null>(null)
@@ -57,8 +62,8 @@ watch(() => props.documentId, () => {
 const paidTotal = computed(() => props.payments
   .filter(payment => payment.status === 'paid')
   .reduce((sum, payment) => sum + payment.amount, 0))
-const canCreatePayment = computed(() => props.isPayableDocument && props.balanceDue > 0)
-const canAdjustPayments = computed(() => can('financial:adjust'))
+const canCreatePayment = computed(() => !props.disabled && props.isPayableDocument && props.balanceDue > 0)
+const canAdjustPayments = computed(() => !props.disabled && can('financial:adjust'))
 const canDeletePayments = computed(() => canAdjustPayments.value && can('records:delete'))
 
 function isPaymentEditable(payment: PaymentRecord) {
@@ -78,7 +83,7 @@ async function addPayment(input: {
   amount?: number
   notes?: string
 }, source: PaymentMethod | 'details') {
-  if (mutationPending.value) return
+  if (props.disabled || mutationPending.value) return
   createError.value = null
   creatingMethod.value = source
 
@@ -213,252 +218,256 @@ async function removePayment(payment: PaymentRecord) {
 </script>
 
 <template>
-  <div class="grid gap-4 xl:h-[calc(100vh-24rem)] xl:grid-cols-[minmax(0,1fr)_20rem]">
-    <UCard
-      :ui="{
-        root: 'rounded-[1.75rem] shadow-sm',
-        body: 'space-y-3 p-4',
-        header: 'p-4 pb-0'
-      }"
-      class="xl:min-h-0"
-    >
-      <template #header>
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <h2 class="text-base font-semibold text-highlighted">
-              Paiements du document
-            </h2>
-          </div>
-          <span class="text-xs text-toned">
-            {{ payments.length }} paiement(s)
-          </span>
-        </div>
-      </template>
-
-      <UEmpty
-        v-if="!payments.length"
-        icon="i-lucide-wallet"
-        title="Aucun paiement enregistré"
-        description="Ajoutez le premier paiement depuis le rail de droite."
-        class="py-10"
-      />
-
-      <div v-else class="max-h-[calc(100vh-29rem)] space-y-3 overflow-y-auto pr-1">
-        <div
-          v-for="payment in payments"
-          :key="payment.id"
-          class="rounded-2xl border border-default bg-default px-3 py-3"
-        >
-          <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[9rem_8rem_9rem_minmax(0,1fr)]">
-              <UFormField label="Mode">
-                <USelect
-                  v-model="paymentDrafts[payment.id]!.method"
-                  :items="methodItems"
-                  value-key="value"
-                  size="sm"
-                  class="w-full"
-                  :disabled="!isPaymentEditable(payment) || mutationPending"
-                />
-              </UFormField>
-
-              <UFormField label="Statut">
-                <USelect
-                  v-model="paymentDrafts[payment.id]!.status"
-                  :items="statusItems"
-                  value-key="value"
-                  size="sm"
-                  class="w-full"
-                  :disabled="!isPaymentStatusEditable(payment) || mutationPending"
-                />
-              </UFormField>
-
-              <UFormField label="Montant">
-                <UInputNumber
-                  v-model="paymentDrafts[payment.id]!.amount"
-                  :min="0"
-                  :step="0.05"
-                  size="sm"
-                  class="w-full"
-                  :disabled="!isPaymentEditable(payment) || mutationPending"
-                  :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
-                />
-              </UFormField>
-
-              <UFormField label="Encaissé à">
-                <UInput
-                  v-model="paymentDrafts[payment.id]!.paidAt"
-                  type="datetime-local"
-                  size="sm"
-                  class="w-full"
-                  :disabled="!isPaymentEditable(payment) || mutationPending"
-                />
-              </UFormField>
-            </div>
-
-            <div class="flex items-start justify-end gap-1">
-              <UBadge :color="paymentMethodColors[payment.method]" variant="subtle" size="sm">
-                {{ paymentMethodLabels[payment.method] }}
-              </UBadge>
-              <UBadge :color="paymentStatusColors[payment.status]" variant="subtle" size="sm">
-                {{ paymentStatusLabels[payment.status] }}
-              </UBadge>
-            </div>
-          </div>
-
-          <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-            <UFormField label="Notes">
-              <UTextarea
-                v-model="paymentDrafts[payment.id]!.notes"
-                :rows="2"
-                autoresize
-                size="sm"
-                class="w-full"
-                placeholder="Note de paiement optionnelle"
-                :disabled="!isPaymentEditable(payment) || mutationPending"
-              />
-            </UFormField>
-
-            <div v-if="isPaymentEditable(payment)" class="flex items-end justify-end gap-2">
-              <UButton
-                type="button"
-                icon="i-lucide-rotate-ccw"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                aria-label="Réinitialiser le paiement"
-                :disabled="mutationPending"
-                @click="resetDraft(payment)"
-              />
-              <UButton
-                v-if="isPaymentDeletable(payment)"
-                type="button"
-                icon="i-lucide-trash-2"
-                color="error"
-                variant="ghost"
-                size="sm"
-                aria-label="Supprimer le paiement"
-                :loading="deletingId === payment.id"
-                :disabled="mutationPending"
-                @click="removePayment(payment)"
-              />
-              <UButton
-                type="button"
-                :label="savingId === payment.id ? 'Enregistrement…' : 'Enregistrer les modifications'"
-                :disabled="mutationPending"
-                icon="i-lucide-save"
-                size="sm"
-                :loading="savingId === payment.id"
-                @click="savePayment(payment)"
-              />
-            </div>
-            <div v-else class="flex items-end justify-end pb-2">
-              <p class="max-w-64 text-right text-xs text-toned">
-                Paiement annulé ou remboursé : utilisez une écriture de correction dédiée.
-              </p>
-            </div>
-          </div>
-          <PosFormFeedback class="mt-2" :saving="savingId === payment.id" :error="paymentErrors[payment.id]" />
-        </div>
-      </div>
-    </UCard>
-
-    <div class="space-y-4 xl:min-h-0 xl:overflow-y-auto pr-1">
+  <PosUnsavedChanges :dirty="dirty" :snapshot="JSON.stringify(paymentDrafts, null, 2)" :saving="mutationPending" />
+  <fieldset :disabled="props.disabled" class="min-w-0">
+    <div class="grid gap-4 xl:h-[calc(100vh-24rem)] xl:grid-cols-[minmax(0,1fr)_20rem]">
       <UCard
         :ui="{
           root: 'rounded-[1.75rem] shadow-sm',
-          body: 'space-y-4 p-4',
+          body: 'space-y-3 p-4',
           header: 'p-4 pb-0'
         }"
+        class="xl:min-h-0"
       >
         <template #header>
-          <div class="flex items-start justify-between gap-3">
-            <div class="space-y-1">
+          <div class="flex items-center justify-between gap-3">
+            <div>
               <h2 class="text-base font-semibold text-highlighted">
-                Encaissement
+                Paiements du document
               </h2>
             </div>
-            <UBadge :color="canCreatePayment ? 'primary' : 'neutral'" variant="soft" size="sm">
-              {{ !isPayableDocument ? 'Non payable' : canCreatePayment ? 'Prêt à encaisser' : 'Soldé' }}
-            </UBadge>
+            <span class="text-xs text-toned">
+              {{ payments.length }} paiement(s)
+            </span>
           </div>
         </template>
 
-        <div class="space-y-2 rounded-2xl border border-default bg-default/70 px-4 py-3">
-          <div class="flex items-center justify-between gap-3 text-sm">
-            <span class="text-toned">Total document</span>
-            <span class="font-medium text-highlighted">{{ formatCurrency(documentTotal) }}</span>
-          </div>
-          <div class="flex items-center justify-between gap-3 text-sm">
-            <span class="text-toned">Déjà encaissé</span>
-            <span class="font-medium text-highlighted">{{ formatCurrency(paidTotal) }}</span>
-          </div>
-          <div class="flex items-center justify-between gap-3 border-t border-default pt-3">
-            <span class="text-sm font-medium text-highlighted">
-              {{ isPayableDocument ? 'Restant' : 'Statut' }}
-            </span>
-            <span class="text-xl font-semibold text-highlighted">
-              {{ isPayableDocument ? formatCurrency(balanceDue) : 'Non payable' }}
-            </span>
+        <UEmpty
+          v-if="!payments.length"
+          icon="i-lucide-wallet"
+          title="Aucun paiement enregistré"
+          description="Ajoutez le premier paiement depuis le rail de droite."
+          class="py-10"
+        />
+
+        <div v-else class="max-h-[calc(100vh-29rem)] space-y-3 overflow-y-auto pr-1">
+          <div
+            v-for="payment in payments"
+            :key="payment.id"
+            class="rounded-2xl border border-default bg-default px-3 py-3"
+          >
+            <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+              <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[9rem_8rem_9rem_minmax(0,1fr)]">
+                <UFormField label="Mode">
+                  <USelect
+                    v-model="paymentDrafts[payment.id]!.method"
+                    :items="methodItems"
+                    value-key="value"
+                    size="sm"
+                    class="w-full"
+                    :disabled="!isPaymentEditable(payment) || mutationPending"
+                  />
+                </UFormField>
+
+                <UFormField label="Statut">
+                  <USelect
+                    v-model="paymentDrafts[payment.id]!.status"
+                    :items="statusItems"
+                    value-key="value"
+                    size="sm"
+                    class="w-full"
+                    :disabled="!isPaymentStatusEditable(payment) || mutationPending"
+                  />
+                </UFormField>
+
+                <UFormField label="Montant">
+                  <UInputNumber
+                    v-model="paymentDrafts[payment.id]!.amount"
+                    :min="0"
+                    :step="0.05"
+                    size="sm"
+                    class="w-full"
+                    :disabled="!isPaymentEditable(payment) || mutationPending"
+                    :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
+                  />
+                </UFormField>
+
+                <UFormField label="Encaissé à">
+                  <UInput
+                    v-model="paymentDrafts[payment.id]!.paidAt"
+                    type="datetime-local"
+                    size="sm"
+                    class="w-full"
+                    :disabled="!isPaymentEditable(payment) || mutationPending"
+                  />
+                </UFormField>
+              </div>
+
+              <div class="flex items-start justify-end gap-1">
+                <UBadge :color="paymentMethodColors[payment.method]" variant="subtle" size="sm">
+                  {{ paymentMethodLabels[payment.method] }}
+                </UBadge>
+                <UBadge :color="paymentStatusColors[payment.status]" variant="subtle" size="sm">
+                  {{ paymentStatusLabels[payment.status] }}
+                </UBadge>
+              </div>
+            </div>
+
+            <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+              <UFormField label="Notes">
+                <UTextarea
+                  v-model="paymentDrafts[payment.id]!.notes"
+                  :rows="2"
+                  autoresize
+                  size="sm"
+                  class="w-full"
+                  placeholder="Note de paiement optionnelle"
+                  :disabled="!isPaymentEditable(payment) || mutationPending"
+                />
+              </UFormField>
+
+              <div v-if="isPaymentEditable(payment)" class="flex items-end justify-end gap-2">
+                <UButton
+                  type="button"
+                  icon="i-lucide-rotate-ccw"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Réinitialiser le paiement"
+                  :disabled="mutationPending"
+                  @click="resetDraft(payment)"
+                />
+                <UButton
+                  v-if="isPaymentDeletable(payment)"
+                  type="button"
+                  icon="i-lucide-trash-2"
+                  color="error"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Supprimer le paiement"
+                  :loading="deletingId === payment.id"
+                  :disabled="mutationPending"
+                  @click="removePayment(payment)"
+                />
+                <UButton
+                  type="button"
+                  :label="savingId === payment.id ? 'Enregistrement…' : 'Enregistrer les modifications'"
+                  :disabled="mutationPending"
+                  icon="i-lucide-save"
+                  size="sm"
+                  :loading="savingId === payment.id"
+                  @click="savePayment(payment)"
+                />
+              </div>
+              <div v-else class="flex items-end justify-end pb-2">
+                <p class="max-w-64 text-right text-xs text-toned">
+                  Paiement annulé ou remboursé : utilisez une écriture de correction dédiée.
+                </p>
+              </div>
+            </div>
+            <PosFormFeedback class="mt-2" :saving="savingId === payment.id" :error="paymentErrors[payment.id]" />
           </div>
         </div>
+      </UCard>
 
-        <template v-if="isPayableDocument">
-          <div class="space-y-2">
-            <h3 class="text-sm font-medium text-highlighted">
-              Paiement direct
-            </h3>
+      <div class="space-y-4 xl:min-h-0 xl:overflow-y-auto pr-1">
+        <UCard
+          :ui="{
+            root: 'rounded-[1.75rem] shadow-sm',
+            body: 'space-y-4 p-4',
+            header: 'p-4 pb-0'
+          }"
+        >
+          <template #header>
+            <div class="flex items-start justify-between gap-3">
+              <div class="space-y-1">
+                <h2 class="text-base font-semibold text-highlighted">
+                  Encaissement
+                </h2>
+              </div>
+              <UBadge :color="canCreatePayment ? 'primary' : 'neutral'" variant="soft" size="sm">
+                {{ !isPayableDocument ? 'Non payable' : canCreatePayment ? 'Prêt à encaisser' : 'Soldé' }}
+              </UBadge>
+            </div>
+          </template>
 
-            <div class="grid gap-2">
-              <UButton
-                v-for="method in paymentMethods"
-                :key="method"
-                type="button"
-                :label="`Encaisser · ${paymentMethodLabels[method]}`"
-                :icon="creatingMethod === method ? 'i-lucide-loader-circle' : 'i-lucide-badge-check'"
-                :loading="creatingMethod === method"
-                :disabled="!canCreatePayment || mutationPending"
-                size="lg"
-                class="justify-center"
-                @click="createQuickPayment(method)"
-              />
+          <div class="space-y-2 rounded-2xl border border-default bg-default/70 px-4 py-3">
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span class="text-toned">Total document</span>
+              <span class="font-medium text-highlighted">{{ formatCurrency(documentTotal) }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span class="text-toned">Déjà encaissé</span>
+              <span class="font-medium text-highlighted">{{ formatCurrency(paidTotal) }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-3 border-t border-default pt-3">
+              <span class="text-sm font-medium text-highlighted">
+                {{ isPayableDocument ? 'Restant' : 'Statut' }}
+              </span>
+              <span class="text-xl font-semibold text-highlighted">
+                {{ isPayableDocument ? formatCurrency(balanceDue) : 'Non payable' }}
+              </span>
             </div>
           </div>
 
-          <PosFormFeedback :saving="Boolean(creatingMethod)" :error="createError" />
+          <template v-if="isPayableDocument">
+            <div class="space-y-2">
+              <h3 class="text-sm font-medium text-highlighted">
+                Paiement direct
+              </h3>
 
-          <UButton
-            type="button"
-            label="Paiement détaillé"
-            icon="i-lucide-sliders-horizontal"
-            color="neutral"
-            variant="soft"
-            block
-            :loading="creatingMethod === 'details'"
-            :disabled="!canCreatePayment || mutationPending"
-            @click="paymentOpen = true"
-          />
-        </template>
+              <div class="grid gap-2">
+                <UButton
+                  v-for="method in paymentMethods"
+                  :key="method"
+                  type="button"
+                  :label="`Encaisser · ${paymentMethodLabels[method]}`"
+                  :icon="creatingMethod === method ? 'i-lucide-loader-circle' : 'i-lucide-badge-check'"
+                  :loading="creatingMethod === method"
+                  :disabled="!canCreatePayment || mutationPending"
+                  size="lg"
+                  class="justify-center"
+                  @click="createQuickPayment(method)"
+                />
+              </div>
+            </div>
 
-        <template v-else>
-          <UAlert
-            icon="i-lucide-info"
-            color="neutral"
-            variant="subtle"
-            title="Document non payable"
-            description="Cette section reste disponible uniquement pour les factures."
-          />
-        </template>
-      </UCard>
+            <PosFormFeedback :saving="Boolean(creatingMethod)" :error="createError" />
 
-      <PosDocumentPaymentSlideover
-        v-if="isPayableDocument"
-        v-model:open="paymentOpen"
-        :balance-due="balanceDue"
-        :save-error="createError"
-        :loading="creatingMethod === 'details'"
-        @save="addPayment($event, 'details')"
-      />
+            <UButton
+              type="button"
+              label="Paiement détaillé"
+              icon="i-lucide-sliders-horizontal"
+              color="neutral"
+              variant="soft"
+              block
+              :loading="creatingMethod === 'details'"
+              :disabled="!canCreatePayment || mutationPending"
+              @click="paymentOpen = true"
+            />
+          </template>
+
+          <template v-else>
+            <UAlert
+              icon="i-lucide-info"
+              color="neutral"
+              variant="subtle"
+              title="Document non payable"
+              description="Cette section reste disponible uniquement pour les factures."
+            />
+          </template>
+        </UCard>
+
+        <PosDocumentPaymentSlideover
+          v-if="isPayableDocument"
+          v-model:open="paymentOpen"
+          :disabled="props.disabled"
+          :balance-due="balanceDue"
+          :save-error="createError"
+          :loading="creatingMethod === 'details'"
+          @save="addPayment($event, 'details')"
+        />
+      </div>
     </div>
-  </div>
+  </fieldset>
 </template>

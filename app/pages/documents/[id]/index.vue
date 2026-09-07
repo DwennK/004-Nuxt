@@ -12,6 +12,8 @@ import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, isPayableDocumentType } from '~~/shared/utils/pos'
 import { readPendingEmailAttempt, type PendingEmailAttempt } from '~~/shared/utils/email-attempt'
 
+const $fetch = useDossierFetch()
+
 const route = useRoute()
 const toast = useToast()
 const { can } = useCapabilities()
@@ -31,7 +33,6 @@ const hasUnsavedDocumentChanges = ref(false)
 const hasOpenedInitialEmailModal = ref(false)
 const documentFormId = 'document-detail-form'
 const documentEditor = useTemplateRef<{ acceptSaved: (saved: DocumentDetail, submitted: DocumentSavePayload) => void }>('documentEditor')
-const unsavedDocumentMessage = 'Des modifications du document ne sont pas enregistrées. Continuer sans enregistrer ?'
 
 const tabItems = [
   { label: 'Lignes', value: 'lines', icon: 'i-lucide-list' },
@@ -51,6 +52,9 @@ const [{ data: document, refresh }, { data: customers }, { data: company }] = aw
   useFetch<CustomerListResponse>('/api/customers', { query: { pageSize: 250 } }),
   useFetch<CompanySettingsRecord>('/api/settings/company')
 ])
+
+const dossier = useDossier(() => ({ kind: 'document', id: id.value }), { record: document, edit: () => can('financial:adjust') })
+provide('pos-dossier-state', dossier.current)
 
 const paidAmount = computed(() => document.value?.payments
   .filter(payment => payment.status === 'paid')
@@ -88,7 +92,7 @@ async function saveDocument(payload: DocumentSavePayload) {
 }
 
 async function openContextEditor() {
-  if (!canEditDocument.value) {
+  if (dossier.blocked.value || !canEditDocument.value) {
     return
   }
 
@@ -98,24 +102,6 @@ async function openContextEditor() {
   }
 
   isContextOpen.value = true
-}
-
-function shouldConfirmUnsavedDocumentChanges() {
-  return hasUnsavedDocumentChanges.value && !isSavingDocument.value
-}
-
-function confirmDiscardUnsavedDocumentChanges() {
-  if (!shouldConfirmUnsavedDocumentChanges()) {
-    return true
-  }
-
-  const shouldContinue = window.confirm(unsavedDocumentMessage)
-
-  if (shouldContinue) {
-    hasUnsavedDocumentChanges.value = false
-  }
-
-  return shouldContinue
 }
 
 function selectTab(value: string | number) {
@@ -137,30 +123,11 @@ function selectTab(value: string | number) {
   activeTab.value = nextTab
 }
 
-function handleBeforeUnload(event: BeforeUnloadEvent) {
-  if (!shouldConfirmUnsavedDocumentChanges()) {
-    return
-  }
-
-  event.preventDefault()
-  event.returnValue = ''
-}
-
-onBeforeRouteLeave(() => {
-  return confirmDiscardUnsavedDocumentChanges()
-})
-
 onMounted(() => {
-  window.addEventListener('beforeunload', handleBeforeUnload)
-
   if (route.query.email === '1' && supportsA4Print.value && !hasOpenedInitialEmailModal.value) {
     hasOpenedInitialEmailModal.value = true
     openEmailModal()
   }
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 
 function fillEmailState() {
@@ -328,51 +295,26 @@ function startNewEmailAttempt() {
             type="submit"
             icon="i-lucide-save"
             :label="saveButtonLabel"
+            :aria-label="saveButtonLabel"
+            :ui="{ label: 'hidden sm:inline' }"
             :loading="isSavingDocument"
+            :disabled="dossier.blocked.value"
           />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
+      <PosDossierBanner :state="dossier.current.value" />
       <div v-if="document && customers?.items" class="space-y-3">
         <PosDocumentDetailHeader
           :document="document"
           :paid-amount="paidAmount"
           :balance-due="balanceDue"
           :is-payable-document="isPayableDocument"
-          :editable="canEditDocument"
+          :editable="canEditDocument && !dossier.blocked.value"
           @edit-context="openContextEditor"
         />
-
-        <div
-          v-if="canEditDocument && hasUnsavedDocumentChanges"
-          class="flex flex-col gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div class="flex items-start gap-3">
-            <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning">
-              <UIcon name="i-lucide-triangle-alert" class="size-4.5" />
-            </div>
-            <div>
-              <p class="text-sm font-medium text-highlighted">
-                Modifications non enregistrées
-              </p>
-              <p class="text-sm text-toned">
-                Enregistrez avant d’imprimer, d’envoyer par mail ou d’encaisser ce document.
-              </p>
-            </div>
-          </div>
-
-          <UButton
-            :form="documentFormId"
-            type="submit"
-            :label="saveButtonLabel"
-            icon="i-lucide-save"
-            color="warning"
-            :loading="isSavingDocument"
-            class="shrink-0"
-          />
-        </div>
 
         <UTabs
           :model-value="activeTab"
@@ -388,8 +330,10 @@ function startNewEmailAttempt() {
           <PosDocumentEditor
             v-if="customers?.items && canEditDocument"
             ref="documentEditor"
+            :key="dossier.current.value?.epoch"
             v-model:context-open="isContextOpen"
             v-model:dirty="hasUnsavedDocumentChanges"
+            :disabled="dossier.blocked.value"
             :form-id="documentFormId"
             :show-submit-button="false"
             :saving="isSavingDocument"
@@ -454,6 +398,8 @@ function startNewEmailAttempt() {
             <PosShopifyPaymentSync v-if="canAdjustFinancialRecords" :document-id="document.id" @refresh="refresh()" />
           </div>
           <PosDocumentPaymentsEditor
+            :key="dossier.current.value?.epoch"
+            :disabled="dossier.blocked.value"
             :document-id="document.id"
             :payments="document.payments"
             :document-total="document.total"

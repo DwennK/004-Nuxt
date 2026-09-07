@@ -1,3 +1,5 @@
+import { createDossierTables, testDossierContext } from '../fixtures/dossiers'
+import { useDb } from '../../server/utils/turso'
 import { createClient } from '@libsql/client'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -101,10 +103,16 @@ describe('editing recorded financial data', () => {
       )`
     ], 'write')
 
+    await createDossierTables(client)
     await client.executeMultiple(await readFile(new URL('../../docs/sql/counter-customer-additive.sql', import.meta.url), 'utf8'))
 
     ;({ updateDocumentRecord, markDocumentAsPaid, createAndPayDocumentRecord } = await import('../../server/utils/pos/documents'))
     ;({ updatePaymentRecord, createPaymentRecord } = await import('../../server/utils/pos/payments'))
+    const original = { updateDocumentRecord, updatePaymentRecord, createPaymentRecord, markDocumentAsPaid }
+    updateDocumentRecord = async (id, input) => original.updateDocumentRecord(id, input, await testDossierContext(useDb(), { kind: 'document', id }))
+    updatePaymentRecord = async (id, input) => original.updatePaymentRecord(id, input, await testDossierContext(useDb(), { kind: 'payment', id }))
+    createPaymentRecord = async (input, key) => original.createPaymentRecord(input, key, await testDossierContext(useDb(), { kind: 'document', id: input.documentId }))
+    markDocumentAsPaid = async (id, input, key) => original.markDocumentAsPaid(id, input, key, await testDossierContext(useDb(), { kind: 'document', id }))
   })
 
   beforeEach(async () => {
@@ -123,6 +131,8 @@ describe('editing recorded financial data', () => {
 
     const now = '2026-08-20T12:00:00.000Z'
     await client.batch([
+      'DELETE FROM dossier_presences',
+      'DELETE FROM dossier_scopes',
       'DELETE FROM document_imports',
       'DELETE FROM counter_customer',
       'DELETE FROM ticket_events',
@@ -235,6 +245,22 @@ describe('editing recorded financial data', () => {
       : markDocumentAsPaid(1, { ...paymentInput, amount }, key)
   }
 
+  it('requires destination proofs when deleting a ticket would detach its documents', async () => {
+    await prepareUnpaidTicketDocument()
+    const { deleteTicket } = await import('../../server/utils/pos/tickets')
+    const { dossierSession } = await import('../../server/utils/pos/dossiers')
+    const context = await testDossierContext(useDb(), { kind: 'ticket', id: 7 })
+    await expect(deleteTicket(7, context)).rejects.toMatchObject({ statusCode: 428 })
+    expect((await client.execute('SELECT COUNT(*) AS n FROM tickets')).rows[0]?.n).toBe(1)
+    const destination = await dossierSession({
+      target: { kind: 'document', id: 1 }, standalone: true,
+      tabId: context.tabId, station: 'Tests', action: 'acquire', intent: 'edit', dirty: false
+    }, { userId: 1, name: 'Test', isAdmin: true }, useDb())
+    context.proofs.push({ key: destination.key, token: destination.token!, revision: destination.revision })
+    await expect(deleteTicket(7, context)).resolves.toBe(1)
+    expect((await client.execute('SELECT revision FROM dossier_scopes')).rows.map(row => row.revision)).toEqual([1, 1])
+  })
+
   it.each(['payment', 'mark-paid'] as const)('%s shares partial/full payment rules and records each event once', async (path) => {
     await prepareUnpaidTicketDocument()
     await recordThrough(path, 2500, 'partial-payment-key')
@@ -298,13 +324,16 @@ describe('editing recorded financial data', () => {
 
   it('checks competing payments against the serialized remaining balance', async () => {
     await prepareUnpaidTicketDocument()
+    const context = await testDossierContext(useDb(), { kind: 'document', id: 1 })
+    const { createPaymentRecord: create } = await import('../../server/utils/pos/payments')
+    const { markDocumentAsPaid: markPaid } = await import('../../server/utils/pos/documents')
     const results = await Promise.allSettled([
-      recordThrough('payment', 10000, 'competing-payment-a'),
-      recordThrough('mark-paid', 10000, 'competing-payment-b')
+      create({ ...paymentInput, customerId: 1, documentId: 1, status: 'paid', amount: 10000 }, 'competing-payment-a', context),
+      markPaid(1, { ...paymentInput, amount: 10000 }, 'competing-payment-b', context)
     ])
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
     expect(results.find(result => result.status === 'rejected')).toMatchObject({
-      reason: { data: { code: 'PAYMENT_EXCEEDS_BALANCE' } }
+      reason: { data: { code: 'DOSSIER_CONFLICT' } }
     })
     expect((await client.execute('SELECT SUM(amount) AS total FROM payments')).rows[0]?.total).toBe(10000)
   })
