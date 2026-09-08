@@ -4,7 +4,6 @@ import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import {
   documentStatusColors,
   documentStatusLabels,
-  documentTypeColors,
   documentTypeLabels,
   paymentMethodColors,
   paymentMethodLabels,
@@ -46,7 +45,6 @@ type TimelineItem = TicketEvent & {
 
 const UBadge = resolveComponent('UBadge')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
-const NuxtLink = resolveComponent('NuxtLink')
 
 const route = useRoute()
 const toast = useToast()
@@ -94,11 +92,16 @@ watch(() => dossier.current.value?.epoch, () => {
   noteModalOpen.value = false
 })
 
-const activeTab = ref('suivi')
+const activeTab = ref('overview')
+const showAllHistory = ref(false)
+
+watch(id, () => {
+  activeTab.value = 'overview'
+  showAllHistory.value = false
+})
 
 const tabItems = computed(() => [
-  { label: 'Suivi', icon: 'i-lucide-clock', value: 'suivi' },
-  { label: 'Documents', icon: 'i-lucide-files', value: 'documents', badge: ticket.value?.documents.length || 0 },
+  { label: ticket.value?.type === 'repair' ? 'Réparation' : 'Vue d’ensemble', icon: 'i-lucide-wrench', value: 'overview' },
   { label: 'Paiements', icon: 'i-lucide-wallet', value: 'payments', badge: ticket.value?.payments.length || 0 },
   { label: 'SMS', icon: 'i-lucide-message-square-share', value: 'sms', badge: smsTimelineItems.value.length || 0 },
   { label: 'Client & Appareil', icon: 'i-lucide-user', value: 'client' }
@@ -112,11 +115,26 @@ const workflowStepIndex = computed(() => {
   return ticketWorkflowSteps.indexOf(ticket.value.workflow.step)
 })
 
-const workflowStepItems = computed(() => ticketWorkflowSteps.map(step => ({
-  title: ticketWorkflowStepLabels[step],
-  description: step === ticket.value?.workflow.step ? ticket.value.workflow.currentStatusLabel : undefined,
-  icon: step === ticket.value?.workflow.step ? 'i-lucide-circle-dot' : undefined
-})))
+// Use the existing permitted workflow actions; only their visual priority changes.
+const primaryWorkflowAction = computed(() => {
+  const actions = ticket.value?.workflow.actions || []
+  return (ticket.value?.status === 'in_progress'
+    ? actions.find(action => action.targetStatus === 'ready_for_pickup')
+    : actions.find(action => action.targetStatus !== 'cancelled')) || null
+})
+
+const statusChangedAt = computed(() => {
+  const event = ticket.value?.events
+    .filter(event => !event.isSynthetic
+      && ['ticket_status_changed', 'ticket_closed'].includes(event.kind)
+      && event.metadata?.nextStatus === ticket.value?.status)
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))[0]
+  return event?.occurredAt || null
+})
+
+const workshopBlocker = computed(() =>
+  ticket.value?.status === 'ready_for_pickup' ? null : ticket.value?.workflow.blockerLabel
+)
 
 const isTicketMutable = computed(() => ticket.value ? !['closed', 'cancelled'].includes(ticket.value.status) : false)
 const ticketDocumentEligibility = computed(() => ({
@@ -238,57 +256,11 @@ const statusMenuItems = computed(() => {
   return [statusItems, finalItems].filter(group => group.length > 0)
 })
 
-const mobileActionItems = computed<DropdownMenuItem[]>(() => {
-  const items: DropdownMenuItem[] = [{
-    label: 'SMS client',
-    icon: 'i-lucide-message-square-share',
-    disabled: !canSendSms.value,
-    onSelect() {
-      openSmsModal()
-    }
-  }]
-
-  if (supportsThermalPrint) {
-    items.push({
-      label: 'Imprimer ticket atelier',
-      icon: 'i-lucide-printer',
-      to: `/tickets/${id.value}/print`
-    })
-  }
-
-  items.push({
-    label: 'Modifier le ticket',
-    icon: 'i-lucide-pencil',
-    to: `/tickets/${id.value}/edit`,
-    disabled: !isTicketMutable.value
-  })
-
-  return items
-})
-
-const documentColumns: TableColumn<TicketDetail['documents'][number]>[] = [
-  {
-    accessorKey: 'documentNumber',
-    header: 'Document',
-    cell: ({ row }) => h('div', { class: 'space-y-1' }, [
-      h(NuxtLink, { to: `/documents/${row.original.id}`, class: 'font-medium text-highlighted' }, () => row.original.documentNumber),
-      h('div', { class: 'flex flex-wrap gap-2' }, [
-        h(UBadge, { color: documentTypeColors[row.original.type], variant: 'subtle' }, () => documentTypeLabels[row.original.type]),
-        h(UBadge, { color: documentStatusColors[row.original.status], variant: 'subtle' }, () => documentStatusLabels[row.original.status])
-      ])
-    ])
-  },
-  {
-    accessorKey: 'issuedAt',
-    header: 'Émis le',
-    cell: ({ row }) => formatDateTime(row.original.issuedAt)
-  },
-  {
-    accessorKey: 'total',
-    header: 'Total TTC',
-    cell: ({ row }) => formatCurrency(row.original.total)
-  }
-]
+const createDocumentItems = computed<DropdownMenuItem[]>(() => [
+  ...(canCreateQuote.value ? [{ label: 'Créer un devis', icon: 'i-lucide-scroll-text', onSelect: createQuote }] : []),
+  ...(canCreateCustomerOrder.value ? [{ label: 'Créer une commande', icon: 'i-lucide-clipboard-plus', onSelect: createOrder }] : []),
+  ...(canCreateInvoice.value ? [{ label: 'Créer une facture', icon: 'i-lucide-file-text', onSelect: createInvoice }] : [])
+])
 
 const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
   {
@@ -320,6 +292,8 @@ const timelineItems = computed<TimelineItem[]>(() => {
     icon: getEventIcon(event.kind)
   }))
 })
+
+const visibleTimelineItems = computed(() => showAllHistory.value ? timelineItems.value : timelineItems.value.slice(0, 4))
 
 const smsTimelineItems = computed(() =>
   timelineItems.value.filter(event => event.kind === 'ticket_sms_qr_opened')
@@ -444,7 +418,7 @@ async function addInternalNote() {
       body: { note }
     })
     await refreshTicket()
-    activeTab.value = 'suivi'
+    activeTab.value = 'overview'
     noteModalOpen.value = false
     noteDraft.value = ''
     toast.add({
@@ -679,62 +653,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
-
         <template #right>
-          <UDropdownMenu
-            v-slot="{ open }"
-            :items="statusMenuItems"
-            :content="{ align: 'end', side: 'bottom' }"
-            :disabled="!isTicketMutable"
-            :ui="{ content: 'min-w-64' }"
-          >
-            <UButton
-              :label="ticket?.workflow.currentStatusLabel || 'Statut'"
-              :color="ticket ? ticketStatusColors[ticket.status] : 'neutral'"
-              variant="subtle"
-              trailing-icon="i-lucide-chevron-down"
-              :disabled="dossier.blocked.value || (!isTicketMutable)"
-              :ui="{
-                trailingIcon: ['transition-transform duration-200', open ? 'rotate-180' : undefined].filter(Boolean).join(' ')
-              }"
-            />
-          </UDropdownMenu>
-
-          <UButton
-            :disabled="dossier.blocked.value"
-            label="Note interne"
-            aria-label="Ajouter une note interne"
-            icon="i-lucide-message-square-plus"
-            color="neutral"
-            variant="subtle"
-            class="hidden sm:inline-flex"
-            :ui="{ label: 'hidden lg:inline' }"
-            @click="openInternalNote"
-          />
-
-          <UButton
-            label="SMS client"
-            aria-label="SMS client"
-            icon="i-lucide-message-square-share"
-            color="neutral"
-            variant="subtle"
-            :disabled="dossier.blocked.value || (!canSendSms)"
-            class="hidden sm:inline-flex"
-            :ui="{ label: 'hidden sm:inline' }"
-            @click="openSmsModal"
-          />
-          <UButton
-            v-if="supportsThermalPrint"
-            :disabled="dossier.blocked.value"
-            :to="`/tickets/${id}/print`"
-            label="Imprimer ticket atelier"
-            aria-label="Imprimer ticket atelier"
-            icon="i-lucide-printer"
-            color="neutral"
-            variant="subtle"
-            class="hidden sm:inline-flex"
-            :ui="{ label: 'hidden sm:inline' }"
-          />
           <UButton
             label="Modifier le dossier"
             aria-label="Modifier le dossier"
@@ -742,189 +661,171 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             color="neutral"
             variant="ghost"
             :to="`/tickets/${id}/edit`"
-            :disabled="dossier.blocked.value || (!isTicketMutable)"
-            class="hidden sm:inline-flex"
+            :disabled="dossier.blocked.value || !isTicketMutable"
             :ui="{ label: 'hidden sm:inline' }"
           />
-
-          <UDropdownMenu
-            :items="mobileActionItems"
-            :content="{ align: 'end', side: 'bottom' }"
-            class="sm:hidden"
-          >
-            <UButton
-              :disabled="dossier.blocked.value"
-              icon="i-lucide-ellipsis"
-              aria-label="Actions du ticket"
-              color="neutral"
-              variant="ghost"
-            />
-          </UDropdownMenu>
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <PosDossierBanner :state="dossier.current.value" />
-      <div v-if="ticket" class="space-y-3">
-        <PosFormFeedback :saving="actionSaving || dossier.blocked.value" :error="actionError" />
-        <UAlert
-          v-if="!canSendSms"
-          color="neutral"
-          variant="soft"
-          icon="i-lucide-message-square-warning"
-          title="SMS client indisponible"
-          :description="smsButtonHelp"
-        />
+      <div v-if="ticket" class="space-y-4">
+        <PosFormFeedback :saving="actionSaving" :error="actionError" />
 
-        <!-- Compact summary band -->
-        <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <div class="flex items-center gap-3">
+        <div class="space-y-1">
+          <div class="flex flex-wrap items-center gap-2">
             <h1 class="text-xl font-semibold text-highlighted">
               {{ ticket.brand || 'Appareil' }} {{ ticket.model || '' }}
             </h1>
-            <div class="flex items-center gap-1.5">
-              <UBadge :color="ticketTypeColors[ticket.type]" variant="subtle" size="sm">
-                {{ ticketTypeLabels[ticket.type] }}
-              </UBadge>
-            </div>
+            <UBadge :color="ticketTypeColors[ticket.type]" variant="subtle" size="sm">
+              {{ ticketTypeLabels[ticket.type] }}
+            </UBadge>
           </div>
-
-          <USeparator orientation="vertical" class="hidden h-5 xl:block" />
-
-          <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-            <span class="text-toned">
-              {{ ticket.workflow.nextActionLabel }}
-            </span>
-            <span class="text-toned">
-              {{ ticket.commercialSummary.paymentStateLabel }}
-            </span>
-            <span class="font-medium text-highlighted">
-              {{ formatCurrency(ticket.commercialSummary.totalPaid) }} encaissé
-            </span>
-            <span v-if="ticket.commercialSummary.balanceDue" class="font-medium text-warning">
-              {{ formatCurrency(ticket.commercialSummary.balanceDue) }} restant
-            </span>
+          <p v-if="ticket.issueDescription" class="text-sm text-highlighted whitespace-pre-line wrap-anywhere">
+            {{ ticket.issueDescription }}
+          </p>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-toned">
+            <UButton
+              :label="ticket.customer.displayName"
+              icon="i-lucide-user-round"
+              color="neutral"
+              variant="link"
+              class="p-0"
+              @click="activeTab = 'client'"
+            />
+            <span v-if="ticket.customer.phone">{{ ticket.customer.phone }}</span>
+            <span class="text-xs">Ouvert le {{ formatDateTime(ticket.openedAt) }}</span>
           </div>
         </div>
 
-        <p class="line-clamp-2 text-sm text-toned">
-          {{ ticket.issueDescription }}
-        </p>
+        <div class="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
+          <section aria-labelledby="ticket-status-heading" class="min-w-0 rounded-xl border border-default bg-default p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="space-y-2">
+                <h2 id="ticket-status-heading" class="text-xs font-semibold text-toned">
+                  {{ ticket.type === 'repair' ? 'État de la réparation' : 'État du dossier' }}
+                </h2>
+                <div class="flex flex-wrap items-center gap-2">
+                  <UBadge :color="ticketStatusColors[ticket.status]" variant="subtle" size="lg">
+                    {{ ticket.workflow.currentStatusLabel }}
+                  </UBadge>
+                  <span v-if="statusChangedAt" class="text-xs text-toned">
+                    Depuis le {{ formatDateTime(statusChangedAt) }}
+                  </span>
+                </div>
+                <p v-if="workshopBlocker" class="flex items-center gap-1.5 text-sm font-medium text-warning">
+                  <UIcon name="i-lucide-circle-pause" class="size-4 shrink-0" />
+                  {{ workshopBlocker }}
+                </p>
+              </div>
+              <div v-if="isTicketMutable" class="flex flex-wrap gap-2">
+                <UButton
+                  v-if="primaryWorkflowAction"
+                  :label="primaryWorkflowAction.label"
+                  :icon="primaryWorkflowAction.icon"
+                  :disabled="dossier.blocked.value || actionSaving"
+                  @click="openWorkflowAction(primaryWorkflowAction)"
+                />
+                <UDropdownMenu
+                  :items="statusMenuItems"
+                  :content="{ align: 'end', side: 'bottom' }"
+                  :ui="{ content: 'min-w-64' }"
+                >
+                  <UButton
+                    label="Changer le statut"
+                    trailing-icon="i-lucide-chevron-down"
+                    color="neutral"
+                    variant="outline"
+                    :disabled="dossier.blocked.value || actionSaving"
+                  />
+                </UDropdownMenu>
+              </div>
+            </div>
 
-        <UAlert
-          v-if="ticket.workflow.blockerLabel"
-          color="warning"
-          variant="soft"
-          icon="i-lucide-triangle-alert"
-          :title="ticket.workflow.blockerLabel"
-        />
+            <ol v-if="ticket.status !== 'cancelled'" aria-label="Progression du dossier" class="mt-4 flex border-t border-default pt-3">
+              <li
+                v-for="(step, index) in ticketWorkflowSteps"
+                :key="step"
+                :aria-current="index === workflowStepIndex ? 'step' : undefined"
+                class="flex min-w-0 flex-1 items-center gap-1 text-xs last:flex-none"
+                :class="index <= workflowStepIndex ? 'text-primary' : 'text-toned'"
+              >
+                <div class="flex flex-col items-center gap-1 sm:flex-row sm:gap-1.5" :class="index === workflowStepIndex ? 'font-semibold' : ''">
+                  <UIcon :name="index < workflowStepIndex ? 'i-lucide-circle-check' : index === workflowStepIndex ? 'i-lucide-circle-dot' : 'i-lucide-circle'" class="size-4 shrink-0" />
+                  <span>{{ ticketWorkflowStepLabels[step] }}</span>
+                </div>
+                <span v-if="index < ticketWorkflowSteps.length - 1" aria-hidden="true" class="mx-1 h-px flex-1 bg-current opacity-20 sm:mx-2" />
+              </li>
+            </ol>
+          </section>
 
-        <UStepper
-          :items="workflowStepItems"
-          :default-value="workflowStepIndex"
-          disabled
-          color="primary"
-          size="sm"
-        />
-
-        <!-- Main two-column layout -->
-        <div class="grid items-start gap-4 xl:h-[calc(100vh-19rem)] xl:grid-cols-[minmax(0,1fr)_18rem]">
-          <!-- Left: tabbed content -->
-          <div class="xl:min-h-0">
+          <div class="min-w-0 lg:col-start-1 lg:row-start-2">
             <UTabs
               v-model="activeTab"
               :items="tabItems"
               variant="link"
               :content="false"
+              size="sm"
+              :ui="{ list: 'w-full overflow-x-auto', trigger: 'shrink-0', leadingIcon: 'hidden sm:block', trailingBadge: 'hidden sm:inline-flex' }"
             />
 
-            <div class="mt-4 xl:h-[calc(100vh-23rem)]">
-              <!-- Suivi tab -->
-              <div v-if="activeTab === 'suivi'" class="xl:h-full xl:overflow-y-auto pr-1">
-                <UTimeline
-                  :items="timelineItems"
-                  color="primary"
-                >
-                  <template #wrapper="{ item: event }">
-                    <div class="space-y-2 rounded-xl border border-default bg-default p-3">
-                      <div class="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <p class="text-sm font-medium text-highlighted">
-                            {{ event.title }}
-                          </p>
-                          <p class="text-xs text-toned">
-                            {{ event.date }}
-                          </p>
-                        </div>
-                        <UBadge
-                          v-if="event.isSynthetic"
-                          color="neutral"
-                          variant="outline"
-                          size="xs"
-                        >
-                          Reconstruit
-                        </UBadge>
-                      </div>
-
-                      <p class="text-sm text-toned">
-                        {{ event.description }}
-                      </p>
-
-                      <div v-if="event.note" class="rounded-lg border border-default bg-muted/30 px-3 py-2">
-                        <p class="text-xs text-toned">
-                          Note
-                        </p>
-                        <p class="text-sm text-highlighted">
-                          {{ event.note }}
-                        </p>
-                      </div>
-
+            <div class="mt-3">
+              <div v-if="activeTab === 'overview'" class="space-y-4">
+                <section aria-labelledby="ticket-documents-heading" class="overflow-hidden rounded-xl border border-default bg-default">
+                  <div class="flex items-center justify-between gap-2 border-b border-default px-4 py-3">
+                    <h2 id="ticket-documents-heading" class="text-sm font-semibold text-highlighted">
+                      Documents liés <span class="ml-1 font-normal text-toned">{{ ticket.documents.length }}</span>
+                    </h2>
+                    <UDropdownMenu v-if="createDocumentItems.length" :items="createDocumentItems" :content="{ align: 'end' }">
                       <UButton
-                        v-if="getEventDocumentId(event)"
-                        :disabled="dossier.blocked.value"
-                        :to="`/documents/${getEventDocumentId(event)}`"
-                        label="Ouvrir le document"
-                        icon="i-lucide-arrow-up-right"
-                        size="xs"
+                        label="Créer un document"
+                        icon="i-lucide-plus"
                         color="neutral"
-                        variant="soft"
+                        variant="outline"
+                        size="sm"
+                        :loading="actionSaving"
+                        :disabled="dossier.blocked.value"
+                        :ui="{ label: 'hidden sm:inline' }"
+                        aria-label="Créer un document"
                       />
-                    </div>
-                  </template>
-                </UTimeline>
-              </div>
-
-              <!-- Documents tab -->
-              <div v-else-if="activeTab === 'documents'" class="xl:h-full">
-                <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
-                  <template #header>
-                    <div class="flex items-center justify-between gap-3">
-                      <h3 class="text-sm font-medium text-highlighted">
-                        Documents liés
-                      </h3>
-                      <span class="text-xs text-toned">
-                        {{ ticket.documents.length }} document(s)
-                      </span>
-                    </div>
-                  </template>
-
-                  <div class="xl:max-h-[calc(100vh-28rem)] xl:overflow-auto pr-1">
-                    <UTable :data="ticket.documents" :columns="documentColumns" sticky="header">
-                      <template #empty>
-                        <UEmpty
-                          icon="i-lucide-files"
-                          title="Aucun document lié"
-                          description="Créez un devis, une commande ou une facture depuis les actions."
-                        />
-                      </template>
-                    </UTable>
+                    </UDropdownMenu>
                   </div>
-                </UCard>
+                  <div v-if="ticket.documents.length" class="max-h-72 overflow-y-auto">
+                    <div class="hidden grid-cols-[minmax(0,1fr)_9rem_7rem_1rem] gap-3 bg-muted/40 px-4 py-2 text-xs text-toned sm:grid" aria-hidden="true">
+                      <span>Document</span><span>Statut</span><span class="text-right">Total TTC</span><span />
+                    </div>
+                    <NuxtLink
+                      v-for="document in ticket.documents"
+                      :key="document.id"
+                      :to="`/documents/${document.id}`"
+                      :aria-label="`Ouvrir ${documentTypeLabels[document.type]} ${document.documentNumber} · ${documentStatusLabels[document.status]} · ${formatCurrency(document.total)}`"
+                      class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 border-t border-default px-4 py-3 text-sm transition-colors first:border-t-0 hover:bg-elevated/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary sm:grid-cols-[minmax(0,1fr)_9rem_7rem_1rem]"
+                    >
+                      <div class="min-w-0">
+                        <span class="font-medium text-highlighted">{{ documentTypeLabels[document.type] }}</span>
+                        <span class="ml-2 text-toned">{{ document.documentNumber }}</span>
+                      </div>
+                      <UBadge
+                        :color="documentStatusColors[document.status]"
+                        variant="subtle"
+                        size="sm"
+                        class="row-start-2 w-fit sm:row-auto"
+                      >
+                        {{ documentStatusLabels[document.status] }}
+                      </UBadge>
+                      <span class="col-start-2 row-start-1 text-right font-medium text-highlighted tabular-nums sm:col-auto sm:row-auto">{{ formatCurrency(document.total) }}</span>
+                      <UIcon name="i-lucide-chevron-right" class="col-start-2 row-start-2 size-4 justify-self-end text-dimmed sm:col-auto sm:row-auto" />
+                    </NuxtLink>
+                  </div>
+                  <p v-else class="px-4 py-5 text-sm text-toned">
+                    {{ createDocumentItems.length ? 'Aucun document lié. Créez un devis, une commande ou une facture.' : 'Aucun document lié à ce dossier.' }}
+                  </p>
+                </section>
               </div>
 
               <!-- Payments tab -->
-              <div v-else-if="activeTab === 'payments'" class="xl:h-full">
+              <div v-else-if="activeTab === 'payments'">
                 <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
                   <template #header>
                     <div class="flex items-center justify-between gap-3">
@@ -937,7 +838,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                     </div>
                   </template>
 
-                  <div class="xl:max-h-[calc(100vh-28rem)] xl:overflow-auto pr-1">
+                  <div class="max-h-96 overflow-auto pr-1">
                     <UTable :data="ticket.payments" :columns="paymentColumns" sticky="header">
                       <template #empty>
                         <UEmpty
@@ -951,108 +852,36 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 </UCard>
               </div>
 
-              <!-- SMS tab -->
-              <div v-else-if="activeTab === 'sms'" class="grid gap-4 xl:h-full xl:grid-cols-[minmax(0,1fr)_18rem]">
-                <UCard :ui="{ body: 'p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
-                  <template #header>
-                    <div class="flex items-center justify-between gap-3">
-                      <h3 class="text-sm font-medium text-highlighted">
-                        Historique QR SMS
-                      </h3>
-                      <span class="text-xs text-toned">
-                        {{ smsTimelineItems.length }} événement(s)
-                      </span>
-                    </div>
-                  </template>
-
-                  <div v-if="smsTimelineItems.length" class="space-y-3 xl:max-h-[calc(100vh-28rem)] xl:overflow-y-auto pr-1">
-                    <div
-                      v-for="event in smsTimelineItems"
-                      :key="event.id"
-                      class="space-y-2 rounded-xl border border-default bg-default p-3"
-                    >
-                      <div class="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <p class="text-sm font-medium text-highlighted">
-                            {{ event.title }}
-                          </p>
-                          <p class="text-xs text-toned">
-                            {{ event.date }}
-                          </p>
-                        </div>
-                      </div>
-
-                      <p class="text-sm text-toned">
-                        {{ event.description }}
+              <section v-else-if="activeTab === 'sms'" class="rounded-xl border border-default bg-default p-4">
+                <h2 class="text-sm font-semibold text-highlighted">
+                  Historique QR SMS
+                </h2>
+                <p class="mt-1 text-xs text-toned">
+                  Ouvertures du QR SMS ; elles ne confirment pas l’envoi du message.
+                </p>
+                <div v-if="smsTimelineItems.length" class="mt-3 max-h-96 divide-y divide-default overflow-y-auto">
+                  <div v-for="event in smsTimelineItems" :key="event.id" class="py-3 text-sm">
+                    <div class="flex flex-wrap justify-between gap-1">
+                      <p class="font-medium text-highlighted">
+                        {{ event.title }}
                       </p>
-
-                      <div v-if="event.note" class="rounded-lg border border-default bg-muted/30 px-3 py-2">
-                        <p class="text-xs text-toned">
-                          Note
-                        </p>
-                        <p class="text-sm text-highlighted">
-                          {{ event.note }}
-                        </p>
-                      </div>
+                      <time :datetime="event.occurredAt" class="text-xs text-toned">{{ event.date }}</time>
                     </div>
-                  </div>
-
-                  <UEmpty
-                    v-else
-                    icon="i-lucide-message-square-share"
-                    title="Aucun QR SMS affiché"
-                    description="Les ouvertures du flux SMS client apparaîtront ici."
-                    class="py-12"
-                  />
-                </UCard>
-
-                <UCard :ui="{ body: 'space-y-4 p-4', header: 'p-4 pb-0' }" class="xl:min-h-0">
-                  <template #header>
-                    <div class="flex items-center justify-between gap-3">
-                      <h3 class="text-sm font-medium text-highlighted">
-                        SMS client
-                      </h3>
-                    </div>
-                  </template>
-
-                  <div class="rounded-xl border border-default bg-default/80 px-3 py-3">
-                    <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                      Numéro client
+                    <p class="text-toned">
+                      {{ event.description }}
                     </p>
-                    <p class="mt-2 font-medium text-highlighted">
-                      {{ ticket.customer.phone || 'Pas de téléphone' }}
-                    </p>
-                    <p class="mt-1 text-xs text-toned">
-                      {{ canSendSms ? 'Le QR ouvre l’app Messages sur l’iPhone de comptoir.' : smsButtonHelp }}
+                    <p v-if="event.note" class="mt-1 whitespace-pre-wrap wrap-anywhere">
+                      {{ event.note }}
                     </p>
                   </div>
-
-                  <div class="rounded-xl border border-default bg-default/80 px-3 py-3">
-                    <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                      Modèles configurés
-                    </p>
-                    <p class="mt-2 font-medium text-highlighted">
-                      {{ smsTemplates.length }} modèle(s)
-                    </p>
-                    <p class="mt-1 text-xs text-toned">
-                      Message libre disponible en plus des modèles enregistrés.
-                    </p>
-                  </div>
-
-                  <UButton
-                    label="Ouvrir le flux SMS"
-                    icon="i-lucide-message-square-share"
-                    color="neutral"
-                    variant="soft"
-                    block
-                    :disabled="dossier.blocked.value || (!canSendSms)"
-                    @click="openSmsModal"
-                  />
-                </UCard>
-              </div>
+                </div>
+                <p v-else class="mt-3 text-sm text-toned">
+                  Aucun QR SMS affiché.
+                </p>
+              </section>
 
               <!-- Client tab -->
-              <div v-else-if="activeTab === 'client'" class="space-y-4 text-sm xl:h-full xl:overflow-y-auto pr-1">
+              <div v-else-if="activeTab === 'client'" class="space-y-4 text-sm max-h-[32rem] overflow-y-auto pr-1">
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="rounded-xl border border-default p-4">
                     <p class="text-xs uppercase tracking-[0.14em] text-toned">
@@ -1085,7 +914,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                   </div>
                 </div>
 
-                <div class="flex gap-4 text-xs text-toned">
+                <div class="flex flex-wrap gap-4 text-xs text-toned">
                   <span>Ouvert le {{ formatDateTime(ticket.openedAt) }}</span>
                   <span>MAJ {{ formatDateTime(ticket.updatedAt) }}</span>
                 </div>
@@ -1093,147 +922,171 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             </div>
           </div>
 
-          <!-- Right: compact sticky sidebar -->
-          <div class="space-y-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-19rem)] xl:overflow-y-auto pr-1">
-            <!-- Commercial -->
-            <UCard
-              :ui="{
-                root: 'rounded-[1.5rem] border border-default/80 bg-elevated/50 shadow-sm',
-                header: 'border-b border-default/70 px-4 py-3',
-                body: 'space-y-4 p-4'
-              }"
-            >
-              <template #header>
-                <h2 class="text-sm font-semibold text-highlighted">
-                  Commercial
-                </h2>
-              </template>
-
-              <div class="space-y-2">
-                <p class="text-[11px] font-medium uppercase tracking-[0.14em] text-toned">
-                  Documents
-                </p>
-
-                <div class="space-y-2 text-sm">
-                  <div class="flex items-center justify-between gap-3 rounded-xl border border-default/70 bg-default/80 px-3 py-2.5">
-                    <div class="min-w-0">
-                      <p class="text-xs text-toned">
-                        Devis
-                      </p>
-                      <p class="truncate font-medium text-highlighted">
-                        {{ ticket.commercialSummary.quote?.documentNumber || '—' }}
-                      </p>
-                    </div>
-                    <UButton
-                      v-if="ticket.commercialSummary.quote"
-                      :disabled="dossier.blocked.value"
-                      :to="`/documents/${ticket.commercialSummary.quote.id}`"
-                      label="Ouvrir"
-                      icon="i-lucide-arrow-up-right"
-                      color="neutral"
-                      variant="ghost"
-                      size="xs"
-                    />
-                  </div>
-
-                  <div class="flex items-center justify-between gap-3 rounded-xl border border-default/70 bg-default/80 px-3 py-2.5">
-                    <div class="min-w-0">
-                      <p class="text-xs text-toned">
-                        Commande
-                      </p>
-                      <p class="truncate font-medium text-highlighted">
-                        {{ ticket.commercialSummary.customerOrder?.documentNumber || '—' }}
-                      </p>
-                    </div>
-                    <UButton
-                      v-if="ticket.commercialSummary.customerOrder"
-                      :disabled="dossier.blocked.value"
-                      :to="`/documents/${ticket.commercialSummary.customerOrder.id}`"
-                      label="Ouvrir"
-                      icon="i-lucide-arrow-up-right"
-                      color="neutral"
-                      variant="ghost"
-                      size="xs"
-                    />
-                  </div>
-
-                  <div class="flex items-center justify-between gap-3 rounded-xl border border-default/70 bg-default/80 px-3 py-2.5">
-                    <div class="min-w-0">
-                      <p class="text-xs text-toned">
-                        Facture
-                      </p>
-                      <p class="truncate font-medium text-highlighted">
-                        {{ ticket.commercialSummary.invoice?.documentNumber || '—' }}
-                      </p>
-                    </div>
-                    <UButton
-                      v-if="ticket.commercialSummary.invoice"
-                      :disabled="dossier.blocked.value"
-                      :to="`/documents/${ticket.commercialSummary.invoice.id}`"
-                      label="Ouvrir"
-                      icon="i-lucide-arrow-up-right"
-                      color="neutral"
-                      variant="ghost"
-                      size="xs"
-                    />
-                  </div>
+          <aside aria-label="Actions du comptoir" class="space-y-4 lg:sticky lg:top-0 lg:col-start-2 lg:row-span-3 lg:row-start-1">
+            <section aria-labelledby="ticket-payment-heading" class="rounded-xl border border-default bg-default p-4">
+              <h2 id="ticket-payment-heading" class="text-sm font-semibold text-highlighted">
+                Règlement
+              </h2>
+              <p class="mt-1 text-xs text-toned">
+                {{ ticket.commercialSummary.paymentStateLabel }}
+              </p>
+              <dl class="mt-4 space-y-3 text-sm">
+                <div class="flex items-baseline justify-between gap-2">
+                  <dt class="text-toned">
+                    Encaissé
+                  </dt>
+                  <dd class="font-medium tabular-nums">
+                    {{ formatCurrency(ticket.commercialSummary.totalPaid) }}
+                  </dd>
                 </div>
-              </div>
+                <div class="flex flex-wrap items-baseline justify-between gap-2 border-t border-default pt-3">
+                  <dt class="font-medium text-highlighted">
+                    Reste à payer
+                  </dt>
+                  <dd class="text-lg font-semibold tabular-nums" :class="ticket.commercialSummary.balanceDue ? 'text-warning' : 'text-highlighted'">
+                    {{ formatCurrency(ticket.commercialSummary.balanceDue) }}
+                  </dd>
+                </div>
+              </dl>
+              <p v-if="ticket.status === 'ready_for_pickup' && ticket.commercialSummary.balanceDue" class="mt-3 text-xs text-warning">
+                À encaisser avant la remise au client.
+              </p>
+              <UButton
+                v-if="canRecordPayment"
+                label="Encaisser"
+                icon="i-lucide-wallet"
+                color="success"
+                block
+                class="mt-4"
+                :disabled="dossier.blocked.value"
+                @click="paymentOpen = true"
+              />
+              <UButton
+                v-if="activeTab !== 'payments'"
+                label="Voir les paiements"
+                color="neutral"
+                variant="link"
+                block
+                size="sm"
+                class="mt-2"
+                @click="activeTab = 'payments'"
+              />
+            </section>
 
-              <div class="border-t border-default/70 pt-4 space-y-2">
-                <p class="text-[11px] font-medium uppercase tracking-[0.14em] text-toned">
-                  Actions
+            <section aria-labelledby="ticket-counter-heading" class="rounded-xl border border-default bg-default p-4">
+              <h2 id="ticket-counter-heading" class="mb-3 text-sm font-semibold text-highlighted">
+                Au comptoir
+              </h2>
+              <div class="space-y-2">
+                <UButton
+                  label="SMS client"
+                  icon="i-lucide-message-square-share"
+                  color="neutral"
+                  variant="outline"
+                  block
+                  class="justify-start"
+                  :disabled="dossier.blocked.value || !canSendSms"
+                  @click="openSmsModal"
+                />
+                <p v-if="!canSendSms" class="text-xs text-toned">
+                  {{ smsButtonHelp }}
                 </p>
                 <UButton
-                  v-if="canCreateQuote"
-                  :disabled="dossier.blocked.value"
-                  label="Créer un devis"
-                  icon="i-lucide-scroll-text"
-                  variant="soft"
-                  size="md"
+                  v-if="supportsThermalPrint"
+                  :to="`/tickets/${id}/print`"
+                  label="Imprimer le dossier"
+                  icon="i-lucide-printer"
+                  color="neutral"
+                  variant="outline"
                   block
-                  class="justify-start rounded-xl"
-                  :loading="actionSaving"
-                  @click="createQuote"
-                />
-                <UButton
-                  v-if="canCreateCustomerOrder"
+                  class="justify-start"
                   :disabled="dossier.blocked.value"
-                  label="Créer une commande"
-                  icon="i-lucide-clipboard-plus"
-                  color="warning"
-                  variant="soft"
-                  size="md"
-                  block
-                  class="justify-start rounded-xl"
-                  :loading="actionSaving"
-                  @click="createOrder"
-                />
-                <UButton
-                  v-if="canCreateInvoice"
-                  :disabled="dossier.blocked.value"
-                  label="Créer une facture"
-                  icon="i-lucide-file-text"
-                  size="md"
-                  block
-                  class="justify-start rounded-xl"
-                  :loading="actionSaving"
-                  @click="createInvoice"
-                />
-                <UButton
-                  v-if="canRecordPayment"
-                  :disabled="dossier.blocked.value"
-                  label="Encaisser"
-                  icon="i-lucide-wallet"
-                  color="success"
-                  variant="soft"
-                  size="md"
-                  block
-                  class="justify-start rounded-xl"
-                  @click="paymentOpen = true"
                 />
               </div>
-            </UCard>
+            </section>
+          </aside>
+
+          <div v-if="activeTab === 'overview'" class="min-w-0 space-y-4 lg:col-start-1 lg:row-start-3">
+            <section v-if="ticket.internalNotes" aria-labelledby="ticket-notes-heading" class="rounded-xl border border-default bg-muted/30 p-4">
+              <h2 id="ticket-notes-heading" class="mb-2 flex items-center gap-2 text-sm font-semibold text-highlighted">
+                <UIcon name="i-lucide-notebook-pen" class="size-4" /> Notes atelier
+              </h2>
+              <p class="max-h-36 overflow-y-auto text-sm text-default whitespace-pre-wrap wrap-anywhere">
+                {{ ticket.internalNotes }}
+              </p>
+            </section>
+
+            <section aria-labelledby="ticket-history-heading" class="rounded-xl border border-default bg-default">
+              <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                <h2 id="ticket-history-heading" class="text-sm font-semibold text-highlighted">
+                  Historique récent
+                </h2>
+                <UButton
+                  label="Note interne"
+                  aria-label="Ajouter une note interne"
+                  icon="i-lucide-message-square-plus"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  :disabled="dossier.blocked.value"
+                  @click="openInternalNote"
+                />
+              </div>
+              <ol v-if="visibleTimelineItems.length" id="ticket-history" class="max-h-72 overflow-y-auto border-t border-default px-4">
+                <li v-for="event in visibleTimelineItems" :key="event.id" class="flex gap-3 border-b border-default py-3 last:border-b-0">
+                  <UIcon :name="event.icon" class="mt-0.5 size-4 shrink-0 text-toned" />
+                  <div class="min-w-0 flex-1 text-sm">
+                    <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                      <p class="font-medium text-highlighted">
+                        {{ event.title }}
+                      </p>
+                      <time :datetime="event.occurredAt" class="text-xs text-toned">{{ event.date }}</time>
+                    </div>
+                    <p class="text-xs text-toned">
+                      {{ event.description }}
+                    </p>
+                    <p v-if="event.note" class="mt-1 whitespace-pre-wrap wrap-anywhere">
+                      {{ event.note }}
+                    </p>
+                    <UBadge
+                      v-if="event.isSynthetic"
+                      color="neutral"
+                      variant="outline"
+                      size="xs"
+                      class="mt-1"
+                    >
+                      Reconstruit
+                    </UBadge>
+                  </div>
+                  <UButton
+                    v-if="getEventDocumentId(event)"
+                    :to="`/documents/${getEventDocumentId(event)}`"
+                    :aria-label="`Ouvrir le document · ${event.description}`"
+                    icon="i-lucide-arrow-up-right"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    class="self-start"
+                  />
+                </li>
+              </ol>
+              <p v-else class="px-4 pb-4 text-sm text-toned">
+                Aucun événement enregistré.
+              </p>
+              <div v-if="timelineItems.length > 4" class="border-t border-default px-4 py-2">
+                <UButton
+                  :label="showAllHistory ? 'Réduire l’historique' : `Voir tout l’historique (${timelineItems.length})`"
+                  :trailing-icon="showAllHistory ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                  :aria-expanded="showAllHistory"
+                  aria-controls="ticket-history"
+                  color="neutral"
+                  variant="link"
+                  size="sm"
+                  class="px-0"
+                  @click="showAllHistory = !showAllHistory"
+                />
+              </div>
+            </section>
           </div>
         </div>
       </div>
