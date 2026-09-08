@@ -126,7 +126,9 @@ export const commercialLineInputSchema = z.object({
 })
 
 export const ticketInputSchema = z.object({
-  customerId: z.coerce.number().int().positive(),
+  customerId: z.coerce.number({ error: 'Veuillez sélectionner un client' })
+    .int('Veuillez sélectionner un client')
+    .positive('Veuillez sélectionner un client'),
   type: z.enum(ticketTypes),
   status: z.enum(ticketStatuses).default('new'),
   brand: optionalText,
@@ -135,7 +137,7 @@ export const ticketInputSchema = z.object({
   imei: optionalImei,
   accessCode: optionalText,
   simCode: optionalText,
-  issueDescription: z.string().trim().min(3, 'La description du problème est obligatoire'),
+  issueDescription: z.string().trim().optional().default(''),
   internalNotes: optionalText,
   openedAt: z.string().trim().min(1).default(() => new Date().toISOString()),
   closedAt: optionalText,

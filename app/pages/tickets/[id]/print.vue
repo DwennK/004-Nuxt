@@ -184,7 +184,7 @@ function printTicket() {
           <p class="thermal-strong">
             {{ deviceLabel }}
           </p>
-          <p>
+          <p v-if="ticket.issueDescription">
             {{ ticket.issueDescription }}
           </p>
         </section>

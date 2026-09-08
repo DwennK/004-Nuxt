@@ -6,6 +6,7 @@ import { ticketStatusTransitions } from '~~/shared/domain/tickets/workflow'
 import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
 import { formatCurrency, formatImei, getImeiWarning, normalizeImei, normalizeSearchText } from '~~/shared/utils/pos'
 import { useCommercialLinesDraft, type EditableCommercialLinePayload } from '~~/app/composables/useCommercialLinesDraft'
+import { ticketInputSchema } from '~~/shared/validation/pos'
 
 const props = withDefaults(defineProps<{
   customers: CustomerRecord[]
@@ -63,7 +64,7 @@ const emit = defineEmits<{
 }>()
 
 const schema = z.object({
-  customerId: z.coerce.number().int().positive(),
+  customerId: ticketInputSchema.shape.customerId,
   type: z.enum(ticketTypes),
   status: z.enum(ticketStatuses),
   brand: z.string().optional().default(''),
@@ -72,7 +73,7 @@ const schema = z.object({
   imei: z.string().optional().default(''),
   accessCode: z.string().optional().default(''),
   simCode: z.string().optional().default(''),
-  issueDescription: z.string().trim().min(3, 'La description du problème est obligatoire'),
+  issueDescription: z.string().trim().optional().default(''),
   internalNotes: z.string().optional().default(''),
   openedAt: z.string().min(1),
   closedAt: z.string().optional().default('')
@@ -679,7 +680,6 @@ async function handleIntakeScan(value: string) {
               <UFormField
                 label="Description de la panne"
                 name="issueDescription"
-                required
               >
                 <UInput
                   v-model="state.issueDescription"
@@ -901,8 +901,7 @@ async function handleIntakeScan(value: string) {
           <UFormField
             label="Description du problème"
             name="issueDescription"
-            description="Visible dans le suivi opérateur et indispensable pour lancer le traitement."
-            required
+            description="Visible dans le suivi opérateur, si renseignée."
           >
             <UTextarea v-model="state.issueDescription" class="w-full" :rows="4" />
           </UFormField>
@@ -1019,7 +1018,7 @@ async function handleIntakeScan(value: string) {
           </UFormField>
         </div>
 
-        <UFormField label="Description du problème" name="issueDescription" required>
+        <UFormField label="Description du problème" name="issueDescription">
           <UTextarea v-model="state.issueDescription" class="w-full" :rows="4" />
         </UFormField>
 

@@ -5,6 +5,8 @@ import {
   documentInputSchema,
   markDocumentPaidSchema,
   mobileSentrixProductsQuerySchema,
+  ticketCreateInputSchema,
+  ticketInputSchema,
   ticketNoteInputSchema
 } from '../../shared/validation/pos'
 import { postalCodeLookupQuerySchema } from '../../shared/validation/lookups'
@@ -81,6 +83,13 @@ describe('query validation', () => {
 })
 
 describe('ticket note validation', () => {
+  it.each([undefined, '', '   ', ' x ', ' Écran cassé '])('accepts an optional issue on creation and editing: %s', (issueDescription) => {
+    const input = { customerId: 1, type: 'repair', issueDescription }
+    const expected = issueDescription?.trim() || ''
+    expect(ticketCreateInputSchema.parse(input).issueDescription).toBe(expected)
+    expect(ticketInputSchema.parse(input).issueDescription).toBe(expected)
+  })
+
   it('accepts a useful note and rejects blank or oversized entries', () => {
     expect(ticketNoteInputSchema.parse({ note: '  Client appelé, pièce commandée.  ' })).toEqual({
       note: 'Client appelé, pièce commandée.'
