@@ -246,7 +246,7 @@ function getTicketSubtitle(ticket: TicketListItem) {
 }
 
 useHead({
-  title: 'Comptoir'
+  title: 'Accueil'
 })
 </script>
 
@@ -254,7 +254,7 @@ useHead({
   <UDashboardPanel id="counter" class="outlook-panel">
     <template #header>
       <UDashboardNavbar
-        title="Comptoir"
+        title="Accueil"
         class="outlook-commandbar"
         :ui="{ title: 'text-white' }"
       >
@@ -637,7 +637,7 @@ useHead({
               v-else
               icon="i-lucide-check-circle-2"
               :title="emptyQueueLabel"
-              description="La file comptoir se remplira dès qu’un dossier demande une action."
+              description="La file d’accueil se remplira dès qu’un dossier demande une action."
               class="py-14"
             />
           </section>
@@ -648,7 +648,7 @@ useHead({
             <div class="flex items-center justify-between gap-3">
               <div>
                 <h2 class="text-base font-semibold text-highlighted">
-                  État comptoir
+                  État de l’accueil
                 </h2>
                 <p class="text-sm text-toned">
                   Files ouvertes en ce moment.

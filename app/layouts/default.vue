@@ -8,7 +8,7 @@ const { currentDashboardTheme } = useDashboardTheme()
 const toolRoutes = ['/tools', '/vacances', '/inbox', '/assistant']
 
 const primaryLinks = [{
-  label: 'Comptoir',
+  label: 'Accueil',
   icon: 'i-lucide-scan-line',
   to: '/comptoir',
   onSelect: () => {
@@ -31,13 +31,6 @@ const primaryLinks = [{
 }] satisfies NavigationMenuItem[]
 
 const secondaryLinks = [{
-  label: 'Vue d’ensemble',
-  icon: 'i-lucide-house',
-  to: '/',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
   label: 'Clients',
   icon: 'i-lucide-users',
   to: '/customers',
