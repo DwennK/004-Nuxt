@@ -1,684 +1,499 @@
 <script setup lang="ts">
-import DailyBreakdownCharts from '~/components/reports/DailyBreakdownCharts.client.vue'
+import DailyReportPrint from '~/components/reports/DailyReportPrint.vue'
 import { lineCategoryLabels } from '~~/shared/constants/pos'
 import type { DailySummary } from '~~/shared/types/pos'
-import { formatCurrency, formatDateTime, getPaymentMethodLabel, toDateInputValue } from '~~/shared/utils/pos'
+import { businessTimeZone, formatCurrency, formatDateTime, getPaymentMethodLabel, toDateInputValue } from '~~/shared/utils/pos'
 
 const date = ref(toDateInputValue())
-
-const { data: summary, refresh } = await useFetch<DailySummary>('/api/reports/end-of-day', {
-  query: computed(() => ({
-    date: date.value
-  }))
+const { data: summary, status, error, refresh } = await useFetch<DailySummary>('/api/reports/end-of-day', {
+  query: computed(() => ({ date: date.value }))
 })
 
-const paymentTransactionCount = computed(() => {
-  return summary.value?.totalsByMethod.reduce((count, item) => count + item.transactionCount, 0) || 0
-})
+const reportReady = computed(() => !!summary.value && status.value === 'success')
+const paymentCount = computed(() => summary.value?.totalsByMethod.reduce((sum, item) => sum + item.transactionCount, 0) || 0)
+const paidSubtotal = computed(() => summary.value?.paidDocuments.reduce((sum, document) => sum + document.paidAmountToday, 0) || 0)
+const categories = computed(() => [...(summary.value?.turnoverByCategory || [])].sort((a, b) => b.total - a.total || a.category.localeCompare(b.category)))
+const categoryTotal = computed(() => categories.value.reduce((sum, item) => sum + item.total, 0))
+const unpaidDocuments = computed(() => [...(summary.value?.unpaidDocuments || [])].sort((a, b) => b.balanceDue - a.balanceDue || a.documentNumber.localeCompare(b.documentNumber, 'fr-CH', { numeric: true })))
+const unpaidTotal = computed(() => unpaidDocuments.value.reduce((sum, document) => sum + document.balanceDue, 0))
 
-const unpaidDocumentsTotal = computed(() => {
-  return summary.value?.unpaidDocuments.reduce((total, document) => total + document.balanceDue, 0) || 0
-})
-
-const turnoverTotal = computed(() => {
-  return summary.value?.turnoverByCategory.reduce((total, item) => total + item.total, 0) || 0
-})
-
-watch(date, async () => {
-  await refresh()
-})
-
-function formatPaymentCount(count: number) {
-  return `${count} paiement${count > 1 ? 's' : ''}`
+function amount(cents: number) {
+  return formatCurrency(cents).replace(/\sCHF$/, '')
 }
 
-function getShortPaymentMethodLabel(method: DailySummary['totalsByMethod'][number]['method']) {
-  switch (method) {
-    case 'cash':
-      return 'Espèces'
-    case 'card_twint':
-      return 'Carte / TWINT'
-    case 'bank_transfer':
-      return 'Virement'
-    case 'stripe':
-      return 'Stripe'
-    case 'shopify':
-      return 'Shopify'
-  }
+function paymentTime(value: string) {
+  return new Intl.DateTimeFormat('fr-CH', {
+    hour: '2-digit', minute: '2-digit', timeZone: businessTimeZone
+  }).format(new Date(value))
 }
 
 function printReport() {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  window.print()
+  if (reportReady.value && typeof window !== 'undefined') window.print()
 }
 </script>
 
 <template>
-  <UDashboardPanel id="report-daily">
+  <UDashboardPanel id="report-daily" class="daily-report-panel">
     <template #header>
       <UDashboardNavbar title="Fin de journée" class="print:hidden">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
-
         <template #right>
           <UButton
             label="Imprimer"
             icon="i-lucide-printer"
             color="neutral"
-            variant="ghost"
+            variant="outline"
+            :disabled="!reportReady"
             @click="printReport"
           />
         </template>
       </UDashboardNavbar>
-
       <UDashboardToolbar class="print:hidden">
-        <UInput v-model="date" type="date" class="w-52" />
+        <div class="flex items-center gap-3">
+          <label for="report-date" class="text-sm font-medium text-toned">Journée</label>
+          <UInput
+            id="report-date"
+            v-model="date"
+            type="date"
+            class="w-44"
+          />
+        </div>
       </UDashboardToolbar>
     </template>
 
     <template #body>
-      <div v-if="summary" class="daily-report mx-auto w-full max-w-[104rem] space-y-4">
-        <header class="hidden print:block">
-          <div class="flex items-end justify-between border-b border-black pb-2">
-            <div>
-              <h1 class="text-xl font-semibold text-black">
-                Fin de journée
-              </h1>
-              <p class="text-xs text-black/70">
-                Rapport du {{ summary.date }}
-              </p>
-            </div>
-            <div class="text-right text-xs text-black/70">
-              <p>{{ formatPaymentCount(paymentTransactionCount) }}</p>
-              <p>{{ summary.paidDocuments.length }} facture(s) encaissée(s)</p>
-            </div>
-          </div>
-        </header>
-
-        <section class="report-panel report-summary">
-          <div class="report-summary-grid">
-            <div class="report-total report-metric report-metric-main">
+      <div v-if="status === 'pending'" role="status" class="flex items-center gap-2 py-6 text-sm text-toned print:hidden">
+        <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
+        Chargement du rapport…
+      </div>
+      <UAlert
+        v-else-if="error"
+        title="Le rapport n’a pas pu être chargé."
+        description="Réessayez pour afficher les chiffres de cette journée."
+        icon="i-lucide-circle-alert"
+        color="error"
+        variant="subtle"
+        class="print:hidden"
+        :actions="[{ label: 'Réessayer', color: 'neutral', variant: 'outline', onClick: () => refresh() }]"
+      />
+      <template v-else-if="summary && reportReady">
+        <DailyReportPrint :summary="summary" />
+        <div class="daily-report print:hidden">
+          <section class="report-overview" aria-label="Encaissements de la journée">
+            <div class="report-total">
               <p class="report-kicker">
                 Total encaissé
               </p>
               <p class="report-total-value">
                 {{ formatCurrency(summary.totalPaid) }}
               </p>
-              <p class="mt-2 text-sm text-toned">
-                {{ formatPaymentCount(paymentTransactionCount) }} · {{ summary.totalsByMethod.length }} méthode(s)
+              <p class="text-sm text-toned">
+                {{ paymentCount }} paiement{{ paymentCount > 1 ? 's' : '' }}
               </p>
             </div>
-
-            <div class="report-metric">
-              <p class="report-kicker">
-                Factures non réglées
-              </p>
-              <p class="report-stat-value">
-                {{ summary.unpaidDocuments.length }} · {{ formatCurrency(unpaidDocumentsTotal) }}
+            <div class="report-methods">
+              <h2>Moyens de paiement</h2>
+              <table v-if="summary.totalsByMethod.length" class="report-table methods-table">
+                <thead>
+                  <tr>
+                    <th scope="col">
+                      Moyen
+                    </th>
+                    <th scope="col" class="amount">
+                      Paiements
+                    </th>
+                    <th scope="col" class="amount">
+                      Montant CHF
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in summary.totalsByMethod" :key="item.method">
+                    <th scope="row">
+                      {{ getPaymentMethodLabel(item.method) }}
+                    </th>
+                    <td class="amount text-toned">
+                      {{ item.transactionCount }}
+                    </td>
+                    <td class="amount strong">
+                      {{ amount(item.total) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p v-else class="report-empty">
+                Aucun paiement enregistré.
               </p>
             </div>
+          </section>
 
-            <div class="report-metric">
-              <p class="report-kicker">
-                Tickets
-              </p>
-              <p class="report-stat-value">
-                {{ summary.ticketStats.openCount }} ouverts · {{ summary.ticketStats.openedToday }} créés · {{ summary.ticketStats.closedToday }} clos
-              </p>
+          <section class="report-section" aria-labelledby="paid-title">
+            <div class="report-section-heading">
+              <h2 id="paid-title">
+                Factures réglées avec encaissement ce jour
+              </h2>
+              <UBadge
+                :label="String(summary.paidDocuments.length)"
+                color="neutral"
+                variant="soft"
+                size="sm"
+              />
             </div>
-
-            <div class="report-metric">
-              <p class="report-kicker">
-                Date
-              </p>
-              <p class="report-stat-value">
-                {{ summary.date }}
-              </p>
-            </div>
-          </div>
-
-          <div class="report-methods">
             <div
-              v-for="item in summary.totalsByMethod"
-              :key="item.method"
-              class="report-method-row"
+              v-if="summary.paidDocuments.length"
+              class="report-table-wrap"
+              role="region"
+              aria-label="Factures réglées"
+              tabindex="0"
             >
-              <span class="report-method-name">
-                {{ getShortPaymentMethodLabel(item.method) }}
-              </span>
-
-              <div class="report-method-detail">
-                <span class="report-method-amount">
-                  {{ formatCurrency(item.total) }}
-                </span>
-
-                <span class="report-method-count" :title="getPaymentMethodLabel(item.method)">
-                  {{ formatPaymentCount(item.transactionCount) }}
-                </span>
-              </div>
+              <table class="report-table documents-table">
+                <thead>
+                  <tr>
+                    <th scope="col">
+                      Facture
+                    </th>
+                    <th scope="col" class="customer-cell">
+                      Client
+                    </th>
+                    <th scope="col">
+                      Dernier paiement
+                    </th>
+                    <th scope="col" class="amount">
+                      Total TTC CHF
+                    </th>
+                    <th scope="col" class="amount">
+                      Encaissé ce jour CHF
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="document in summary.paidDocuments" :key="document.id">
+                    <th scope="row">
+                      <NuxtLink :to="`/documents/${document.id}`">{{ document.documentNumber }}</NuxtLink>
+                    </th>
+                    <td class="customer-cell">
+                      {{ document.customerName }}
+                    </td>
+                    <td class="text-toned" :title="formatDateTime(document.paidAt)">
+                      {{ paymentTime(document.paidAt) }}
+                    </td>
+                    <td class="amount">
+                      {{ amount(document.total) }}
+                    </td>
+                    <td class="amount strong">
+                      {{ amount(document.paidAmountToday) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-
-            <div v-if="!summary.totalsByMethod.length" class="report-empty">
-              Aucun paiement enregistré.
+            <div v-if="summary.paidDocuments.length" class="report-subtotal">
+              <span>Sous-total encaissé sur ces factures</span>
+              <strong>{{ formatCurrency(paidSubtotal) }}</strong>
             </div>
-          </div>
-        </section>
+            <p v-else class="report-empty">
+              Aucune facture entièrement réglée avec encaissement ce jour.
+            </p>
+          </section>
 
-        <section class="report-panel report-critical">
-          <div class="report-section-header">
-            <div>
-              <h2>Factures du jour non réglées</h2>
-              <p>{{ summary.unpaidDocuments.length }} document(s), {{ formatCurrency(unpaidDocumentsTotal) }} restant à payer</p>
+          <section class="report-section" aria-labelledby="category-title">
+            <div class="report-section-heading">
+              <h2 id="category-title">
+                Répartition par catégorie
+              </h2>
             </div>
-          </div>
-
-          <div class="report-table-wrap">
-            <table class="report-table report-table-compact">
+            <p class="report-note">
+              Lignes catégorisées des factures ci-dessus
+            </p>
+            <table v-if="categories.length" class="report-table">
               <thead>
                 <tr>
-                  <th>Document</th>
-                  <th>Nom</th>
-                  <th class="amount">
-                    Total
+                  <th scope="col">
+                    Catégorie
                   </th>
-                  <th class="amount">
-                    Total réglé
-                  </th>
-                  <th class="amount">
-                    Reste à payer
+                  <th scope="col" class="amount">
+                    Montant TTC CHF
                   </th>
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="document in summary.unpaidDocuments"
-                  :key="document.id"
-                >
-                  <td>
-                    <NuxtLink :to="`/documents/${document.id}`">
-                      {{ document.documentNumber }}
-                    </NuxtLink>
-                  </td>
-                  <td>{{ document.customerName }}</td>
+                <tr v-for="item in categories" :key="item.category">
+                  <th scope="row">
+                    {{ lineCategoryLabels[item.category] }}
+                  </th>
                   <td class="amount">
-                    {{ formatCurrency(document.total) }}
-                  </td>
-                  <td class="amount">
-                    {{ formatCurrency(document.paidAmount) }}
-                  </td>
-                  <td class="amount strong">
-                    {{ formatCurrency(document.balanceDue) }}
-                  </td>
-                </tr>
-                <tr v-if="!summary.unpaidDocuments.length">
-                  <td colspan="5" class="empty-cell">
-                    Aucune facture du jour non réglée.
+                    {{ amount(item.total) }}
                   </td>
                 </tr>
               </tbody>
             </table>
-          </div>
-        </section>
-
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]">
-          <section class="report-panel">
-            <div class="report-section-header">
-              <div>
-                <h2>Factures encaissées</h2>
-                <p>{{ summary.paidDocuments.length }} document(s), {{ formatCurrency(summary.totalPaid) }} encaissé(s)</p>
-              </div>
+            <div v-if="categories.length" class="report-subtotal">
+              <span>Total catégorisé</span>
+              <strong>{{ formatCurrency(categoryTotal) }}</strong>
             </div>
-
-            <div class="report-table-wrap">
-              <table class="report-table">
-                <thead>
-                  <tr>
-                    <th>Document</th>
-                    <th>Client</th>
-                    <th class="amount">
-                      Encaissé jour
-                    </th>
-                    <th class="amount">
-                      Total TTC
-                    </th>
-                    <th>Dernier paiement</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="document in summary.paidDocuments"
-                    :key="document.id"
-                  >
-                    <td>
-                      <NuxtLink :to="`/documents/${document.id}`">
-                        {{ document.documentNumber }}
-                      </NuxtLink>
-                    </td>
-                    <td>{{ document.customerName }}</td>
-                    <td class="amount strong">
-                      {{ formatCurrency(document.paidAmountToday) }}
-                    </td>
-                    <td class="amount">
-                      {{ formatCurrency(document.total) }}
-                    </td>
-                    <td>{{ formatDateTime(document.paidAt) }}</td>
-                  </tr>
-                  <tr v-if="!summary.paidDocuments.length">
-                    <td colspan="5" class="empty-cell">
-                      Aucun document encaissé à la date sélectionnée.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <p v-else class="report-empty">
+              Aucune répartition disponible.
+            </p>
           </section>
 
-          <section class="report-panel">
-            <div class="report-section-header">
-              <div>
-                <h2>Répartition</h2>
-                <p>{{ formatCurrency(turnoverTotal) }} de chiffre d’affaires catégorisé</p>
+          <section class="report-section report-unpaid" aria-labelledby="unpaid-title">
+            <template v-if="unpaidDocuments.length">
+              <div class="report-section-heading">
+                <h2 id="unpaid-title">
+                  Factures du jour non réglées
+                </h2>
+                <UBadge
+                  :label="String(unpaidDocuments.length)"
+                  color="warning"
+                  variant="subtle"
+                  size="sm"
+                />
               </div>
-            </div>
-
-            <DailyBreakdownCharts class="print:hidden" kind="turnover" :summary="summary" />
-
-            <div class="report-table-wrap">
-              <table class="report-table report-table-compact">
-                <thead>
-                  <tr>
-                    <th>Catégorie</th>
-                    <th class="amount">
-                      Chiffre d’affaires
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="item in summary.turnoverByCategory"
-                    :key="item.category"
-                  >
-                    <td>{{ lineCategoryLabels[item.category] }}</td>
-                    <td class="amount strong">
-                      {{ formatCurrency(item.total) }}
-                    </td>
-                  </tr>
-                  <tr v-if="!summary.turnoverByCategory.length">
-                    <td colspan="2" class="empty-cell">
-                      Aucune répartition disponible.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+              <div
+                class="report-table-wrap"
+                role="region"
+                aria-label="Factures du jour non réglées"
+                tabindex="0"
+              >
+                <table class="report-table documents-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">
+                        Facture
+                      </th>
+                      <th scope="col" class="customer-cell">
+                        Client
+                      </th>
+                      <th scope="col" class="amount">
+                        Total TTC CHF
+                      </th>
+                      <th scope="col" class="amount">
+                        Déjà réglé CHF
+                      </th>
+                      <th scope="col" class="amount">
+                        Solde dû CHF
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="document in unpaidDocuments" :key="document.id">
+                      <th scope="row">
+                        <NuxtLink :to="`/documents/${document.id}`">{{ document.documentNumber }}</NuxtLink>
+                      </th>
+                      <td class="customer-cell">
+                        {{ document.customerName }}
+                      </td>
+                      <td class="amount">
+                        {{ amount(document.total) }}
+                      </td>
+                      <td class="amount">
+                        {{ amount(document.paidAmount) }}
+                      </td>
+                      <td class="amount strong">
+                        {{ amount(document.balanceDue) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="report-subtotal">
+                <span>Total restant dû</span>
+                <strong>{{ formatCurrency(unpaidTotal) }}</strong>
+              </div>
+            </template>
+            <p v-else id="unpaid-title" class="flex items-center gap-2 text-sm text-toned">
+              <UIcon name="i-lucide-circle-check" class="size-4 shrink-0 text-success" />
+              Aucune facture du jour non réglée.
+            </p>
           </section>
         </div>
-      </div>
+      </template>
     </template>
   </UDashboardPanel>
 </template>
 
 <style scoped>
-.report-panel {
+.daily-report {
+  width: 100%;
+  max-width: 96rem;
+  margin: 0 auto;
+  padding: 1.25rem;
   border: 1px solid var(--ui-border);
-  border-radius: 0.875rem;
-  background: color-mix(in oklab, var(--ui-bg) 92%, var(--ui-bg-muted));
-  padding: 0.875rem;
-  box-shadow: 0 1px 2px color-mix(in oklab, var(--ui-text) 8%, transparent);
-}
-
-.report-summary {
-  display: grid;
-  gap: 0.625rem;
-  background: color-mix(in oklab, var(--ui-primary) 3%, var(--ui-bg));
-}
-
-.report-summary-grid {
-  display: grid;
-  grid-template-columns: minmax(18rem, 1.2fr) repeat(3, minmax(10rem, 0.75fr));
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--ui-primary) 24%, var(--ui-border));
   border-radius: 0.75rem;
-  background: color-mix(in oklab, var(--ui-bg) 92%, transparent);
+  background: var(--ui-bg);
+  color: var(--ui-text);
 }
 
-.report-metric {
-  min-height: 5.25rem;
-  min-width: 0;
-  padding: 0.875rem 1rem;
-  border-left: 1px solid color-mix(in oklab, var(--ui-primary) 18%, var(--ui-border-muted));
-  background: color-mix(in oklab, var(--ui-bg) 94%, transparent);
+.report-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: 2rem;
 }
 
-.report-metric-main {
-  border-left: 0;
-  background: color-mix(in oklab, var(--ui-primary) 7%, var(--ui-bg));
+.report-total {
+  display: grid;
+  gap: 0.375rem;
 }
 
 .report-kicker {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ui-text-toned);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .report-total-value {
-  margin-top: 0.375rem;
-  font-size: clamp(2.125rem, 3.1vw, 3.25rem);
-  font-weight: 700;
-  line-height: 1;
   color: var(--ui-text-highlighted);
+  font-size: clamp(1.875rem, 3vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .report-methods {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
-.report-method-row {
-  border: 1px solid var(--ui-border-muted);
-  border-radius: 0.625rem;
-  background: color-mix(in oklab, var(--ui-bg) 82%, transparent);
-  padding: 0.55rem 0.7rem;
   min-width: 0;
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--ui-border);
 }
 
-.report-method-name {
-  display: inline-flex;
+.daily-report h2 {
+  color: var(--ui-text-highlighted);
+  font-size: 0.9375rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.report-section {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--ui-border);
+}
+
+.report-section-heading {
+  display: flex;
   align-items: center;
-  min-width: 0;
-  color: var(--ui-text);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
-.report-method-name::before {
-  content: '';
-  width: 0.5rem;
-  height: 0.5rem;
-  flex: 0 0 auto;
-  margin-right: 0.5rem;
-  border-radius: 999px;
-  background: var(--ui-primary);
-}
-
-.report-method-detail {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.625rem;
-  margin-top: 0.35rem;
-}
-
-.report-method-amount {
-  color: var(--ui-text-highlighted);
-  font-size: 1.125rem;
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.report-method-count {
+.report-note,
+.report-empty {
   color: var(--ui-text-toned);
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.report-stat-value {
-  margin-top: 0.125rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--ui-text-highlighted);
-}
-
-@media (max-width: 1120px) {
-  .report-summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .report-metric:nth-child(odd) {
-    border-left: 0;
-  }
-
-  .report-methods {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 700px) {
-  .report-summary-grid,
-  .report-methods {
-    grid-template-columns: 1fr;
-  }
-
-  .report-metric {
-    border-left: 0;
-    border-top: 1px solid color-mix(in oklab, var(--ui-primary) 18%, var(--ui-border-muted));
-  }
-
-  .report-metric-main {
-    border-top: 0;
-  }
-}
-
-.report-critical {
-  border-color: color-mix(in oklab, var(--ui-warning) 42%, var(--ui-border));
-  background: color-mix(in oklab, var(--ui-warning) 6%, var(--ui-bg));
-}
-
-.report-section-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
-}
-
-.report-section-header h2 {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--ui-text-highlighted);
-}
-
-.report-section-header p {
-  margin-top: 0.125rem;
   font-size: 0.8125rem;
-  color: var(--ui-text-toned);
+  line-height: 1.5;
 }
+
+.report-note { margin: -0.25rem 0 0.5rem; }
+.report-empty { padding: 0.25rem 0; }
 
 .report-table-wrap {
-  overflow-x: auto;
+  max-height: 22rem;
+  overflow: auto;
 }
 
 .report-table {
   width: 100%;
-  min-width: 44rem;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.8125rem;
-  line-height: 1.25;
-}
-
-.report-table-compact {
-  min-width: 38rem;
-  font-size: 0.78125rem;
-}
-
-.report-table th {
-  border-bottom: 1px solid var(--ui-border);
-  padding: 0.5rem 0.625rem;
-  color: var(--ui-text-toned);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-align: left;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.report-table td {
-  border-bottom: 1px solid var(--ui-border-muted);
-  padding: 0.5rem 0.625rem;
-  color: var(--ui-text);
-  vertical-align: top;
-}
-
-.report-table a {
-  color: var(--ui-text-highlighted);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.report-table .amount {
-  text-align: right;
-  white-space: nowrap;
+  line-height: 1.4;
   font-variant-numeric: tabular-nums;
 }
 
-.report-table .strong {
-  color: var(--ui-text-highlighted);
-  font-weight: 700;
+.documents-table { min-width: 44rem; }
+
+.report-table th,
+.report-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--ui-border-muted);
+  text-align: left;
+  vertical-align: top;
 }
 
-.empty-cell {
-  color: var(--ui-text-toned) !important;
-  text-align: center;
+.report-table th:first-child,
+.report-table td:first-child { padding-left: 0; }
+.report-table th:last-child,
+.report-table td:last-child { padding-right: 0; }
+.report-table th { font-weight: 400; }
+
+.report-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ui-bg);
+  color: var(--ui-text-toned);
+  border-bottom-color: var(--ui-border);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.report-table tbody tr:last-child > * { border-bottom: 0; }
+.documents-table tbody tr:hover > * { background: var(--ui-bg-muted); }
+.report-table .customer-cell { width: 40%; min-width: 12rem; overflow-wrap: anywhere; }
+.report-table .amount { text-align: right; white-space: nowrap; }
+.report-table .strong { font-weight: 600; color: var(--ui-text-highlighted); }
+.report-table a { color: var(--ui-primary); font-weight: 600; white-space: nowrap; }
+.report-table a:hover { text-decoration: underline; }
+.report-table a:focus-visible,
+.report-table-wrap:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+
+.report-subtotal {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--ui-border);
+  font-size: 0.8125rem;
+}
+
+.report-subtotal strong { color: var(--ui-text-highlighted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 767px) {
+  .daily-report { padding: 1rem; }
+  .report-overview { grid-template-columns: 1fr; gap: 1rem; }
+  .report-methods { padding: 1rem 0 0; border-left: 0; border-top: 1px solid var(--ui-border-muted); }
+  .report-table th,
+  .report-table td { padding-right: 0.375rem; padding-left: 0.375rem; }
+  .report-section { margin-top: 1rem; padding-top: 1rem; }
 }
 
 @media print {
-  @page {
-    size: A4;
-    margin: 8mm;
+  @page daily-report {
+    size: A4 portrait;
+    margin: 14mm;
   }
 
-  :global(body) {
+  :global(body:has(.daily-report-print)) {
+    page: daily-report;
+    margin: 0 !important;
     background: #fff !important;
   }
 
-  :global(body:has(#report-daily) aside),
-  :global(body:has(#report-daily) #default) {
-    display: none !important;
-  }
-
-  #report-daily {
-    color: #111 !important;
-  }
-
-  .daily-report {
-    max-width: none !important;
-    padding: 0 !important;
-    gap: 6px !important;
-  }
-
-  .report-panel {
-    break-inside: avoid;
-    border-color: #111 !important;
-    border-radius: 0 !important;
-    background: #fff !important;
-    box-shadow: none !important;
-    padding: 6px 8px !important;
-  }
-
-  .report-summary {
-    margin-top: 6px;
-  }
-
-  .daily-report > div {
+  /* Release the dashboard's fixed viewport and scroll containers for pagination. */
+  :global(body:has(.daily-report-print) #__nuxt),
+  :global(body:has(.daily-report-print) #__nuxt div:has(.daily-report-print)) {
     display: block !important;
-  }
-
-  .report-summary-grid {
-    display: grid !important;
-    grid-template-columns: 1.4fr repeat(3, 1fr) !important;
-    gap: 4px !important;
-  }
-
-  .report-metric {
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: #fff !important;
-    padding: 0 !important;
-  }
-
-  .report-total-value {
-    margin-top: 1px !important;
-    font-size: 22px !important;
-    color: #000 !important;
-  }
-
-  .report-methods {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 2px 12px !important;
-    margin-top: 4px !important;
-  }
-
-  .report-method-row {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) max-content;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: #fff !important;
-    padding: 1px 0 !important;
-  }
-
-  .report-method-name::before {
-    display: none !important;
-  }
-
-  .report-method-detail {
-    margin-top: 0 !important;
-  }
-
-  .report-section-header {
-    margin-bottom: 3px !important;
-  }
-
-  .report-section-header h2 {
-    color: #000 !important;
-    font-size: 12px !important;
-  }
-
-  .report-section-header p,
-  .report-kicker,
-  .report-stat-value,
-  .report-table th,
-  .report-table td {
-    color: #111 !important;
-  }
-
-  .report-table-wrap {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: #fff !important;
   }
 
-  .report-table,
-  .report-table-compact {
-    min-width: 0 !important;
-    font-size: 9px !important;
-    line-height: 1.12 !important;
-  }
-
-  .report-table th,
-  .report-table td {
-    border-color: #999 !important;
-    padding: 2px 4px !important;
-  }
-
-  .report-table a {
-    color: #000 !important;
+  :global(body:has(.daily-report-print) div:has(> .daily-report-panel) > :not(.daily-report-panel)),
+  :global(body:has(.daily-report-print) nuxt-devtools-frame) {
+    display: none !important;
   }
 }
 </style>
