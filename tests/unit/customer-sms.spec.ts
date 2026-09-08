@@ -9,6 +9,25 @@ import {
 } from '../../shared/utils/customer-sms'
 
 describe('customer SMS settings', () => {
+  it('upgrades only unchanged legacy defaults and preserves customized templates', () => {
+    const legacy = {
+      id: 'repair-complete', label: 'Réparation terminée',
+      body: 'Bonjour {{client_name}}, votre ticket {{ticket_number}} est prêt. Vous pouvez venir récupérer votre appareil.'
+    }
+    const custom = { ...legacy, body: `${legacy.body} Merci !` }
+    const renamed = { ...legacy, label: 'Mon modèle' }
+    const settings = parseCustomerSmsSettings(JSON.stringify({ templates: [legacy, custom, renamed] }))
+    expect(settings.templates).toEqual([defaultSmsTemplates[0], custom, renamed])
+    expect(parseCustomerSmsSettings(serializeCustomerSmsSettings(settings))).toEqual(settings)
+  })
+
+  it('resolves both placeholder names to the same dossier number', () => {
+    const body = resolveSmsTemplateBody({ id: 'test', label: 'Test', body: '{{dossier_number}} / {{ticket_number}}' }, {
+      clientName: 'Camille', ticketNumber: 'DOS-34', brand: '', model: ''
+    })
+    expect(body).toBe('DOS-34 / DOS-34')
+  })
+
   it('falls back to independent defaults for malformed JSON', () => {
     const first = parseCustomerSmsSettings('{broken')
     const second = parseCustomerSmsSettings(null)

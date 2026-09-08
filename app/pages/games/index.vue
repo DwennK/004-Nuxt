@@ -186,7 +186,7 @@ function normalize(value: string) {
                     Mini-jeux plus propres, plus nerveux, plus agreables.
                   </h1>
                   <p class="mt-3 max-w-xl text-sm leading-6 text-toned sm:text-base">
-                    Une petite arcade interne pour souffler entre deux tickets: jeux rapides, grilles lisibles, controles directs et scores visibles.
+                    Une petite arcade interne pour souffler entre deux dossiers: jeux rapides, grilles lisibles, controles directs et scores visibles.
                   </p>
                 </div>
 

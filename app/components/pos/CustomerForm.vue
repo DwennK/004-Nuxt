@@ -273,7 +273,7 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
     <template v-else-if="props.layout === 'page'">
       <UPageCard
         title="Identité"
-        description="Créez une fiche claire pour retrouver le client rapidement dans les tickets, documents et paiements."
+        description="Créez une fiche claire pour retrouver le client rapidement dans les dossiers, documents et paiements."
         variant="subtle"
       >
         <div class="grid gap-4 md:grid-cols-2">

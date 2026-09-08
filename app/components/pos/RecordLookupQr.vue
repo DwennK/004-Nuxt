@@ -5,7 +5,7 @@ import { buildRecordQrUrl, type RecordQrType } from '~~/shared/utils/record-qr'
 const props = defineProps<{ type: RecordQrType, id: number, compact?: boolean }>()
 const appOrigin = useRequestURL().origin
 const url = computed(() => buildRecordQrUrl(props.type, props.id, appOrigin))
-const label = computed(() => props.type === 'tickets' ? 'Ouvrir le ticket' : 'Ouvrir le document')
+const label = computed(() => props.type === 'tickets' ? 'Ouvrir le dossier' : 'Ouvrir le document')
 const { data: qr } = await useAsyncData(
   () => `record-qr-${url.value}`,
   () => QRCode.toDataURL(url.value, { errorCorrectionLevel: 'M', margin: 4, width: 300 }),

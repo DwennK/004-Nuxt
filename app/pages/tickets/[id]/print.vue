@@ -89,10 +89,10 @@ function printTicket() {
       <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div>
           <p class="text-xs uppercase tracking-[0.24em] text-toned">
-            Ticket atelier · {{ printProfileLabels.thermal }}
+            Dossier client · {{ printProfileLabels.thermal }}
           </p>
           <h1 class="text-lg font-semibold text-highlighted">
-            {{ ticket?.ticketNumber || 'Ticket atelier' }}
+            {{ ticket?.ticketNumber || 'Dossier client' }}
           </h1>
         </div>
 
@@ -145,7 +145,7 @@ function printTicket() {
           <div class="thermal-meta">
             <div>
               <p class="thermal-kicker">
-                Ticket
+                Dossier client
               </p>
               <p class="thermal-reference">
                 {{ ticket.ticketNumber }}
@@ -262,7 +262,7 @@ function printTicket() {
 
         <footer class="thermal-footer">
           <p>
-            Présentez ce ticket lors du retrait ou du suivi en magasin.
+            Présentez cette fiche lors du retrait ou du suivi en magasin.
           </p>
           <p v-if="company.email || company.website">
             {{ [company.email, company.website].filter(Boolean).join(' · ') }}
@@ -274,7 +274,7 @@ function printTicket() {
         v-else
         class="flex min-h-[60vh] w-full max-w-3xl items-center justify-center rounded-3xl border border-dashed border-default bg-default px-6 text-center text-sm text-toned"
       >
-        Impossible de charger le ticket atelier imprimable.
+        Impossible de charger le dossier client imprimable.
       </div>
     </main>
   </div>

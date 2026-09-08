@@ -79,7 +79,7 @@ export async function logTicketSmsQrOpened(ticketId: number, input: {
   if (!existing[0]) {
     throw createError({
       statusCode: 404,
-      statusMessage: 'Ticket not found'
+      statusMessage: 'Dossier introuvable'
     })
   }
 

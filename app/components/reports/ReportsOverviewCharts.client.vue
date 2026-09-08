@@ -242,7 +242,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
         <template #header>
           <div class="flex flex-col gap-1">
             <h2 class="text-base font-semibold text-highlighted">
-              Flux tickets
+              Flux dossiers
             </h2>
             <p class="text-sm text-toned">
               Ouvertures et clôtures par jour sur 7 jours glissants.
@@ -277,7 +277,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
         <UEmpty
           v-else
           icon="i-lucide-wrench"
-          title="Aucune variation de tickets"
+          title="Aucune variation de dossiers"
           description="Les ouvertures et clôtures apparaîtront ici dès qu’il y aura de l’activité."
         />
       </UCard>

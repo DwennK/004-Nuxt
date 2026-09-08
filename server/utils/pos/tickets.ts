@@ -1,3 +1,5 @@
+import { dossierEventLabel } from '~~/shared/utils/dossier-labels'
+import { dossierReferenceSearch, dossierReferenceTerm } from './dossier-search'
 import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { customers, documents, ticketEvents, ticketLines, tickets } from '~~/server/db/schema'
@@ -77,7 +79,7 @@ function assertTicketStatusTransition(from: TicketStatus, to: TicketStatus) {
 
   throw createError({
     statusCode: 409,
-    statusMessage: `Ticket cannot transition from ${ticketStatusLabels[from]} to ${ticketStatusLabels[to]}`,
+    statusMessage: `Transition impossible du dossier : ${ticketStatusLabels[from]} vers ${ticketStatusLabels[to]}`,
     data: {
       code: 'TICKET_TRANSITION_NOT_ALLOWED',
       from,
@@ -162,7 +164,7 @@ function mapTicketEvent(row: typeof ticketEvents.$inferSelect): TicketEvent {
     id: row.id,
     ticketId: row.ticketId,
     kind: row.kind,
-    label: row.label,
+    label: dossierEventLabel(row.kind, row.label),
     note: row.note,
     metadata: parseEventMetadata(row.metadataJson),
     occurredAt: row.occurredAt,
@@ -196,7 +198,7 @@ function getWorkflowActions(status: TicketStatus): TicketWorkflowAction[] {
       id: 'start-diagnosis',
       kind: 'status',
       label: 'Lancer le diagnostic',
-      description: 'Le ticket entre en analyse atelier.',
+      description: 'Le dossier entre en analyse atelier.',
       icon: 'i-lucide-stethoscope',
       color: 'info',
       targetStatus: 'diagnosis'
@@ -211,7 +213,7 @@ function getWorkflowActions(status: TicketStatus): TicketWorkflowAction[] {
     }, {
       id: 'cancel-ticket',
       kind: 'status',
-      label: 'Annuler le ticket',
+      label: 'Annuler le dossier',
       description: 'Le dossier est abandonné avant intervention.',
       icon: 'i-lucide-circle-x',
       color: 'error',
@@ -236,7 +238,7 @@ function getWorkflowActions(status: TicketStatus): TicketWorkflowAction[] {
     }, {
       id: 'cancel-ticket',
       kind: 'status',
-      label: 'Annuler le ticket',
+      label: 'Annuler le dossier',
       description: 'Le dossier est fermé sans intervention.',
       icon: 'i-lucide-circle-x',
       color: 'error',
@@ -286,7 +288,7 @@ function getWorkflowActions(status: TicketStatus): TicketWorkflowAction[] {
     }, {
       id: 'cancel-ticket',
       kind: 'status',
-      label: 'Annuler le ticket',
+      label: 'Annuler le dossier',
       description: 'Le dossier est abandonné malgré accord.',
       icon: 'i-lucide-circle-x',
       color: 'error',
@@ -311,7 +313,7 @@ function getWorkflowActions(status: TicketStatus): TicketWorkflowAction[] {
     }, {
       id: 'cancel-ticket',
       kind: 'status',
-      label: 'Annuler le ticket',
+      label: 'Annuler le dossier',
       description: 'Annuler le dossier en cours d’atelier.',
       icon: 'i-lucide-circle-x',
       color: 'error',
@@ -336,7 +338,7 @@ function getWorkflowActions(status: TicketStatus): TicketWorkflowAction[] {
     }, {
       id: 'cancel-ticket',
       kind: 'status',
-      label: 'Annuler le ticket',
+      label: 'Annuler le dossier',
       description: 'Le dossier est abandonné faute de pièces ou de validation.',
       icon: 'i-lucide-circle-x',
       color: 'error',
@@ -362,7 +364,7 @@ function getWorkflowActions(status: TicketStatus): TicketWorkflowAction[] {
     delivered: [{
       id: 'close-ticket',
       kind: 'close',
-      label: 'Clôturer le ticket',
+      label: 'Clôturer le dossier',
       description: 'Le dossier est terminé et archivé.',
       icon: 'i-lucide-check-check',
       color: 'success',
@@ -371,7 +373,7 @@ function getWorkflowActions(status: TicketStatus): TicketWorkflowAction[] {
       id: 'back-ready-pickup',
       kind: 'status',
       label: 'Revenir en attente de retrait',
-      description: 'La remise est annulée, le ticket revient au comptoir.',
+      description: 'La remise est annulée, le dossier revient au comptoir.',
       icon: 'i-lucide-rotate-ccw',
       color: 'neutral',
       targetStatus: 'ready_for_pickup'
@@ -458,7 +460,7 @@ function getTicketWorkflowSummary(ticket: TicketRecord, commercialSummary: Ticke
       case 'ready_for_pickup':
         return commercialSummary.balanceDue > 0 ? 'Encaisser puis remettre l’appareil' : 'Remettre l’appareil au client'
       case 'delivered':
-        return 'Clôturer le ticket'
+        return 'Clôturer le dossier'
       case 'closed':
         return 'Dossier terminé'
       case 'cancelled':
@@ -481,7 +483,7 @@ function buildSyntheticEvents(ticket: TicketRecord, documentRows: DocumentRecord
     id: `synthetic-ticket-created-${ticket.id}`,
     ticketId: ticket.id,
     kind: 'ticket_created',
-    label: 'Ticket ouvert',
+    label: 'Dossier ouvert',
     note: ticket.internalNotes,
     metadata: {
       status: ticket.status,
@@ -541,7 +543,7 @@ function buildSyntheticEvents(ticket: TicketRecord, documentRows: DocumentRecord
       id: `synthetic-ticket-closed-${ticket.id}`,
       ticketId: ticket.id,
       kind: ticket.status === 'cancelled' ? 'ticket_status_changed' : 'ticket_closed',
-      label: ticket.status === 'cancelled' ? 'Ticket annulé' : 'Ticket clôturé',
+      label: ticket.status === 'cancelled' ? 'Dossier annulé' : 'Dossier clôturé',
       note: ticket.internalNotes,
       metadata: {
         status: ticket.status
@@ -573,17 +575,19 @@ export async function listTickets(filters?: {
   const offset = (page - 1) * pageSize
   const searchTerm = filters?.q?.trim().toLowerCase()
   const searchPattern = searchTerm ? `%${searchTerm}%` : null
+  const referenceTerm = dossierReferenceTerm(searchTerm)
+  const referenceColumn = dossierReferenceSearch(sql`${tickets.ticketNumber}`)
   const staleCutoff = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString()
 
   const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
   const relevanceOrder = searchTerm
     ? sql<number>`case
-        when lower(${tickets.ticketNumber}) = ${searchTerm} then 0
+        when ${referenceColumn} = ${referenceTerm} then 0
         when lower(coalesce(${tickets.imei}, '')) = ${searchTerm} then 0
         when lower(coalesce(${tickets.serialNumber}, '')) = ${searchTerm} then 0
         when lower(${customers.phone}) = ${searchTerm} then 0
         when lower(${customerNameValue}) = ${searchTerm} then 0
-        when lower(${tickets.ticketNumber}) like ${`${searchTerm}%`} then 1
+        when ${referenceColumn} like ${`${referenceTerm}%`} then 1
         when lower(coalesce(${tickets.imei}, '')) like ${`${searchTerm}%`} then 1
         when lower(coalesce(${tickets.serialNumber}, '')) like ${`${searchTerm}%`} then 1
         else 2
@@ -595,7 +599,7 @@ export async function listTickets(filters?: {
     filters?.customerId ? eq(tickets.customerId, filters.customerId) : undefined,
     searchPattern
       ? or(
-          sql`lower(${tickets.ticketNumber}) like ${searchPattern}`,
+          sql`${referenceColumn} like ${`%${referenceTerm}%`}`,
           sql`lower(${customerNameValue}) like ${searchPattern}`,
           sql`lower(${customers.phone}) like ${searchPattern}`,
           sql`lower(coalesce(${tickets.brand}, '')) like ${searchPattern}`,
@@ -687,7 +691,7 @@ export async function getTicketById(id: number): Promise<TicketDetail> {
   if (!header) {
     throw createError({
       statusCode: 404,
-      statusMessage: 'Ticket not found'
+      statusMessage: 'Dossier introuvable'
     })
   }
 
@@ -729,7 +733,7 @@ export async function addTicketNote(id: number, note: string, actor?: {
     if (!ticket) {
       throw createError({
         statusCode: 404,
-        statusMessage: 'Ticket not found'
+        statusMessage: 'Dossier introuvable'
       })
     }
 
@@ -782,7 +786,7 @@ export async function createTicket(input: Omit<TicketRecord, 'id' | 'ticketNumbe
     if (!row) {
       throw createError({
         statusCode: 500,
-        statusMessage: 'Could not create ticket'
+        statusMessage: 'Impossible de créer le dossier'
       })
     }
 
@@ -792,7 +796,7 @@ export async function createTicket(input: Omit<TicketRecord, 'id' | 'ticketNumbe
     await createTicketEvent({
       ticketId: ticket.id,
       kind: 'ticket_created',
-      label: 'Ticket ouvert',
+      label: 'Dossier ouvert',
       note: input.internalNotes,
       metadata: {
         status: ticket.status,
@@ -820,7 +824,7 @@ export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 
     if (!existing) {
       throw createError({
         statusCode: 404,
-        statusMessage: 'Ticket not found'
+        statusMessage: 'Dossier introuvable'
       })
     }
 
@@ -850,7 +854,7 @@ export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 
     if (!row) {
       throw createError({
         statusCode: 404,
-        statusMessage: 'Ticket not found'
+        statusMessage: 'Dossier introuvable'
       })
     }
 
@@ -860,7 +864,7 @@ export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 
       await createTicketEvent({
         ticketId: id,
         kind: row.status === 'closed' ? 'ticket_closed' : 'ticket_status_changed',
-        label: row.status === 'closed' ? 'Ticket clôturé' : `Statut mis à jour · ${ticketStatusLabels[row.status]}`,
+        label: row.status === 'closed' ? 'Dossier clôturé' : `Statut mis à jour · ${ticketStatusLabels[row.status]}`,
         note: input.internalNotes,
         metadata: {
           previousStatus: existing.status,

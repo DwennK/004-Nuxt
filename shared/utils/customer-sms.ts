@@ -4,12 +4,26 @@ export const freeSmsTemplateId = 'free'
 
 export const smsTemplatePlaceholders = [
   '{{client_name}}',
-  '{{ticket_number}}',
+  '{{dossier_number}}',
   '{{brand}}',
   '{{model}}'
 ] as const
 
 export const defaultSmsTemplates: SmsTemplateRecord[] = [{
+  id: 'repair-complete',
+  label: 'Réparation terminée',
+  body: 'Bonjour {{client_name}}, votre dossier {{dossier_number}} est prêt. Vous pouvez venir récupérer votre appareil.'
+}, {
+  id: 'quote-complete',
+  label: 'Devis terminé',
+  body: 'Bonjour {{client_name}}, le devis pour votre dossier {{dossier_number}} est prêt. Merci de nous contacter pour la suite.'
+}, {
+  id: 'order-received',
+  label: 'Commande reçue',
+  body: 'Bonjour {{client_name}}, la commande liée au dossier {{dossier_number}} est reçue. Nous pouvons poursuivre le traitement.'
+}]
+
+const legacySmsTemplates: SmsTemplateRecord[] = [{
   id: 'repair-complete',
   label: 'Réparation terminée',
   body: 'Bonjour {{client_name}}, votre ticket {{ticket_number}} est prêt. Vous pouvez venir récupérer votre appareil.'
@@ -55,6 +69,11 @@ export function parseCustomerSmsSettings(value: string | null | undefined): Cust
         body: template.body.trim()
       }))
       .filter((template: SmsTemplateRecord) => template.id && template.label && template.body)
+      .map((template: SmsTemplateRecord) => {
+        const index = legacySmsTemplates.findIndex(legacy => legacy.id === template.id
+          && legacy.label === template.label && legacy.body === template.body)
+        return index < 0 ? template : { ...defaultSmsTemplates[index]! }
+      })
 
     return {
       templates: normalizedTemplates
@@ -82,6 +101,7 @@ export function resolveSmsTemplateBody(template: SmsTemplateRecord, values: {
 }) {
   return template.body
     .replaceAll('{{client_name}}', values.clientName)
+    .replaceAll('{{dossier_number}}', values.ticketNumber)
     .replaceAll('{{ticket_number}}', values.ticketNumber)
     .replaceAll('{{brand}}', values.brand)
     .replaceAll('{{model}}', values.model)

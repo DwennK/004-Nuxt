@@ -973,7 +973,7 @@ watch(editOpen, (open) => {
     "
     :description="
       createType === 'repair'
-        ? 'Ajoutez une réparation structurée pour la recherche atelier et les tickets.'
+        ? 'Ajoutez une réparation structurée pour la recherche atelier et les dossiers.'
         : createType === 'service'
           ? 'Ajoutez un service structuré pour les opérations génériques.'
           : 'Ajoutez un article vendu tel quel sans quitter la liste.'

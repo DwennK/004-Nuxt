@@ -199,14 +199,14 @@ const statusMenuItems = computed(() => {
 
   if (allowedStatuses.includes('cancelled')) {
     finalItems.push({
-      label: 'Annuler le ticket',
+      label: 'Annuler le dossier',
       icon: 'i-lucide-circle-x',
       color: 'error',
       onSelect() {
         openWorkflowAction({
           id: 'cancel-ticket-inline',
           kind: 'status',
-          label: 'Annuler le ticket',
+          label: 'Annuler le dossier',
           description: 'Le dossier est abandonné. Une confirmation explicite est requise.',
           icon: 'i-lucide-circle-x',
           color: 'error',
@@ -218,14 +218,14 @@ const statusMenuItems = computed(() => {
 
   if (allowedStatuses.includes('closed')) {
     finalItems.push({
-      label: 'Clôturer le ticket',
+      label: 'Clôturer le dossier',
       icon: 'i-lucide-check-check',
       color: 'success',
       onSelect() {
         openWorkflowAction({
           id: 'close-ticket-inline',
           kind: 'close',
-          label: 'Clôturer le ticket',
+          label: 'Clôturer le dossier',
           description: 'Le dossier est terminé et archivé.',
           icon: 'i-lucide-check-check',
           color: 'success',
@@ -355,7 +355,7 @@ function getEventDescription(event: TicketEvent) {
       return `${ticketStatusLabels[previousStatus as keyof typeof ticketStatusLabels]} → ${ticketStatusLabels[nextStatus as keyof typeof ticketStatusLabels]}`
     }
 
-    return 'Le statut du ticket a été mis à jour.'
+    return 'Le statut du dossier a été mis à jour.'
   }
 
   if (event.kind === 'ticket_created') {
@@ -368,7 +368,7 @@ function getEventDescription(event: TicketEvent) {
 
   if (event.kind === 'ticket_note_added') {
     const actorName = typeof metadata.actorName === 'string' ? metadata.actorName : null
-    return actorName ? `Ajoutée par ${actorName}` : 'Ajoutée au suivi interne du ticket.'
+    return actorName ? `Ajoutée par ${actorName}` : 'Ajoutée au suivi interne du dossier.'
   }
 
   if (event.kind === 'document_created') {
@@ -379,7 +379,7 @@ function getEventDescription(event: TicketEvent) {
       return `${documentTypeLabels[documentType as keyof typeof documentTypeLabels]} ${documentNumber}`
     }
 
-    return 'Un document commercial a été lié au ticket.'
+    return 'Un document commercial a été lié au dossier.'
   }
 
   if (event.kind === 'payment_recorded') {
@@ -527,7 +527,7 @@ async function handleWorkflowSubmit(payload: {
     if (!result?.ok) return
 
     toast.add({
-      title: 'Ticket clôturé',
+      title: 'Dossier clôturé',
       color: 'success'
     })
 
@@ -675,7 +675,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
 <template>
   <UDashboardPanel id="ticket-detail">
     <template #header>
-      <UDashboardNavbar :title="ticket?.ticketNumber || 'Détail du ticket'">
+      <UDashboardNavbar :title="ticket?.ticketNumber || 'Détail du dossier'">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -736,8 +736,8 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             :ui="{ label: 'hidden sm:inline' }"
           />
           <UButton
-            label="Modifier le ticket"
-            aria-label="Modifier le ticket"
+            label="Modifier le dossier"
+            aria-label="Modifier le dossier"
             icon="i-lucide-pencil"
             color="neutral"
             variant="ghost"
@@ -1244,7 +1244,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
     v-if="createdCommercialDocument"
     v-model:open="createdDocumentActionsOpen"
     :title="`${documentTypeLabels[createdCommercialDocument.type]} créé`"
-    :description="`${createdCommercialDocument.documentNumber} est lié au ticket ${ticket?.ticketNumber || ''}.`"
+    :description="`${createdCommercialDocument.documentNumber} est lié au dossier ${ticket?.ticketNumber || ''}.`"
     :ui="{ content: 'sm:max-w-2xl' }"
     @after:leave="clearCreatedDocumentActions"
   >
@@ -1334,7 +1334,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
       <div class="flex w-full justify-end">
         <UButton
           :disabled="dossier.blocked.value"
-          label="Rester sur le ticket"
+          label="Rester sur le dossier"
           color="neutral"
           variant="ghost"
           @click="closeCreatedDocumentActions"
@@ -1359,7 +1359,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
     :dismissible="!noteSaving"
     :close="!noteSaving"
     title="Ajouter une note interne"
-    description="Cette note sera horodatée dans le suivi du ticket."
+    description="Cette note sera horodatée dans le suivi du dossier."
     :ui="{ content: 'sm:max-w-xl' }"
   >
     <template #body>

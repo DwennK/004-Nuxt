@@ -20,7 +20,7 @@ const paymentPagination = ref({
 })
 
 const tabItems = [
-  { label: 'Tickets', value: 'tickets', icon: 'i-lucide-wrench' },
+  { label: 'Dossiers', value: 'tickets', icon: 'i-lucide-wrench' },
   { label: 'Documents', value: 'documents', icon: 'i-lucide-files' },
   { label: 'Paiements', value: 'payments', icon: 'i-lucide-wallet' }
 ]
@@ -86,7 +86,7 @@ async function saveCustomer(payload: CustomerFormValue) {
 const ticketColumns: TableColumn<TicketListItem>[] = [
   {
     accessorKey: 'ticketNumber',
-    header: 'Ticket',
+    header: 'Dossier',
     cell: ({ row }) => h('div', { class: 'space-y-1' }, [
       h(NuxtLink, { to: `/tickets/${row.original.id}`, class: 'font-medium text-highlighted' }, () => row.original.ticketNumber),
       h(UBadge, { color: ticketStatusColors[row.original.status], variant: 'subtle' }, () => ticketStatusLabels[row.original.status])
@@ -172,7 +172,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
           />
           <UButton
             :to="`/tickets/new?customerId=${id}`"
-            label="Nouveau ticket"
+            label="Nouveau dossier"
             icon="i-lucide-wrench"
             variant="subtle"
           />
@@ -204,7 +204,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
             <div class="grid gap-2 sm:grid-cols-4">
               <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
                 <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                  Tickets ouverts
+                  Dossiers ouverts
                 </p>
                 <p class="text-sm font-semibold text-highlighted">
                   {{ (tickets?.items || []).filter(ticket => ticket.status !== 'closed' && ticket.status !== 'cancelled').length }}
@@ -344,7 +344,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
                 sticky="header"
               >
                 <template #empty>
-                  <UEmpty icon="i-lucide-wrench" title="Aucun ticket" description="Les tickets de travail suivis pour ce client apparaîtront ici." />
+                  <UEmpty icon="i-lucide-wrench" title="Aucun dossier" description="Les dossiers de travail suivis pour ce client apparaîtront ici." />
                 </template>
               </UTable>
 

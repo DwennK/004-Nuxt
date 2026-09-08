@@ -287,7 +287,7 @@ const columns: TableColumn<DocumentListItem>[] = [
           <UInput
             v-model="search"
             icon="i-lucide-search"
-            placeholder="Rechercher par document, client ou ticket"
+            placeholder="Rechercher par document, client ou dossier"
             class="max-w-md"
           />
           <USelectMenu

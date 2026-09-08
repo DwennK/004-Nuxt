@@ -45,7 +45,7 @@ async function saveTicket(payload: {
   const result = await save(() => $fetch(`/api/tickets/${id.value}`, {
     method: 'PATCH',
     body: payload
-  }), { success: 'Ticket enregistré' })
+  }), { success: 'Dossier enregistré' })
   if (!result?.ok) return
   dirty.value = false
   await navigateTo(`/tickets/${id.value}`)
@@ -55,7 +55,7 @@ async function saveTicket(payload: {
 <template>
   <UDashboardPanel id="ticket-edit">
     <template #header>
-      <UDashboardNavbar :title="ticket?.ticketNumber ? `Modifier ${ticket.ticketNumber}` : 'Modifier le ticket'">
+      <UDashboardNavbar :title="ticket?.ticketNumber ? `Modifier ${ticket.ticketNumber}` : 'Modifier le dossier'">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>

@@ -40,7 +40,7 @@ const props = withDefaults(defineProps<{
   formId: undefined,
   layout: 'compact',
   showSubmit: true,
-  submitLabel: 'Enregistrer le ticket'
+  submitLabel: 'Enregistrer le dossier'
 })
 
 const emit = defineEmits<{
@@ -437,7 +437,7 @@ async function handleIntakeScan(value: string) {
     handleImeiScan(normalizedNumericValue)
     toast.add({
       title: 'IMEI scanné',
-      description: 'Renseigné dans les champs avancés du ticket.',
+      description: 'Renseigné dans les champs avancés du dossier.',
       color: 'success'
     })
     return
@@ -670,7 +670,7 @@ async function handleIntakeScan(value: string) {
             <template #header>
               <div>
                 <h2 class="text-base font-semibold text-highlighted">
-                  Détails du ticket
+                  Détails du dossier
                 </h2>
               </div>
             </template>
@@ -712,7 +712,7 @@ async function handleIntakeScan(value: string) {
             </p>
 
             <div class="grid gap-3 md:grid-cols-3">
-              <UFormField label="Type de ticket" name="type" required>
+              <UFormField label="Type de dossier" name="type" required>
                 <USelect
                   v-model="state.type"
                   :items="ticketTypeItems"
@@ -765,7 +765,7 @@ async function handleIntakeScan(value: string) {
       <template v-if="props.layout === 'page'">
         <UPageCard
           title="Contexte"
-          description="Associez le ticket au bon client et définissez son cadre opérationnel."
+          description="Associez le dossier au bon client et définissez son cadre opérationnel."
           variant="subtle"
         >
           <UFormField
@@ -785,7 +785,7 @@ async function handleIntakeScan(value: string) {
           <USeparator />
           <div class="grid gap-4 md:grid-cols-3">
             <UFormField
-              label="Type de ticket"
+              label="Type de dossier"
               name="type"
               description="Détermine le flux atelier ou support."
               required
@@ -935,7 +935,7 @@ async function handleIntakeScan(value: string) {
             />
           </UFormField>
 
-          <UFormField label="Type de ticket" name="type" required>
+          <UFormField label="Type de dossier" name="type" required>
             <USelect
               v-model="state.type"
               :items="ticketTypeItems"

@@ -282,7 +282,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         v-if="isCatalogService"
         :title="isRepair ? 'Contexte réparation' : 'Contexte service'"
         :description="isRepair
-          ? 'Structurez la réparation pour alimenter la recherche atelier et préremplir les tickets.'
+          ? 'Structurez la réparation pour alimenter la recherche atelier et préremplir les dossiers.'
           : 'Décrivez le service pour le retrouver vite dans le catalogue et les documents.'"
         variant="subtle"
       >

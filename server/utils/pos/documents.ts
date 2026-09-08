@@ -1,3 +1,4 @@
+import { dossierReferenceSearch, dossierReferenceTerm } from './dossier-search'
 import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { getShopifyProvenance } from '../shopify/import'
 import { and, asc, desc, eq, gte, inArray, lte, ne, or, sql } from 'drizzle-orm'
@@ -201,14 +202,14 @@ export async function assertTicketDocumentCreationAllowed(
   if (!ticket) {
     throw createError({
       statusCode: 404,
-      statusMessage: 'Ticket not found'
+      statusMessage: 'Dossier introuvable'
     })
   }
 
   if (ticket.customerId !== input.customerId) {
     throw createError({
       statusCode: 409,
-      statusMessage: 'Document customer must match the ticket customer',
+      statusMessage: 'Le client du document doit correspondre à celui du dossier',
       data: { code: 'TICKET_DOCUMENT_CUSTOMER_MISMATCH' }
     })
   }
@@ -225,8 +226,8 @@ export async function assertTicketDocumentCreationAllowed(
   throw createError({
     statusCode: 409,
     statusMessage: isFinalized
-      ? 'Finalized tickets cannot receive new commercial documents'
-      : 'This ticket already has a document of this type',
+      ? 'Les dossiers clôturés ou annulés ne peuvent pas recevoir de nouveaux documents commerciaux'
+      : 'Ce dossier possède déjà un document de ce type',
     data: {
       code: isFinalized ? 'TICKET_FINALIZED' : 'TICKET_DOCUMENT_ALREADY_EXISTS',
       documentType: input.documentType
@@ -346,6 +347,7 @@ export async function listDocuments(filters?: {
   const sortBy = filters?.sortBy || 'issuedAt'
   const searchTerm = filters?.q?.trim().toLowerCase()
   const searchPattern = searchTerm ? `%${searchTerm}%` : null
+  const referenceTerm = dossierReferenceTerm(searchTerm)
   const dateFrom = filters?.dateFrom ? normalizeDocumentDateFrom(filters.dateFrom) : undefined
   const dateTo = filters?.dateTo ? normalizeDocumentDateTo(filters.dateTo) : undefined
   const payableTypes = [...payableDocumentTypes]
@@ -466,7 +468,7 @@ export async function listDocuments(filters?: {
         ? or(
             sql`lower(${documents.documentNumber}) like ${searchPattern}`,
             sql`lower(${customerNameValue}) like ${searchPattern}`,
-            sql`lower(coalesce(${tickets.ticketNumber}, '')) like ${searchPattern}`
+            sql`${dossierReferenceSearch(sql`${tickets.ticketNumber}`)} like ${`%${referenceTerm}%`}`
           )
         : undefined,
       ...baseFilters
@@ -477,10 +479,10 @@ export async function listDocuments(filters?: {
   const relevanceOrder = searchTerm
     ? sql<number>`case
         when lower(${baseQuery.documentNumber}) = ${searchTerm} then 0
-        when lower(coalesce(${baseQuery.ticketNumber}, '')) = ${searchTerm} then 0
+        when ${dossierReferenceSearch(sql`${baseQuery.ticketNumber}`)} = ${referenceTerm} then 0
         when lower(${baseQuery.customerName}) = ${searchTerm} then 0
         when lower(${baseQuery.documentNumber}) like ${`${searchTerm}%`} then 1
-        when lower(coalesce(${baseQuery.ticketNumber}, '')) like ${`${searchTerm}%`} then 1
+        when ${dossierReferenceSearch(sql`${baseQuery.ticketNumber}`)} like ${`${referenceTerm}%`} then 1
         else 2
       end`
     : undefined
@@ -645,7 +647,7 @@ export async function createAndPayDocumentRecord(
   }
 
   if (input.customerId === null && input.ticketId) {
-    throw createError({ statusCode: 400, statusMessage: 'A ticket document must retain its customer' })
+    throw createError({ statusCode: 400, statusMessage: 'Un document lié à un dossier doit conserver son client' })
   }
 
   const totals = calculateDocumentTotals(input.lines)

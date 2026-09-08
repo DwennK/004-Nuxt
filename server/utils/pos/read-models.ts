@@ -396,7 +396,7 @@ function projectHomeOverview(input: {
         subtitle: buildTicketContext(row),
         occurredAt: row.occurredAt,
         to: `/tickets/${row.ticketId}`,
-        badgeLabel: 'Nouveau ticket',
+        badgeLabel: 'Nouveau dossier',
         badgeColor: 'info'
       })
       continue
@@ -487,15 +487,15 @@ function projectHomeOverview(input: {
       badgeColor: 'warning'
     }, {
       id: 'ready-tickets',
-      title: 'Tickets prêts pour retrait',
+      title: 'Dossiers prêts pour retrait',
       value: String(readyForPickupCount),
-      description: readyForPickupCount ? 'Clients à prévenir ou restitutions à préparer' : 'Aucun ticket prêt actuellement',
+      description: readyForPickupCount ? 'Clients à prévenir ou restitutions à préparer' : 'Aucun dossier prêt actuellement',
       to: '/tickets?status=ready_for_pickup',
       badgeLabel: 'Voir',
       badgeColor: 'success'
     }, {
       id: 'open-tickets',
-      title: 'Tickets ouverts',
+      title: 'Dossiers ouverts',
       value: String(openTicketCount),
       description: `${openedToday} nouveau(x) aujourd’hui`,
       to: '/tickets',

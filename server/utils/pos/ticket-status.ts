@@ -27,14 +27,14 @@ export async function updateTicketStatusRecord(ticketId: number, status: TicketS
     if (!existing) {
       throw createError({
         statusCode: 404,
-        statusMessage: 'Ticket not found'
+        statusMessage: 'Dossier introuvable'
       })
     }
 
     if (!canTransitionTicketStatus(existing.status, status)) {
       throw createError({
         statusCode: 409,
-        statusMessage: `Ticket cannot transition from ${ticketStatusLabels[existing.status]} to ${ticketStatusLabels[status]}`,
+        statusMessage: `Transition impossible du dossier : ${ticketStatusLabels[existing.status]} vers ${ticketStatusLabels[status]}`,
         data: {
           code: 'TICKET_TRANSITION_NOT_ALLOWED',
           from: existing.status,
@@ -57,7 +57,7 @@ export async function updateTicketStatusRecord(ticketId: number, status: TicketS
     if (!row) {
       throw createError({
         statusCode: 404,
-        statusMessage: 'Ticket not found'
+        statusMessage: 'Dossier introuvable'
       })
     }
 
@@ -65,7 +65,7 @@ export async function updateTicketStatusRecord(ticketId: number, status: TicketS
       await createTicketEvent({
         ticketId,
         kind: status === 'closed' ? 'ticket_closed' : 'ticket_status_changed',
-        label: status === 'closed' ? 'Ticket clôturé' : `Statut mis à jour · ${ticketStatusLabels[status]}`,
+        label: status === 'closed' ? 'Dossier clôturé' : `Statut mis à jour · ${ticketStatusLabels[status]}`,
         note: internalNotes,
         metadata: {
           previousStatus: existing.status,

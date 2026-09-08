@@ -61,7 +61,7 @@ const emit = defineEmits<{
           </div>
           <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
             <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-              Ticket lié
+              Dossier lié
             </p>
             <p class="mt-1 font-medium text-highlighted">
               {{ props.document.ticket ? props.document.ticket.ticketNumber : 'Vente directe / autonome' }}

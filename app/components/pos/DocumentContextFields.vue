@@ -75,7 +75,7 @@ const documentStatusItems = props.editor.documentStatusItems
             />
           </UFormField>
 
-          <UFormField label="Ticket lié" name="ticketId">
+          <UFormField label="Dossier lié" name="ticketId">
             <UInput
               :model-value="state.ticketId ? String(state.ticketId) : 'Vente directe / document autonome'"
               :disabled="true"

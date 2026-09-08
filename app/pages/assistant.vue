@@ -25,7 +25,7 @@ const requestError = ref<string | null>(null)
 const suggestionPrompts = [
   'Quels sont les 10 derniers paiements encaissés ?',
   'Quel chiffre d’affaires avons-nous par type de document ce mois-ci ?',
-  'Combien de tickets sont encore ouverts par statut ?',
+  'Combien de dossiers sont encore ouverts par statut ?',
   'Quel est l’état des demandes de réservation smartphone ?'
 ]
 
@@ -174,7 +174,7 @@ async function submitPrompt() {
 
       <UDashboardToolbar v-if="hasConversation">
         <p class="text-sm text-toned">
-          Questions ad hoc sur ventes, tickets, documents, paiements, stock, réservations et RH. Les colonnes sensibles restent exclues.
+          Questions ad hoc sur ventes, dossiers, documents, paiements, stock, réservations et RH. Les colonnes sensibles restent exclues.
         </p>
       </UDashboardToolbar>
     </template>

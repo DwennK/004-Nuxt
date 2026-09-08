@@ -217,7 +217,7 @@ useHead(() => ({
               </p>
               <p>Émis le {{ formatDate(document.issuedAt) }}</p>
               <p v-if="document.ticket">
-                Réf. ticket {{ document.ticket.ticketNumber }}
+                Réf. dossier {{ document.ticket.ticketNumber }}
               </p>
               <p>
                 Statut {{ documentStatusLabels[document.status] }}
@@ -505,7 +505,7 @@ useHead(() => ({
             <div class="thermal-meta-right">
               <p>{{ formatDateTime(document.issuedAt) }}</p>
               <p v-if="document.ticket">
-                Ticket {{ document.ticket.ticketNumber }}
+                Réf. dossier {{ document.ticket.ticketNumber }}
               </p>
               <p>Statut {{ documentStatusLabels[document.status] }}</p>
             </div>

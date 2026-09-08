@@ -90,7 +90,7 @@ const stats = computed(() => {
     description: 'Base glissante sur 7 journées commerciales',
     icon: 'i-lucide-chart-column'
   }, {
-    title: 'Tickets encore ouverts',
+    title: 'Dossiers encore ouverts',
     value: String(overview.value.kpis.openTickets),
     description: 'Vue opérationnelle du backlog atelier',
     icon: 'i-lucide-wrench'

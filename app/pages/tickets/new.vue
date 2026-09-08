@@ -39,7 +39,7 @@ async function saveTicket(payload: {
   const result = await save(() => $fetch(`/api/tickets`, {
     method: 'POST',
     body: { ...payload, customerId: payload.customerId || customerId.value }
-  }), { success: 'Ticket créé' })
+  }), { success: 'Dossier créé' })
   if (!result?.ok) return
   dirty.value = false
   await navigateTo(`/tickets/${result.data.id}`)
@@ -49,7 +49,7 @@ async function saveTicket(payload: {
 <template>
   <UDashboardPanel id="ticket-create">
     <template #header>
-      <UDashboardNavbar title="Nouveau ticket">
+      <UDashboardNavbar title="Nouveau dossier">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -65,7 +65,7 @@ async function saveTicket(payload: {
             <UButton
               :form="formId"
               type="submit"
-              :label="isSaving ? 'Enregistrement…' : 'Créer le ticket'"
+              :label="isSaving ? 'Enregistrement…' : 'Créer le dossier'"
               :loading="isSaving"
               icon="i-lucide-check"
             />

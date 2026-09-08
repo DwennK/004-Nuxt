@@ -76,7 +76,7 @@ export async function resolveDossierKey(
       .from(tickets)
       .where(eq(tickets.id, target.id))
       .limit(1)
-    if (!row) conflict('DOSSIER_NOT_FOUND', 'Ticket introuvable.', 404)
+    if (!row) conflict('DOSSIER_NOT_FOUND', 'Dossier introuvable.', 404)
     return `ticket:${target.id}`
   }
   let documentId = target.id

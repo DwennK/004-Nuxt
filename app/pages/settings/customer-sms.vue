@@ -37,7 +37,7 @@ function addTemplate() {
   state.templates.push({
     id: createTemplateId(),
     label: 'Nouveau message',
-    body: 'Bonjour {{client_name}}, concernant votre ticket {{ticket_number}}.'
+    body: 'Bonjour {{client_name}}, concernant votre dossier {{dossier_number}}.'
   })
 }
 
@@ -89,7 +89,7 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
   >
     <UPageCard
       title="Messages client"
-      description="Modèles SMS proposés depuis un ticket. Le message libre reste toujours disponible sur l’iPhone."
+      description="Modèles SMS proposés depuis un dossier. Le message libre reste toujours disponible sur l’iPhone."
       variant="naked"
       orientation="horizontal"
       class="mb-4"
@@ -202,7 +202,7 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
         v-if="state.templates.length === 0"
         icon="i-lucide-message-square-more"
         title="Aucun message prédéfini"
-        description="Ajoutez des modèles SMS. Le mode Message libre restera tout de même disponible depuis le ticket."
+        description="Ajoutez des modèles SMS. Le mode Message libre restera tout de même disponible depuis le dossier."
       />
     </div>
   </UForm>

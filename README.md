@@ -11,7 +11,7 @@ Nuxt 4 POS and shop-management app for a physical tech store.
 
 The app is built for day-to-day in-store operations with a strict business split between:
 
-- `ticket`: operational work case such as repair, diagnostic, support or tracked follow-up
+- `ticket`: operational work case such as repair, diagnostic, support or tracked follow-up; displayed as **Dossier client** with a **DOS-** reference (see [conversion guide](docs/dossier-naming.md))
 - `document`: commercial object such as quote, customer order or invoice
 - `payment`: cashflow object tracked separately from tickets and documents
 

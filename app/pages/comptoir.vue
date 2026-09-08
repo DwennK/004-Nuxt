@@ -73,7 +73,7 @@ const counterActions: CounterAction[] = [{
   to: '/sales/new',
   variant: 'solid'
 }, {
-  label: 'Nouveau ticket',
+  label: 'Nouveau dossier',
   description: 'Créer une réparation',
   icon: 'i-lucide-wrench',
   to: '/tickets/new',
@@ -219,7 +219,7 @@ const emptyQueueLabel = computed(() => {
   }
 
   if (selectedQueueFilter.value === 'blocked') {
-    return 'Aucun ticket bloqué'
+    return 'Aucun dossier bloqué'
   }
 
   return 'Rien à traiter maintenant'
@@ -273,7 +273,7 @@ useHead({
           />
           <UButton
             to="/tickets/new"
-            label="Nouveau ticket"
+            label="Nouveau dossier"
             icon="i-lucide-wrench"
             color="neutral"
             variant="ghost"
@@ -294,7 +294,7 @@ useHead({
                   icon="i-lucide-search"
                   size="xl"
                   autofocus
-                  placeholder="Scanner ou rechercher client, ticket, facture, téléphone, IMEI..."
+                  placeholder="Scanner ou rechercher client, dossier, facture, téléphone, IMEI..."
                   :loading="isSearching"
                   class="w-full"
                   :ui="{ base: 'h-10 rounded-[4px] bg-blue-50/80 ring-blue-200 focus-visible:ring-blue-500' }"
@@ -347,7 +347,7 @@ useHead({
                     Résultats pour "{{ searchTerm }}"
                   </p>
                   <p class="text-xs text-toned">
-                    Clients, tickets, documents et catalogue.
+                    Clients, dossiers, documents et catalogue.
                   </p>
                 </div>
                 <UButton
@@ -384,7 +384,7 @@ useHead({
                 <div class="space-y-2">
                   <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <UIcon name="i-lucide-wrench" class="size-4 text-blue-600" />
-                    Tickets
+                    Dossiers
                   </div>
                   <NuxtLink
                     v-for="ticket in ticketResults?.items || []"
@@ -678,7 +678,7 @@ useHead({
                 to="/tickets"
                 class="flex items-center justify-between gap-3 py-3 transition hover:text-blue-700"
               >
-                <span class="text-sm text-toned">Tickets bloqués</span>
+                <span class="text-sm text-toned">Dossiers bloqués</span>
                 <USkeleton v-if="isCounterInitialLoading" class="h-5 w-6" />
                 <span v-else class="font-semibold text-highlighted">{{ totalBlockedTickets }}</span>
               </NuxtLink>
@@ -746,7 +746,7 @@ useHead({
               </h2>
               <UButton
                 to="/tickets"
-                label="Tickets"
+                label="Dossiers"
                 color="neutral"
                 variant="ghost"
                 size="xs"

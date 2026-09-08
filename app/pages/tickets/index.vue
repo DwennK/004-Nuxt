@@ -88,8 +88,8 @@ async function removeTicket(ticket: TicketListItem) {
   }
 
   const confirmed = await confirmDelete({
-    title: `Supprimer le ticket ${ticket.ticketNumber} ?`,
-    description: 'Le ticket et son suivi seront définitivement supprimés.'
+    title: `Supprimer le dossier ${ticket.ticketNumber} ?`,
+    description: 'Le dossier et son suivi seront définitivement supprimés.'
   })
 
   if (!confirmed) {
@@ -98,7 +98,7 @@ async function removeTicket(ticket: TicketListItem) {
 
   const result = await runApiAction(
     () => $fetch(`/api/tickets/${ticket.id}`, { method: 'DELETE' }),
-    { success: 'Ticket supprimé', errorTitle: 'Suppression impossible' }
+    { success: 'Dossier supprimé', errorTitle: 'Suppression impossible' }
   )
 
   if (result.ok) {
@@ -108,7 +108,7 @@ async function removeTicket(ticket: TicketListItem) {
 
 function getRowItems(ticket: TicketListItem) {
   const primaryItems: DropdownMenuItem[] = [{
-    label: 'Ouvrir le ticket',
+    label: 'Ouvrir le dossier',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
       navigateTo(`/tickets/${ticket.id}`)
@@ -133,7 +133,7 @@ function getRowItems(ticket: TicketListItem) {
 const columns: TableColumn<TicketListItem>[] = [
   {
     accessorKey: 'ticketNumber',
-    header: 'Ticket',
+    header: 'Dossier',
     cell: ({ row }) => h('div', { class: 'space-y-1' }, [
       h('p', { class: 'font-medium text-highlighted' }, row.original.ticketNumber),
       h('div', { class: 'flex flex-wrap items-center gap-2' }, [
@@ -187,13 +187,13 @@ const columns: TableColumn<TicketListItem>[] = [
 <template>
   <UDashboardPanel id="tickets-list">
     <template #header>
-      <UDashboardNavbar title="Tickets">
+      <UDashboardNavbar title="Dossiers clients">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
 
         <template #right>
-          <UButton to="/tickets/new" icon="i-lucide-plus" label="Nouveau ticket" />
+          <UButton to="/tickets/new" icon="i-lucide-plus" label="Nouveau dossier" />
         </template>
       </UDashboardNavbar>
 
@@ -202,7 +202,7 @@ const columns: TableColumn<TicketListItem>[] = [
           <UInput
             v-model="search"
             icon="i-lucide-search"
-            placeholder="Rechercher par ticket, client, appareil ou problème"
+            placeholder="Rechercher par dossier, client, appareil ou problème"
             class="max-w-md"
           />
 
@@ -221,7 +221,7 @@ const columns: TableColumn<TicketListItem>[] = [
               .filter((column: DashboardTableColumn) => column.getCanHide())
               .map((column: DashboardTableColumn) => ({
                 label: ({
-                  ticketNumber: 'Ticket',
+                  ticketNumber: 'Dossier',
                   customerName: 'Client',
                   issueDescription: 'Problème',
                   documentCount: 'Documents',
@@ -258,7 +258,7 @@ const columns: TableColumn<TicketListItem>[] = [
           <PosSummaryCard
             title="Sans mouvement 7 j"
             :value="String(summary.staleCount)"
-            description="Tickets ouverts sans mise à jour"
+            description="Dossiers ouverts sans mise à jour"
             icon="i-lucide-clock-alert"
           />
         </div>
@@ -288,8 +288,8 @@ const columns: TableColumn<TicketListItem>[] = [
             <UEmpty
               v-else
               icon="i-lucide-wrench"
-              title="Aucun ticket trouvé"
-              description="Essayez un autre filtre ou créez un nouveau ticket."
+              title="Aucun dossier trouvé"
+              description="Essayez un autre filtre ou créez un nouveau dossier."
             />
           </template>
         </UTable>

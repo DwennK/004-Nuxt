@@ -37,7 +37,7 @@ async function saveCustomer(payload: CustomerFormValue) {
       <div class="mx-auto flex w-full max-w-3xl flex-col gap-4">
         <UPageCard
           title="Nouveau client"
-          description="Créez une fiche exploitable immédiatement dans les tickets, documents et encaissements."
+          description="Créez une fiche exploitable immédiatement dans les dossiers, documents et encaissements."
           variant="naked"
           orientation="horizontal"
         >

@@ -144,7 +144,7 @@ export const ticketInputSchema = z.object({
 
 export const ticketCreateInputSchema = ticketInputSchema.extend({
   status: z.literal('new').default('new'),
-  closedAt: optionalText.refine(value => value === null, 'Un nouveau ticket ne peut pas être déjà clôturé')
+  closedAt: optionalText.refine(value => value === null, 'Un nouveau dossier ne peut pas être déjà clôturé')
 })
 
 export const documentLineInputSchema = commercialLineInputSchema
@@ -204,7 +204,7 @@ export const createAndPayDocumentSchema = z.object({
     type: z.enum(payableDocumentTypes),
     customerId: z.coerce.number().int().positive().nullable()
   }).refine(value => value.customerId !== null || !value.ticketId, {
-    message: 'Un document lié à un ticket doit conserver son client',
+    message: 'Un document lié à un dossier doit conserver son client',
     path: ['customerId']
   }),
   payment: markDocumentPaidSchema.omit({ amount: true })

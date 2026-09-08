@@ -45,10 +45,10 @@ export const assistantTableAllowlist = {
     ]
   },
   tickets: {
-    description: 'Tickets opérationnels de réparation et support.',
+    description: 'Dossiers opérationnels de réparation et support.',
     columns: {
-      id: 'Identifiant ticket.',
-      ticket_number: 'Numéro ticket.',
+      id: 'Identifiant du dossier.',
+      ticket_number: 'Numéro de dossier.',
       customer_id: 'Client lié.',
       type: 'repair ou support.',
       status: 'Statut opérationnel.',
@@ -67,10 +67,10 @@ export const assistantTableAllowlist = {
     ]
   },
   ticket_events: {
-    description: 'Journal métier des événements de tickets.',
+    description: 'Journal métier des événements de dossiers.',
     columns: {
       id: 'Identifiant événement.',
-      ticket_id: 'Ticket lié.',
+      ticket_id: 'Dossier lié.',
       kind: 'Type d’événement.',
       label: 'Libellé métier.',
       note: 'Note événement si non sensible.',
@@ -90,7 +90,7 @@ export const assistantTableAllowlist = {
       type: 'Type commercial.',
       status: 'Statut commercial.',
       customer_id: 'Client lié.',
-      ticket_id: 'Ticket lié si présent.',
+      ticket_id: 'Dossier lié si présent.',
       issued_at: 'Date d’émission.',
       subtotal: 'Sous-total HT en centimes.',
       tax_amount: 'Montant TVA en centimes.',
@@ -124,10 +124,10 @@ export const assistantTableAllowlist = {
     ]
   },
   ticket_lines: {
-    description: 'Lignes estimées ou facturables rattachées aux tickets.',
+    description: 'Lignes estimées ou facturables rattachées aux dossiers.',
     columns: {
       id: 'Identifiant ligne.',
-      ticket_id: 'Ticket parent.',
+      ticket_id: 'Dossier parent.',
       catalog_item_id: 'Article lié.',
       label: 'Libellé de ligne.',
       quantity: 'Quantité entière.',

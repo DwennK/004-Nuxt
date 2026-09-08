@@ -209,7 +209,7 @@ export const checks = [
     sql: `SELECT CASE WHEN
       (SELECT last_value FROM number_sequences WHERE scope = 'ticket') IS NOT NULL
       AND (SELECT last_value FROM number_sequences WHERE scope = 'ticket') <
-      COALESCE((SELECT MAX(CAST(SUBSTR(ticket_number, 5) AS INTEGER)) FROM tickets WHERE ticket_number LIKE 'TIC-%'), 0)
+      COALESCE((SELECT MAX(CAST(SUBSTR(ticket_number, 5) AS INTEGER)) FROM tickets WHERE ticket_number LIKE 'DOS-%' OR ticket_number LIKE 'TIC-%'), 0)
       THEN 1 ELSE 0 END AS violations`
   }
 ]

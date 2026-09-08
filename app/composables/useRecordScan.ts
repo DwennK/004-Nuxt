@@ -13,7 +13,7 @@ export function useRecordScan(search: Ref<string>, beforeNavigate?: () => void) 
       return
     }
     if (result.kind === 'unsupported') {
-      toast.add({ title: 'QR non reconnu', description: 'Scannez le QR « Ouvrir le ticket » ou « Ouvrir le document » de cette application.', color: 'warning' })
+      toast.add({ title: 'QR non reconnu', description: 'Scannez le QR « Ouvrir le dossier » ou « Ouvrir le document » de cette application.', color: 'warning' })
       return
     }
 
@@ -27,7 +27,7 @@ export function useRecordScan(search: Ref<string>, beforeNavigate?: () => void) 
       const status = (error as { statusCode?: number }).statusCode
       toast.add({
         title: status === 404 ? 'Fiche introuvable' : status === 401 || status === 403 ? 'Accès à la fiche refusé' : 'Impossible d’ouvrir la fiche',
-        description: status === 404 ? 'Ce ticket ou document n’existe plus.' : status === 401 ? 'Reconnectez-vous puis scannez à nouveau.' : status === 403 ? 'Votre compte ne permet pas de consulter cette fiche.' : 'Vérifiez la connexion puis réessayez.',
+        description: status === 404 ? 'Ce dossier ou document n’existe plus.' : status === 401 ? 'Reconnectez-vous puis scannez à nouveau.' : status === 403 ? 'Votre compte ne permet pas de consulter cette fiche.' : 'Vérifiez la connexion puis réessayez.',
         color: 'error'
       })
     } finally {

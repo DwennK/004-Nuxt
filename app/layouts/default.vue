@@ -22,7 +22,7 @@ const primaryLinks = [{
     open.value = false
   }
 }, {
-  label: 'Tickets',
+  label: 'Dossiers clients',
   icon: 'i-lucide-wrench',
   to: '/tickets',
   onSelect: () => {
@@ -147,7 +147,7 @@ const counterActions = [{
   to: '/sales/new'
 }, {
   id: 'new-ticket',
-  label: 'Nouveau ticket',
+  label: 'Nouveau dossier',
   icon: 'i-lucide-wrench',
   to: '/tickets/new'
 }]
@@ -231,7 +231,7 @@ const groups = computed(() => {
     icon: 'i-lucide-files',
     to: `/documents/${document.id}`,
     suffix: document.customerName,
-    description: document.ticketNumber ? `Ticket ${document.ticketNumber}` : 'Document commercial'
+    description: document.ticketNumber ? `Dossier ${document.ticketNumber}` : 'Document commercial'
   }))
 
   const catalogItems = (dashboardSearchResults.value?.catalogItems.items || []).map(item => ({
@@ -250,7 +250,7 @@ const groups = computed(() => {
     items: customerItems
   }, {
     id: 'tickets',
-    label: 'Tickets',
+    label: 'Dossiers clients',
     ignoreFilter: true,
     items: ticketItems
   }, {
@@ -335,7 +335,7 @@ const groups = computed(() => {
       :groups="groups"
       :loading="dashboardSearchLoading"
       title="Recherche globale"
-      description="Rechercher un client, téléphone, ticket, IMEI, document, article ou code-barres."
+      description="Rechercher un client, téléphone, dossier, IMEI, document, article ou code-barres."
       placeholder="Nom, téléphone, TIC-…, IMEI, facture, SKU…"
       :color-mode="false"
       preserve-group-order
@@ -344,7 +344,7 @@ const groups = computed(() => {
         <div class="flex justify-end p-2">
           <PosBarcodeScanner
             title="Scanner un document"
-            description="Placez le QR « Ouvrir le ticket » ou « Ouvrir le document » dans le cadre."
+            description="Placez le QR « Ouvrir le dossier » ou « Ouvrir le document » dans le cadre."
             trigger-label="Scanner un document"
             trigger-icon="i-lucide-qr-code"
             trigger-aria-label="Scanner un document avec la caméra"

@@ -12,18 +12,19 @@ export async function generateTicketNumber(executor?: PosDatabaseExecutor) {
     await ensurePosSchema()
   }
 
-  const prefix = 'TIC-'
+  const prefix = 'DOS-'
   const db = executor || useDb()
+  const maximum = sql<number>`coalesce((
+    select max(cast(substr(${tickets.ticketNumber}, 5) as integer))
+    from ${tickets}
+    where ${tickets.ticketNumber} like 'DOS-%' or ${tickets.ticketNumber} like 'TIC-%'
+  ), 0)`
   const [result] = await db.insert(numberSequences).values({
     scope: 'ticket',
-    lastValue: sql<number>`coalesce((
-      select max(cast(substr(${tickets.ticketNumber}, length(${prefix}) + 1) as integer))
-      from ${tickets}
-      where ${tickets.ticketNumber} like ${`${prefix}%`}
-    ), 0) + 1`
+    lastValue: sql<number>`${maximum} + 1`
   }).onConflictDoUpdate({
     target: numberSequences.scope,
-    set: { lastValue: sql`${numberSequences.lastValue} + 1` }
+    set: { lastValue: sql`max(${numberSequences.lastValue}, ${maximum}) + 1` }
   }).returning({ lastValue: numberSequences.lastValue })
 
   const sequence = Number(result?.lastValue || 0)
@@ -31,7 +32,7 @@ export async function generateTicketNumber(executor?: PosDatabaseExecutor) {
   if (!sequence) {
     throw createError({
       statusCode: 500,
-      statusMessage: 'Could not generate ticket number'
+      statusMessage: 'Impossible de générer le numéro de dossier'
     })
   }
 

@@ -374,7 +374,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
 
   const metaLines = [
     `Émis le ${formatDate(document.issuedAt)}`,
-    document.ticket ? `Réf. ticket ${document.ticket.ticketNumber}` : null,
+    document.ticket ? `Réf. dossier ${document.ticket.ticketNumber}` : null,
     `Statut ${documentStatusLabels[document.status]}`
   ].filter(Boolean) as string[]
 
