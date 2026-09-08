@@ -78,7 +78,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
       :square="collapsed"
       class="outlook-user-button"
       :ui="{
-        trailingIcon: 'text-slate-500'
+        trailingIcon: 'text-muted'
       }"
     />
   </UDropdownMenu>

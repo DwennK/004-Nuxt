@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
 
+const route = useRoute()
+const isInterfacePage = computed(() => route.path === '/settings/interface')
+
 const links = [[{
   label: 'Société',
   icon: 'i-lucide-building-2',
@@ -21,7 +24,7 @@ const links = [[{
 </script>
 
 <template>
-  <UDashboardPanel id="settings" :ui="{ body: 'lg:py-12' }">
+  <UDashboardPanel id="settings" :ui="{ body: isInterfacePage ? 'lg:py-6' : 'lg:py-12' }">
     <template #header>
       <UDashboardNavbar title="Paramètres">
         <template #leading>
@@ -36,7 +39,7 @@ const links = [[{
     </template>
 
     <template #body>
-      <div class="flex flex-col gap-4 sm:gap-6 lg:gap-12 w-full lg:max-w-2xl mx-auto">
+      <div class="flex flex-col gap-4 sm:gap-6 lg:gap-12 w-full mx-auto" :class="isInterfacePage ? 'lg:max-w-5xl' : 'lg:max-w-2xl'">
         <NuxtPage />
       </div>
     </template>

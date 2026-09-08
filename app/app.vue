@@ -2,6 +2,7 @@
 import { fr } from '@nuxt/ui/locale'
 
 const locale = ref(fr)
+const { dashboardTheme } = useDashboardTheme()
 const colorMode = useColorMode()
 
 const color = computed(() => colorMode.value === 'dark' ? '#1b1718' : 'white')
@@ -16,7 +17,8 @@ useHead({
     { rel: 'icon', href: '/favicon.ico' }
   ],
   htmlAttrs: {
-    lang: 'fr'
+    'lang': 'fr',
+    'data-office-theme': dashboardTheme
   }
 })
 

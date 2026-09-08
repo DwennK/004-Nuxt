@@ -77,227 +77,339 @@
   --color-green-950: #052E16;
 }
 
+/* Shared Fluent surfaces also reach menus and dialogs teleported to body. */
+:root {
+  --ui-radius: 0.25rem;
+  --ui-success: var(--ui-color-success-700);
+  --ui-warning: var(--ui-color-warning-700);
+  --ui-info: var(--ui-color-info-700);
+  --ui-error: var(--ui-color-error-700);
+  --ui-header-height: 3.5rem;
+  --ui-bg: #ffffff;
+  --ui-bg-muted: #f5f5f5;
+  --ui-bg-elevated: #ebebeb;
+  --ui-bg-accented: #e0e0e0;
+  --ui-text: #242424;
+  --ui-text-highlighted: #171717;
+  --ui-text-toned: #424242;
+  --ui-text-muted: #616161;
+  --ui-text-dimmed: #707070;
+  --ui-border: #d1d1d1;
+  --ui-border-muted: #e0e0e0;
+  --ui-border-accented: #adadad;
+  --mw-theme-page: #f3f3f3;
+  --mw-theme-titlebar: var(--ui-color-primary-500);
+  --mw-theme-titlebar-hover: var(--ui-color-primary-600);
+  --mw-theme-selection: color-mix(in srgb, var(--ui-primary) 10%, var(--ui-bg));
+  --mw-theme-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  --mw-theme-overlay: rgb(0 0 0 / 0.42);
+  /* Compatibility for the existing counter and dashboard shell. */
+  --mw-outlook-blue: var(--ui-primary);
+  --mw-outlook-blue-hover: var(--ui-color-primary-600);
+  --mw-outlook-blue-dark: var(--ui-color-primary-800);
+  --mw-outlook-line: var(--ui-border);
+  --mw-outlook-pane: var(--ui-bg-muted);
+  --mw-outlook-pane-strong: var(--mw-theme-selection);
+  --mw-outlook-surface: var(--ui-bg);
+  --mw-outlook-text: var(--ui-text);
+  --mw-outlook-muted: var(--ui-text-muted);
+}
+
+.dark {
+  --ui-success: var(--ui-color-success-400);
+  --ui-warning: var(--ui-color-warning-400);
+  --ui-info: var(--ui-color-info-400);
+  --ui-error: var(--ui-color-error-400);
+  --ui-bg: #242424;
+  --ui-bg-muted: #292929;
+  --ui-bg-elevated: #333333;
+  --ui-bg-accented: #414141;
+  --ui-text: #f0f0f0;
+  --ui-text-highlighted: #ffffff;
+  --ui-text-toned: #dedede;
+  --ui-text-muted: #bdbdbd;
+  --ui-text-dimmed: #ababab;
+  --ui-border: #525252;
+  --ui-border-muted: #414141;
+  --ui-border-accented: #858585;
+  --mw-theme-page: #191919;
+  --mw-theme-titlebar: var(--ui-color-primary-800);
+  --mw-theme-titlebar-hover: var(--ui-color-primary-700);
+  --mw-theme-selection: color-mix(in srgb, var(--ui-primary) 16%, var(--ui-bg));
+  --mw-theme-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  --mw-theme-overlay: rgb(0 0 0 / 0.65);
+}
+
 @layer base {
   body {
-    background: #f3f6fb;
+    background: var(--mw-theme-page);
   }
 }
 
-@layer components {
-  .outlook-app {
-    --mw-theme-primary: #0f6cbd;
-    --mw-theme-primary-hover: #115ea3;
-    --mw-theme-primary-dark: #0b3a75;
-    --mw-theme-line: #c7dbf4;
-    --mw-theme-pane: #f3f8ff;
-    --mw-theme-pane-strong: #e7f1ff;
-    --mw-theme-page: #f3f6fb;
-    --mw-theme-surface: #ffffff;
-    --mw-theme-text: #102033;
-    --mw-theme-muted: #536579;
-  }
-
-  .excel-app {
-    --mw-theme-primary: #217346;
-    --mw-theme-primary-hover: #185c37;
-    --mw-theme-primary-dark: #0e3822;
-    --mw-theme-line: #b7d7c2;
-    --mw-theme-pane: #f2faf5;
-    --mw-theme-pane-strong: #e1f2e7;
-    --mw-theme-page: #f4f8f5;
-    --mw-theme-surface: #ffffff;
-    --mw-theme-text: #11281a;
-    --mw-theme-muted: #536b5c;
-  }
-
-  .onenote-app {
-    --mw-theme-primary: #7719aa;
-    --mw-theme-primary-hover: #681093;
-    --mw-theme-primary-dark: #441064;
-    --mw-theme-line: #d9c1e8;
-    --mw-theme-pane: #faf5ff;
-    --mw-theme-pane-strong: #f1e5f8;
-    --mw-theme-page: #f8f4fb;
-    --mw-theme-surface: #ffffff;
-    --mw-theme-text: #24112f;
-    --mw-theme-muted: #65556f;
-  }
-
-  .powerpoint-app {
-    --mw-theme-primary: #c43e1c;
-    --mw-theme-primary-hover: #a92f16;
-    --mw-theme-primary-dark: #651f12;
-    --mw-theme-line: #e8c5ba;
-    --mw-theme-pane: #fff6f2;
-    --mw-theme-pane-strong: #fde8de;
-    --mw-theme-page: #fbf5f1;
-    --mw-theme-surface: #ffffff;
-    --mw-theme-text: #30160f;
-    --mw-theme-muted: #705b53;
-  }
-
-  .sharepoint-app {
-    --mw-theme-primary: #03787c;
-    --mw-theme-primary-hover: #026c70;
-    --mw-theme-primary-dark: #064548;
-    --mw-theme-line: #a8d9dc;
-    --mw-theme-pane: #effdfd;
-    --mw-theme-pane-strong: #dff5f6;
-    --mw-theme-page: #f1f8f8;
-    --mw-theme-surface: #ffffff;
-    --mw-theme-text: #0c2628;
-    --mw-theme-muted: #4d686b;
-  }
-
-  .outlook-app,
-  .excel-app,
-  .onenote-app,
-  .powerpoint-app,
-  .sharepoint-app {
-    --mw-outlook-blue: var(--mw-theme-primary);
-    --mw-outlook-blue-hover: var(--mw-theme-primary-hover);
-    --mw-outlook-blue-dark: var(--mw-theme-primary-dark);
-    --mw-outlook-line: var(--mw-theme-line);
-    --mw-outlook-pane: var(--mw-theme-pane);
-    --mw-outlook-pane-strong: var(--mw-theme-pane-strong);
-    --mw-outlook-surface: var(--mw-theme-surface);
-    --mw-outlook-text: var(--mw-theme-text);
-    --mw-outlook-muted: var(--mw-theme-muted);
-    background: var(--mw-theme-page);
-  }
-
-  .outlook-sidebar {
-    color: var(--mw-outlook-text);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--mw-outlook-pane) 35%, white) 0%, var(--mw-outlook-pane) 100%);
-    border-right: 1px solid var(--mw-outlook-line);
-    box-shadow: none;
-  }
-
-  .outlook-sidebar :is(a, button) {
-    min-height: 2rem;
-    border-radius: 4px;
-  }
-
-  .outlook-sidebar :is(a, button):not([disabled]) {
-    color: #32465d;
-  }
-
-  .outlook-sidebar :is(a, button):not([disabled]):hover {
-    color: #0f172a;
-    background: var(--mw-outlook-pane-strong);
-  }
-
-  .outlook-sidebar [data-slot="link"][data-state="open"],
-  .outlook-sidebar [data-slot="link"][aria-current="page"],
-  .outlook-sidebar [data-slot="childLink"][aria-current="page"],
-  .outlook-sidebar [data-slot="link"].router-link-active,
-  .outlook-sidebar [data-slot="childLink"].router-link-active {
-    color: #0f172a;
-    background: color-mix(in srgb, var(--mw-outlook-blue) 14%, white);
-    box-shadow: inset 3px 0 0 var(--mw-outlook-blue);
-  }
-
-  .outlook-sidebar .text-toned,
-  .outlook-sidebar .text-dimmed,
-  .outlook-sidebar [class*="text-toned"],
-  .outlook-sidebar [class*="text-dimmed"] {
-    color: var(--mw-outlook-muted) !important;
-  }
-
-  .outlook-brand {
-    color: white !important;
-    background: var(--mw-outlook-blue);
-    border: 1px solid var(--mw-outlook-blue);
-    box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.10);
-  }
-
-  .outlook-brand:hover,
-  .outlook-brand[data-state="open"] {
-    background: var(--mw-outlook-blue-hover) !important;
-  }
-
-  .outlook-sidebar-header {
-    border-bottom: 1px solid color-mix(in srgb, var(--mw-outlook-line) 70%, transparent);
-  }
-
-  .outlook-sidebar-footer {
-    border-top: 1px solid color-mix(in srgb, var(--mw-outlook-line) 70%, transparent);
-  }
-
-  .outlook-search-button {
-    color: #334155;
-    background: white;
-    --tw-ring-color: var(--mw-outlook-line);
-  }
-
-  .outlook-search-button:hover {
-    background: var(--mw-outlook-pane-strong);
-  }
-
-  .outlook-user-button {
-    color: #334155;
-  }
-
-  .outlook-user-button:hover,
-  .outlook-user-button[data-state="open"] {
-    background: var(--mw-outlook-pane-strong);
-  }
-
+@layer utilities {
+  .outlook-app, .excel-app, .onenote-app, .powerpoint-app, .sharepoint-app,
   .outlook-panel {
     background: var(--mw-theme-page);
   }
 
-  .outlook-surface {
-    border: 1px solid var(--mw-outlook-line);
-    background: var(--mw-outlook-surface);
-    box-shadow: none;
-  }
-
-  .outlook-surface-muted {
-    border: 1px solid var(--mw-outlook-line);
-    background: var(--mw-outlook-pane);
-    box-shadow: none;
-  }
-
-  .outlook-commandbar {
+  /* A compact Office title bar above the neutral command ribbon. */
+  .office-titlebar, .outlook-commandbar {
     color: white;
-    background: var(--mw-outlook-blue);
-    border-bottom: 1px solid var(--mw-outlook-blue-dark);
+    background: var(--mw-theme-titlebar);
+    border-bottom-color: transparent;
   }
 
-  .outlook-commandbar :is(a, button) {
+  .office-titlebar h1, .office-titlebar [data-slot="title"] {
+    color: white;
+  }
+
+  .office-titlebar :is(button, a),
+  .outlook-commandbar :is(button, a) {
+    color: white;
+    background: transparent;
+    --tw-ring-color: rgb(255 255 255 / 0.45);
+  }
+
+  .office-titlebar :is(button, a):hover,
+  .outlook-commandbar :is(button, a):hover {
+    background: rgb(255 255 255 / 0.16);
+  }
+
+  .office-titlebar :is(button, a):focus-visible,
+  .outlook-commandbar :is(button, a):focus-visible {
+    outline: 2px solid white;
+    outline-offset: 2px;
+  }
+
+  .office-titlebar .bg-primary {
+    color: var(--ui-color-primary-600);
+    background: white;
+    box-shadow: var(--mw-theme-shadow);
+  }
+
+  .office-titlebar .bg-primary:hover {
+    color: var(--ui-color-primary-700);
+    background: var(--ui-color-primary-50);
+  }
+
+  .office-command-ribbon {
+    background: var(--ui-bg);
+    box-shadow: var(--mw-theme-shadow);
+  }
+
+  :is(.outlook-sidebar, .office-sidebar-mobile) {
+    color: var(--ui-text);
+    background: var(--ui-bg-muted);
+    border-right: 1px solid var(--ui-border);
+  }
+
+  :is(.outlook-sidebar, .office-sidebar-mobile) :is(a, button) {
+    min-height: 2rem;
     border-radius: 4px;
   }
 
-  .outlook-commandbar :is(a, button):hover {
+  :is(.outlook-sidebar, .office-sidebar-mobile) :is(a, button):not([disabled]) {
+    color: var(--ui-text-toned);
+  }
+
+  :is(.outlook-sidebar, .office-sidebar-mobile) :is(a, button):not([disabled]):hover {
+    color: var(--ui-text-highlighted);
+    background: var(--ui-bg-elevated);
+  }
+
+  :is(.outlook-sidebar, .office-sidebar-mobile) [data-slot="link"][aria-current="page"],
+  :is(.outlook-sidebar, .office-sidebar-mobile) [data-slot="childLink"][aria-current="page"] {
+    color: var(--ui-text-highlighted);
+    background: var(--mw-theme-selection);
+    box-shadow: inset 3px 0 0 var(--ui-primary);
+    font-weight: 600;
+  }
+
+  .outlook-sidebar-header [data-slot="toggle"] {
+    color: white;
+    background: transparent;
+  }
+
+  .outlook-sidebar-header [data-slot="toggle"]:hover {
     background: rgb(255 255 255 / 0.14);
   }
 
-  .outlook-mail-toolbar {
-    border: 1px solid var(--mw-outlook-line);
-    background: #ffffff;
+  .outlook-sidebar-header {
+    background: var(--mw-theme-titlebar);
+    border-bottom: 1px solid transparent;
+  }
+
+  .outlook-sidebar-footer {
+    border-top: 1px solid var(--ui-border);
+  }
+
+  :is(.outlook-sidebar, .office-sidebar-mobile) .outlook-brand:not([disabled]) {
+    color: white;
+    background: transparent;
     box-shadow: none;
   }
 
-  .outlook-kpi {
-    border: 1px solid var(--mw-outlook-line);
-    background: #ffffff;
-    box-shadow: none;
+  :is(.outlook-sidebar, .office-sidebar-mobile) .outlook-brand:not([disabled]):hover {
+    color: white;
+    background: rgb(255 255 255 / 0.14);
   }
 
-  .outlook-kpi:hover,
-  .outlook-row:hover {
-    background: var(--mw-outlook-pane-strong);
+  .outlook-search-button {
+    color: var(--ui-text-muted);
+    background: var(--ui-bg);
+    --tw-ring-color: var(--ui-border-accented);
+  }
+
+  .outlook-surface, .outlook-mail-toolbar, .outlook-kpi {
+    border: 1px solid var(--ui-border);
+    background: var(--ui-bg);
+    box-shadow: var(--mw-theme-shadow);
+  }
+
+  .outlook-surface-muted {
+    border: 1px solid var(--ui-border);
+    background: var(--ui-bg-muted);
+  }
+
+  .outlook-kpi:hover, .outlook-row:hover {
+    background: var(--ui-bg-elevated);
   }
 
   .outlook-tab-active {
-    color: #0f172a;
-    background: white;
-    box-shadow: none;
-    border: 1px solid var(--mw-outlook-line);
+    color: var(--ui-text-highlighted);
+    background: var(--ui-bg);
+    box-shadow: inset 0 -2px var(--ui-primary), var(--mw-theme-shadow);
+    border: 1px solid var(--ui-border);
   }
 
   .outlook-row {
     transition: background-color 120ms ease;
+  }
+
+  /* All UTable instances share an opaque, outlined work surface. */
+  .office-table {
+    border: 1px solid var(--ui-border);
+    border-radius: 6px;
+    background: var(--ui-bg);
+    box-shadow: var(--mw-theme-shadow);
+  }
+
+  .office-table th {
+    color: var(--ui-text-highlighted);
+    background: var(--ui-bg-elevated);
+    border-bottom: 1px solid var(--ui-border);
+  }
+
+  .office-table td {
+    border-bottom: 1px solid var(--ui-border-muted);
+  }
+
+  .office-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .office-table tbody tr[data-selectable="true"]:hover {
+    background: var(--ui-bg-muted);
+  }
+
+  .office-table tbody tr[data-selected="true"] {
+    background: var(--mw-theme-selection);
+  }
+
+  .office-table tbody tr[data-selected="true"] td:first-child {
+    box-shadow: inset 3px 0 0 var(--ui-primary);
+  }
+
+  .office-table tbody tr[data-selectable="true"]:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: -2px;
+  }
+
+  /* A visible tab rail with a paper-like active tab, for both Nuxt variants. */
+  .office-tabs [role="tablist"] {
+    gap: 3px;
+    padding: 4px;
+    border: 1px solid var(--ui-border);
+    border-radius: 6px;
+    background: var(--ui-bg-elevated);
+  }
+
+  .office-tabs [role="tab"] {
+    min-height: 34px;
+    padding-inline: 14px;
+    border-radius: 4px;
+    color: var(--ui-text-toned);
+    transition: background-color 120ms ease, color 120ms ease;
+  }
+
+  .office-tabs [role="tab"]:hover {
+    background: var(--ui-bg-muted);
+    color: var(--ui-text-highlighted);
+  }
+
+  .office-tabs [role="tab"][data-state="active"] {
+    color: var(--ui-text-highlighted);
+    background: var(--ui-bg);
+    box-shadow: inset 0 -2px var(--ui-primary), var(--mw-theme-shadow);
+    font-weight: 600;
+  }
+
+  .office-tabs [role="tab"]:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: -2px;
+  }
+
+  .office-tabs [data-slot="indicator"],
+  .office-tabs [role="tab"]::before,
+  .office-tabs [role="tab"]::after {
+    display: none;
+  }
+
+  .office-tabs [role="tab"][data-state="active"] [data-slot="trailingBadge"] {
+    color: var(--ui-text-highlighted);
+    background: var(--mw-theme-selection);
+  }
+
+  /* Small structural signatures, without tinting the working canvas. */
+  [data-office-theme="excel"] .office-table {
+    border-radius: 3px;
+  }
+
+  [data-office-theme="excel"] .office-table th + th {
+    border-left: 1px solid var(--ui-border);
+  }
+
+  [data-office-theme="excel"] .office-table thead {
+    box-shadow: inset 0 2px var(--ui-primary);
+  }
+
+  [data-office-theme="onenote"] .office-tabs [role="tab"][data-state="active"] {
+    box-shadow: inset 3px 0 var(--ui-primary), var(--mw-theme-shadow);
+    border-radius: 3px 8px 3px 3px;
+  }
+
+  [data-office-theme="sharepoint"] .office-command-ribbon {
+    border-bottom: 2px solid var(--ui-primary);
+  }
+
+  [data-office-theme="powerpoint"] .office-table {
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.12);
+  }
+
+  .office-theme-choice {
+    border: 1px solid var(--ui-border);
+    background: var(--ui-bg);
+    box-shadow: var(--mw-theme-shadow);
+  }
+
+  .office-theme-choice[aria-pressed="true"] {
+    border-color: var(--office-swatch);
+    box-shadow: 0 0 0 2px var(--office-swatch);
+  }
+
+  .office-theme-choice:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 4px;
   }
 }

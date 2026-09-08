@@ -11,23 +11,23 @@ type DashboardThemeOption = {
   icon: string
   appClass: string
   primaryColor: DashboardTheme
-  neutralColor: 'slate' | 'zinc'
+  neutralColor: 'zinc'
   swatch: string
 }
 
 export const dashboardThemeOptions: DashboardThemeOption[] = [{
   value: 'outlook',
   label: 'Outlook',
-  description: 'Bleu Microsoft Outlook pour le shell et les actions principales.',
+  description: 'Bleu Outlook, ruban clair et listes nettes.',
   icon: 'i-lucide-mail',
   appClass: 'outlook-app',
   primaryColor: 'outlook',
-  neutralColor: 'slate',
+  neutralColor: 'zinc',
   swatch: '#0f6cbd'
 }, {
   value: 'excel',
   label: 'Excel',
-  description: 'Vert Microsoft Excel pour le shell et les actions principales.',
+  description: 'Vert Excel et en-têtes structurés comme une feuille de calcul.',
   icon: 'i-lucide-table-2',
   appClass: 'excel-app',
   primaryColor: 'excel',
@@ -36,7 +36,7 @@ export const dashboardThemeOptions: DashboardThemeOption[] = [{
 }, {
   value: 'onenote',
   label: 'OneNote',
-  description: 'Violet Microsoft OneNote pour le shell et les actions principales.',
+  description: 'Violet OneNote et onglets inspirés des intercalaires.',
   icon: 'i-lucide-notebook-tabs',
   appClass: 'onenote-app',
   primaryColor: 'onenote',
@@ -45,7 +45,7 @@ export const dashboardThemeOptions: DashboardThemeOption[] = [{
 }, {
   value: 'powerpoint',
   label: 'PowerPoint',
-  description: 'Orange Microsoft PowerPoint pour le shell et les actions principales.',
+  description: 'Orange PowerPoint et surfaces sobres comme une diapositive.',
   icon: 'i-lucide-presentation',
   appClass: 'powerpoint-app',
   primaryColor: 'powerpoint',
@@ -54,11 +54,11 @@ export const dashboardThemeOptions: DashboardThemeOption[] = [{
 }, {
   value: 'sharepoint',
   label: 'SharePoint',
-  description: 'Sarcelle Microsoft SharePoint pour le shell et les actions principales.',
+  description: 'Sarcelle SharePoint et ruban souligné pour un espace partagé.',
   icon: 'i-lucide-network',
   appClass: 'sharepoint-app',
   primaryColor: 'sharepoint',
-  neutralColor: 'slate',
+  neutralColor: 'zinc',
   swatch: '#03787c'
 }]
 

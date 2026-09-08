@@ -784,10 +784,8 @@ watch(editOpen, (open) => {
                   class="shrink-0"
                   :ui="{
                     base: 'table-fixed border-separate border-spacing-0',
-                    thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
-                    tbody: '[&>tr]:last:[&>td]:border-b-0',
-                    th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
-                    td: 'border-b border-default py-2 align-middle text-sm',
+                    th: 'py-2 text-xs',
+                    td: 'py-2 align-middle text-sm',
                     separator: 'h-0'
                   }"
                   @select="(_, row) => openEditSlideover(row.original)"
@@ -856,10 +854,8 @@ watch(editOpen, (open) => {
                   class="shrink-0"
                   :ui="{
                     base: 'table-fixed border-separate border-spacing-0',
-                    thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
-                    tbody: '[&>tr]:last:[&>td]:border-b-0',
-                    th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
-                    td: 'border-b border-default py-2 align-middle text-sm',
+                    th: 'py-2 text-xs',
+                    td: 'py-2 align-middle text-sm',
                     separator: 'h-0'
                   }"
                   @select="(_, row) => openEditSlideover(row.original)"
@@ -928,10 +924,8 @@ watch(editOpen, (open) => {
                   class="shrink-0"
                   :ui="{
                     base: 'table-fixed border-separate border-spacing-0',
-                    thead: '[&>tr]:bg-elevated/60 [&>tr]:after:content-none',
-                    tbody: '[&>tr]:last:[&>td]:border-b-0',
-                    th: 'py-1.5 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-xs',
-                    td: 'border-b border-default py-2 align-middle text-sm',
+                    th: 'py-2 text-xs',
+                    td: 'py-2 align-middle text-sm',
                     separator: 'h-0'
                   }"
                   @select="(_, row) => openEditSlideover(row.original)"

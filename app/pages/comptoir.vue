@@ -277,7 +277,7 @@ useHead({
             icon="i-lucide-wrench"
             color="neutral"
             variant="ghost"
-            class="hidden text-white hover:bg-white/15 sm:inline-flex"
+            class="hidden text-white hover:bg-default/15 sm:inline-flex"
           />
         </template>
       </UDashboardNavbar>
@@ -287,7 +287,7 @@ useHead({
       <div class="mx-auto grid w-full max-w-[118rem] gap-3 2xl:grid-cols-[minmax(0,1fr)_24rem]">
         <main class="min-w-0 space-y-3">
           <section class="outlook-mail-toolbar overflow-hidden rounded-md">
-            <div class="grid gap-2 border-b border-blue-100 bg-white p-2 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center">
+            <div class="grid gap-2 border-b border-default bg-default p-2 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center">
               <div class="flex items-center gap-2">
                 <UInput
                   v-model="search"
@@ -297,7 +297,7 @@ useHead({
                   placeholder="Scanner ou rechercher client, dossier, facture, téléphone, IMEI..."
                   :loading="isSearching"
                   class="w-full"
-                  :ui="{ base: 'h-10 rounded-[4px] bg-blue-50/80 ring-blue-200 focus-visible:ring-blue-500' }"
+                  :ui="{ base: 'h-10 rounded-[4px] bg-muted ring-accented focus-visible:ring-primary' }"
                 />
                 <PosBarcodeScanner
                   trigger-size="xl"
@@ -340,7 +340,7 @@ useHead({
               </div>
             </div>
 
-            <div v-if="canSearch" class="bg-white p-3">
+            <div v-if="canSearch" class="bg-default p-3">
               <div class="mb-3 flex items-center justify-between gap-3">
                 <div class="min-w-0">
                   <p class="truncate text-sm font-semibold text-highlighted">
@@ -362,15 +362,15 @@ useHead({
 
               <div v-if="hasSearchResults" class="grid gap-3 xl:grid-cols-4">
                 <div class="space-y-2">
-                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <UIcon name="i-lucide-users" class="size-4 text-blue-600" />
+                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                    <UIcon name="i-lucide-users" class="size-4 text-primary" />
                     Clients
                   </div>
                   <NuxtLink
                     v-for="customer in customerResults?.items || []"
                     :key="customer.id"
                     :to="`/customers/${customer.id}`"
-                    class="block rounded-md border border-blue-100 px-3 py-2 transition hover:border-blue-300 hover:bg-blue-50"
+                    class="block rounded-md border border-default px-3 py-2 transition hover:border-primary hover:bg-muted"
                   >
                     <p class="truncate text-sm font-medium text-highlighted">
                       {{ customer.displayName }}
@@ -382,15 +382,15 @@ useHead({
                 </div>
 
                 <div class="space-y-2">
-                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <UIcon name="i-lucide-wrench" class="size-4 text-blue-600" />
+                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                    <UIcon name="i-lucide-wrench" class="size-4 text-primary" />
                     Dossiers
                   </div>
                   <NuxtLink
                     v-for="ticket in ticketResults?.items || []"
                     :key="ticket.id"
                     :to="`/tickets/${ticket.id}`"
-                    class="block rounded-md border border-blue-100 px-3 py-2 transition hover:border-blue-300 hover:bg-blue-50"
+                    class="block rounded-md border border-default px-3 py-2 transition hover:border-primary hover:bg-muted"
                   >
                     <div class="flex items-center justify-between gap-2">
                       <p class="truncate text-sm font-medium text-highlighted">
@@ -407,15 +407,15 @@ useHead({
                 </div>
 
                 <div class="space-y-2">
-                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <UIcon name="i-lucide-files" class="size-4 text-blue-600" />
+                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                    <UIcon name="i-lucide-files" class="size-4 text-primary" />
                     Documents
                   </div>
                   <NuxtLink
                     v-for="document in documentResults?.items || []"
                     :key="document.id"
                     :to="`/documents/${document.id}`"
-                    class="block rounded-md border border-blue-100 px-3 py-2 transition hover:border-blue-300 hover:bg-blue-50"
+                    class="block rounded-md border border-default px-3 py-2 transition hover:border-primary hover:bg-muted"
                   >
                     <div class="flex items-center justify-between gap-2">
                       <p class="truncate text-sm font-medium text-highlighted">
@@ -432,15 +432,15 @@ useHead({
                 </div>
 
                 <div class="space-y-2">
-                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <UIcon name="i-lucide-package-search" class="size-4 text-blue-600" />
+                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                    <UIcon name="i-lucide-package-search" class="size-4 text-primary" />
                     Catalogue
                   </div>
                   <NuxtLink
                     v-for="item in catalogResults?.items || []"
                     :key="item.id"
                     :to="`/catalog/${item.id}`"
-                    class="block rounded-md border border-blue-100 px-3 py-2 transition hover:border-blue-300 hover:bg-blue-50"
+                    class="block rounded-md border border-default px-3 py-2 transition hover:border-primary hover:bg-muted"
                   >
                     <div class="flex items-center justify-between gap-2">
                       <p class="truncate text-sm font-medium text-highlighted">
@@ -470,9 +470,9 @@ useHead({
           <section class="outlook-mail-toolbar grid overflow-hidden rounded-md md:grid-cols-4">
             <NuxtLink
               to="/comptoir"
-              class="border-b border-blue-100 px-3 py-2.5 transition hover:bg-blue-50 md:border-b-0 md:border-r"
+              class="border-b border-default px-3 py-2.5 transition hover:bg-muted md:border-b-0 md:border-r"
             >
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted">
                 À traiter
               </p>
               <USkeleton v-if="isCounterInitialLoading" class="mt-1 h-7 w-10" />
@@ -482,9 +482,9 @@ useHead({
             </NuxtLink>
             <NuxtLink
               to="/tickets?status=ready_for_pickup"
-              class="border-b border-blue-100 px-3 py-2.5 transition hover:bg-blue-50 md:border-b-0 md:border-r"
+              class="border-b border-default px-3 py-2.5 transition hover:bg-muted md:border-b-0 md:border-r"
             >
-              <p class="text-xs font-semibold uppercase tracking-wide text-blue-700">
+              <p class="text-xs font-semibold uppercase tracking-wide text-primary">
                 Restitutions
               </p>
               <USkeleton v-if="isCounterInitialLoading" class="mt-1 h-7 w-8" />
@@ -494,7 +494,7 @@ useHead({
             </NuxtLink>
             <NuxtLink
               to="/documents?paymentState=due"
-              class="border-b border-blue-100 px-3 py-2.5 transition hover:bg-blue-50 md:border-b-0 md:border-r"
+              class="border-b border-default px-3 py-2.5 transition hover:bg-muted md:border-b-0 md:border-r"
             >
               <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">
                 À encaisser
@@ -506,7 +506,7 @@ useHead({
             </NuxtLink>
             <NuxtLink
               to="/tickets"
-              class="px-3 py-2.5 transition hover:bg-blue-50"
+              class="px-3 py-2.5 transition hover:bg-muted"
             >
               <p class="text-xs font-semibold uppercase tracking-wide text-sky-700">
                 Bloqués
@@ -535,7 +535,7 @@ useHead({
           </section>
 
           <section class="outlook-surface overflow-hidden rounded-md">
-            <div class="flex flex-col gap-3 border-b border-blue-100 bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-col gap-3 border-b border-default bg-default p-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">
                   À traiter maintenant
@@ -545,13 +545,13 @@ useHead({
                 </p>
               </div>
 
-              <div class="flex flex-wrap gap-1 rounded-[4px] bg-blue-50 p-1 ring-1 ring-blue-100">
+              <div class="flex flex-wrap gap-1 rounded-[4px] bg-muted p-1 ring-1 ring-default">
                 <button
                   v-for="filter in queueFilters"
                   :key="filter.value"
                   type="button"
                   class="inline-flex items-center gap-2 rounded-[4px] px-3 py-1.5 text-sm font-medium transition"
-                  :class="selectedQueueFilter === filter.value ? 'outlook-tab-active' : 'text-slate-600 hover:bg-white/60 hover:text-slate-950'"
+                  :class="selectedQueueFilter === filter.value ? 'outlook-tab-active' : 'text-toned hover:bg-default/60 hover:text-highlighted'"
                   @click="selectedQueueFilter = filter.value"
                 >
                   <span>{{ filter.label }}</span>
@@ -565,7 +565,7 @@ useHead({
               </div>
             </div>
 
-            <div v-if="isQueueLoading" class="space-y-3 bg-white p-3">
+            <div v-if="isQueueLoading" class="space-y-3 bg-default p-3">
               <USkeleton
                 v-for="index in 4"
                 :key="index"
@@ -573,7 +573,7 @@ useHead({
               />
             </div>
 
-            <div v-else-if="filteredWorkItems.length" class="divide-y divide-blue-100 bg-white">
+            <div v-else-if="filteredWorkItems.length" class="divide-y divide-default bg-default">
               <NuxtLink
                 v-for="item in filteredWorkItems"
                 :key="item.id"
@@ -583,7 +583,7 @@ useHead({
                 <div
                   class="flex size-10 items-center justify-center rounded-md ring-1"
                   :class="item.tone === 'success'
-                    ? 'bg-blue-50 text-blue-700 ring-blue-200'
+                    ? 'bg-muted text-primary ring-accented'
                     : item.tone === 'warning'
                       ? 'bg-amber-50 text-amber-700 ring-amber-200'
                       : 'bg-sky-50 text-sky-700 ring-sky-200'"
@@ -644,7 +644,7 @@ useHead({
         </main>
 
         <aside class="outlook-surface overflow-hidden rounded-md lg:grid lg:grid-cols-3 2xl:sticky 2xl:top-3 2xl:block 2xl:self-start">
-          <section class="border-b border-blue-100 bg-blue-50/70 p-4 lg:border-b-0 lg:border-r 2xl:border-b 2xl:border-r-0">
+          <section class="border-b border-default bg-muted p-4 lg:border-b-0 lg:border-r 2xl:border-b 2xl:border-r-0">
             <div class="flex items-center justify-between gap-3">
               <div>
                 <h2 class="text-base font-semibold text-highlighted">
@@ -657,10 +657,10 @@ useHead({
               <UIcon name="i-lucide-activity" class="size-5 text-primary" />
             </div>
 
-            <div class="mt-4 divide-y divide-blue-100">
+            <div class="mt-4 divide-y divide-default">
               <NuxtLink
                 to="/tickets?status=ready_for_pickup"
-                class="flex items-center justify-between gap-3 py-3 transition hover:text-blue-700"
+                class="flex items-center justify-between gap-3 py-3 transition hover:text-primary"
               >
                 <span class="text-sm text-toned">Retraits prêts</span>
                 <USkeleton v-if="isCounterInitialLoading" class="h-5 w-6" />
@@ -668,7 +668,7 @@ useHead({
               </NuxtLink>
               <NuxtLink
                 to="/documents?paymentState=due"
-                class="flex items-center justify-between gap-3 py-3 transition hover:text-blue-700"
+                class="flex items-center justify-between gap-3 py-3 transition hover:text-primary"
               >
                 <span class="text-sm text-toned">Factures ouvertes</span>
                 <USkeleton v-if="isCounterInitialLoading" class="h-5 w-6" />
@@ -676,7 +676,7 @@ useHead({
               </NuxtLink>
               <NuxtLink
                 to="/tickets"
-                class="flex items-center justify-between gap-3 py-3 transition hover:text-blue-700"
+                class="flex items-center justify-between gap-3 py-3 transition hover:text-primary"
               >
                 <span class="text-sm text-toned">Dossiers bloqués</span>
                 <USkeleton v-if="isCounterInitialLoading" class="h-5 w-6" />
@@ -685,7 +685,7 @@ useHead({
             </div>
           </section>
 
-          <section class="border-b border-blue-100 bg-white p-4 lg:border-b-0 lg:border-r 2xl:border-b 2xl:border-r-0">
+          <section class="border-b border-default bg-default p-4 lg:border-b-0 lg:border-r 2xl:border-b 2xl:border-r-0">
             <div class="flex items-center justify-between gap-3">
               <h2 class="text-base font-semibold text-highlighted">
                 Encaissements
@@ -696,7 +696,7 @@ useHead({
                 color="neutral"
                 variant="ghost"
                 size="xs"
-                class="text-blue-700 hover:bg-blue-50"
+                class="text-primary hover:bg-muted"
               />
             </div>
 
@@ -715,7 +715,7 @@ useHead({
                 v-for="document in dueDocumentItems.slice(0, 4)"
                 :key="document.id"
                 :to="`/documents/${document.id}`"
-                class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-[4px] px-2 py-2 transition hover:bg-blue-50"
+                class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-[4px] px-2 py-2 transition hover:bg-muted"
               >
                 <div class="min-w-0">
                   <p class="truncate text-sm font-medium text-highlighted">
@@ -739,7 +739,7 @@ useHead({
             />
           </section>
 
-          <section class="bg-white p-4">
+          <section class="bg-default p-4">
             <div class="flex items-center justify-between gap-3">
               <h2 class="text-base font-semibold text-highlighted">
                 Blocages
@@ -750,7 +750,7 @@ useHead({
                 color="neutral"
                 variant="ghost"
                 size="xs"
-                class="text-blue-700 hover:bg-blue-50"
+                class="text-primary hover:bg-muted"
               />
             </div>
 
@@ -769,7 +769,7 @@ useHead({
                 v-for="queue in blockedQueues"
                 :key="queue.id"
                 :to="queue.to"
-                class="flex items-center justify-between gap-3 rounded-[4px] px-2 py-2 transition hover:bg-blue-50"
+                class="flex items-center justify-between gap-3 rounded-[4px] px-2 py-2 transition hover:bg-muted"
               >
                 <span class="flex min-w-0 items-center gap-2">
                   <UIcon
