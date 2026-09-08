@@ -120,16 +120,19 @@ export async function listCatalogItems(options: ListCatalogItemsOptions = {}): P
   const page = Math.max(options.page || 1, 1)
   const pageSize = Math.min(Math.max(options.pageSize || 50, 1), 250)
   const offset = (page - 1) * pageSize
-  const searchableColumns = [
+  const descriptiveColumns = [
     sql`lower(${catalogItems.name})`,
-    sql`lower(coalesce(${catalogItems.sku}, ''))`,
-    sql`lower(coalesce(json_extract(${catalogItems.mobileSentrixJson}, '$.sku'), ''))`,
-    sql`lower(${catalogItems.type})`,
-    sql`lower(${catalogItems.category})`,
     sql`lower(coalesce(${catalogItems.brand}, ''))`,
     sql`lower(coalesce(${catalogItems.model}, ''))`,
     sql`lower(coalesce(${catalogItems.serviceKind}, ''))`,
     sql`lower(coalesce(${catalogItems.keywordsJson}, ''))`
+  ] as const
+  const searchableColumns = [
+    ...descriptiveColumns,
+    sql`lower(coalesce(${catalogItems.sku}, ''))`,
+    sql`lower(coalesce(json_extract(${catalogItems.mobileSentrixJson}, '$.sku'), ''))`,
+    sql`lower(${catalogItems.type})`,
+    sql`lower(${catalogItems.category})`
   ] as const
   const searchClause = searchTokens.length
     ? and(...searchTokens.map(token => or(
@@ -143,6 +146,22 @@ export async function listCatalogItems(options: ListCatalogItemsOptions = {}): P
     normalizedCategory ? eq(catalogItems.category, normalizedCategory) : undefined,
     searchClause
   )
+  // Rank device/service matches before technical references such as SERV-*.
+  // This must happen before LIMIT: the intake form only receives one page.
+  const descriptiveMatch = searchTokens.length
+    ? and(...searchTokens.map(token => or(
+        ...descriptiveColumns.map(column => sql`${column} like ${`%${token}%`}`)
+      )))
+    : undefined
+  const matchOrder = normalizedSearch
+    ? sql<number>`case
+        when lower(coalesce(${catalogItems.sku}, '')) = ${normalizedSearch}
+          or lower(coalesce(json_extract(${catalogItems.mobileSentrixJson}, '$.sku'), '')) = ${normalizedSearch} then 0
+        when ${descriptiveMatch} then 1
+        else 2
+      end`
+    : undefined
+
   const relevanceOrder = normalizedSearch
     ? sql<number>`case
         when lower(coalesce(${catalogItems.sku}, '')) = ${normalizedSearch} then 0
@@ -159,6 +178,7 @@ export async function listCatalogItems(options: ListCatalogItemsOptions = {}): P
       .from(catalogItems)
       .where(whereClause)
       .orderBy(
+        ...(matchOrder ? [matchOrder] : []),
         ...(relevanceOrder ? [relevanceOrder] : []),
         asc(catalogItems.category),
         asc(catalogItems.name),

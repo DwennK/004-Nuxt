@@ -45,6 +45,34 @@ describe('catalogue supplier references and additive migration', () => {
     expect((await listCatalogItems({ search: '000123' })).total).toBe(2)
   })
 
+  it('ranks descriptive iPhone SE matches before SERV references and pagination', async () => {
+    for (const model of [
+      ...Array.from({ length: 30 }, (_, index) => `iPhone ${index + 1}`),
+      'iPhone SE 2016', 'iPhone SE 2020/2022'
+    ]) {
+      await createCatalogItem({
+        ...input,
+        name: `Remplacement écran ${model}`,
+        sku: `SERV-${model.replaceAll(' ', '-')}-SCREEN`,
+        model,
+        serviceKind: 'Remplacement écran',
+        keywords: [`${model} ecran`, `${model} screen`]
+      })
+    }
+    for (const search of ['écran iPhone SE', 'ecran iphone se', 'SE écran iPhone', 'iPhone SE ecran']) {
+      const result = await listCatalogItems({ search, pageSize: 25, activeOnly: true })
+      expect(result.total).toBe(32)
+      expect(result.items).toHaveLength(25)
+      expect(result.items.slice(0, 2).map(item => item.model)).toEqual(['iPhone SE 2016', 'iPhone SE 2020/2022'])
+    }
+    expect((await listCatalogItems({ search: 'ecran se 2020' })).items.map(item => item.model)).toEqual(['iPhone SE 2020/2022'])
+    expect((await listCatalogItems({ search: 'SERV-iPhone-SE-2016-SCREEN' })).items[0]?.model).toBe('iPhone SE 2016')
+
+    const exactSupplier = await createCatalogItem({ ...input, mobileSentrix: reference })
+    await createCatalogItem({ ...input, name: '000123 accessoire', sku: 'OTHER', keywords: ['000123'] })
+    expect((await listCatalogItems({ search: '000123', pageSize: 1 })).items[0]?.id).toBe(exactSupplier.id)
+  })
+
   it('preserves omitted associations on legacy writes and keeps manual removal', async () => {
     const first = await createCatalogItem({ ...input, mobileSentrix: reference })
     const legacy = catalogItemInputSchema.parse(input)
