@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CustomerListResponse } from '~~/shared/types/pos'
+import type { CustomerListResponse, TicketRecord } from '~~/shared/types/pos'
 
 const $fetch = useDossierFetch()
 
@@ -8,6 +8,28 @@ const { isSaving, saveError, save } = useFormAction()
 const customerId = computed(() => Number(route.query.customerId || 0))
 const formId = 'ticket-editor-form'
 const dirty = ref(false)
+const formVersion = ref(0)
+const createdTicket = ref<TicketRecord | null>(null)
+const completionOpen = ref(false)
+const completionHandled = ref(false)
+
+async function openCreatedTicket(print = false) {
+  if (!createdTicket.value) return
+  completionHandled.value = true
+  await navigateTo(`/tickets/${createdTicket.value.id}${print ? '/print?profile=thermal' : ''}`)
+}
+
+function startNewTicket() {
+  completionHandled.value = true
+  createdTicket.value = null
+  completionOpen.value = false
+  dirty.value = false
+  formVersion.value++
+}
+
+function onCompletionClosed() {
+  if (createdTicket.value && !completionHandled.value) void openCreatedTicket()
+}
 
 const { data: customers } = await useFetch<CustomerListResponse>('/api/customers', {
   query: { pageSize: 250 }
@@ -36,13 +58,16 @@ async function saveTicket(payload: {
     categoryHint: 'accessory' | 'repair' | 'service' | null
   }>
 }) {
-  const result = await save(() => $fetch(`/api/tickets`, {
+  if (createdTicket.value) return
+  const result = await save(() => $fetch<TicketRecord>(`/api/tickets`, {
     method: 'POST',
     body: { ...payload, customerId: payload.customerId || customerId.value }
   }), { success: 'Dossier créé' })
   if (!result?.ok) return
   dirty.value = false
-  await navigateTo(`/tickets/${result.data.id}`)
+  createdTicket.value = result.data
+  completionHandled.value = false
+  completionOpen.value = true
 }
 </script>
 
@@ -67,6 +92,7 @@ async function saveTicket(payload: {
               type="submit"
               :label="isSaving ? 'Enregistrement…' : 'Créer le dossier'"
               :loading="isSaving"
+              :disabled="!!createdTicket"
               icon="i-lucide-check"
             />
           </div>
@@ -78,9 +104,11 @@ async function saveTicket(payload: {
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
         <PosTicketForm
           v-if="customers?.items"
+          :key="formVersion"
           v-model:dirty="dirty"
           :form-id="formId"
           :saving="isSaving"
+          :disabled="!!createdTicket"
           :save-error="saveError"
           layout="intake"
           :show-submit="false"
@@ -91,4 +119,47 @@ async function saveTicket(payload: {
       </div>
     </template>
   </UDashboardPanel>
+
+  <UModal
+    v-model:open="completionOpen"
+    title="Dossier créé"
+    :description="createdTicket ? `${createdTicket.ticketNumber} enregistré` : undefined"
+    :ui="{ content: 'max-w-md', footer: 'flex flex-wrap justify-end gap-2' }"
+    @after:leave="onCompletionClosed"
+  >
+    <template #body>
+      <div class="space-y-5">
+        <div class="flex items-center gap-3">
+          <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-success text-inverted">
+            <UIcon name="i-lucide-check" class="size-5" />
+          </span>
+          <p class="text-lg font-semibold text-highlighted">
+            {{ createdTicket?.ticketNumber }}
+          </p>
+        </div>
+        <UButton
+          label="Imprimer thermique"
+          icon="i-lucide-printer"
+          color="neutral"
+          variant="outline"
+          size="lg"
+          block
+          @click="openCreatedTicket(true)"
+        />
+      </div>
+    </template>
+    <template #footer>
+      <UButton
+        label="Voir le dossier"
+        color="neutral"
+        variant="ghost"
+        @click="openCreatedTicket()"
+      />
+      <UButton
+        label="Nouveau dossier"
+        trailing-icon="i-lucide-arrow-right"
+        @click="startNewTicket"
+      />
+    </template>
+  </UModal>
 </template>
