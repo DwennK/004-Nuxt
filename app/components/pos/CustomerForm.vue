@@ -234,7 +234,7 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           />
         </UFormField>
 
-        <div class="grid gap-4 md:grid-cols-2">
+        <div class="grid gap-4">
           <UFormField
             label="Téléphone"
             name="phone"
