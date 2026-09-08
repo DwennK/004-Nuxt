@@ -16,7 +16,6 @@ const { data: qr } = await useAsyncData(
 <template>
   <div v-if="qr" class="record-lookup" :class="{ 'record-lookup--compact': compact }">
     <img :src="qr" :alt="label" class="record-lookup-qr">
-    <p>{{ label }}</p>
   </div>
 </template>
 
@@ -32,9 +31,6 @@ const { data: qr } = await useAsyncData(
   display: block;
   width: 25mm;
   height: 25mm;
-}
-.record-lookup p {
-  margin: 0;
 }
 .record-lookup--compact {
   display: flex;

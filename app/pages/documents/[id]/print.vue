@@ -206,6 +206,8 @@ useHead(() => ({
               </div>
             </div>
 
+            <PosRecordLookupQr :id="id" type="documents" class="invoice-lookup" />
+
             <div class="invoice-meta">
               <p class="invoice-type">
                 {{ documentTitle }}
@@ -231,7 +233,6 @@ useHead(() => ({
               <p v-for="line in a4PrintModel?.referenceLines || []" :key="line">
                 {{ line }}
               </p>
-              <PosRecordLookupQr :id="id" type="documents" />
             </section>
 
             <section class="invoice-window-wrap">
@@ -666,9 +667,8 @@ body {
 .invoice-header {
   position: relative;
   display: grid;
-  grid-template-rows: calc(var(--a4-envelope-window-top) - 4.8mm) auto;
+  grid-template-rows: minmax(calc(var(--a4-envelope-window-top) - 4.8mm), auto) auto;
   box-sizing: border-box;
-  min-height: 96mm;
   padding-top: 4.8mm;
   padding-bottom: 3.2mm;
   border-bottom: 0.2mm solid #dbe4f0;
@@ -676,7 +676,7 @@ body {
 
 .invoice-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 49mm;
+  grid-template-columns: minmax(0, 1fr) 25mm 40mm;
   gap: 6mm;
   align-items: start;
 }
@@ -685,6 +685,17 @@ body {
   display: flex;
   gap: 3mm;
   align-items: start;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.invoice-brand > div:last-child {
+  min-width: 0;
+}
+
+.invoice-lookup.record-lookup {
+  margin-top: 0;
+  text-align: center;
 }
 
 .invoice-logo {
@@ -753,11 +764,16 @@ body {
 
 .invoice-meta {
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .invoice-party-row {
-  display: block;
-  margin-top: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100mm;
+  gap: 7mm;
+  align-items: start;
+  margin-left: calc(var(--a4-reference-left) - 5.8mm);
+  margin-right: calc(var(--a4-envelope-window-right) - 5.8mm);
 }
 
 .invoice-party {
@@ -765,14 +781,11 @@ body {
 }
 
 .invoice-party--compact {
-  margin-left: calc(var(--a4-reference-left) - 5.8mm);
-  width: 62mm;
+  max-width: 62mm;
+  overflow-wrap: anywhere;
 }
 
 .invoice-window-wrap {
-  position: absolute;
-  top: var(--a4-envelope-window-top);
-  right: var(--a4-envelope-window-right);
   width: 100mm;
   min-height: 0;
 }
@@ -784,10 +797,9 @@ body {
 
 .invoice-window {
   width: 100mm;
-  min-height: 45mm;
   padding: 7mm 6mm 0;
   color: #334155;
-  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .invoice-strong {
@@ -1071,6 +1083,18 @@ body {
   flex-wrap: wrap;
   gap: 1.5mm 4mm;
   font-size: 9px;
+}
+
+@media screen and (max-width: 839px) {
+  .print-preview--a4 > main {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .sheet--a4 {
+    flex-shrink: 0;
+    width: 210mm;
+  }
 }
 
 @media print {
