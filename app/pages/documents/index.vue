@@ -115,22 +115,37 @@ const totalPages = computed(() => Math.max(Math.ceil(totalResults.value / pagina
 
 watch([debouncedSearch, typeFilter, statusFilter, paymentStateFilter, dateFrom, dateTo], () => {
   pagination.value.pageIndex = 0
+  // Navigation may replace the search while its previous debounce is pending.
+  if (debouncedSearch.value !== search.value) return
+  const filters = {
+    q: debouncedSearch.value.trim() || undefined,
+    type: typeFilter.value === 'all' ? undefined : typeFilter.value,
+    status: statusFilter.value === 'all' ? undefined : statusFilter.value,
+    paymentState: paymentStateFilter.value === 'due' ? 'due' : undefined,
+    dateFrom: dateFrom.value || undefined,
+    dateTo: dateTo.value || undefined
+  }
+  if (Object.entries(filters).every(([key, value]) => route.query[key] === value)) return
   router.replace({
     query: {
       ...route.query,
-      q: debouncedSearch.value.trim() || undefined,
-      type: typeFilter.value === 'all' ? undefined : typeFilter.value,
-      status: statusFilter.value === 'all' ? undefined : statusFilter.value,
-      paymentState: paymentStateFilter.value === 'due' ? 'due' : undefined,
-      dateFrom: dateFrom.value || undefined,
-      dateTo: dateTo.value || undefined
+      ...filters
     }
   })
 })
 
-watch(() => route.query.paymentState, (paymentState) => {
-  paymentStateFilter.value = paymentState === 'due' ? 'due' : 'all'
-})
+watch(() => route.query, (query) => {
+  search.value = typeof query.q === 'string' ? query.q : ''
+  typeFilter.value = typeof query.type === 'string' && Object.hasOwn(documentTypeLabels, query.type)
+    ? query.type as DocumentListItem['type']
+    : 'all'
+  statusFilter.value = typeof query.status === 'string' && Object.hasOwn(documentStatusLabels, query.status)
+    ? query.status as DocumentListItem['status']
+    : 'all'
+  paymentStateFilter.value = query.paymentState === 'due' ? 'due' : 'all'
+  dateFrom.value = typeof query.dateFrom === 'string' ? query.dateFrom : ''
+  dateTo.value = typeof query.dateTo === 'string' ? query.dateTo : ''
+}, { flush: 'sync' })
 
 watch(totalResults, (total) => {
   const lastPageIndex = Math.max(Math.ceil(total / pagination.value.pageSize) - 1, 0)

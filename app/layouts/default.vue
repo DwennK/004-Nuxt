@@ -7,7 +7,7 @@ const route = useRoute()
 const { currentDashboardTheme } = useDashboardTheme()
 const toolRoutes = ['/tools', '/vacances', '/inbox', '/assistant']
 
-const primaryLinks = [{
+const primaryLinks = computed(() => [{
   label: 'Accueil',
   icon: 'i-lucide-scan-line',
   to: '/comptoir',
@@ -18,6 +18,27 @@ const primaryLinks = [{
   label: 'Documents',
   icon: 'i-lucide-files',
   to: '/documents',
+  active: route.path.startsWith('/documents'),
+  defaultOpen: true,
+  children: [{
+    label: 'Devis',
+    icon: 'i-lucide-scroll-text',
+    to: '/documents?type=quote',
+    active: route.path === '/documents' && route.query.type === 'quote',
+    onSelect: () => { open.value = false }
+  }, {
+    label: 'Commandes',
+    icon: 'i-lucide-clipboard-list',
+    to: '/documents?type=customer_order',
+    active: route.path === '/documents' && route.query.type === 'customer_order',
+    onSelect: () => { open.value = false }
+  }, {
+    label: 'Factures',
+    icon: 'i-lucide-file-text',
+    to: '/documents?type=invoice',
+    active: route.path === '/documents' && route.query.type === 'invoice',
+    onSelect: () => { open.value = false }
+  }],
   onSelect: () => {
     open.value = false
   }
@@ -28,7 +49,7 @@ const primaryLinks = [{
   onSelect: () => {
     open.value = false
   }
-}] satisfies NavigationMenuItem[]
+}] satisfies NavigationMenuItem[])
 
 const secondaryLinks = [{
   label: 'Clients',
@@ -166,12 +187,10 @@ type SearchNavigationItem = {
 
 function flattenNavigationItems(items: NavigationMenuItem[]): SearchNavigationItem[] {
   return items.flatMap((item) => {
-    if (item.children?.length) {
-      return flattenNavigationItems(item.children)
-    }
+    const children = item.children?.length ? flattenNavigationItems(item.children) : []
 
     if (typeof item.to !== 'string' || typeof item.label !== 'string') {
-      return []
+      return children
     }
 
     return [{
@@ -179,7 +198,7 @@ function flattenNavigationItems(items: NavigationMenuItem[]): SearchNavigationIt
       label: item.label,
       icon: item.icon,
       to: item.to
-    }]
+    }, ...children]
   })
 }
 
@@ -189,7 +208,7 @@ const groups = computed(() => {
       id: 'navigate',
       label: 'Navigation',
       items: [
-        ...flattenNavigationItems(primaryLinks),
+        ...flattenNavigationItems(primaryLinks.value),
         ...flattenNavigationItems(secondaryLinks),
         ...flattenNavigationItems(footerLinks)
       ]
