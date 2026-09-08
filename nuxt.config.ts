@@ -61,6 +61,11 @@ export default defineNuxtConfig({
     preset: 'cloudflare_module',
     sourceMap: false,
 
+    replace: {
+      // Nitro #3071: preserve Papa Parse's double-quoted worker source string.
+      'typeof window': (id: string) => /[/\\]papaparse[/\\]/.test(id) ? '\'undefined\'' : '"undefined"'
+    },
+
     cloudflare: {
       deployConfig: true,
       nodeCompat: true

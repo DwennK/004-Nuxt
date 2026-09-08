@@ -1,3 +1,4 @@
+import Papa from 'papaparse'
 import type { SmartphoneReservationRequest, SmartphoneReservationStatus } from '~~/shared/types/smartphones'
 
 type ParsedReservationInput = Omit<SmartphoneReservationRequest, 'id'>
@@ -27,63 +28,20 @@ function normalizeToken(value: string) {
 }
 
 function detectDelimiter(content: string) {
-  const firstLine = content.split('\n', 1)[0] || ''
-  const commas = firstLine.split(',').length - 1
-  const semicolons = firstLine.split(';').length - 1
+  const aliases: readonly string[] = Object.values(headerAliases).flat()
 
-  return semicolons > commas ? ';' : ','
-}
+  // Compare parsed headers, not punctuation inside quoted cells or malformed data rows.
+  const candidates = [';', ','].map((delimiter) => {
+    const header = Papa.parse<string[]>(content, {
+      delimiter,
+      preview: 1,
+      skipEmptyLines: 'greedy'
+    }).data[0] || []
 
-function parseRows(content: string, delimiter: string) {
-  const rows: string[][] = []
-  let row: string[] = []
-  let field = ''
-  let inQuotes = false
+    return { delimiter, score: header.filter(value => aliases.includes(normalizeToken(value))).length }
+  })
 
-  for (let index = 0; index < content.length; index += 1) {
-    const char = content[index]
-
-    if (inQuotes) {
-      if (char === '"') {
-        if (content[index + 1] === '"') {
-          field += '"'
-          index += 1
-        } else {
-          inQuotes = false
-        }
-      } else {
-        field += char
-      }
-
-      continue
-    }
-
-    if (char === '"') {
-      inQuotes = true
-      continue
-    }
-
-    if (char === delimiter) {
-      row.push(field)
-      field = ''
-      continue
-    }
-
-    if (char === '\n') {
-      row.push(field)
-      rows.push(row)
-      row = []
-      field = ''
-      continue
-    }
-
-    field += char
-  }
-
-  row.push(field)
-  rows.push(row)
-
-  return rows.filter(currentRow => currentRow.some(cell => cell.trim() !== ''))
+  return candidates.sort((left, right) => right.score - left.score)[0]!.delimiter
 }
 
 function getHeaderMap(headerRow: string[]) {
@@ -164,13 +122,32 @@ export function parseSmartphoneReservationsCsv(content: string): ParsedReservati
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
 
-  const delimiter = detectDelimiter(normalizedContent)
-  const rows = parseRows(normalizedContent, delimiter)
+  const parsed = Papa.parse<string[]>(normalizedContent, {
+    delimiter: detectDelimiter(normalizedContent),
+    skipEmptyLines: 'greedy',
+    dynamicTyping: false
+  })
+  const rows = parsed.data
 
   if (!rows.length) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Fichier CSV vide'
+    })
+  }
+
+  const parseError = parsed.errors[0]
+
+  if (parseError) {
+    const reason = parseError.code === 'MissingQuotes'
+      ? 'guillemet non refermé'
+      : parseError.type === 'Quotes'
+        ? 'guillemets mal formés'
+        : 'séparateur non reconnu (virgule ou point-virgule attendu)'
+
+    throw createError({
+      statusCode: 400,
+      statusMessage: `CSV invalide : ${reason}`
     })
   }
 
@@ -188,6 +165,14 @@ export function parseSmartphoneReservationsCsv(content: string): ParsedReservati
 
   return dataRows.map((row, rowIndex) => {
     const lineNumber = rowIndex + 2
+
+    if (row.length !== headerRow.length) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Enregistrement CSV ${rowIndex + 1}: ${row.length} colonnes au lieu de ${headerRow.length}`
+      })
+    }
+
     const requestedAt = getCell(row, headerMap.requestedAt) || today
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedAt)) {
