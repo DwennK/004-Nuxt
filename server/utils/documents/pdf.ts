@@ -571,6 +571,43 @@ function drawDocumentLines(context: PdfContext, document: DocumentDetail) {
   context.cursorY -= (3 * MM)
 }
 
+function drawPayments(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord) {
+  const { payments } = buildDocumentA4PrintModel(document, company)
+  if (!payments.length) return
+
+  const rowHeight = 14
+  const methodX = SECTION_LEFT + SECTION_WIDTH * 0.25
+  const drawHeading = () => {
+    ensureSpace(context, 32 + rowHeight)
+    drawTextBlock(context, 'Paiements reçus', SECTION_LEFT, context.cursorY, SECTION_WIDTH, {
+      font: context.boldFont,
+      size: FONT_LABEL,
+      color: COLORS.muted
+    })
+    context.cursorY -= 14
+    drawTextBlock(context, 'Date', SECTION_LEFT, context.cursorY, methodX - SECTION_LEFT, { font: context.boldFont, size: FONT_SMALL })
+    drawTextBlock(context, 'Moyen de paiement', methodX, context.cursorY, SECTION_WIDTH / 2, { font: context.boldFont, size: FONT_SMALL })
+    drawRightAlignedText(context, 'Montant', SECTION_RIGHT, context.cursorY - FONT_SMALL, { font: context.boldFont, size: FONT_SMALL })
+    context.cursorY -= 14
+    context.page.drawLine({ start: { x: SECTION_LEFT, y: context.cursorY }, end: { x: SECTION_RIGHT, y: context.cursorY }, thickness: 0.4, color: COLORS.border })
+  }
+
+  drawHeading()
+  for (const payment of payments) {
+    if (context.cursorY - rowHeight < BOTTOM_LIMIT) {
+      addPage(context)
+      drawHeading()
+    }
+    const topY = context.cursorY - 3
+    drawTextBlock(context, payment.paidAt, SECTION_LEFT, topY, methodX - SECTION_LEFT, { size: FONT_SMALL })
+    drawTextBlock(context, payment.label, methodX, topY, SECTION_WIDTH / 2, { size: FONT_SMALL })
+    drawRightAlignedText(context, formatCurrency(payment.amount), SECTION_RIGHT, topY - FONT_SMALL, { size: FONT_SMALL })
+    context.cursorY -= rowHeight
+    context.page.drawLine({ start: { x: SECTION_LEFT, y: context.cursorY }, end: { x: SECTION_RIGHT, y: context.cursorY }, thickness: 0.4, color: COLORS.border })
+  }
+  context.cursorY -= 3 * MM
+}
+
 function measureSummaryHeight(context: PdfContext, model: ReturnType<typeof buildDocumentA4PrintModel>) {
   const notesWidth = SECTION_WIDTH - (4 * MM) - (54 * MM)
   const noteHeight = model.noteBlocks.reduce((total, block, index) => {
@@ -578,7 +615,7 @@ function measureSummaryHeight(context: PdfContext, model: ReturnType<typeof buil
     const contentHeight = measureTextBlock(context.regularFont, block.content, FONT_SMALL, notesWidth, 9.5)
     return total + labelHeight + contentHeight + (index ? (2.2 * MM) : 0) + (1.2 * MM)
   }, 0)
-  const totalRows = 3 + ((model.isPayableDocument && model.paidAmount > 0) ? 2 : 0)
+  const totalRows = 3 + (model.isPayableDocument ? 2 : 0)
   const totalsHeight = (2.2 * MM) + (totalRows * 11) + 16
 
   return Math.max(noteHeight, totalsHeight) + (3 * MM)
@@ -589,10 +626,10 @@ function drawSummary(context: PdfContext, document: DocumentDetail, company: Com
   const totalsWidth = 54 * MM
   const gap = 4 * MM
   const notesWidth = SECTION_WIDTH - gap - totalsWidth
-  const topY = context.cursorY
   const requiredHeight = measureSummaryHeight(context, model)
 
   ensureSpace(context, requiredHeight)
+  const topY = context.cursorY
 
   let notesBottom = topY
 
@@ -619,10 +656,10 @@ function drawSummary(context: PdfContext, document: DocumentDetail, company: Com
     { label: 'Total TTC', value: formatCurrency(document.total), emphasized: true }
   ]
 
-  if (model.isPayableDocument && model.paidAmount > 0) {
+  if (model.isPayableDocument) {
     totalRows.push(
       { label: 'Encaissé', value: formatCurrency(model.paidAmount), emphasized: false },
-      { label: 'Reste', value: formatCurrency(model.balanceDue), emphasized: false }
+      { label: 'Reste à payer', value: formatCurrency(model.balanceDue), emphasized: true }
     )
   }
 
@@ -883,6 +920,7 @@ export async function generateDocumentPdf(document: DocumentDetail, company: Com
 
   drawHeader(context, document, company, logoImage, lookupUrl)
   drawDocumentLines(context, document)
+  drawPayments(context, document, company)
   drawSummary(context, document, company)
 
   const renderedQr = await drawQrSection(context, document, company)

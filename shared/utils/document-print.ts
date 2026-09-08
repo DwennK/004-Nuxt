@@ -2,10 +2,12 @@ import { documentTypeLabels, paymentMethodLabels } from '../constants/pos'
 import type { DocumentDetail } from '../types/pos'
 import type { CompanySettingsRecord } from '../types/settings'
 import { isValidSwissQrBillAccount } from './iban'
-import { formatDateTime, isPayableDocumentType } from './pos'
+import { formatDate, isPayableDocumentType } from './pos'
 import { buildSwissQrBill, type SwissQrBillData } from './qr-bill'
 
-export interface DocumentPrintPaymentSummary {
+export interface DocumentPrintPayment {
+  id: number
+  amount: number
   label: string
   paidAt: string
 }
@@ -24,30 +26,23 @@ export interface DocumentA4PrintModel {
   noteBlocks: DocumentPrintNoteBlock[]
   footerNote: string | null
   footerMeta: string[]
-  paymentSummary: DocumentPrintPaymentSummary | null
+  payments: DocumentPrintPayment[]
   paidAmount: number
   balanceDue: number
   isPayableDocument: boolean
   qrBill: SwissQrBillData | null
 }
 
-export function buildDocumentPaymentSummary(document: DocumentDetail): DocumentPrintPaymentSummary | null {
-  if (!document.payments.length) {
-    return null
-  }
-
-  const latestPaid = [...document.payments]
+export function buildDocumentPrintPayments(document: DocumentDetail): DocumentPrintPayment[] {
+  return document.payments
     .filter(payment => payment.status === 'paid')
-    .sort((left, right) => new Date(right.paidAt).getTime() - new Date(left.paidAt).getTime())[0]
-
-  if (!latestPaid) {
-    return null
-  }
-
-  return {
-    label: paymentMethodLabels[latestPaid.method],
-    paidAt: formatDateTime(latestPaid.paidAt)
-  }
+    .sort((left, right) => new Date(left.paidAt).getTime() - new Date(right.paidAt).getTime() || left.id - right.id)
+    .map(payment => ({
+      id: payment.id,
+      amount: payment.amount,
+      label: paymentMethodLabels[payment.method],
+      paidAt: formatDate(payment.paidAt)
+    }))
 }
 
 function getCompanyAddress(company: CompanySettingsRecord) {
@@ -86,12 +81,10 @@ function getQrBillNotice(document: DocumentDetail, company: CompanySettingsRecor
 }
 
 export function buildDocumentA4PrintModel(document: DocumentDetail, company: CompanySettingsRecord): DocumentA4PrintModel {
-  const paymentSummary = buildDocumentPaymentSummary(document)
+  const payments = buildDocumentPrintPayments(document)
   const companyAddress = getCompanyAddress(company)
   const customerAddress = getCustomerAddress(document)
-  const paidAmount = document.payments
-    .filter(payment => payment.status === 'paid')
-    .reduce((total, payment) => total + payment.amount, 0)
+  const paidAmount = payments.reduce((total, payment) => total + payment.amount, 0)
   const isPayableDocument = isPayableDocumentType(document.type)
   const balanceDue = isPayableDocument ? Math.max(document.total - paidAmount, 0) : 0
   const qrBill = buildSwissQrBill(document, company, balanceDue)
@@ -132,14 +125,12 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
     referenceLines: [
       company.vatNumber ? `TVA / IDE ${company.vatNumber}` : null,
       company.bankName ? `Banque ${company.bankName}` : null,
-      company.iban ? `IBAN ${company.iban}` : null,
-      paymentSummary ? `Dernier paiement ${paymentSummary.label}` : null,
-      paymentSummary ? paymentSummary.paidAt : null
+      company.iban ? `IBAN ${company.iban}` : null
     ].filter(Boolean) as string[],
     noteBlocks,
     footerNote: company.footerNotes,
     footerMeta: [company.phone, company.email, company.website].filter(Boolean) as string[],
-    paymentSummary,
+    payments,
     paidAmount,
     balanceDue,
     isPayableDocument,

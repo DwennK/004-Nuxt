@@ -46,7 +46,7 @@ const a4PrintModel = computed(() => {
 })
 const printDocumentTitle = computed(() => document.value?.documentNumber || 'Document commercial')
 const documentTitle = computed(() => a4PrintModel.value?.documentTitle || (document.value ? documentTypeLabels[document.value.type] : 'Document'))
-const paymentSummary = computed(() => a4PrintModel.value?.paymentSummary || null)
+const payments = computed(() => a4PrintModel.value?.payments || [])
 const companyAddress = computed(() => a4PrintModel.value?.companyAddress || [])
 const customerAddress = computed(() => a4PrintModel.value?.customerAddress || [])
 const paidAmount = computed(() => a4PrintModel.value?.paidAmount || 0)
@@ -281,6 +281,34 @@ useHead(() => ({
           </table>
         </section>
 
+        <section v-if="payments.length" class="invoice-payments">
+          <p class="invoice-label">
+            Paiements reçus
+          </p>
+          <table class="print-payments-table">
+            <thead>
+              <tr>
+                <th scope="col">
+                  Date
+                </th>
+                <th scope="col">
+                  Moyen de paiement
+                </th>
+                <th scope="col">
+                  Montant
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="payment in payments" :key="payment.id">
+                <td>{{ payment.paidAt }}</td>
+                <td>{{ payment.label }}</td>
+                <td>{{ formatCurrency(payment.amount) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
         <section class="invoice-summary">
           <div class="invoice-notes">
             <div v-for="block in a4PrintModel?.noteBlocks || []" :key="block.label" class="invoice-note-block">
@@ -306,12 +334,12 @@ useHead(() => ({
               <span>Total TTC</span>
               <strong>{{ formatCurrency(document.total) }}</strong>
             </div>
-            <div v-if="isPayableDocument && paidAmount > 0" class="invoice-total-row">
+            <div v-if="isPayableDocument" class="invoice-total-row">
               <span>Encaissé</span>
               <strong>{{ formatCurrency(paidAmount) }}</strong>
             </div>
-            <div v-if="isPayableDocument && paidAmount > 0" class="invoice-total-row">
-              <span>Reste</span>
+            <div v-if="isPayableDocument" class="invoice-total-row invoice-total-row--grand">
+              <span>Reste à payer</span>
               <strong>{{ formatCurrency(balanceDue) }}</strong>
             </div>
           </div>
@@ -537,20 +565,41 @@ useHead(() => ({
             <span>Total TTC</span>
             <strong>{{ formatCurrency(document.total) }}</strong>
           </div>
-          <div v-if="isPayableDocument && paidAmount > 0" class="thermal-total-row">
+          <div v-if="isPayableDocument" class="thermal-total-row">
             <span>Encaissé</span>
             <strong>{{ formatCurrency(paidAmount) }}</strong>
           </div>
-          <div v-if="isPayableDocument && paidAmount > 0" class="thermal-total-row">
-            <span>Reste</span>
+          <div v-if="isPayableDocument" class="thermal-total-row thermal-strong">
+            <span>Reste à payer</span>
             <strong>{{ formatCurrency(balanceDue) }}</strong>
           </div>
 
-          <div v-if="paymentSummary" class="thermal-note">
+          <div v-if="payments.length" class="thermal-note">
             <p class="thermal-kicker">
-              Paiement
+              Paiements reçus
             </p>
-            <p>{{ paymentSummary.label }} · {{ paymentSummary.paidAt }}</p>
+            <table class="print-payments-table">
+              <thead>
+                <tr>
+                  <th scope="col">
+                    Date
+                  </th>
+                  <th scope="col">
+                    Moyen
+                  </th>
+                  <th scope="col">
+                    Montant
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="payment in payments" :key="payment.id">
+                  <td>{{ payment.paidAt }}</td>
+                  <td>{{ payment.label }}</td>
+                  <td>{{ formatCurrency(payment.amount) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <div v-if="document.notes" class="thermal-note">
@@ -607,6 +656,7 @@ body {
 
 .invoice-header,
 .invoice-lines,
+.invoice-payments,
 .invoice-summary,
 .invoice-footer,
 .qr-bill {
@@ -814,6 +864,50 @@ body {
   font-weight: 600;
   color: #0f172a;
   overflow-wrap: anywhere;
+}
+
+.invoice-payments {
+  padding-bottom: 3mm;
+}
+
+.print-payments-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: inherit;
+}
+
+.print-payments-table th,
+.print-payments-table td {
+  padding: 0.8mm 1.5mm;
+  text-align: left;
+  border-bottom: 0.125mm solid currentColor;
+}
+
+.print-payments-table th:first-child,
+.print-payments-table td:first-child {
+  padding-left: 0;
+  width: 25%;
+  white-space: nowrap;
+}
+
+.print-payments-table th:last-child,
+.print-payments-table td:last-child {
+  padding-right: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.print-payments-table tr {
+  break-inside: avoid;
+}
+
+.invoice-payments > .invoice-label,
+.print-payments-table thead {
+  break-after: avoid;
+}
+
+.thermal-sheet .print-payments-table {
+  font-size: 8pt;
 }
 
 .invoice-summary {
