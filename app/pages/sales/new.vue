@@ -31,6 +31,7 @@ const saveError = ref<string | null>(null)
 const lastCreatedDocument = ref<DocumentDetail | null>(null)
 const lastCompletedPaymentMethod = ref<PaymentMethod | null>(null)
 const saleCompletionOpen = ref(false)
+const nextSaleButton = useTemplateRef('nextSaleButton')
 const customerPool = ref<CustomerRecord[]>([])
 const cashReceived = ref<number | null>(null)
 const saleDirty = computed(() => lines.value.length > 0 || selectedCustomerId.value !== null || cashReceived.value !== null)
@@ -217,6 +218,11 @@ function closeSaleCompletionModal() {
   saleCompletionOpen.value = false
 }
 
+function focusNextSale(event: Event) {
+  event.preventDefault()
+  nextSaleButton.value?.$el?.focus()
+}
+
 function handleSaleCompletionClosed() {
   lastCreatedDocument.value = null
   lastCompletedPaymentMethod.value = null
@@ -374,108 +380,109 @@ defineShortcuts({
         <UModal
           v-if="lastCreatedDocument"
           v-model:open="saleCompletionOpen"
+          title="Encaissement terminé"
+          :description="`${documentTypeLabels[lastCreatedDocument.type]} ${lastCreatedDocument.documentNumber} enregistrée`"
           :dismissible="false"
           :close="false"
+          :content="{ onOpenAutoFocus: focusNextSale }"
           :ui="{
-            content: 'max-w-2xl overflow-hidden rounded-[2rem] border border-success/20 shadow-2xl',
-            body: 'p-0',
-            footer: 'border-t border-default/70 p-4 sm:px-6'
+            content: 'max-w-md overflow-hidden rounded-2xl divide-y-0',
+            header: 'sr-only',
+            body: 'p-5 sm:p-6',
+            footer: 'grid grid-cols-1 gap-2 border-t border-default bg-muted/40 p-5 sm:grid-cols-2 sm:p-6'
           }"
           @after:leave="handleSaleCompletionClosed"
         >
           <template #body>
-            <div class="bg-[linear-gradient(180deg,rgba(34,197,94,0.12),rgba(34,197,94,0.03))] px-6 py-6 sm:px-7 sm:py-7">
-              <div class="flex items-start gap-4">
-                <div class="mt-1 flex size-12 shrink-0 items-center justify-center rounded-full bg-success/12 text-success ring-1 ring-success/15">
-                  <UIcon name="i-lucide-badge-check" class="size-6" />
-                </div>
+            <div class="flex items-center gap-2.5">
+              <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-success text-inverted">
+                <UIcon name="i-lucide-check" class="size-4" />
+              </span>
+              <p aria-hidden="true" class="text-sm font-semibold text-highlighted">
+                Encaissement terminé
+              </p>
+            </div>
 
-                <div class="min-w-0 flex-1 space-y-5">
-                  <div class="space-y-2">
-                    <p class="text-sm font-medium uppercase tracking-[0.18em] text-success">
-                      Encaissement terminé
-                    </p>
-                    <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
-                      <h2 class="text-4xl font-semibold tracking-tight text-highlighted sm:text-5xl">
-                        {{ formatCurrency(lastCreatedDocument.total) }}
-                      </h2>
-                      <p class="pb-1 text-base text-toned">
-                        encaissé
-                      </p>
-                    </div>
-                    <p class="text-lg font-medium text-highlighted">
-                      {{ documentTypeLabels[lastCreatedDocument.type] }} {{ lastCreatedDocument.documentNumber }}
-                    </p>
-                  </div>
+            <div class="my-6">
+              <p class="text-sm text-muted">
+                Montant encaissé
+              </p>
+              <p class="mt-1 break-words text-4xl font-semibold tracking-tight text-highlighted tabular-nums sm:text-5xl">
+                {{ formatCurrency(lastCreatedDocument.total) }}
+              </p>
+            </div>
 
-                  <div class="grid gap-3 rounded-[1.5rem] border border-default/70 bg-default/85 p-4 sm:grid-cols-3">
-                    <div>
-                      <p class="text-[11px] uppercase tracking-[0.16em] text-toned">
-                        Paiement
-                      </p>
-                      <p class="mt-1 text-sm font-medium text-highlighted">
-                        {{ lastPaymentMethodLabel }}
-                      </p>
-                    </div>
-                    <div>
-                      <p class="text-[11px] uppercase tracking-[0.16em] text-toned">
-                        Client
-                      </p>
-                      <p class="mt-1 text-sm font-medium text-highlighted">
-                        {{ lastCreatedDocument.customer.displayName }}
-                      </p>
-                    </div>
-                    <div>
-                      <p class="text-[11px] uppercase tracking-[0.16em] text-toned">
-                        Type
-                      </p>
-                      <p class="mt-1 text-sm font-medium text-highlighted">
-                        {{ documentTypeLabels[lastCreatedDocument.type] }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+            <dl class="space-y-3 border-t border-dashed border-default pt-5 text-sm">
+              <div class="flex items-baseline justify-between gap-4">
+                <dt class="shrink-0 text-muted">
+                  {{ documentTypeLabels[lastCreatedDocument.type] }}
+                </dt>
+                <dd class="min-w-0 text-right font-medium break-words text-highlighted">
+                  {{ lastCreatedDocument.documentNumber }}
+                </dd>
               </div>
+              <div class="flex items-baseline justify-between gap-4">
+                <dt class="shrink-0 text-muted">
+                  Paiement
+                </dt>
+                <dd class="min-w-0 text-right font-medium text-highlighted">
+                  {{ lastPaymentMethodLabel }}
+                </dd>
+              </div>
+              <div class="flex items-baseline justify-between gap-4">
+                <dt class="shrink-0 text-muted">
+                  Client
+                </dt>
+                <dd class="min-w-0 text-right font-medium break-words text-highlighted">
+                  {{ lastCreatedDocument.customer.displayName }}
+                </dd>
+              </div>
+            </dl>
+
+            <div class="mt-6 grid auto-cols-fr grid-flow-col gap-2">
+              <UButton
+                v-if="supportsDocumentPrintProfile(lastCreatedDocument.type, 'thermal')"
+                label="Thermique"
+                aria-label="Imprimer thermique"
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-printer"
+                size="lg"
+                class="justify-center gap-1.5 px-2 sm:gap-2 sm:px-3"
+                @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}/print?profile=thermal`)"
+              />
+              <UButton
+                label="Format A4"
+                aria-label="Imprimer A4"
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-file-text"
+                size="lg"
+                class="justify-center gap-1.5 px-2 sm:gap-2 sm:px-3"
+                @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}/print?profile=a4`)"
+              />
             </div>
           </template>
 
           <template #footer>
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p class="text-sm text-toned">
-                Vente enregistrée. Passez directement à la suivante ou ouvrez le document.
-              </p>
-
-              <div class="flex flex-wrap justify-end gap-2">
-                <UButton
-                  v-if="supportsDocumentPrintProfile(lastCreatedDocument.type, 'thermal')"
-                  :label="'Imprimer thermique'"
-                  color="neutral"
-                  variant="soft"
-                  icon="i-lucide-printer"
-                  @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}/print?profile=thermal`)"
-                />
-                <UButton
-                  :label="'Imprimer A4'"
-                  color="neutral"
-                  variant="soft"
-                  icon="i-lucide-file-text"
-                  @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}/print?profile=a4`)"
-                />
-                <UButton
-                  :label="'Voir le document'"
-                  color="neutral"
-                  variant="ghost"
-                  @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}`)"
-                />
-                <UButton
-                  label="Nouvelle vente"
-                  color="primary"
-                  icon="i-lucide-arrow-right"
-                  autofocus
-                  @click="closeSaleCompletionModal"
-                />
-              </div>
-            </div>
+            <UButton
+              label="Voir le document"
+              color="neutral"
+              variant="ghost"
+              size="lg"
+              class="justify-center max-sm:order-2"
+              @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}`)"
+            />
+            <UButton
+              ref="nextSaleButton"
+              label="Nouvelle vente"
+              color="primary"
+              trailing-icon="i-lucide-arrow-right"
+              size="lg"
+              class="justify-center"
+              autofocus
+              @click="closeSaleCompletionModal"
+            />
           </template>
         </UModal>
 
