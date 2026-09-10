@@ -76,11 +76,7 @@ function onSubmit() {
 function onSubmitError(event: { errors?: Array<{ name?: string, message?: string }> }) {
   const errors = event.errors || []
   const firstError = errors[0]
-  const hasContextError = errors.some(error => ['type', 'status', 'customerId', 'ticketId', 'issuedAt', 'notes'].includes(String(error.name)))
-
-  if (hasContextError) {
-    contextOpen.value = true
-  }
+  contextOpen.value = firstError?.name === 'notes'
 
   toast.add({
     title: 'Document incomplet',
@@ -106,12 +102,9 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
     >
       <fieldset :disabled="props.saving || props.disabled" class="min-w-0 space-y-4">
         <div
-          class="grid gap-3 rounded-2xl border border-default bg-muted/30 p-3 lg:items-end"
-          :class="isExistingDocument
-            ? 'lg:grid-cols-[minmax(16rem,1fr)_12rem_10rem_auto]'
-            : 'lg:grid-cols-[11rem_minmax(16rem,1fr)_12rem_10rem_auto]'"
+          class="grid gap-3 rounded-lg border border-default bg-muted/30 p-3 sm:grid-cols-2 lg:grid-cols-[9rem_minmax(12rem,1fr)_12rem_9rem] lg:items-end"
         >
-          <UFormField v-if="!isExistingDocument" label="Type" name="type">
+          <UFormField label="Type" name="type">
             <USelectMenu
               v-model="state.type"
               :items="documentTypeItems"
@@ -158,13 +151,14 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
             />
           </UFormField>
 
-          <div class="flex flex-wrap items-center justify-end gap-2">
+          <div v-if="!isExistingDocument || showSubmitButton" class="col-span-full flex flex-wrap items-center justify-end gap-2">
             <UButton
+              v-if="!isExistingDocument"
               type="button"
               color="neutral"
               variant="soft"
               icon="i-lucide-panel-right-open"
-              label="Contexte"
+              label="Informations complémentaires"
               @click="contextOpen = true"
             />
             <UButton
@@ -188,8 +182,6 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
         <PosDocumentContextFields
           v-model:open="contextOpen"
           :editor="editor"
-          :customers="customers"
-          :fixed-customer-id="fixedCustomerId"
           :form-id="resolvedFormId"
           :saving="props.saving"
           :save-error="props.saveError"
