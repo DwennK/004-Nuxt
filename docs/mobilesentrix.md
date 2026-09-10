@@ -171,3 +171,41 @@ appel réel avec des résultats confirme leur fonctionnement. Une erreur JSON
 OAuth ou de droits API après ajout du header doit être distinguée du blocage
 Cloudflare. Ne jamais partager les headers d’authentification dans les captures
 ou les journaux de diagnostic.
+
+## Navigation dans le fournisseur
+
+L’explorateur propose une liste avec défilement local et en-tête fixe, une
+pagination de 20 ou 50 résultats, une recherche libre/SKU complétée par modèle,
+type de pièce, qualité et couleur, ainsi qu’une fiche latérale et un comparateur
+limité à trois références. Les critères de recherche sont envoyés au moteur
+fournisseur ; ils ne constituent pas une preuve de compatibilité.
+
+Les catégories sont cliquables. Les sous-catégories sont reprises quand la
+réponse fournisseur expose une hiérarchie (`parent_id`, `children` ou
+`children_data`). La réponse produits par catégorie est paginée localement ;
+les recherches et les appareils utilisent la pagination fournisseur. Un total
+absent est signalé comme non communiqué.
+
+Le filtre de disponibilité s’applique à la page reçue pour la recherche et les
+appareils, et à la liste complète reçue pour les catégories et les favoris. Le
+libellé « Stock de la page » et le compteur distinguent ce filtrage local du
+nombre total de résultats fournisseur. Aucune quantité Europe n’est déduite du
+champ de disponibilité.
+
+Les favoris (100 maximum) et les huit recherches récentes sont conservés dans
+le stockage de ce navigateur, sous une clé propre à l’utilisateur POS. Les
+favoris sont des instantanés d’affichage, sans la réponse fournisseur brute ;
+la fiche permet une nouvelle consultation de la référence exacte. Un stockage
+bloqué ou illisible est signalé sans empêcher la navigation. Le comparateur
+reste en mémoire pendant la visite et conserve la sélection entre les pages.
+
+La recherche de variantes dans la fiche est indépendante de la liste principale,
+paginée et présentée comme des suggestions à vérifier. Les réponses tardives ne
+peuvent pas remplacer une recherche plus récente ou une autre fiche sélectionnée.
+Ces fonctions ne modifient ni le catalogue POS ni les prix de vente ou les stocks.
+
+Validation ciblée :
+
+```bash
+npx vitest run tests/unit/mobilesentrix-browser.spec.ts tests/unit/mobilesentrix.spec.ts tests/unit/mobilesentrix-matching.spec.ts tests/integration/catalog-mobilesentrix.spec.ts
+```

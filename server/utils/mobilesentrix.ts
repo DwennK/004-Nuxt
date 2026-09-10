@@ -624,8 +624,21 @@ export async function listMobileSentrixCategories(): Promise<MobileSentrixCatego
   const payload = await mobileSentrixRequest<unknown>('/categories')
   const payloadRecord = asRecord(payload)
   const data = 'data' in payloadRecord ? payloadRecord.data : payload
-
-  return {
-    items: asArray(data).map(mapCategory)
+  const dataRecord = asRecord(data)
+  const items: MobileSentrixCategorySummary[] = []
+  const seen = new Set<string>()
+  function visit(values: unknown, parentId: string | null = null, depth = 0) {
+    if (depth > 20) return
+    for (const value of asArray(values)) {
+      const record = asRecord(value)
+      const category = mapCategory(value)
+      if (category.id && seen.has(category.id)) continue
+      if (category.id) seen.add(category.id)
+      items.push({ ...category, parentId: parentId || category.parentId })
+      const children = record.children ?? record.children_data ?? record.categories
+      if (children && typeof children === 'object') visit(children, category.id, depth + 1)
+    }
   }
+  visit(dataRecord.items ?? (dataRecord.id || dataRecord.category_id || dataRecord.entity_id ? [data] : data))
+  return { items }
 }

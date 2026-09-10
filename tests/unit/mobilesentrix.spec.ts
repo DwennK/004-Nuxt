@@ -56,6 +56,14 @@ describe('MobileSentrix image URLs', () => {
     expect(result.items[0]).toMatchObject({ id: '10', sku: '000123', url: 'https://www.mobilesentrix.eu/battery', imageUrl: 'https://static.mobilesentrix.eu/battery.webp' })
   })
 
+  it('flattens nested categories while preserving parent links and removing duplicates', async () => {
+    mockResponse({ data: [{ id: '1', name: 'Parts', children: [{ id: '2', name: 'Apple', children_data: [{ id: '3', name: 'iPhone' }] }] }, { id: '2', name: 'Duplicate' }] })
+    const result = await listMobileSentrixCategories()
+    expect(result.items.map(({ id, parentId }) => ({ id, parentId }))).toEqual([
+      { id: '1', parentId: null }, { id: '2', parentId: '1' }, { id: '3', parentId: '2' }
+    ])
+  })
+
   it.each([
     'http://static.mobilesentrix.com/image.webp',
     'https://static.mobilesentrix.com.evil.test/image.webp',
