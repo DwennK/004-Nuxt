@@ -754,7 +754,6 @@ defineShortcuts({
           </div>
 
           <div class="space-y-4 xl:sticky xl:top-3">
-            <PosUnsavedChanges :dirty="saleDirty" :snapshot="saleSnapshot" :saving="Boolean(isSaving)" />
             <UCard
               variant="subtle"
               :ui="{
@@ -765,10 +764,13 @@ defineShortcuts({
             >
               <template #header>
                 <div class="flex items-start justify-between gap-3">
-                  <div class="space-y-1">
-                    <h2 class="text-base font-semibold text-highlighted">
-                      Encaissement
-                    </h2>
+                  <div class="w-full space-y-1">
+                    <div class="flex items-center justify-between gap-2">
+                      <h2 class="text-base font-semibold text-highlighted">
+                        Encaissement
+                      </h2>
+                      <PosUnsavedChanges :dirty="saleDirty" :snapshot="saleSnapshot" :saving="Boolean(isSaving)" />
+                    </div>
                     <p class="text-sm text-toned">
                       Facture immédiate, client éventuel, puis paiement direct.
                     </p>

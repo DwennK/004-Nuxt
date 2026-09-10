@@ -59,9 +59,16 @@ est rejoué sans deuxième paiement ; sinon les contrôles habituels s’appliqu
 
 ## Saisies non enregistrées
 
-Le bandeau apparaît dès une différence dans le formulaire, y compris pour les
-lignes, les paiements et le panier de vente rapide. Le rappel intervient après cinq minutes sans modification, puis toutes
-les cinq minutes. La coupure sonore dure jusqu’à l’enregistrement ou à l’abandon.
+Le statut « Non enregistré » apparaît dans les actions du formulaire ou dans
+l’en-tête des paiements et de l’encaissement. Son emplacement reste réservé pour
+éviter de déplacer le contenu pendant la saisie ; sur mobile, une icône avec un
+libellé accessible ouvre le même menu. Ce menu permet de copier les saisies, de
+couper le rappel et de tester le son.
+
+Après cinq minutes sans modification, puis toutes les cinq minutes, une
+notification temporaire de huit secondes accompagne le rappel sonore. Reprendre
+la saisie ou enregistrer ferme cette notification. La coupure du rappel visuel
+et sonore dure jusqu’à l’enregistrement ou à l’abandon.
 Une erreur de sauvegarde conserve les saisies et le rappel.
 
 L’audio est activé lors d’une interaction, avec un bouton de test si le navigateur

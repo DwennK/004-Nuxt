@@ -219,8 +219,7 @@ async function removePayment(payment: PaymentRecord) {
 </script>
 
 <template>
-  <PosUnsavedChanges :dirty="dirty" :snapshot="JSON.stringify(paymentDrafts, null, 2)" :saving="mutationPending" />
-  <fieldset :disabled="props.disabled" class="min-w-0">
+  <div class="min-w-0">
     <div class="grid gap-4 xl:h-[calc(100vh-24rem)] xl:grid-cols-[minmax(0,1fr)_20rem]">
       <UCard
         :ui="{
@@ -237,6 +236,7 @@ async function removePayment(payment: PaymentRecord) {
                 Paiements du document
               </h2>
             </div>
+            <PosUnsavedChanges :dirty="dirty" :snapshot="JSON.stringify(paymentDrafts, null, 2)" :saving="mutationPending" />
             <span class="text-xs text-toned">
               {{ payments.length }} paiement(s)
             </span>
@@ -478,5 +478,5 @@ async function removePayment(payment: PaymentRecord) {
         />
       </div>
     </div>
-  </fieldset>
+  </div>
 </template>

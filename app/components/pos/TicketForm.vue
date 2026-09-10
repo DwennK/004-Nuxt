@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<{
     closedAt: string | null
     lines: EditableCommercialLinePayload[]
   }>
+  unsavedTarget?: string
   formId?: string
   layout?: 'compact' | 'page' | 'intake'
   showSubmit?: boolean
@@ -230,7 +231,6 @@ function handleImeiScan(value: string) {
 </script>
 
 <template>
-  <PosUnsavedChanges :dirty="dirty" :snapshot="draftSnapshot" :saving="props.saving" />
   <UForm
     :id="formId"
     :schema="schema"
@@ -708,7 +708,13 @@ function handleImeiScan(value: string) {
 
       <PosFormFeedback :saving="props.saving" :error="props.saveError" />
 
-      <div v-if="props.showSubmit && props.layout !== 'intake'" class="flex justify-end">
+      <div v-if="props.showSubmit && props.layout !== 'intake'" class="flex flex-wrap items-center justify-end gap-2">
+        <PosUnsavedChanges
+          v-if="!props.unsavedTarget"
+          :dirty="dirty"
+          :snapshot="draftSnapshot"
+          :saving="props.saving"
+        />
         <UButton
           type="submit"
           :label="props.saving ? 'Enregistrement…' : props.submitLabel"
@@ -717,6 +723,13 @@ function handleImeiScan(value: string) {
         />
       </div>
     </fieldset>
+    <PosUnsavedChanges
+      v-if="props.unsavedTarget"
+      :to="props.unsavedTarget"
+      :dirty="dirty"
+      :snapshot="draftSnapshot"
+      :saving="props.saving"
+    />
   </UForm>
 
   <PosAndroidPatternSlideover

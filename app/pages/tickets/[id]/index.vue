@@ -1233,12 +1233,12 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           @keydown.ctrl.enter="addInternalNote"
         />
       </UFormField>
-      <PosUnsavedChanges :dirty="!!noteDraft" :snapshot="noteDraft" :saving="noteSaving" />
       <PosFormFeedback class="mt-3" :saving="noteSaving" :error="noteError" />
     </template>
 
     <template #footer>
-      <div class="flex w-full justify-end gap-2">
+      <div class="flex w-full flex-wrap items-center justify-end gap-2">
+        <PosUnsavedChanges :dirty="!!noteDraft" :snapshot="noteDraft" :saving="noteSaving" />
         <UButton
           label="Annuler"
           color="neutral"

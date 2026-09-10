@@ -130,9 +130,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         </UFormField>
 
         <PosFormFeedback :saving="props.loading" :error="props.saveError" />
-        <PosUnsavedChanges :dirty="dirty" :snapshot="snapshot" :saving="props.loading" />
-
-        <div class="flex justify-end">
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <PosUnsavedChanges :dirty="dirty" :snapshot="snapshot" :saving="props.loading" />
           <UButton
             type="submit"
             :label="props.loading ? 'Enregistrement…' : 'Enregistrer le paiement'"

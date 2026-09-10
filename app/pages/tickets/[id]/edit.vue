@@ -62,6 +62,7 @@ async function saveTicket(payload: {
 
         <template #right>
           <div class="flex items-center gap-2">
+            <span id="ticket-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />
             <UButton
               v-if="ticket"
               :to="`/tickets/${id}/print`"
@@ -105,6 +106,7 @@ async function saveTicket(payload: {
           v-model:dirty="dirty"
           :disabled="dossier.blocked.value"
           :form-id="formId"
+          unsaved-target="#ticket-unsaved-status"
           :saving="isSaving"
           :save-error="saveError"
           layout="intake"

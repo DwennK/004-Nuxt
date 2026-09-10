@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<{
   saving?: boolean
   saveError?: string | null
   submitLabel?: string
+  unsavedTarget?: string
   formId?: string
   showSubmitButton?: boolean
   allowedTypes?: DocumentType[]
@@ -89,7 +90,13 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
 
 <template>
   <div class="min-w-0 flex flex-col gap-3">
-    <PosUnsavedChanges :dirty="dirty" :snapshot="JSON.stringify(editor.serialize(), null, 2)" :saving="props.saving" />
+    <PosUnsavedChanges
+      v-if="props.unsavedTarget"
+      :to="props.unsavedTarget"
+      :dirty="dirty"
+      :snapshot="JSON.stringify(editor.serialize(), null, 2)"
+      :saving="props.saving"
+    />
     <UForm
       :id="resolvedFormId"
       :schema="schema"
@@ -161,14 +168,22 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
               label="Informations complémentaires"
               @click="contextOpen = true"
             />
-            <UButton
-              v-if="showSubmitButton"
-              type="submit"
-              icon="i-lucide-save"
-              :label="props.saving ? 'Enregistrement…' : resolvedSubmitLabel"
-              :loading="props.saving"
-              class="shrink-0"
-            />
+            <div class="flex items-center gap-2">
+              <PosUnsavedChanges
+                v-if="!props.unsavedTarget"
+                :dirty="dirty"
+                :snapshot="JSON.stringify(editor.serialize(), null, 2)"
+                :saving="props.saving"
+              />
+              <UButton
+                v-if="showSubmitButton"
+                type="submit"
+                icon="i-lucide-save"
+                :label="props.saving ? 'Enregistrement…' : resolvedSubmitLabel"
+                :loading="props.saving"
+                class="shrink-0"
+              />
+            </div>
           </div>
         </div>
 

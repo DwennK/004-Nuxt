@@ -81,9 +81,13 @@ async function saveTicket(payload: {
 
         <template #right>
           <div class="flex items-center gap-2">
+            <span id="ticket-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />
             <UButton
               to="/tickets"
               label="Annuler"
+              aria-label="Annuler"
+              icon="i-lucide-x"
+              :ui="{ label: 'hidden sm:inline' }"
               color="neutral"
               variant="ghost"
             />
@@ -94,6 +98,8 @@ async function saveTicket(payload: {
               :loading="isSaving"
               :disabled="!!createdTicket"
               icon="i-lucide-check"
+              aria-label="Créer le dossier"
+              :ui="{ label: 'hidden sm:inline' }"
             />
           </div>
         </template>
@@ -107,6 +113,7 @@ async function saveTicket(payload: {
           :key="formVersion"
           v-model:dirty="dirty"
           :form-id="formId"
+          unsaved-target="#ticket-unsaved-status"
           :saving="isSaving"
           :disabled="!!createdTicket"
           :save-error="saveError"

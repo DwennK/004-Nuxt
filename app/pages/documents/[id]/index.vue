@@ -293,6 +293,7 @@ function startNewEmailAttempt() {
             :disabled="documentActionsDisabled"
             :ui="{ label: 'hidden sm:inline' }"
           />
+          <span v-if="activeTab === 'lines' && canEditDocument" id="document-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />
           <UButton
             v-if="activeTab === 'lines' && canEditDocument"
             :form="documentFormId"
@@ -349,6 +350,7 @@ function startNewEmailAttempt() {
             :disabled="dossier.blocked.value"
             :form-id="documentFormId"
             :show-submit-button="false"
+            unsaved-target="#document-unsaved-status"
             :saving="isSavingDocument"
             :save-error="saveError"
             :customers="customers.items"
