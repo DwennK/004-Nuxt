@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import ReportsOverviewCharts from '~/components/reports/ReportsOverviewCharts.client.vue'
 import {
   catalogItemTypeColors,
   catalogItemTypeLabels,
-  documentTypeLabels,
+  paymentMethodLabels,
   ticketStatusColors,
   ticketStatusLabels
 } from '~~/shared/constants/pos'
 import type {
   CounterOverviewResponse,
-  DocumentListItem,
   TicketListItem
 } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime, getCatalogItemTypeLabel } from '~~/shared/utils/pos'
@@ -33,7 +31,7 @@ type WorkQueue = {
   items: TicketListItem[]
 }
 
-type QueueFilter = 'all' | 'pickup' | 'payment' | 'blocked'
+type QueueFilter = 'all' | 'pickup' | 'blocked'
 
 type QueueFilterItem = {
   label: string
@@ -52,7 +50,6 @@ type CounterWorkItem = {
   subtitle: string
   detail: string
   meta: string
-  amount?: number
   actionLabel: string
 }
 
@@ -80,17 +77,16 @@ const counterActions: CounterAction[] = [{
   variant: 'soft'
 }]
 
-const { data: counterOverview, status: counterOverviewStatus } = await useFetch<CounterOverviewResponse>('/api/comptoir', {
+const { data: counterOverview, status: counterOverviewStatus, refresh } = await useFetch<CounterOverviewResponse>('/api/comptoir', {
   key: 'counter-overview',
   lazy: true
 })
 
 const readyTickets = computed(() => counterOverview.value?.readyTickets)
-const dueDocuments = computed(() => counterOverview.value?.dueDocuments)
 const diagnosisTickets = computed(() => counterOverview.value?.diagnosisTickets)
 const approvalTickets = computed(() => counterOverview.value?.approvalTickets)
 const waitingPartsTickets = computed(() => counterOverview.value?.waitingPartsTickets)
-const reportsOverview = computed(() => counterOverview.value?.reportsOverview)
+const dailyPayments = computed(() => counterOverview.value?.dailyPayments)
 
 const customerResults = computed(() => globalSearchResults.value?.customers)
 const ticketResults = computed(() => globalSearchResults.value?.tickets)
@@ -98,7 +94,6 @@ const documentResults = computed(() => globalSearchResults.value?.documents)
 const catalogResults = computed(() => globalSearchResults.value?.catalogItems)
 
 const readyTicketItems = computed(() => readyTickets.value?.items || [])
-const dueDocumentItems = computed(() => dueDocuments.value?.items || [])
 
 const blockedQueues = computed<WorkQueue[]>(() => [{
   id: 'diagnosis',
@@ -130,10 +125,8 @@ const blockedQueues = computed<WorkQueue[]>(() => [{
 }])
 
 const totalReadyTickets = computed(() => readyTickets.value?.total || 0)
-const totalDueDocuments = computed(() => dueDocuments.value?.total || 0)
-const totalDueAmount = computed(() => dueDocuments.value?.summary.totalBalanceDue || 0)
 const totalBlockedTickets = computed(() => blockedQueues.value.reduce((total, queue) => total + queue.count, 0))
-const totalCounterItems = computed(() => totalReadyTickets.value + totalDueDocuments.value + totalBlockedTickets.value)
+const totalCounterItems = computed(() => totalReadyTickets.value + totalBlockedTickets.value)
 const isCounterInitialLoading = computed(() => counterOverviewStatus.value === 'pending' && !counterOverview.value)
 const queueFilters = computed<QueueFilterItem[]>(() => [{
   label: 'Tout',
@@ -143,10 +136,6 @@ const queueFilters = computed<QueueFilterItem[]>(() => [{
   label: 'Restitutions',
   value: 'pickup',
   count: totalReadyTickets.value
-}, {
-  label: 'Encaissements',
-  value: 'payment',
-  count: totalDueDocuments.value
 }, {
   label: 'Bloqués',
   value: 'blocked',
@@ -167,21 +156,6 @@ const counterWorkItems = computed<CounterWorkItem[]>(() => {
     actionLabel: 'Ouvrir'
   }))
 
-  const paymentItems = dueDocumentItems.value.map(document => ({
-    id: `payment-${document.id}`,
-    kind: 'payment' as const,
-    to: `/documents/${document.id}`,
-    icon: 'i-lucide-wallet-cards',
-    tone: 'warning' as const,
-    eyebrow: documentTypeLabels[document.type],
-    title: document.documentNumber,
-    subtitle: `${document.customerName}${document.ticketNumber ? ` · ${document.ticketNumber}` : ''}`,
-    detail: `Émis le ${formatDateTime(document.issuedAt)}`,
-    meta: 'Reste à payer',
-    amount: document.balanceDue,
-    actionLabel: getDocumentActionLabel(document)
-  }))
-
   const blockedItems = blockedQueues.value.flatMap(queue => queue.items.map(ticket => ({
     id: `blocked-${queue.id}-${ticket.id}`,
     kind: 'blocked' as const,
@@ -196,7 +170,7 @@ const counterWorkItems = computed<CounterWorkItem[]>(() => {
     actionLabel: 'Traiter'
   })))
 
-  return [...pickupItems, ...paymentItems, ...blockedItems]
+  return [...pickupItems, ...blockedItems]
 })
 const filteredWorkItems = computed(() => {
   if (selectedQueueFilter.value === 'all') {
@@ -212,10 +186,6 @@ const isQueueLoading = computed(() =>
 const emptyQueueLabel = computed(() => {
   if (selectedQueueFilter.value === 'pickup') {
     return 'Aucune restitution en attente'
-  }
-
-  if (selectedQueueFilter.value === 'payment') {
-    return 'Rien à encaisser'
   }
 
   if (selectedQueueFilter.value === 'blocked') {
@@ -235,10 +205,6 @@ const hasSearchResults = computed(() =>
 )
 function clearSearch() {
   search.value = ''
-}
-
-function getDocumentActionLabel(document: DocumentListItem) {
-  return document.balanceDue > 0 ? 'Encaisser' : 'Ouvrir'
 }
 
 function getTicketSubtitle(ticket: TicketListItem) {
@@ -284,7 +250,7 @@ useHead({
     </template>
 
     <template #body>
-      <div class="mx-auto grid w-full max-w-[118rem] gap-3 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <div class="mx-auto grid w-full max-w-[118rem] gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <main class="min-w-0 space-y-3">
           <section class="outlook-mail-toolbar overflow-hidden rounded-md">
             <div class="grid gap-2 border-b border-default bg-default p-2 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center">
@@ -312,13 +278,13 @@ useHead({
                   v-for="action in counterActions"
                   :key="action.to"
                   :to="action.to"
-                  class="group flex min-h-16 items-center gap-3 rounded-[6px] border px-3 py-2.5 transition focus-visible:outline-2 focus-visible:outline-offset-2"
+                  class="group flex min-h-16 items-center gap-2 rounded-[6px] border px-2 py-2.5 sm:gap-3 sm:px-3 transition focus-visible:outline-2 focus-visible:outline-offset-2"
                   :class="action.variant === 'solid'
                     ? 'border-primary bg-primary text-inverted shadow-sm hover:bg-primary/75 focus-visible:outline-primary/25'
                     : 'border-primary/25 bg-primary/10 text-primary hover:border-primary/40 hover:bg-primary/15 focus-visible:outline-primary/25'"
                 >
                   <span
-                    class="flex size-10 shrink-0 items-center justify-center rounded-[5px] ring-1 transition"
+                    class="flex size-8 shrink-0 items-center justify-center rounded-[5px] ring-1 transition sm:size-10"
                     :class="action.variant === 'solid'
                       ? 'bg-default/15 text-inverted ring-default/25 group-hover:bg-default/20'
                       : 'bg-default text-primary ring-primary/20 group-hover:ring-primary/30'"
@@ -326,7 +292,7 @@ useHead({
                     <UIcon :name="action.icon" class="size-5" />
                   </span>
                   <span class="min-w-0">
-                    <span class="block truncate text-sm font-semibold leading-5">
+                    <span class="block text-xs font-semibold leading-5 sm:text-sm">
                       {{ action.label }}
                     </span>
                     <span
@@ -467,10 +433,10 @@ useHead({
             </div>
           </section>
 
-          <section class="outlook-mail-toolbar grid overflow-hidden rounded-md md:grid-cols-4">
+          <section class="outlook-mail-toolbar grid grid-cols-3 overflow-hidden rounded-md">
             <NuxtLink
               to="/comptoir"
-              class="border-b border-default px-3 py-2.5 transition hover:bg-muted md:border-b-0 md:border-r"
+              class="border-r border-default px-3 py-2.5 transition hover:bg-muted"
             >
               <p class="text-xs font-semibold uppercase tracking-wide text-muted">
                 À traiter
@@ -482,7 +448,7 @@ useHead({
             </NuxtLink>
             <NuxtLink
               to="/tickets?status=ready_for_pickup"
-              class="border-b border-default px-3 py-2.5 transition hover:bg-muted md:border-b-0 md:border-r"
+              class="border-r border-default px-3 py-2.5 transition hover:bg-muted"
             >
               <p class="text-xs font-semibold uppercase tracking-wide text-primary">
                 Restitutions
@@ -490,18 +456,6 @@ useHead({
               <USkeleton v-if="isCounterInitialLoading" class="mt-1 h-7 w-8" />
               <p v-else class="mt-1 text-2xl font-semibold leading-none text-highlighted">
                 {{ totalReadyTickets }}
-              </p>
-            </NuxtLink>
-            <NuxtLink
-              to="/documents?paymentState=due"
-              class="border-b border-default px-3 py-2.5 transition hover:bg-muted md:border-b-0 md:border-r"
-            >
-              <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                À encaisser
-              </p>
-              <USkeleton v-if="isCounterInitialLoading" class="mt-1 h-6 w-32" />
-              <p v-else class="mt-1 truncate text-xl font-semibold leading-none text-highlighted">
-                {{ formatCurrency(totalDueAmount) }}
               </p>
             </NuxtLink>
             <NuxtLink
@@ -518,21 +472,22 @@ useHead({
             </NuxtLink>
           </section>
 
-          <section class="overflow-hidden">
-            <div
-              v-if="counterOverviewStatus === 'pending' && !reportsOverview"
-              class="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]"
-            >
-              <USkeleton class="h-[26rem] rounded-md xl:col-span-2" />
-              <USkeleton class="h-80 rounded-md" />
-              <USkeleton class="h-80 rounded-md" />
-            </div>
-
-            <ReportsOverviewCharts
-              v-if="reportsOverview"
-              :overview="reportsOverview"
-            />
-          </section>
+          <UAlert
+            v-if="counterOverviewStatus === 'error'"
+            color="error"
+            variant="soft"
+            icon="i-lucide-circle-alert"
+            title="Chargement de l’accueil indisponible"
+          >
+            <template #actions>
+              <UButton
+                label="Réessayer"
+                color="error"
+                variant="soft"
+                @click="refresh()"
+              />
+            </template>
+          </UAlert>
 
           <section class="outlook-surface overflow-hidden rounded-md">
             <div class="flex flex-col gap-3 border-b border-default bg-default p-3 lg:flex-row lg:items-center lg:justify-between">
@@ -541,7 +496,7 @@ useHead({
                   À traiter maintenant
                 </h2>
                 <p class="text-sm text-toned">
-                  Restitutions, encaissements et dossiers bloqués au même endroit.
+                  Dossiers prêts et en attente.
                 </p>
               </div>
 
@@ -550,7 +505,8 @@ useHead({
                   v-for="filter in queueFilters"
                   :key="filter.value"
                   type="button"
-                  class="inline-flex items-center gap-2 rounded-[4px] px-3 py-1.5 text-sm font-medium transition"
+                  :aria-pressed="selectedQueueFilter === filter.value"
+                  class="inline-flex items-center gap-2 rounded-[4px] px-2 py-1.5 text-sm font-medium transition sm:px-3"
                   :class="selectedQueueFilter === filter.value ? 'outlook-tab-active' : 'text-toned hover:bg-default/60 hover:text-highlighted'"
                   @click="selectedQueueFilter = filter.value"
                 >
@@ -573,15 +529,15 @@ useHead({
               />
             </div>
 
-            <div v-else-if="filteredWorkItems.length" class="divide-y divide-default bg-default">
+            <div v-else-if="filteredWorkItems.length" class="divide-y divide-default overflow-y-auto bg-default xl:max-h-[calc(100dvh-24rem)]">
               <NuxtLink
                 v-for="item in filteredWorkItems"
                 :key="item.id"
                 :to="item.to"
-                class="outlook-row group grid gap-3 px-3 py-2.5 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center"
+                class="outlook-row group grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 px-3 py-2.5 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center"
               >
                 <div
-                  class="flex size-10 items-center justify-center rounded-md ring-1"
+                  class="row-span-2 flex size-10 items-center justify-center rounded-md ring-1 md:row-span-1"
                   :class="item.tone === 'success'
                     ? 'bg-muted text-primary ring-accented'
                     : item.tone === 'warning'
@@ -611,15 +567,7 @@ useHead({
                   </p>
                 </div>
 
-                <div class="flex items-center justify-between gap-3 md:justify-end">
-                  <div v-if="item.amount !== undefined" class="text-right">
-                    <p class="font-semibold text-warning tabular-nums">
-                      {{ formatCurrency(item.amount) }}
-                    </p>
-                    <p class="text-xs text-toned">
-                      restant
-                    </p>
-                  </div>
+                <div class="col-start-2 flex items-center justify-between gap-3 md:col-start-auto md:justify-end">
                   <UButton
                     :label="item.actionLabel"
                     icon="i-lucide-arrow-up-right"
@@ -634,7 +582,7 @@ useHead({
             </div>
 
             <UEmpty
-              v-else
+              v-else-if="counterOverviewStatus !== 'error'"
               icon="i-lucide-check-circle-2"
               :title="emptyQueueLabel"
               description="La file d’accueil se remplira dès qu’un dossier demande une action."
@@ -643,100 +591,67 @@ useHead({
           </section>
         </main>
 
-        <aside class="outlook-surface overflow-hidden rounded-md lg:grid lg:grid-cols-3 2xl:sticky 2xl:top-3 2xl:block 2xl:self-start">
-          <section class="border-b border-default bg-muted p-4 lg:border-b-0 lg:border-r 2xl:border-b 2xl:border-r-0">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <h2 class="text-base font-semibold text-highlighted">
-                  État de l’accueil
-                </h2>
-                <p class="text-sm text-toned">
-                  Files ouvertes en ce moment.
-                </p>
-              </div>
-              <UIcon name="i-lucide-activity" class="size-5 text-primary" />
-            </div>
-
-            <div class="mt-4 divide-y divide-default">
-              <NuxtLink
-                to="/tickets?status=ready_for_pickup"
-                class="flex items-center justify-between gap-3 py-3 transition hover:text-primary"
-              >
-                <span class="text-sm text-toned">Retraits prêts</span>
-                <USkeleton v-if="isCounterInitialLoading" class="h-5 w-6" />
-                <span v-else class="font-semibold text-highlighted">{{ totalReadyTickets }}</span>
-              </NuxtLink>
-              <NuxtLink
-                to="/documents?paymentState=due"
-                class="flex items-center justify-between gap-3 py-3 transition hover:text-primary"
-              >
-                <span class="text-sm text-toned">Factures ouvertes</span>
-                <USkeleton v-if="isCounterInitialLoading" class="h-5 w-6" />
-                <span v-else class="font-semibold text-highlighted">{{ totalDueDocuments }}</span>
-              </NuxtLink>
-              <NuxtLink
-                to="/tickets"
-                class="flex items-center justify-between gap-3 py-3 transition hover:text-primary"
-              >
-                <span class="text-sm text-toned">Dossiers bloqués</span>
-                <USkeleton v-if="isCounterInitialLoading" class="h-5 w-6" />
-                <span v-else class="font-semibold text-highlighted">{{ totalBlockedTickets }}</span>
-              </NuxtLink>
-            </div>
-          </section>
-
-          <section class="border-b border-default bg-default p-4 lg:border-b-0 lg:border-r 2xl:border-b 2xl:border-r-0">
+        <aside class="outlook-surface self-start overflow-hidden rounded-md xl:sticky xl:top-3">
+          <section class="border-b border-default bg-default p-4">
             <div class="flex items-center justify-between gap-3">
               <h2 class="text-base font-semibold text-highlighted">
-                Encaissements
+                Encaissements du jour
               </h2>
               <UButton
-                to="/documents?paymentState=due"
-                label="Tout voir"
+                icon="i-lucide-refresh-cw"
+                aria-label="Actualiser l’accueil"
                 color="neutral"
                 variant="ghost"
                 size="xs"
-                class="text-primary hover:bg-muted"
+                :loading="counterOverviewStatus === 'pending'"
+                @click="refresh()"
               />
             </div>
-
-            <div v-if="isCounterInitialLoading" class="mt-3 space-y-3">
-              <div v-for="index in 4" :key="index" class="grid grid-cols-[minmax(0,1fr)_5rem] gap-3 px-2 py-2">
-                <div class="space-y-2">
-                  <USkeleton class="h-4 w-20" />
-                  <USkeleton class="h-3 w-28" />
-                </div>
-                <USkeleton class="h-4 w-full" />
-              </div>
+            <div v-if="isCounterInitialLoading" class="mt-4 space-y-3">
+              <USkeleton class="h-8 w-36" />
+              <USkeleton class="h-4 w-24" />
             </div>
-
-            <div v-else-if="dueDocumentItems.length" class="mt-3 space-y-2">
-              <NuxtLink
-                v-for="document in dueDocumentItems.slice(0, 4)"
-                :key="document.id"
-                :to="`/documents/${document.id}`"
-                class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-[4px] px-2 py-2 transition hover:bg-muted"
-              >
-                <div class="min-w-0">
-                  <p class="truncate text-sm font-medium text-highlighted">
-                    {{ document.documentNumber }}
-                  </p>
-                  <p class="truncate text-xs text-toned">
-                    {{ document.customerName }}
-                  </p>
+            <div v-else-if="dailyPayments" class="mt-4">
+              <p class="text-2xl font-semibold text-highlighted tabular-nums">
+                {{ formatCurrency(dailyPayments.totalPaid) }}
+              </p>
+              <p class="mt-1 text-xs text-toned">
+                {{ dailyPayments.transactionCount }} paiement{{ dailyPayments.transactionCount === 1 ? '' : 's' }}
+              </p>
+              <dl v-if="dailyPayments.methods.length" class="mt-3 divide-y divide-default">
+                <div v-for="row in dailyPayments.methods" :key="row.method" class="flex justify-between gap-3 py-2 text-sm">
+                  <dt class="text-toned">
+                    {{ paymentMethodLabels[row.method] }}
+                  </dt>
+                  <dd class="font-medium text-highlighted tabular-nums">
+                    {{ formatCurrency(row.total) }}
+                  </dd>
                 </div>
-                <p class="text-sm font-semibold text-warning tabular-nums">
-                  {{ formatCurrency(document.balanceDue) }}
-                </p>
-              </NuxtLink>
+              </dl>
+              <p v-else class="mt-3 text-sm text-toned">
+                Aucun encaissement aujourd’hui.
+              </p>
             </div>
-
-            <UEmpty
-              v-else
-              icon="i-lucide-wallet-cards"
-              title="Rien à encaisser"
-              class="py-8"
-            />
+            <div class="mt-4 flex flex-wrap gap-2 border-t border-default pt-3">
+              <UButton
+                to="/reports"
+                :prefetch="false"
+                label="Rapports"
+                icon="i-lucide-chart-no-axes-combined"
+                color="neutral"
+                variant="soft"
+                size="sm"
+              />
+              <UButton
+                to="/documents?paymentState=due"
+                :prefetch="false"
+                label="Impayés"
+                icon="i-lucide-files"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+              />
+            </div>
           </section>
 
           <section class="bg-default p-4">

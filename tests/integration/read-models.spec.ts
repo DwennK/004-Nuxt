@@ -137,17 +137,17 @@ describe('batched POS read models', () => {
     client.close()
   })
 
-  it('loads the counter payload through one nine-statement database batch', async () => {
+  it('loads the counter payload through one two-statement database batch', async () => {
     const batchSpy = vi.spyOn(client, 'batch')
     const observer = vi.fn()
     const result = await readCounterOverview(db, '2026-08-20', observer)
 
     expect(batchSpy).toHaveBeenCalledOnce()
-    expect(batchSpy.mock.calls[0]?.[0]).toHaveLength(9)
+    expect(batchSpy.mock.calls[0]?.[0]).toHaveLength(2)
     expect(observer).toHaveBeenCalledWith(expect.objectContaining({
       readModel: 'counter-overview',
       databaseCalls: 1,
-      statementCount: 9,
+      statementCount: 2,
       outcome: 'success'
     }))
     expect(result.readyTickets).toMatchObject({
@@ -167,14 +167,41 @@ describe('batched POS read models', () => {
     expect(result.diagnosisTickets.total).toBe(1)
     expect(result.approvalTickets.total).toBe(1)
     expect(result.waitingPartsTickets.total).toBe(1)
-    expect(result.dueDocuments.items.map(item => item.documentNumber)).toEqual(['FAC-3', 'CMD-2'])
-    expect(result.dueDocuments.summary).toEqual({ paidCount: 0, totalBalanceDue: 10000 })
-    expect(result.reportsOverview.kpis).toMatchObject({ totalPaid: 12000, paidToday: 12000, openTickets: 4 })
-    expect(result.reportsOverview.topCustomers).toEqual([expect.objectContaining({
-      customerName: 'Ada Lovelace',
-      total: 10000,
-      documentCount: 1
-    })])
+    expect(result.dailyPayments).toEqual({
+      date: '2026-08-20', totalPaid: 12000, transactionCount: 2,
+      methods: [
+        { method: 'cash', total: 10000, transactionCount: 1 },
+        { method: 'card_twint', total: 2000, transactionCount: 1 }
+      ]
+    })
+    expect(result).not.toHaveProperty('dueDocuments')
+    expect(result).not.toHaveProperty('reportsOverview')
+    const statements = JSON.stringify(batchSpy.mock.calls[0]?.[0])
+    expect(statements).not.toMatch(/settlement_|document_lines|balanceDue/)
+  })
+
+  it.each([
+    ['2026-08-20', '2026-08-19T22:00:00.000Z', '2026-08-20T21:59:59.999Z', '2026-08-19T21:59:59.999Z', '2026-08-20T22:00:00.000Z'],
+    ['2026-01-20', '2026-01-19T23:00:00.000Z', '2026-01-20T22:59:59.999Z', '2026-01-19T22:59:59.999Z', '2026-01-20T23:00:00.000Z']
+  ])('counts only paid cashflows within the Zurich day %s, including deposits on older documents', async (date, start, end, before, after) => {
+    await client.execute('DELETE FROM payments')
+    for (const [index, [paidAt, status, amount]] of [
+      [start, 'paid', 111], [end, 'paid', 222],
+      [before, 'paid', 4000], [after, 'paid', 8000],
+      [start, 'pending', 16000], [start, 'cancelled', 32000]
+    ].entries()) {
+      await client.execute({
+        sql: `INSERT INTO payments (id, document_id, method, status, amount, paid_at, created_at, updated_at)
+          VALUES (?, 2, 'cash', ?, ?, ?, ?, ?)`,
+        args: [index + 10, status!, amount!, paidAt!, paidAt!, paidAt!]
+      })
+    }
+    const result = await readCounterOverview(db, date, vi.fn())
+    expect(result.dailyPayments).toEqual({
+      date, totalPaid: 333, transactionCount: 2,
+      methods: [{ method: 'cash', total: 333, transactionCount: 2 }]
+    })
+    expect(result.diagnosisTickets.items.map(row => row.ticketNumber)).toEqual(['TIC-2'])
   })
 
   it('loads the home payload through one six-statement batch without private ticket fields', async () => {
@@ -227,12 +254,7 @@ describe('batched POS read models', () => {
       total: 0,
       summary: { openCount: 0, readyCount: 0, staleCount: 0 }
     })
-    expect(counter.dueDocuments).toMatchObject({
-      items: [],
-      total: 0,
-      summary: { paidCount: 0, totalBalanceDue: 0 }
-    })
-    expect(counter.reportsOverview.kpis).toMatchObject({ totalPaid: 0, paidToday: 0, openTickets: 0 })
+    expect(counter.dailyPayments).toEqual({ date: '2026-08-20', totalPaid: 0, transactionCount: 0, methods: [] })
 
     batchSpy.mockClear()
     const home = await readHomeOverview(db, '2026-08-20', vi.fn())
@@ -252,18 +274,15 @@ describe('batched POS read models', () => {
   it('replaces orders with invoices in every due queue and reuses legacy deposits once', async () => {
     await client.execute(`INSERT INTO documents VALUES
       (4, 'FAC-4', 'invoice', 'issued', 1, 2, '2026-08-20T12:00:00.000Z', 6000, 0, 6000, NULL, '2026-08-20T12:00:00.000Z', '2026-08-20T12:00:00.000Z')`)
-    const counter = await readCounterOverview(db, '2026-08-20')
     const home = await readHomeOverview(db, '2026-08-20')
-    expect(counter.dueDocuments.items.map(row => row.documentNumber)).toEqual(['FAC-3', 'FAC-4'])
-    expect(counter.dueDocuments.summary.totalBalanceDue).toBe(11000)
+    expect(home.dueDocuments.map(row => row.documentNumber)).toEqual(['FAC-3', 'FAC-4'])
     expect(home.summary.totalBalanceDue).toBe(11000)
-    expect(counter.dueDocuments.items.find(row => row.id === 4)).toMatchObject({ paidAmount: 2000, balanceDue: 4000 })
+    expect(home.dueDocuments.find(row => row.id === 4)).toMatchObject({ balanceDue: 4000 })
     expect(home.summary.totalPaid).toBe(12000)
     // A fully prepaid legacy invoice may still store status=issued: reads must resolve it.
     await client.execute('UPDATE documents SET total = 2000 WHERE id = 4')
-    const prepaid = await readCounterOverview(db, '2026-08-20')
-    expect(prepaid.dueDocuments.items.map(row => row.id)).toEqual([3])
-    expect(prepaid.reportsOverview.topCustomers[0]).toMatchObject({ total: 12000, documentCount: 2 })
+    const prepaid = await readHomeOverview(db, '2026-08-20')
+    expect(prepaid.dueDocuments.map(row => row.id)).toEqual([3])
     await client.execute('UPDATE documents SET status = \'cancelled\' WHERE id IN (3, 4)')
     const cancelled = await readHomeOverview(db, '2026-08-20')
     expect(cancelled.dueDocuments.map(row => row.documentNumber)).toEqual(['CMD-2'])

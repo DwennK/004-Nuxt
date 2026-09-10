@@ -560,11 +560,19 @@ export interface ReportsOverview {
 
 export interface CounterOverviewResponse {
   readyTickets: TicketListResponse
-  dueDocuments: DocumentListResponse
   diagnosisTickets: TicketListResponse
   approvalTickets: TicketListResponse
   waitingPartsTickets: TicketListResponse
-  reportsOverview: ReportsOverview
+  dailyPayments: {
+    date: string
+    totalPaid: number
+    transactionCount: number
+    methods: Array<{
+      method: PaymentMethod
+      total: number
+      transactionCount: number
+    }>
+  }
 }
 
 export interface ReportsTopCustomer {

@@ -13,19 +13,16 @@ import {
 import type {
   CounterOverviewResponse,
   DocumentListItem,
-  DocumentListResponse,
   HomeActivityItem,
   HomeOverview,
-  ReportsOverview,
   TicketListItem,
   TicketListResponse,
   TicketStatus
 } from '~~/shared/types/pos'
-import { formatCurrency, isPayableDocumentType, buildZonedDayRange as buildDayRange } from '~~/shared/utils/pos'
+import { formatCurrency, buildZonedDayRange as buildDayRange } from '~~/shared/utils/pos'
 import type { PosDatabase } from '../turso'
 import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
-import { projectReportsLeaders, projectReportsOverview } from './reports'
 
 type ReadModelName = 'counter-overview' | 'home-overview'
 
@@ -87,43 +84,6 @@ type DueDocumentRow = {
   totalCount?: number | string
   paidCount?: number | string
   totalBalanceDue?: number | string
-}
-
-type WeeklyPaymentRow = {
-  amount: number
-  method: (typeof paymentMethods)[number]
-  paidAt: string
-}
-
-type PeriodPaymentRow = {
-  bucket: string
-  method: (typeof paymentMethods)[number]
-  total: number | string | null
-}
-
-type TicketSnapshotRow = {
-  kind: 'summary' | 'opened' | 'closed'
-  occurredAt: string | null
-  openCount: number | string
-}
-
-type TopCustomerRow = {
-  customerId: number
-  customerName: string
-  total: number | string | null
-  documentCount: number | string | null
-}
-
-type TopItemRow = {
-  label: string
-  category: ReportsOverview['topItems'][number]['category']
-  total: number | string | null
-  quantity: number | string | null
-}
-
-type TurnoverRow = {
-  category: ReportsOverview['turnoverByCategory'][number]['category'] | null
-  total: number | string | null
 }
 
 type HomeKpiRow = {
@@ -237,35 +197,6 @@ async function executeReadModelBatch<
   }
 }
 
-function shiftIsoDate(date: string, days: number) {
-  const [year, month, day] = date.split('-').map(Number)
-  const value = new Date(Date.UTC(year!, month! - 1, day! + days, 12, 0, 0))
-
-  return [
-    value.getUTCFullYear(),
-    String(value.getUTCMonth() + 1).padStart(2, '0'),
-    String(value.getUTCDate()).padStart(2, '0')
-  ].join('-')
-}
-
-function buildReportQueryRange(date: string) {
-  const startDate = shiftIsoDate(date, -6)
-  const [year] = date.split('-').map(Number)
-  const { start } = buildDayRange(startDate)
-  const { end } = buildDayRange(date)
-  const { start: selectedYearStart } = buildDayRange(`${year}-01-01`)
-  const { end: selectedYearEnd } = buildDayRange(`${year}-12-31`)
-  const { start: rollingYearStart } = buildDayRange(`${year! - 4}-01-01`)
-
-  return {
-    start,
-    end,
-    selectedYearStart,
-    selectedYearEnd,
-    rollingYearStart
-  }
-}
-
 function mapTicketQueue(
   rows: CounterTicketQueueRow[],
   status: TicketStatus,
@@ -305,43 +236,6 @@ function mapTicketQueue(
       openCount: Number(summaryRow?.openCount || 0),
       readyCount: Number(summaryRow?.readyCount || 0),
       staleCount: Number(summaryRow?.staleCount || 0)
-    }
-  }
-}
-
-function mapDueDocument(row: DueDocumentRow): DocumentListItem {
-  return {
-    id: row.id,
-    documentNumber: row.documentNumber,
-    type: row.type,
-    status: row.status,
-    customerId: row.customerId,
-    ticketId: row.ticketId,
-    issuedAt: row.issuedAt,
-    subtotal: row.subtotal,
-    taxAmount: row.taxAmount,
-    total: row.total,
-    notes: row.notes,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    customerName: row.customerName,
-    ticketNumber: row.ticketNumber,
-    paidAmount: Number(row.paidAmount || 0),
-    balanceDue: isPayableDocumentType(row.type) ? Number(row.balanceDue || 0) : 0
-  }
-}
-
-function mapDueDocuments(rows: DueDocumentRow[], pageSize: number): DocumentListResponse {
-  const summaryRow = rows[0]
-
-  return {
-    items: rows.map(mapDueDocument),
-    page: 1,
-    pageSize,
-    total: Number(summaryRow?.totalCount || 0),
-    summary: {
-      paidCount: Number(summaryRow?.paidCount || 0),
-      totalBalanceDue: Number(summaryRow?.totalBalanceDue || 0)
     }
   }
 }
@@ -527,7 +421,7 @@ function projectHomeOverview(input: {
 
 function createCounterQueries(db: PosDatabase, date: string) {
   const staleCutoff = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString()
-  const range = buildReportQueryRange(date)
+  const { start, end } = buildDayRange(date)
 
   const ticketQueues = db.all<CounterTicketQueueRow>(sql`
     WITH ticket_base AS (
@@ -574,144 +468,14 @@ function createCounterQueries(db: PosDatabase, date: string) {
     ORDER BY status, "openedAt" DESC, id DESC
   `)
 
-  const dueDocuments = db.all<DueDocumentRow>(sql`
-    WITH document_base AS (
-      SELECT
-        d.id,
-        d.document_number AS "documentNumber",
-        d.type,
-        ${settlementSqlForAlias('d').status} AS status,
-        d.customer_id AS "customerId",
-        d.ticket_id AS "ticketId",
-        d.issued_at AS "issuedAt",
-        d.subtotal,
-        d.tax_amount AS "taxAmount",
-        d.total,
-        d.notes,
-        d.created_at AS "createdAt",
-        d.updated_at AS "updatedAt",
-        coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS "customerName",
-        t.ticket_number AS "ticketNumber",
-        ${settlementSqlForAlias('d').paidAmount} AS "paidAmount"
-      FROM documents d
-      INNER JOIN customers c ON c.id = d.customer_id
-      LEFT JOIN tickets t ON t.id = d.ticket_id
-      LEFT JOIN payments p ON p.document_id = d.id
-      WHERE ${settlementSqlForAlias('d').active}
-      GROUP BY d.id, c.id, t.id
-    ), due AS (
-      SELECT document_base.*, max(total - "paidAmount", 0) AS "balanceDue"
-      FROM document_base
-      WHERE total > "paidAmount"
-    )
-    SELECT
-      due.*,
-      count(*) OVER () AS "totalCount",
-      sum(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) OVER () AS "paidCount",
-      sum("balanceDue") OVER () AS "totalBalanceDue"
-    FROM due
-    ORDER BY "balanceDue" DESC, "issuedAt" DESC, id DESC
-    LIMIT 6
+  const dailyPayments = db.all<HomePaymentMethodRow>(sql`
+    SELECT method, sum(amount) AS total, count(*) AS "transactionCount"
+    FROM payments
+    WHERE status = 'paid' AND paid_at >= ${start} AND paid_at <= ${end}
+    GROUP BY method
   `)
 
-  const weeklyPayments = db.all<WeeklyPaymentRow>(sql`
-    SELECT amount, method, paid_at AS "paidAt"
-    FROM payments
-    WHERE status = 'paid' AND paid_at >= ${range.start} AND paid_at <= ${range.end}
-  `)
-  const monthlyPayments = db.all<PeriodPaymentRow>(sql`
-    SELECT substr(paid_at, 1, 7) AS bucket, method, sum(amount) AS total
-    FROM payments
-    WHERE status = 'paid' AND paid_at >= ${range.selectedYearStart} AND paid_at <= ${range.selectedYearEnd}
-    GROUP BY bucket, method
-    ORDER BY bucket, method
-  `)
-  const yearlyPayments = db.all<PeriodPaymentRow>(sql`
-    SELECT substr(paid_at, 1, 4) AS bucket, method, sum(amount) AS total
-    FROM payments
-    WHERE status = 'paid' AND paid_at >= ${range.rollingYearStart} AND paid_at <= ${range.selectedYearEnd}
-    GROUP BY bucket, method
-    ORDER BY bucket, method
-  `)
-  const ticketSnapshot = db.all<TicketSnapshotRow>(sql`
-    WITH open_total AS (
-      SELECT count(*) AS open_count
-      FROM tickets
-      WHERE status NOT IN ('closed', 'cancelled')
-    ), flow AS (
-      SELECT 'opened' AS kind, opened_at AS occurred_at
-      FROM tickets
-      WHERE opened_at >= ${range.start} AND opened_at <= ${range.end}
-      UNION ALL
-      SELECT 'closed' AS kind, closed_at AS occurred_at
-      FROM tickets
-      WHERE status = 'closed' AND closed_at >= ${range.start} AND closed_at <= ${range.end}
-    )
-    SELECT 'summary' AS kind, NULL AS "occurredAt", open_count AS "openCount"
-    FROM open_total
-    UNION ALL
-    SELECT flow.kind, flow.occurred_at AS "occurredAt", open_total.open_count AS "openCount"
-    FROM flow CROSS JOIN open_total
-  `)
-  const qualifyingPayment = sql`
-    EXISTS (
-      SELECT 1
-      FROM payments recent_payment
-      WHERE ${settlementSqlForAlias('report_document').paymentScope(sql`recent_payment.document_id`)}
-        AND recent_payment.status = 'paid'
-        AND recent_payment.paid_at >= ${range.start}
-        AND recent_payment.paid_at <= ${range.end}
-    )
-  `
-  const topCustomers = db.all<TopCustomerRow>(sql`
-    SELECT
-      c.id AS "customerId",
-      coalesce(c.company_name, c.first_name || ' ' || c.last_name) AS "customerName",
-      sum(report_document.total) AS total,
-      count(report_document.id) AS "documentCount"
-    FROM documents report_document
-    INNER JOIN customers c ON c.id = report_document.customer_id
-    WHERE ${settlementSqlForAlias('report_document').status} = 'paid'
-      AND report_document.type = 'invoice'
-      AND ${qualifyingPayment}
-    GROUP BY c.id
-  `)
-  const topItems = db.all<TopItemRow>(sql`
-    SELECT
-      coalesce(ci.name, dl.label) AS label,
-      dl.category_hint AS category,
-      sum(dl.line_total) AS total,
-      sum(dl.quantity) AS quantity
-    FROM document_lines dl
-    INNER JOIN documents report_document ON report_document.id = dl.document_id
-    LEFT JOIN catalog_items ci ON ci.id = dl.catalog_item_id
-    WHERE ${settlementSqlForAlias('report_document').status} = 'paid'
-      AND report_document.type = 'invoice'
-      AND ${qualifyingPayment}
-    GROUP BY coalesce(ci.name, dl.label), dl.category_hint
-  `)
-  const turnover = db.all<TurnoverRow>(sql`
-    SELECT dl.category_hint AS category, sum(dl.line_total) AS total
-    FROM document_lines dl
-    INNER JOIN documents report_document ON report_document.id = dl.document_id
-    WHERE dl.category_hint IS NOT NULL
-      AND ${settlementSqlForAlias('report_document').status} = 'paid'
-      AND report_document.type = 'invoice'
-      AND ${qualifyingPayment}
-    GROUP BY dl.category_hint
-  `)
-
-  return [
-    ticketQueues,
-    dueDocuments,
-    weeklyPayments,
-    monthlyPayments,
-    yearlyPayments,
-    ticketSnapshot,
-    topCustomers,
-    topItems,
-    turnover
-  ] as const
+  return [ticketQueues, dailyPayments] as const
 }
 
 function createHomeQueries(db: PosDatabase, date: string) {
@@ -837,42 +601,23 @@ export async function readCounterOverview(
   observer?: PosReadModelObserver
 ): Promise<CounterOverviewResponse> {
   const queries = createCounterQueries(db, date)
-  const [
-    ticketQueueRows,
-    dueDocumentRows,
-    weeklyPaymentRows,
-    monthlyPaymentRows,
-    yearlyPaymentRows,
-    ticketSnapshotRows,
-    topCustomerRows,
-    topItemRows,
-    turnoverRows
-  ] = await executeReadModelBatch(db, 'counter-overview', queries, observer)
-  const leaders = projectReportsLeaders(topCustomerRows, topItemRows)
-  const summaryRow = ticketSnapshotRows.find(row => row.kind === 'summary')
+  const [ticketQueueRows, paymentRows] = await executeReadModelBatch(db, 'counter-overview', queries, observer)
+  const methods = paymentMethods.flatMap((method) => {
+    const row = paymentRows.find(row => row.method === method)
+    return row ? [{ method, total: Number(row.total || 0), transactionCount: Number(row.transactionCount) }] : []
+  })
 
   return {
     readyTickets: mapTicketQueue(ticketQueueRows, 'ready_for_pickup', 6),
-    dueDocuments: mapDueDocuments(dueDocumentRows, 6),
     diagnosisTickets: mapTicketQueue(ticketQueueRows, 'diagnosis', 4),
     approvalTickets: mapTicketQueue(ticketQueueRows, 'awaiting_customer_approval', 4),
     waitingPartsTickets: mapTicketQueue(ticketQueueRows, 'waiting_parts', 4),
-    reportsOverview: projectReportsOverview({
+    dailyPayments: {
       date,
-      weeklyPaymentRows,
-      monthlyPaymentRows,
-      yearlyPaymentRows,
-      openTicketCount: summaryRow?.openCount || 0,
-      openedRows: ticketSnapshotRows
-        .filter(row => row.kind === 'opened' && row.occurredAt)
-        .map(row => ({ openedAt: row.occurredAt! })),
-      closedRows: ticketSnapshotRows
-        .filter(row => row.kind === 'closed')
-        .map(row => ({ closedAt: row.occurredAt })),
-      topCustomers: leaders.topCustomers,
-      topItems: leaders.topItems,
-      turnoverRows
-    })
+      totalPaid: methods.reduce((total, row) => total + row.total, 0),
+      transactionCount: methods.reduce((total, row) => total + row.transactionCount, 0),
+      methods
+    }
   }
 }
 
