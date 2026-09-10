@@ -85,11 +85,15 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
   const companyAddress = getCompanyAddress(company)
   const customerAddress = getCustomerAddress(document)
   const paidAmount = payments.reduce((total, payment) => total + payment.amount, 0)
-  const isPayableDocument = isPayableDocumentType(document.type)
-  const balanceDue = isPayableDocument ? Math.max(document.total - paidAmount, 0) : 0
+  const isPayableDocument = document.settlement?.isPayable ?? (isPayableDocumentType(document.type) && document.status !== 'cancelled')
+  const balanceDue = document.settlement?.balanceDue ?? (isPayableDocument ? Math.max(document.total - paidAmount, 0) : 0)
   const qrBill = buildSwissQrBill(document, company, balanceDue)
   const qrBillNotice = getQrBillNotice(document, company, qrBill, balanceDue)
   const noteBlocks: DocumentPrintNoteBlock[] = []
+
+  if (document.settlement?.activeDocument && document.settlement.activeDocument.id !== document.id) {
+    noteBlocks.push({ label: 'Suivi', content: `Repris dans ${document.settlement.activeDocument.documentNumber}. Ce document ne constitue pas un montant supplémentaire à payer.` })
+  }
 
   if (document.notes) {
     noteBlocks.push({

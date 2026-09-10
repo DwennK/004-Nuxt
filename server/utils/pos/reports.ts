@@ -1,3 +1,4 @@
+import { settlementSql } from './document-settlement'
 import { and, desc, eq, gte, inArray, lte, sql, sum } from 'drizzle-orm'
 import { catalogItems, customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
@@ -292,18 +293,18 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       id: documents.id,
       documentNumber: documents.documentNumber,
       type: documents.type,
-      status: documents.status,
+      status: settlementSql().status,
       customerName: customerNameValue,
       total: documents.total,
       paidAmountToday: sum(payments.amount),
       paidAt: sql<string>`max(${payments.paidAt})`
     })
       .from(payments)
-      .innerJoin(documents, eq(payments.documentId, documents.id))
+      .innerJoin(documents, settlementSql().paymentScope(payments.documentId))
       .innerJoin(customers, eq(documents.customerId, customers.id))
       .where(and(
         eq(payments.status, 'paid'),
-        eq(documents.status, 'paid'),
+        sql`${settlementSql().status} = 'paid'`,
         inArray(documents.type, ['invoice']),
         gte(payments.paidAt, start),
         lte(payments.paidAt, end)
@@ -315,11 +316,11 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       documentNumber: documents.documentNumber,
       customerName: customerNameValue,
       total: documents.total,
-      paidAmount: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
+      paidAmount: settlementSql().paidAmount
     })
       .from(documents)
       .innerJoin(customers, eq(documents.customerId, customers.id))
-      .leftJoin(payments, eq(payments.documentId, documents.id))
+      .leftJoin(payments, settlementSql().paymentScope(payments.documentId))
       .where(and(
         eq(documents.type, 'invoice'),
         sql`${documents.status} != 'cancelled'`,
@@ -596,10 +597,10 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
       documentId: documents.id
     })
       .from(payments)
-      .innerJoin(documents, eq(payments.documentId, documents.id))
+      .innerJoin(documents, settlementSql().paymentScope(payments.documentId))
       .where(and(
         eq(payments.status, 'paid'),
-        eq(documents.status, 'paid'),
+        sql`${settlementSql().status} = 'paid'`,
         inArray(documents.type, ['invoice']),
         gte(payments.paidAt, start),
         lte(payments.paidAt, end)
@@ -663,10 +664,10 @@ export async function getReportsLeaders(startDate: string, endDate: string): Pro
       documentId: documents.id
     })
       .from(payments)
-      .innerJoin(documents, eq(payments.documentId, documents.id))
+      .innerJoin(documents, settlementSql().paymentScope(payments.documentId))
       .where(and(
         eq(payments.status, 'paid'),
-        eq(documents.status, 'paid'),
+        sql`${settlementSql().status} = 'paid'`,
         inArray(documents.type, ['invoice']),
         gte(payments.paidAt, start),
         lte(payments.paidAt, end)

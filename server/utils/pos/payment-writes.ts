@@ -1,4 +1,5 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { getDocumentSettlement } from './document-settlement'
+import { eq } from 'drizzle-orm'
 import { createError } from 'h3'
 import { documents, payments } from '~~/server/db/schema'
 import { paymentMethodLabels } from '~~/shared/constants/pos'
@@ -13,7 +14,7 @@ import { syncDocumentStatus } from '~~/server/utils/pos/document-balances'
 type PaymentDocument = Pick<typeof documents.$inferSelect,
   'id' | 'type' | 'status' | 'customerId' | 'total' | 'ticketId' | 'documentNumber'>
 
-export async function getPayablePaymentDocument(tx: PosTransaction, documentId: number) {
+export async function getPayablePaymentDocument(tx: PosTransaction, documentId: number, editingPayment = false) {
   const [document] = await tx.select().from(documents).where(eq(documents.id, documentId)).limit(1)
 
   if (!document) {
@@ -21,6 +22,13 @@ export async function getPayablePaymentDocument(tx: PosTransaction, documentId: 
   }
 
   assertPayableDocumentType(document)
+  // Keep the cancellation guard on the receipt's original document.
+  if (document.status === 'cancelled') return document
+  const settlement = await getDocumentSettlement(tx, document)
+  if (settlement.activeDocument && settlement.activeDocument.id !== document.id) {
+    if (editingPayment) return settlement.activeDocument
+    throw createError({ statusCode: 409, statusMessage: 'Encaissez sur la facture qui reprend cette commande.', data: { code: 'DOCUMENT_SUPERSEDED', documentId: settlement.activeDocument.id } })
+  }
   return document
 }
 
@@ -39,13 +47,12 @@ export async function assertPaymentFitsDocument(
   requestedAmount: number | undefined,
   excludedPaymentId?: number
 ) {
-  const [summary] = await tx.select({
-    paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
-  }).from(payments).where(and(
-    eq(payments.documentId, document.id),
-    excludedPaymentId ? sql`${payments.id} <> ${excludedPaymentId}` : undefined
-  ))
-  const paidTotal = Number(summary?.paidTotal || 0)
+  const [current] = await tx.select().from(documents).where(eq(documents.id, document.id)).limit(1)
+  if (!current) throw createError({ statusCode: 404, statusMessage: 'Document not found' })
+  const settlement = await getDocumentSettlement(tx, current)
+  const paidTotal = settlement.payments
+    .filter(payment => payment.status === 'paid' && payment.id !== excludedPaymentId)
+    .reduce((total, payment) => total + payment.amount, 0)
   const amount = requestedAmount ?? Math.max(document.total - paidTotal, 0)
   const result = evaluateDocumentPayment({
     documentStatus: document.status,
@@ -107,7 +114,7 @@ export async function recordDocumentPayment(tx: PosTransaction, document: Paymen
   paidAt: string
   notes?: string | null
 }) {
-  assertPayableDocumentType(document)
+  await getPayablePaymentDocument(tx, document.id)
   const amount = await assertPaymentFitsDocument(tx, document, input.amount)
   const now = new Date().toISOString()
   const [payment] = await tx.insert(payments).values({

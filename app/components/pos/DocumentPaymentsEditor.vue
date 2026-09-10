@@ -256,6 +256,13 @@ async function removePayment(payment: PaymentRecord) {
             :key="payment.id"
             class="rounded-2xl border border-default bg-default px-3 py-3"
           >
+            <NuxtLink
+              v-if="payment.documentId !== documentId"
+              :to="`/documents/${payment.documentId}`"
+              class="mb-2 block text-xs text-primary"
+            >
+              Acompte repris de la commande
+            </NuxtLink>
             <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
               <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[9rem_8rem_9rem_minmax(0,1fr)]">
                 <UFormField label="Mode">

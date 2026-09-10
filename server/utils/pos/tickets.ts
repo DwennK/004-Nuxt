@@ -1,10 +1,10 @@
+import { getActivePayableDocument } from '~~/shared/domain/documents/settlement'
 import { dossierEventLabel } from '~~/shared/utils/dossier-labels'
 import { dossierReferenceSearch, dossierReferenceTerm } from './dossier-search'
 import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { customers, documents, ticketEvents, ticketLines, tickets } from '~~/server/db/schema'
 import {
-  payableDocumentTypes,
   ticketStatusLabels,
   ticketWorkflowStepLabels
 } from '~~/shared/constants/pos'
@@ -390,22 +390,18 @@ function getTicketCommercialSummary(documentRows: DocumentRecord[], paymentRows:
   const customerOrder = documentRows.find(document => document.type === 'customer_order') || null
   const invoice = documentRows.find(document => document.type === 'invoice') || null
   const latestDocument = documentRows[0] || null
-  const payableDocuments = documentRows.filter(document =>
-    document.status !== 'cancelled'
-    && payableDocumentTypes.includes(document.type as (typeof payableDocumentTypes)[number])
-  )
-  const payableDocument = invoice || payableDocuments[0] || null
+  const payableDocument = getActivePayableDocument(documentRows)
   const totalPaid = paymentRows
     .filter(payment => payment.status === 'paid')
     .reduce((sum, payment) => sum + payment.amount, 0)
-  const payableTotal = payableDocuments.reduce((sum, document) => sum + document.total, 0)
+  const payableTotal = payableDocument?.total || 0
   const balanceDue = Math.max(payableTotal - totalPaid, 0)
 
   let paymentStateLabel = 'Aucun document commercial'
 
-  if (quote && !payableDocuments.length) {
+  if (quote && !payableDocument) {
     paymentStateLabel = 'En attente de facturation'
-  } else if (payableDocuments.length) {
+  } else if (payableDocument) {
     if (totalPaid <= 0) {
       paymentStateLabel = 'Non encaissé'
     } else if (balanceDue > 0) {
@@ -818,7 +814,8 @@ export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 
   return db.transaction(async (tx) => {
     await guardDossierWrite(tx, [{ kind: 'ticket', id }], dossier)
     const [existing] = await tx.select({
-      status: tickets.status
+      status: tickets.status,
+      customerId: tickets.customerId
     }).from(tickets).where(eq(tickets.id, id)).limit(1)
 
     if (!existing) {
@@ -828,6 +825,12 @@ export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 
       })
     }
 
+    if (existing.customerId !== input.customerId) {
+      const linked = await tx.select({ id: documents.id }).from(documents).where(eq(documents.ticketId, id)).limit(1)
+      if (linked.length) {
+        throw createError({ statusCode: 409, statusMessage: 'Un dossier avec des documents commerciaux doit conserver son client.', data: { code: 'DOCUMENT_OPERATION_IMMUTABLE' } })
+      }
+    }
     assertTicketStatusTransition(existing.status, input.status)
 
     const rows = await tx.update(tickets)
@@ -887,6 +890,9 @@ export async function deleteTicket(id: number, dossier?: DossierWriteContext) {
     // destinations too, including leases held before an earlier attachment.
     const linked = await tx.select({ id: documents.id }).from(documents).where(eq(documents.ticketId, id))
     await guardDossierWrite(tx, [{ kind: 'ticket', id }], dossier, linked.map(document => `document:${document.id}`))
+    if (linked.length > 1) {
+      throw createError({ statusCode: 409, statusMessage: 'Clôturez ce dossier pour conserver le lien entre ses documents.', data: { code: 'DOCUMENT_OPERATION_IMMUTABLE' } })
+    }
     const result = await tx.delete(tickets).where(eq(tickets.id, id))
     return result.rowsAffected
   })
@@ -910,8 +916,8 @@ function buildFallbackLines(ticket: TicketRecord): Array<{
 
 export async function createQuoteFromTicket(ticketId: number, idempotencyKey: string, dossier?: DossierWriteContext) {
   const ticket = await getTicketById(ticketId)
-  const ticketLines = await cloneTicketLines(ticketId)
-  const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
+  const existingLines = await cloneDocumentLinesFromLatest(ticketId, 'quote')
+  const ticketLines = existingLines.length ? [] : await cloneTicketLines(ticketId)
 
   return createDocumentRecord({
     type: 'quote',
@@ -929,8 +935,8 @@ export async function createQuoteFromTicket(ticketId: number, idempotencyKey: st
 
 export async function createCustomerOrderFromTicket(ticketId: number, idempotencyKey: string, dossier?: DossierWriteContext) {
   const ticket = await getTicketById(ticketId)
-  const ticketLines = await cloneTicketLines(ticketId)
-  const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
+  const existingLines = await cloneDocumentLinesFromLatest(ticketId, 'quote')
+  const ticketLines = existingLines.length ? [] : await cloneTicketLines(ticketId)
 
   return createDocumentRecord({
     type: 'customer_order',
@@ -948,8 +954,9 @@ export async function createCustomerOrderFromTicket(ticketId: number, idempotenc
 
 export async function createInvoiceFromTicket(ticketId: number, idempotencyKey: string, dossier?: DossierWriteContext) {
   const ticket = await getTicketById(ticketId)
-  const ticketLines = await cloneTicketLines(ticketId)
-  const existingLines = ticketLines.length ? [] : await cloneDocumentLinesFromLatest(ticketId, 'quote')
+  const orderLines = await cloneDocumentLinesFromLatest(ticketId, 'customer_order')
+  const existingLines = orderLines.length ? orderLines : await cloneDocumentLinesFromLatest(ticketId, 'quote')
+  const ticketLines = existingLines.length ? [] : await cloneTicketLines(ticketId)
   const invoice = await createDocumentRecord({
     type: 'invoice',
     status: 'issued',

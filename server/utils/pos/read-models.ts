@@ -1,3 +1,4 @@
+import { settlementSqlForAlias } from './document-settlement'
 import type { BatchItem, BatchResponse } from 'drizzle-orm/batch'
 import { sql } from 'drizzle-orm'
 import {
@@ -579,7 +580,7 @@ function createCounterQueries(db: PosDatabase, date: string) {
         d.id,
         d.document_number AS "documentNumber",
         d.type,
-        d.status,
+        ${settlementSqlForAlias('d').status} AS status,
         d.customer_id AS "customerId",
         d.ticket_id AS "ticketId",
         d.issued_at AS "issuedAt",
@@ -591,12 +592,12 @@ function createCounterQueries(db: PosDatabase, date: string) {
         d.updated_at AS "updatedAt",
         coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS "customerName",
         t.ticket_number AS "ticketNumber",
-        coalesce(sum(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END), 0) AS "paidAmount"
+        ${settlementSqlForAlias('d').paidAmount} AS "paidAmount"
       FROM documents d
       INNER JOIN customers c ON c.id = d.customer_id
       LEFT JOIN tickets t ON t.id = d.ticket_id
       LEFT JOIN payments p ON p.document_id = d.id
-      WHERE d.type IN ('customer_order', 'invoice')
+      WHERE ${settlementSqlForAlias('d').active}
       GROUP BY d.id, c.id, t.id
     ), due AS (
       SELECT document_base.*, max(total - "paidAmount", 0) AS "balanceDue"
@@ -656,7 +657,7 @@ function createCounterQueries(db: PosDatabase, date: string) {
     EXISTS (
       SELECT 1
       FROM payments recent_payment
-      WHERE recent_payment.document_id = report_document.id
+      WHERE ${settlementSqlForAlias('report_document').paymentScope(sql`recent_payment.document_id`)}
         AND recent_payment.status = 'paid'
         AND recent_payment.paid_at >= ${range.start}
         AND recent_payment.paid_at <= ${range.end}
@@ -670,7 +671,7 @@ function createCounterQueries(db: PosDatabase, date: string) {
       count(report_document.id) AS "documentCount"
     FROM documents report_document
     INNER JOIN customers c ON c.id = report_document.customer_id
-    WHERE report_document.status = 'paid'
+    WHERE ${settlementSqlForAlias('report_document').status} = 'paid'
       AND report_document.type = 'invoice'
       AND ${qualifyingPayment}
     GROUP BY c.id
@@ -684,7 +685,7 @@ function createCounterQueries(db: PosDatabase, date: string) {
     FROM document_lines dl
     INNER JOIN documents report_document ON report_document.id = dl.document_id
     LEFT JOIN catalog_items ci ON ci.id = dl.catalog_item_id
-    WHERE report_document.status = 'paid'
+    WHERE ${settlementSqlForAlias('report_document').status} = 'paid'
       AND report_document.type = 'invoice'
       AND ${qualifyingPayment}
     GROUP BY coalesce(ci.name, dl.label), dl.category_hint
@@ -694,7 +695,7 @@ function createCounterQueries(db: PosDatabase, date: string) {
     FROM document_lines dl
     INNER JOIN documents report_document ON report_document.id = dl.document_id
     WHERE dl.category_hint IS NOT NULL
-      AND report_document.status = 'paid'
+      AND ${settlementSqlForAlias('report_document').status} = 'paid'
       AND report_document.type = 'invoice'
       AND ${qualifyingPayment}
     GROUP BY dl.category_hint
@@ -717,14 +718,14 @@ function createHomeQueries(db: PosDatabase, date: string) {
   const { start, end } = buildDayRange(date)
   const kpis = db.all<HomeKpiRow>(sql`
     WITH due AS (
-      SELECT max(d.total - coalesce(sum(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END), 0), 0) AS balance_due
+      SELECT ${settlementSqlForAlias('d').balanceDue} AS balance_due
       FROM documents d
       INNER JOIN customers c ON c.id = d.customer_id
       LEFT JOIN tickets t ON t.id = d.ticket_id
       LEFT JOIN payments p ON p.document_id = d.id
-      WHERE d.type IN ('customer_order', 'invoice')
+      WHERE ${settlementSqlForAlias('d').active}
       GROUP BY d.id, c.id, t.id
-      HAVING d.total > coalesce(sum(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END), 0)
+      HAVING ${settlementSqlForAlias('d').balanceDue} > 0
     )
     SELECT
       coalesce((SELECT sum(amount) FROM payments WHERE status = 'paid' AND paid_at >= ${start} AND paid_at <= ${end}), 0) AS "totalPaid",
@@ -748,7 +749,7 @@ function createHomeQueries(db: PosDatabase, date: string) {
         d.id,
         d.document_number AS "documentNumber",
         d.type,
-        d.status,
+        ${settlementSqlForAlias('d').status} AS status,
         d.customer_id AS "customerId",
         d.ticket_id AS "ticketId",
         d.issued_at AS "issuedAt",
@@ -760,15 +761,15 @@ function createHomeQueries(db: PosDatabase, date: string) {
         d.updated_at AS "updatedAt",
         coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS "customerName",
         t.ticket_number AS "ticketNumber",
-        coalesce(sum(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END), 0) AS "paidAmount",
-        max(d.total - coalesce(sum(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END), 0), 0) AS "balanceDue"
+        ${settlementSqlForAlias('d').paidAmount} AS "paidAmount",
+        ${settlementSqlForAlias('d').balanceDue} AS "balanceDue"
       FROM documents d
       INNER JOIN customers c ON c.id = d.customer_id
       LEFT JOIN tickets t ON t.id = d.ticket_id
       LEFT JOIN payments p ON p.document_id = d.id
-      WHERE d.type IN ('customer_order', 'invoice')
+      WHERE ${settlementSqlForAlias('d').active}
       GROUP BY d.id, c.id, t.id
-      HAVING d.total > coalesce(sum(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END), 0)
+      HAVING ${settlementSqlForAlias('d').balanceDue} > 0
     ) due
     ORDER BY "balanceDue" DESC, "issuedAt" DESC, id DESC
     LIMIT 5

@@ -23,4 +23,12 @@ describe('ticket document eligibility', () => {
       existingDocumentTypes: []
     }, 'quote')).toBe(false)
   })
+  it('allows starting with an order or invoice and prevents going back to an earlier step', () => {
+    const initial = { ticketStatus: 'diagnosis' as const, existingDocumentTypes: [] }
+    expect(canCreateTicketDocument(initial, 'customer_order')).toBe(true)
+    expect(canCreateTicketDocument(initial, 'invoice')).toBe(true)
+    expect(canCreateTicketDocument({ ...initial, existingDocumentTypes: ['customer_order'] }, 'quote')).toBe(false)
+    expect(canCreateTicketDocument({ ...initial, existingDocumentTypes: ['customer_order'] }, 'invoice')).toBe(true)
+    expect(canCreateTicketDocument({ ...initial, existingDocumentTypes: ['invoice'] }, 'customer_order')).toBe(false)
+  })
 })

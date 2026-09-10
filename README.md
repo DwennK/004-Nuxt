@@ -54,6 +54,15 @@ Typical business flows:
 - quick support: `Invoice -> Payment`
 - Shopify import: `Shopify order -> POS invoice + Shopify payments`
 
+Within a dossier, quote, order and invoice are successive stages of one operation.
+A quote is optional: an order can be created directly, and a direct invoice remains supported.
+The current invoice takes over from the order for collection; their totals are never added together.
+Invoice lines inherit the order, then the quote, then the dossier lines, in that order.
+Order deposits retain their original payment IDs, dates and document links and are deducted from the invoice.
+This also applies to existing linked documents without a data migration; standalone documents remain independent.
+The previous stage stays readable and printable. New collections and commercial edits use the current stage.
+Cancelling an unpaid invoice restores the order balance; cancellation or a lower total is rejected while it conflicts with collected deposits.
+
 Important product rules:
 
 - money is stored as integer cents

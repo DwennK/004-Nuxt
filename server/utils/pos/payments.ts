@@ -261,7 +261,7 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
       })
     }
 
-    const document = await getPayablePaymentDocument(tx, input.documentId)
+    const document = await getPayablePaymentDocument(tx, input.documentId, true)
 
     if (input.customerId !== null && input.customerId !== document.customerId) {
       throw createError({

@@ -89,6 +89,11 @@ describe('editing recorded financial data', () => {
         line_total INTEGER NOT NULL,
         category_hint TEXT
       )`,
+      `CREATE TABLE ticket_lines (
+        id INTEGER PRIMARY KEY, ticket_id INTEGER NOT NULL, catalog_item_id INTEGER,
+        label TEXT NOT NULL, quantity INTEGER NOT NULL, unit_price INTEGER NOT NULL,
+        vat_rate REAL NOT NULL, line_total INTEGER NOT NULL, category_hint TEXT
+      )`,
       `CREATE TABLE payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_id INTEGER,
@@ -140,6 +145,7 @@ describe('editing recorded financial data', () => {
       'DELETE FROM payments',
       'DELETE FROM document_lines',
       'DELETE FROM documents',
+      'DELETE FROM ticket_lines',
       'DELETE FROM tickets',
       'DELETE FROM customers',
       {
@@ -423,5 +429,139 @@ describe('editing recorded financial data', () => {
       paidAt: '2026-08-20T12:30:00.000Z',
       notes: 'Mode corrigé'
     })).resolves.toMatchObject({ method: 'card_twint', notes: 'Mode corrigé' })
+  })
+  async function prepareOrder(deposit = 0, withQuote = false) {
+    const now = paymentInput.paidAt
+    await client.execute(`DELETE FROM payments`)
+    await client.execute(`DELETE FROM document_lines`)
+    await client.execute(`DELETE FROM documents`)
+    await client.execute({
+      sql: `INSERT INTO tickets (id, ticket_number, customer_id, type, status, issue_description, opened_at, created_at, updated_at)
+        VALUES (1, 'DOS-31', 1, 'repair', 'diagnosis', 'Batterie', ?, ?, ?)`, args: [now, now, now]
+    })
+    await client.execute(`INSERT INTO ticket_lines (ticket_id, label, quantity, unit_price, vat_rate, line_total) VALUES (1, 'Ancienne saisie', 1, 99900, 0, 99900)`)
+    const { createDocumentRecord } = await import('../../server/utils/pos/documents')
+    const context = await testDossierContext(useDb(), { kind: 'ticket', id: 1 })
+    if (withQuote) await createDocumentRecord({
+      type: 'quote', status: 'draft', customerId: 1, ticketId: 1, issuedAt: now,
+      lines: [{ label: 'Devis initial', quantity: 1, unitPrice: 35000, vatRate: 0 }]
+    }, { key: 'settlement-quote', dossier: context })
+    const order = await createDocumentRecord({
+      type: 'customer_order', customerId: 1, ticketId: 1, issuedAt: now,
+      lines: [{ label: 'Batterie commandée', quantity: 1, unitPrice: 39300, vatRate: 8.1 }]
+    }, { key: 'settlement-order', dossier: await testDossierContext(useDb(), { kind: 'ticket', id: 1 }) })
+    if (deposit) await markDocumentAsPaid(order.id, { ...paymentInput, amount: deposit }, 'settlement-deposit')
+    return order
+  }
+
+  it.each([false, true])('counts a repair once and inherits the order lines (quote: %s)', async (withQuote) => {
+    const order = await prepareOrder(0, withQuote)
+    const { createInvoiceFromTicket, getTicketById } = await import('../../server/utils/pos/tickets')
+    const { getDocumentById, listDocuments } = await import('../../server/utils/pos/documents')
+    const before = await getTicketById(1)
+    expect(before.commercialSummary.balanceDue).toBe(39300)
+    expect(before.commercialSummary.payableDocument?.id).toBe(order.id)
+    const invoice = await createInvoiceFromTicket(1, 'settlement-invoice', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    expect(invoice.total).toBe(39300)
+    expect(invoice.lines[0]?.label).toBe('Batterie commandée')
+    expect((await getTicketById(1)).commercialSummary.balanceDue).toBe(39300)
+    expect((await getDocumentById(order.id)).settlement).toMatchObject({ isPayable: false, balanceDue: 0, activeDocument: { id: invoice.id } })
+    for (const filters of [{}, { q: 'DOS-31' }, { paymentState: 'due' as const }, { sortBy: 'balanceDue' as const }]) {
+      const list = await listDocuments(filters)
+      expect(list.summary.totalBalanceDue).toBe(39300)
+    }
+    await expect(markDocumentAsPaid(order.id, { ...paymentInput, amount: 100 }, 'old-order-payment')).rejects.toMatchObject({ data: { code: 'DOCUMENT_SUPERSEDED' } })
+    await markDocumentAsPaid(invoice.id, { ...paymentInput, amount: 39300 }, 'settlement-full-payment')
+    expect((await getTicketById(1)).commercialSummary).toMatchObject({ balanceDue: 0, totalPaid: 39300, paymentStateLabel: 'Entièrement encaissé' })
+    expect((await listDocuments({ paymentState: 'due' })).items).toHaveLength(0)
+  })
+
+  it('carries an existing deposit to invoice, print and payment validation without moving or duplicating receipts', async () => {
+    const order = await prepareOrder(10000)
+    const { createInvoiceFromTicket, getTicketById } = await import('../../server/utils/pos/tickets')
+    const { getDocumentById, listDocuments } = await import('../../server/utils/pos/documents')
+    const context = await testDossierContext(useDb(), { kind: 'ticket', id: 1 })
+    const invoice = await createInvoiceFromTicket(1, 'settlement-invoice', context)
+    const retry = await createInvoiceFromTicket(1, 'settlement-invoice', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    expect(retry.id).toBe(invoice.id)
+    expect(invoice.settlement).toMatchObject({ paidAmount: 10000, balanceDue: 29300 })
+    const { buildDocumentA4PrintModel } = await import('../../shared/utils/document-print')
+    const { printCompany } = await import('../fixtures/document-print')
+    expect(buildDocumentA4PrintModel(invoice, printCompany())).toMatchObject({ paidAmount: 10000, balanceDue: 29300 })
+    const { getEndOfDaySummary } = await import('../../server/utils/pos/reports')
+    await client.execute({ sql: 'UPDATE documents SET issued_at = ? WHERE id = ?', args: [paymentInput.paidAt, invoice.id] })
+    const daily = await getEndOfDaySummary('2026-08-20')
+    expect(daily.totalPaid).toBe(10000)
+    expect(daily.unpaidDocuments).toEqual([expect.objectContaining({ id: invoice.id, balanceDue: 29300 })])
+    expect(invoice.payments).toHaveLength(1)
+    expect(invoice.payments[0]?.documentId).toBe(order.id)
+    await expect(markDocumentAsPaid(invoice.id, { ...paymentInput, amount: 39300 }, 'overpayment')).rejects.toMatchObject({ data: { code: 'PAYMENT_EXCEEDS_BALANCE' } })
+    await markDocumentAsPaid(invoice.id, { ...paymentInput, amount: 29300 }, 'settlement-remainder')
+    expect((await getDocumentById(invoice.id)).status).toBe('paid')
+    expect((await getTicketById(1)).commercialSummary.balanceDue).toBe(0)
+    expect((await listDocuments()).summary.totalBalanceDue).toBe(0)
+    const deposit = invoice.payments[0]!
+    await updatePaymentRecord(deposit.id, { ...deposit, amount: 5000 })
+    expect((await getDocumentById(invoice.id)).settlement?.balanceDue).toBe(5000)
+    expect((await getDocumentById(invoice.id)).status).toBe('issued')
+    expect((await client.execute('SELECT count(*) AS n FROM payments')).rows[0]?.n).toBe(2)
+  })
+
+  it('rejects a final amount below deposits and prevents detaching or editing the previous operation stage', async () => {
+    const order = await prepareOrder(10000)
+    const { createDocumentRecord, getDocumentById } = await import('../../server/utils/pos/documents')
+    const { createInvoiceFromTicket } = await import('../../server/utils/pos/tickets')
+    await expect(createDocumentRecord({
+      type: 'invoice', customerId: 1, ticketId: 1, issuedAt: paymentInput.paidAt,
+      lines: [{ label: 'Trop faible', quantity: 1, unitPrice: 5000, vatRate: 0 }]
+    }, { key: 'too-low', dossier: await testDossierContext(useDb(), { kind: 'ticket', id: 1 }) })).rejects.toMatchObject({ data: { code: 'DOCUMENT_TOTAL_BELOW_PAID' } })
+    const invoice = await createInvoiceFromTicket(1, 'settlement-invoice', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    await expect(updateDocumentRecord(order.id, order)).rejects.toMatchObject({ data: { code: 'DOCUMENT_SUPERSEDED' } })
+    await expect(updateDocumentRecord(invoice.id, { ...invoice, ticketId: null })).rejects.toMatchObject({ data: { code: 'DOSSIER_PROOF_REQUIRED' } })
+    await expect(updateDocumentRecord(invoice.id, { ...invoice, lines: [{ label: 'Trop faible', quantity: 1, unitPrice: 5000, vatRate: 0 }] })).rejects.toMatchObject({ data: { code: 'DOCUMENT_TOTAL_BELOW_PAID' } })
+    await expect(updateDocumentRecord(invoice.id, { ...invoice, type: 'quote' })).rejects.toMatchObject({ data: { code: 'DOCUMENT_OPERATION_IMMUTABLE' } })
+    await expect(updateDocumentRecord(invoice.id, { ...invoice, status: 'cancelled' })).rejects.toMatchObject({ data: { code: 'PAID_DOCUMENT_CANNOT_BE_CANCELLED' } })
+    expect((await getDocumentById(invoice.id)).settlement?.balanceDue).toBe(29300)
+  })
+
+  it('recognizes an invoice fully prepaid on the order and falls back to the order if an unpaid invoice is cancelled', async () => {
+    const order = await prepareOrder(39300)
+    const { createInvoiceFromTicket } = await import('../../server/utils/pos/tickets')
+    const { getDocumentById } = await import('../../server/utils/pos/documents')
+    const invoice = await createInvoiceFromTicket(1, 'settlement-invoice', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    expect(invoice.status).toBe('paid')
+    expect(invoice.settlement?.balanceDue).toBe(0)
+    expect(invoice.payments[0]?.documentId).toBe(order.id)
+    await updatePaymentRecord(invoice.payments[0]!.id, { ...invoice.payments[0]!, status: 'cancelled' })
+    await updateDocumentRecord(invoice.id, { ...invoice, status: 'cancelled' })
+    expect((await getDocumentById(order.id)).settlement).toMatchObject({ isPayable: true, balanceDue: 39300 })
+  })
+  it('inherits quote lines when creating an order and ignores stale dossier lines', async () => {
+    const oldOrder = await prepareOrder(0, true)
+    // Keep only the quote in this disposable fixture.
+    await client.execute({ sql: 'DELETE FROM document_imports WHERE document_id = ?', args: [oldOrder.id] })
+    await client.execute({ sql: 'DELETE FROM document_lines WHERE document_id = ?', args: [oldOrder.id] })
+    await client.execute({ sql: 'DELETE FROM documents WHERE id = ?', args: [oldOrder.id] })
+    const { createCustomerOrderFromTicket } = await import('../../server/utils/pos/tickets')
+    const order = await createCustomerOrderFromTicket(1, 'from-quote', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    expect(order.total).toBe(35000)
+    expect(order.lines[0]?.label).toBe('Devis initial')
+  })
+
+  it.each([10000, 39300])('creates and settles an invoice using only the remaining amount (deposit %s)', async (deposit) => {
+    await prepareOrder(deposit)
+    const input = { type: 'invoice' as const, customerId: 1, ticketId: 1, issuedAt: paymentInput.paidAt, lines: [{ label: 'Réparation', quantity: 1, unitPrice: 39300, vatRate: 0 }] }
+    const invoice = await createAndPayDocumentRecord(input, paymentInput, 'create-pay-with-deposit', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    expect(invoice.payments.map(row => row.amount).sort((a, b) => a - b)).toEqual(deposit === 39300 ? [39300] : [10000, 29300])
+    expect(invoice.status).toBe('paid')
+    expect(invoice.settlement?.balanceDue).toBe(0)
+  })
+  it('does not settle a cancelled invoice through a pending payment when its order becomes active again', async () => {
+    await prepareOrder()
+    const { createInvoiceFromTicket } = await import('../../server/utils/pos/tickets')
+    const invoice = await createInvoiceFromTicket(1, 'settlement-invoice', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    const pending = await createPaymentRecord({ customerId: 1, documentId: invoice.id, ...paymentInput, amount: 10000, status: 'pending' }, 'pending-invoice')
+    await updateDocumentRecord(invoice.id, { ...invoice, status: 'cancelled' })
+    await expect(updatePaymentRecord(pending.id, { ...pending, status: 'paid' })).rejects.toMatchObject({ data: { code: 'DOCUMENT_CANCELLED' } })
   })
 })

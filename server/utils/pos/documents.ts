@@ -1,3 +1,5 @@
+import { getDocumentSettlement, settlementSql } from './document-settlement'
+import { syncDocumentStatus } from './document-balances'
 import { dossierReferenceSearch, dossierReferenceTerm } from './dossier-search'
 import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { getShopifyProvenance } from '../shopify/import'
@@ -11,7 +13,6 @@ import {
   payments,
   tickets
 } from '~~/server/db/schema'
-import { payableDocumentTypes } from '~~/shared/constants/pos'
 import { evaluateDocumentRevision } from '~~/shared/domain/documents/revision'
 import { canCreateTicketDocument } from '~~/shared/domain/tickets/document-policy'
 import type {
@@ -189,14 +190,12 @@ export async function assertTicketDocumentCreationAllowed(
       .from(tickets)
       .where(eq(tickets.id, input.ticketId))
       .limit(1),
-    executor.select({ type: documents.type })
+    executor.select({ type: documents.type, status: documents.status })
       .from(documents)
       .where(and(
         eq(documents.ticketId, input.ticketId),
-        eq(documents.type, input.documentType),
         input.excludeDocumentId ? ne(documents.id, input.excludeDocumentId) : undefined
       ))
-      .limit(1)
   ])
 
   if (!ticket) {
@@ -216,20 +215,22 @@ export async function assertTicketDocumentCreationAllowed(
 
   if (canCreateTicketDocument({
     ticketStatus: ticket.status,
-    existingDocumentTypes: existingDocuments.map(document => document.type)
+    existingDocumentTypes: existingDocuments.map(document => document.type),
+    activeDocumentTypes: existingDocuments.filter(document => document.status !== 'cancelled').map(document => document.type)
   }, input.documentType)) {
     return
   }
 
   const isFinalized = ticket.status === 'closed' || ticket.status === 'cancelled'
+  const isDuplicate = existingDocuments.some(document => document.type === input.documentType)
 
   throw createError({
     statusCode: 409,
     statusMessage: isFinalized
       ? 'Les dossiers clôturés ou annulés ne peuvent pas recevoir de nouveaux documents commerciaux'
-      : 'Ce dossier possède déjà un document de ce type',
+      : isDuplicate ? 'Ce dossier possède déjà un document de ce type' : 'Ce dossier possède déjà un document commercial plus avancé.',
     data: {
-      code: isFinalized ? 'TICKET_FINALIZED' : 'TICKET_DOCUMENT_ALREADY_EXISTS',
+      code: isFinalized ? 'TICKET_FINALIZED' : isDuplicate ? 'TICKET_DOCUMENT_ALREADY_EXISTS' : 'DOCUMENT_STAGE_ALREADY_PASSED',
       documentType: input.documentType
     }
   })
@@ -350,30 +351,30 @@ export async function listDocuments(filters?: {
   const referenceTerm = dossierReferenceTerm(searchTerm)
   const dateFrom = filters?.dateFrom ? normalizeDocumentDateFrom(filters.dateFrom) : undefined
   const dateTo = filters?.dateTo ? normalizeDocumentDateTo(filters.dateTo) : undefined
-  const payableTypes = [...payableDocumentTypes]
-  const paidAmountValue = sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
+  const settlement = settlementSql()
+  const paidAmountValue = settlement.paidAmount
   const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
-  const balanceDueValue = sql<number>`case when ${inArray(documents.type, payableTypes)} then max(${documents.total} - ${paidAmountValue}, 0) else 0 end`
+  const balanceDueValue = settlement.balanceDue
   const paidAmount = paidAmountValue.as('paid_amount')
   const customerName = customerNameValue.as('customer_name')
   const balanceDue = balanceDueValue.as('balance_due')
   const baseFilters = [
     filters?.type ? eq(documents.type, filters.type as typeof documents.$inferSelect.type) : undefined,
-    filters?.status ? eq(documents.status, filters.status as typeof documents.$inferSelect.status) : undefined,
+    filters?.status ? sql`${settlement.status} = ${filters.status}` : undefined,
     filters?.customerId ? eq(documents.customerId, filters.customerId) : undefined,
     filters?.ticketId ? eq(documents.ticketId, filters.ticketId) : undefined,
     dateFrom ? gte(documents.issuedAt, dateFrom) : undefined,
     dateTo ? lte(documents.issuedAt, dateTo) : undefined
   ] as const
   const dueFilter = filters?.paymentState === 'due'
-    ? sql`${inArray(documents.type, payableTypes)} and ${documents.total} > ${paidAmountValue}`
+    ? sql`${balanceDueValue} > 0`
     : undefined
   const useAggregateList = !!searchPattern || filters?.paymentState === 'due' || sortBy === 'balanceDue'
 
   if (!useAggregateList) {
     const filteredDocuments = db.select({
       id: documents.id,
-      status: documents.status,
+      status: settlement.status.as('settlement_status'),
       balanceDue
     })
       .from(documents)
@@ -402,7 +403,7 @@ export async function listDocuments(filters?: {
           id: documents.id,
           documentNumber: documents.documentNumber,
           type: documents.type,
-          status: documents.status,
+          status: settlement.status.as('settlement_status'),
           customerId: documents.customerId,
           ticketId: documents.ticketId,
           issuedAt: documents.issuedAt,
@@ -444,7 +445,7 @@ export async function listDocuments(filters?: {
     id: documents.id,
     documentNumber: documents.documentNumber,
     type: documents.type,
-    status: documents.status,
+    status: settlement.status.as('settlement_status'),
     customerId: documents.customerId,
     ticketId: documents.ticketId,
     issuedAt: documents.issuedAt,
@@ -542,9 +543,9 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
     })
   }
 
-  const [lineRows, paymentRows] = await Promise.all([
+  const [lineRows, settlement] = await Promise.all([
     db.select().from(documentLines).where(eq(documentLines.documentId, id)).orderBy(asc(documentLines.id)),
-    db.select().from(payments).where(eq(payments.documentId, id)).orderBy(desc(payments.paidAt), desc(payments.id))
+    getDocumentSettlement(db, header.document)
   ])
 
   return {
@@ -573,7 +574,16 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
       : null,
     lines: lineRows.map(mapDocumentLine),
     shopify: await getShopifyProvenance(id, db),
-    payments: paymentRows.map(mapPayment)
+    payments: settlement.payments.map(mapPayment),
+    status: settlement.isPayable
+      ? settlement.paidAmount >= header.document.total && header.document.total > 0 ? 'paid' : header.document.status === 'draft' ? 'draft' : 'issued'
+      : header.document.status,
+    settlement: {
+      isPayable: settlement.isPayable,
+      paidAmount: settlement.paidAmount,
+      balanceDue: settlement.balanceDue,
+      activeDocument: settlement.activeDocument ? { id: settlement.activeDocument.id, documentNumber: settlement.activeDocument.documentNumber, type: settlement.activeDocument.type } : null
+    }
   }
 }
 
@@ -602,6 +612,11 @@ export async function createDocumentRecord(input: DocumentWriteInput, idempotenc
 
       const documentNumber = await generateDocumentNumber(input.type, tx)
       const createdDocument = await insertDocumentWithLines(tx, input, documentNumber)
+      const settlement = await getDocumentSettlement(tx, createdDocument)
+      if (settlement.isPayable && settlement.paidAmount > createdDocument.total) {
+        throw createError({ statusCode: 409, statusMessage: 'Le total ne peut pas être inférieur aux acomptes déjà encaissés.', data: { code: 'DOCUMENT_TOTAL_BELOW_PAID' } })
+      }
+      await syncDocumentStatus(createdDocument.id, tx)
       await createDocumentCreatedEvent(tx, createdDocument)
 
       return {
@@ -685,18 +700,25 @@ export async function createAndPayDocumentRecord(
         status: 'issued'
       }, documentNumber)
 
+      const settlement = await getDocumentSettlement(tx, createdDocument)
+      if (settlement.isPayable && settlement.paidAmount > createdDocument.total) {
+        throw createError({ statusCode: 409, statusMessage: 'Le total ne peut pas être inférieur aux acomptes déjà encaissés.', data: { code: 'DOCUMENT_TOTAL_BELOW_PAID' } })
+      }
+      await syncDocumentStatus(createdDocument.id, tx)
       await createDocumentCreatedEvent(tx, createdDocument)
 
-      const payment = await recordDocumentPayment(tx, createdDocument, {
-        ...paymentInput,
-        status: 'paid',
-        amount: createdDocument.total
-      })
+      const payment = settlement.balanceDue > 0
+        ? await recordDocumentPayment(tx, createdDocument, {
+            ...paymentInput,
+            status: 'paid',
+            amount: settlement.balanceDue
+          })
+        : null
 
       return {
         value: createdDocument.id,
         documentId: createdDocument.id,
-        resourceId: payment.id
+        resourceId: payment?.id ?? createdDocument.id
       }
     },
     async replay(tx, receipt) {
@@ -739,10 +761,7 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
 
   await db.transaction(async (tx) => {
     await guardDossierWrite(tx, [{ kind: 'document', id }, ...(input.ticketId ? [{ kind: 'ticket' as const, id: input.ticketId }] : [])], dossier, input.ticketId ? [] : [`document:${id}`])
-    const [existingDocument] = await tx.select({
-      id: documents.id,
-      type: documents.type
-    }).from(documents).where(eq(documents.id, id)).limit(1)
+    const [existingDocument] = await tx.select().from(documents).where(eq(documents.id, id)).limit(1)
 
     if (!existingDocument) {
       throw createError({
@@ -751,10 +770,17 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
       })
     }
 
-    const [paymentSummary] = await tx.select({
-      count: sql<number>`count(*)`,
-      paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
-    }).from(payments).where(eq(payments.documentId, id))
+    const settlement = await getDocumentSettlement(tx, existingDocument)
+    if (settlement.activeDocument && settlement.activeDocument.id !== id && existingDocument.status !== 'cancelled') {
+      throw createError({ statusCode: 409, statusMessage: 'Modifiez le document courant du dossier ; cette étape est conservée dans l’historique.', data: { code: 'DOCUMENT_SUPERSEDED', documentId: settlement.activeDocument.id } })
+    }
+    if (existingDocument.ticketId && (input.ticketId !== existingDocument.ticketId || input.type !== existingDocument.type || input.customerId !== existingDocument.customerId)) {
+      const related = await tx.select({ id: documents.id }).from(documents).where(eq(documents.ticketId, existingDocument.ticketId))
+      if (related.length > 1) {
+        throw createError({ statusCode: 409, statusMessage: 'Les documents successifs doivent conserver leur dossier, leur client et leur type.', data: { code: 'DOCUMENT_OPERATION_IMMUTABLE' } })
+      }
+    }
+    const paymentSummary = { count: settlement.payments.length, paidTotal: settlement.paidAmount }
 
     if (input.ticketId) {
       await assertTicketDocumentCreationAllowed(tx, {
@@ -763,6 +789,12 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
         customerId: input.customerId,
         excludeDocumentId: id
       })
+    }
+
+    if (input.type === 'invoice' && input.ticketId && input.ticketId !== existingDocument.ticketId) {
+      const destination = await getDocumentSettlement(tx, { ...existingDocument, ticketId: input.ticketId, customerId: input.customerId, type: input.type })
+      paymentSummary.count = destination.payments.length
+      paymentSummary.paidTotal = destination.paidAmount
     }
 
     const revision = evaluateDocumentRevision({
@@ -842,10 +874,7 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
 
 export async function assertDocumentDeletionAllowed(executor: PosDatabaseExecutor, id: number) {
   const [[document], [paymentSummary], [receiptSummary]] = await Promise.all([
-    executor.select({
-      id: documents.id,
-      status: documents.status
-    }).from(documents).where(eq(documents.id, id)).limit(1),
+    executor.select().from(documents).where(eq(documents.id, id)).limit(1),
     executor.select({
       count: sql<number>`count(*)`,
       paidTotal: sql<number>`coalesce(sum(case when ${payments.status} = 'paid' then ${payments.amount} else 0 end), 0)`
@@ -857,6 +886,13 @@ export async function assertDocumentDeletionAllowed(executor: PosDatabaseExecuto
 
   if (!document) {
     return null
+  }
+
+  if (document.ticketId) {
+    const related = await executor.select({ id: documents.id }).from(documents).where(eq(documents.ticketId, document.ticketId)).limit(2)
+    if (related.length > 1) {
+      throw createError({ statusCode: 409, statusMessage: 'Conservez les documents successifs du dossier ; annulez le document courant si nécessaire.', data: { code: 'DOCUMENT_OPERATION_IMMUTABLE' } })
+    }
   }
 
   if (Number(receiptSummary?.count || 0) > 0) {
@@ -947,6 +983,7 @@ export async function cloneDocumentLinesFromLatest(ticketId: number, preferredTy
     .from(documents)
     .where(and(
       eq(documents.ticketId, ticketId),
+      ne(documents.status, 'cancelled'),
       preferredType ? eq(documents.type, preferredType) : undefined
     ))
     .orderBy(desc(documents.issuedAt), desc(documents.id))

@@ -1,3 +1,4 @@
+import { getDocumentSettlement } from './document-settlement'
 import { and, desc, eq, isNotNull, sum } from 'drizzle-orm'
 import { createError } from 'h3'
 import { documents, payments } from '~~/server/db/schema'
@@ -12,12 +13,6 @@ export async function syncDocumentStatus(documentId: number, executor?: PosDatab
   await ensurePosSchema()
 
   const db = executor || useDb()
-  const paymentSummary = await db.select({
-    paidTotal: sum(payments.amount)
-  })
-    .from(payments)
-    .where(and(eq(payments.documentId, documentId), eq(payments.status, 'paid')))
-
   const documentRow = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1)
   const currentDocument = documentRow[0]
 
@@ -28,7 +23,8 @@ export async function syncDocumentStatus(documentId: number, executor?: PosDatab
     })
   }
 
-  const paidTotal = Number(paymentSummary[0]?.paidTotal || 0)
+  const settlement = await getDocumentSettlement(db, currentDocument)
+  const paidTotal = settlement.paidAmount
   const isPayable = payableDocumentTypes.includes(currentDocument.type as (typeof payableDocumentTypes)[number])
   const nextStatus: DocumentStatus = currentDocument.status === 'cancelled'
     ? 'cancelled'
@@ -45,6 +41,10 @@ export async function syncDocumentStatus(documentId: number, executor?: PosDatab
         updatedAt: toIsoDateTime()
       })
       .where(eq(documents.id, documentId))
+  }
+
+  if (settlement.activeDocument && settlement.activeDocument.id !== documentId) {
+    await syncDocumentStatus(settlement.activeDocument.id, db)
   }
 
   return nextStatus

@@ -235,6 +235,12 @@ export interface DocumentRecord {
 }
 
 export interface DocumentDetail extends DocumentRecord {
+  settlement?: {
+    isPayable: boolean
+    paidAmount: number
+    balanceDue: number
+    activeDocument: Pick<DocumentRecord, 'id' | 'documentNumber' | 'type'> | null
+  }
   dossier?: DossierSnapshot
   shopify?: ShopifyProvenance | null
   customer: CustomerRecord

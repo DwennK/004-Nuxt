@@ -60,12 +60,16 @@ const paidAmount = computed(() => document.value?.payments
   .filter(payment => payment.status === 'paid')
   .reduce((total: number, payment) => total + payment.amount, 0) || 0)
 
-const isPayableDocument = computed(() => document.value ? isPayableDocumentType(document.value.type) : false)
+const successorDocument = computed(() => {
+  const active = document.value?.settlement?.activeDocument
+  return active && active.id !== id.value ? active : null
+})
+const isPayableDocument = computed(() => document.value?.settlement?.isPayable ?? (document.value ? isPayableDocumentType(document.value.type) && document.value.status !== 'cancelled' : false))
 const canAdjustFinancialRecords = computed(() => can('financial:adjust'))
-const canEditDocument = computed(() => canAdjustFinancialRecords.value)
+const canEditDocument = computed(() => canAdjustFinancialRecords.value && !successorDocument.value)
 const documentLockTitle = 'Modification réservée aux administrateurs'
 const documentLockDescription = 'Les opérateurs peuvent consulter, envoyer, imprimer et encaisser ce document sans modifier son écriture commerciale.'
-const balanceDue = computed(() => isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0)
+const balanceDue = computed(() => document.value?.settlement?.balanceDue ?? (isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0))
 const supportsA4Print = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'a4') : false)
 const supportsThermalPrint = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'thermal') : false)
 const documentActionsDisabled = computed(() => hasUnsavedDocumentChanges.value || isSavingDocument.value)
@@ -307,6 +311,15 @@ function startNewEmailAttempt() {
     <template #body>
       <PosDossierBanner :state="dossier.current.value" />
       <div v-if="document && customers?.items" class="space-y-3">
+        <UAlert
+          v-if="successorDocument"
+          icon="i-lucide-file-check-2"
+          color="neutral"
+          variant="subtle"
+          :title="`Repris dans ${successorDocument.documentNumber}`"
+          description="Cette étape reste dans l’historique. Le règlement se poursuit sur le document courant."
+          :actions="[{ label: 'Ouvrir le document', to: `/documents/${successorDocument.id}`, color: 'neutral', variant: 'outline' }]"
+        />
         <PosDocumentDetailHeader
           :document="document"
           :paid-amount="paidAmount"
@@ -347,6 +360,7 @@ function startNewEmailAttempt() {
 
           <div v-else class="space-y-3">
             <UAlert
+              v-if="!successorDocument"
               icon="i-lucide-lock-keyhole"
               color="neutral"
               variant="subtle"
@@ -380,9 +394,9 @@ function startNewEmailAttempt() {
 
               <template #footer>
                 <div class="ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm">
-                  <span class="text-toned">Sous-total TTC</span>
+                  <span class="text-toned">Total HT</span>
                   <span class="text-right tabular-nums">{{ formatCurrency(document.subtotal) }}</span>
-                  <span class="text-toned">TVA incluse</span>
+                  <span class="text-toned">TVA</span>
                   <span class="text-right tabular-nums">{{ formatCurrency(document.taxAmount) }}</span>
                   <span class="font-semibold text-highlighted">Total TTC</span>
                   <span class="text-right font-semibold tabular-nums text-highlighted">{{ formatCurrency(document.total) }}</span>

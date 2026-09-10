@@ -139,7 +139,8 @@ const workshopBlocker = computed(() =>
 const isTicketMutable = computed(() => ticket.value ? !['closed', 'cancelled'].includes(ticket.value.status) : false)
 const ticketDocumentEligibility = computed(() => ({
   ticketStatus: ticket.value?.status || 'closed',
-  existingDocumentTypes: ticket.value?.documents.map(document => document.type) || []
+  existingDocumentTypes: ticket.value?.documents.map(document => document.type) || [],
+  activeDocumentTypes: ticket.value?.documents.filter(document => document.status !== 'cancelled').map(document => document.type) || []
 }))
 const canCreateQuote = computed(() => canCreateTicketDocument(ticketDocumentEligibility.value, 'quote'))
 const canCreateCustomerOrder = computed(() => canCreateTicketDocument(ticketDocumentEligibility.value, 'customer_order'))
@@ -929,6 +930,9 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
               </h2>
               <p class="mt-1 text-xs text-toned">
                 {{ ticket.commercialSummary.paymentStateLabel }}
+              </p>
+              <p v-if="payableDocument" class="mt-1 text-xs text-toned">
+                Sur {{ payableDocument.documentNumber }} · acomptes déduits
               </p>
               <dl class="mt-4 space-y-3 text-sm">
                 <div class="flex items-baseline justify-between gap-2">
