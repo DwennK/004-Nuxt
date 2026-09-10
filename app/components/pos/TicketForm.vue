@@ -4,7 +4,7 @@ import type { FormSubmitEvent, TabsItem } from '@nuxt/ui'
 import { ticketStatusLabels, ticketStatuses, ticketTypeLabels, ticketTypes } from '~~/shared/constants/pos'
 import { ticketStatusTransitions } from '~~/shared/domain/tickets/workflow'
 import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
-import { formatCurrency, formatImei, getImeiWarning, normalizeImei, normalizeSearchText } from '~~/shared/utils/pos'
+import { formatImei, getImeiWarning, normalizeImei } from '~~/shared/utils/pos'
 import { useCommercialLinesDraft, type EditableCommercialLinePayload } from '~~/app/composables/useCommercialLinesDraft'
 import { ticketInputSchema } from '~~/shared/validation/pos'
 
@@ -116,37 +116,14 @@ const statusItems = computed(() => {
 
 const intakeSection = ref<'lines' | 'details'>('lines')
 const intakeSectionTabs: TabsItem[] = [
-  { label: 'Lignes', value: 'lines' },
+  { label: 'Prestations et articles', value: 'lines' },
   { label: 'Détails', value: 'details' }
 ]
 
-const toast = useToast()
 const patternOpen = ref(false)
 watch(() => props.disabled, (disabled) => {
   if (disabled) patternOpen.value = false
 })
-const {
-  searchInput,
-  focusSearch,
-  search: intakeQuery,
-  searchOpen,
-  highlightedItemIndex: highlightedSuggestionIndex,
-  remoteSearchPending: remoteSuggestionsPending,
-  searchPanelItems: remoteSuggestions,
-  shouldShowSearchPanel,
-  minSearchLength,
-  searchCatalogItems,
-  setSearchValue,
-  openSearchPanel,
-  closeSearchPanel,
-  scheduleSearchClose,
-  cancelSearchClose,
-  highlightNextResult,
-  highlightPreviousResult
-} = useCatalogItemSearch({
-  filterItem: item => (item.type === 'repair' || item.type === 'service') && item.isActive
-})
-
 const state = reactive<Schema>({
   customerId: 0,
   type: 'repair',
@@ -200,144 +177,14 @@ watch(() => JSON.stringify(state) !== ticketDraftBaseline.value || lineEditor.is
   dirty.value = value
 }, { immediate: true, flush: 'sync' })
 
-function buildServiceSearchText(item: CatalogItemRecord) {
-  return normalizeSearchText([
-    item.name,
-    item.category,
-    item.brand,
-    item.model,
-    item.serviceKind,
-    ...item.keywords
-  ].filter(Boolean).join(' '))
-}
-
-function scoreCatalogService(item: CatalogItemRecord, normalizedQuery: string) {
-  const tokens = normalizedQuery.split(' ').filter(Boolean)
-  const searchText = buildServiceSearchText(item)
-
-  if (!tokens.length || !tokens.every(token => searchText.includes(token))) {
-    return null
-  }
-
-  const nameText = normalizeSearchText(item.name)
-  const modelText = normalizeSearchText(item.model)
-  const serviceKindText = normalizeSearchText(item.serviceKind)
-  const keywordText = normalizeSearchText(item.keywords.join(' '))
-  const deviceIssueText = normalizeSearchText([item.model, item.serviceKind].filter(Boolean).join(' '))
-  const issueDeviceText = normalizeSearchText([item.serviceKind, item.model].filter(Boolean).join(' '))
-
-  let score = 0
-
-  if (nameText.includes(normalizedQuery)) {
-    score += 220
-  }
-
-  if (deviceIssueText.includes(normalizedQuery) || issueDeviceText.includes(normalizedQuery)) {
-    score += 180
-  }
-
-  if (modelText.includes(normalizedQuery)) {
-    score += 120
-  }
-
-  if (serviceKindText.includes(normalizedQuery)) {
-    score += 120
-  }
-
-  if (keywordText.includes(normalizedQuery)) {
-    score += 90
-  }
-
-  for (const token of tokens) {
-    if (nameText.includes(token)) {
-      score += 24
-    }
-
-    if (modelText.includes(token)) {
-      score += 20
-    }
-
-    if (serviceKindText.includes(token)) {
-      score += 20
-    }
-
-    if (keywordText.includes(token)) {
-      score += 16
-    }
-  }
-
-  return score
-}
-
-function getCatalogServiceResult(query: string) {
-  const normalizedQuery = normalizeSearchText(query)
-
-  if (!normalizedQuery) {
-    return {
-      bestMatch: null as CatalogItemRecord | null,
-      suggestedMatches: []
-    }
-  }
-
-  const matches = remoteSuggestions.value
-    .map(item => ({
-      item,
-      score: scoreCatalogService(item, normalizedQuery)
-    }))
-    .filter((match): match is { item: CatalogItemRecord, score: number } => match.score !== null)
-    .sort((left, right) => right.score - left.score || left.item.name.localeCompare(right.item.name))
-
-  return {
-    bestMatch: matches[0]?.item || null,
-    suggestedMatches: matches.slice(0, 6).map(match => match.item)
-  }
-}
-
-const serviceSearchResult = computed(() => getCatalogServiceResult(intakeQuery.value))
-const bestSuggestedService = computed(() => serviceSearchResult.value.bestMatch)
-const searchPanelItems = computed(() => {
-  return intakeQuery.value.trim().length >= minSearchLength ? serviceSearchResult.value.suggestedMatches : []
-})
-
 const imeiWarning = computed(() => getImeiWarning(state.imei))
 
-const searchPanelTitle = computed(() => {
-  return 'Résultats atelier'
-})
+function handleCatalogItemAdded(item: CatalogItemRecord) {
+  if (item.type !== 'repair' && item.type !== 'service') return
 
-function applySuggestionContext(suggestion: CatalogItemRecord, force = false) {
-  if (force || !state.brand) {
-    state.brand = suggestion.brand || ''
-  }
-
-  if (force || !state.model) {
-    state.model = suggestion.model || ''
-  }
-
-  if (force || !state.issueDescription.trim()) {
-    state.issueDescription = suggestion.serviceKind || suggestion.name
-  }
-
-  if (force || state.type === 'repair') {
-    state.type = suggestion.type === 'service' ? 'support' : 'repair'
-  }
+  if (!state.brand.trim()) state.brand = item.brand || ''
+  if (!state.model.trim()) state.model = item.model || ''
 }
-
-watch(bestSuggestedService, (suggestion) => {
-  if (!suggestion || props.layout !== 'intake') {
-    return
-  }
-
-  applySuggestionContext(suggestion)
-}, { immediate: true })
-
-watch(intakeQuery, (value) => {
-  if (props.layout !== 'intake' || state.issueDescription.trim()) {
-    return
-  }
-
-  state.issueDescription = value.trim()
-})
 
 function onSubmit(event: FormSubmitEvent<Schema>) {
   if (props.saving || props.disabled) return
@@ -380,97 +227,6 @@ function handleImeiInput(value: string | number) {
 function handleImeiScan(value: string) {
   state.imei = formatImei(value)
 }
-
-function applyCatalogSuggestion(item: CatalogItemRecord) {
-  setSearchValue(item.name, { open: false })
-  applySuggestionContext(item, true)
-  lineEditor.addCatalogItem(item)
-  void focusSearch()
-}
-
-function applyFirstSearchResult() {
-  const suggestion = searchPanelItems.value[highlightedSuggestionIndex.value] || searchPanelItems.value[0]
-
-  if (!suggestion) {
-    return
-  }
-
-  applyCatalogSuggestion(suggestion)
-}
-
-function handleSearchKeydown(event: KeyboardEvent) {
-  if (event.key === 'ArrowDown') {
-    event.preventDefault()
-    openSearchPanel()
-    highlightNextResult()
-    return
-  }
-
-  if (event.key === 'ArrowUp') {
-    event.preventDefault()
-    openSearchPanel()
-    highlightPreviousResult()
-    return
-  }
-
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    closeSearchPanel()
-    return
-  }
-
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    applyFirstSearchResult()
-  }
-}
-
-async function handleIntakeScan(value: string) {
-  const sanitizedValue = value.trim()
-
-  if (!sanitizedValue) {
-    return
-  }
-
-  const normalizedNumericValue = normalizeImei(sanitizedValue) || ''
-
-  if (/^\d{8,}$/.test(normalizedNumericValue)) {
-    handleImeiScan(normalizedNumericValue)
-    toast.add({
-      title: 'IMEI scanné',
-      description: 'Renseigné dans les champs avancés du dossier.',
-      color: 'success'
-    })
-    return
-  }
-
-  const normalizedQuery = normalizeSearchText(sanitizedValue)
-  const match = (await searchCatalogItems(sanitizedValue))
-    .map(item => ({
-      item,
-      score: scoreCatalogService(item, normalizedQuery)
-    }))
-    .filter((entry): entry is { item: CatalogItemRecord, score: number } => entry.score !== null)
-    .sort((left, right) => right.score - left.score || left.item.name.localeCompare(right.item.name))[0]?.item || null
-
-  if (match) {
-    applyCatalogSuggestion(match)
-    toast.add({
-      title: 'Suggestion détectée',
-      description: `${match.model || match.category} · ${match.serviceKind || match.name}`,
-      color: 'success'
-    })
-    return
-  }
-
-  intakeQuery.value = sanitizedValue
-  openSearchPanel()
-  toast.add({
-    title: 'Code scanné',
-    description: `Aucune correspondance directe pour "${sanitizedValue}". Suggestions filtrées.`,
-    color: 'warning'
-  })
-}
 </script>
 
 <template>
@@ -489,9 +245,9 @@ async function handleIntakeScan(value: string) {
         <div class="space-y-3">
           <div class="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(24rem,0.9fr)]">
             <UCard
-              variant="subtle"
+              variant="outline"
               :ui="{
-                root: `relative overflow-visible rounded-[1.5rem] border border-default/70 shadow-sm ${searchOpen ? 'z-20' : 'z-10'}`,
+                root: 'overflow-visible rounded-lg border border-default shadow-none',
                 body: 'space-y-3 p-3'
               }"
             >
@@ -515,94 +271,23 @@ async function handleIntakeScan(value: string) {
                   />
                 </UFormField>
 
-                <div
-                  class="relative"
-                  :class="searchOpen ? 'z-30' : ''"
-                  @focusin="cancelSearchClose"
-                  @focusout="scheduleSearchClose"
-                  @pointerdown="openSearchPanel"
-                >
-                  <UFormField label="Diagnostic rapide">
-                    <div class="flex gap-2">
-                      <UInput
-                        ref="searchInput"
-                        v-model="intakeQuery"
-                        icon="i-lucide-scan-search"
-                        size="lg"
-                        class="flex-1"
-                        placeholder="iphone 14 ecran"
-                        autofocus
-                        @keydown="handleSearchKeydown"
-                      />
-                      <PosBarcodeScanner
-                        title="Scanner une référence ou un IMEI"
-                        description="Scannez un code-barres ou QR code pour pre-remplir la saisie rapide ou l’IMEI."
-                        trigger-size="lg"
-                        trigger-aria-label="Scanner une référence"
-                        @scanned="handleIntakeScan"
-                      />
-                    </div>
-                  </UFormField>
-
-                  <div
-                    v-if="shouldShowSearchPanel"
-                    class="absolute inset-x-0 top-full z-50 mt-2 rounded-2xl border border-default bg-default p-2 shadow-lg"
-                  >
-                    <div class="flex items-center justify-between gap-3 px-2 pb-2">
-                      <p class="text-sm font-medium text-highlighted">
-                        {{ searchPanelTitle }}
-                      </p>
-                      <span class="text-xs text-toned">
-                        {{ searchPanelItems.length }} suggestion(s)
-                      </span>
-                    </div>
-
-                    <div v-if="intakeQuery.trim().length < minSearchLength" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
-                      Tapez au moins {{ minSearchLength }} caractères.
-                    </div>
-
-                    <div v-else-if="searchPanelItems.length" class="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
-                      <button
-                        v-for="(suggestion, index) in searchPanelItems"
-                        :key="suggestion.id"
-                        type="button"
-                        class="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition"
-                        :class="index === highlightedSuggestionIndex
-                          ? 'bg-primary/8 ring-1 ring-primary/20'
-                          : 'hover:bg-muted/60'"
-                        @mouseenter="highlightedSuggestionIndex = index"
-                        @click="applyCatalogSuggestion(suggestion)"
-                      >
-                        <div class="min-w-0">
-                          <p class="truncate text-sm font-medium text-highlighted">
-                            {{ suggestion.name }}
-                          </p>
-                          <p class="truncate text-xs text-toned">
-                            {{ suggestion.model || suggestion.category }} · {{ suggestion.serviceKind || 'Prestation atelier' }}
-                          </p>
-                        </div>
-                        <span class="shrink-0 text-sm font-medium text-highlighted">
-                          {{ formatCurrency(suggestion.defaultPrice) }}
-                        </span>
-                      </button>
-                    </div>
-
-                    <div v-else-if="remoteSuggestionsPending" class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
-                      Recherche dans le catalogue...
-                    </div>
-
-                    <div v-else class="rounded-xl border border-dashed border-default px-4 py-5 text-sm text-toned">
-                      Aucune suggestion trouvée pour cette saisie.
-                    </div>
-                  </div>
-                </div>
+                <UFormField label="Problème signalé" name="issueDescription" hint="Facultatif">
+                  <UTextarea
+                    v-model="state.issueDescription"
+                    class="w-full"
+                    :rows="2"
+                    :maxrows="4"
+                    autoresize
+                    placeholder="Ex. écran cassé après une chute, tactile encore fonctionnel."
+                  />
+                </UFormField>
               </div>
             </UCard>
 
             <UCard
-              variant="subtle"
+              variant="outline"
               :ui="{
-                root: 'rounded-[1.5rem] border border-default/70 shadow-sm',
+                root: 'rounded-lg border border-default shadow-none',
                 body: 'space-y-3 p-3'
               }"
             >
@@ -612,13 +297,22 @@ async function handleIntakeScan(value: string) {
                 </h2>
               </div>
 
-              <div class="space-y-3">
+              <div class="grid grid-cols-2 gap-3">
+                <UFormField label="Marque" name="brand">
+                  <UInput v-model="state.brand" class="w-full" placeholder="Apple" />
+                </UFormField>
+                <UFormField label="Modèle" name="model">
+                  <UInput v-model="state.model" class="w-full" placeholder="iPhone 14" />
+                </UFormField>
+              </div>
+
+              <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
                 <UFormField label="Code / accès appareil" name="accessCode">
-                  <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                  <div class="flex items-center gap-2">
                     <UInput
                       v-model="state.accessCode"
-                      class="w-full"
-                      placeholder="PIN, mot de passe ou pattern"
+                      class="min-w-0 flex-1"
+                      placeholder="PIN ou mot de passe"
                     />
                     <UButton
                       type="button"
@@ -627,7 +321,6 @@ async function handleIntakeScan(value: string) {
                       color="neutral"
                       variant="soft"
                       size="sm"
-                      class="justify-center"
                       @click="patternOpen = true"
                     />
                   </div>
@@ -657,6 +350,7 @@ async function handleIntakeScan(value: string) {
             :editor="lineEditor"
             :catalog-items="catalogItems || []"
             mode="ticket"
+            @catalog-item-added="handleCatalogItemAdded"
           />
 
           <UCard
@@ -676,16 +370,9 @@ async function handleIntakeScan(value: string) {
               </div>
             </template>
 
-            <div class="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(18rem,1fr)]">
-              <UFormField
-                label="Description de la panne"
-                name="issueDescription"
-              >
-                <UInput
-                  v-model="state.issueDescription"
-                  class="w-full"
-                  placeholder="Ex. écran fissuré, batterie faible, port de charge endommagé..."
-                />
+            <div class="grid gap-3 md:grid-cols-2">
+              <UFormField label="Numéro de série" name="serialNumber">
+                <UInput v-model="state.serialNumber" class="w-full" placeholder="N° de série" />
               </UFormField>
 
               <UFormField label="IMEI" name="imei">
@@ -732,20 +419,6 @@ async function handleIntakeScan(value: string) {
 
               <UFormField label="Ouvert le" name="openedAt" required>
                 <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
-              </UFormField>
-            </div>
-
-            <div class="grid gap-3 md:grid-cols-3">
-              <UFormField label="Marque" name="brand">
-                <UInput v-model="state.brand" class="w-full" placeholder="Apple" />
-              </UFormField>
-
-              <UFormField label="Modèle" name="model">
-                <UInput v-model="state.model" class="w-full" placeholder="iPhone 14" />
-              </UFormField>
-
-              <UFormField label="Numéro de série" name="serialNumber">
-                <UInput v-model="state.serialNumber" class="w-full" placeholder="N° de série" />
               </UFormField>
             </div>
 

@@ -16,6 +16,10 @@ const props = withDefaults(defineProps<{
   showSearchCard: true
 })
 
+const emit = defineEmits<{
+  catalogItemAdded: [item: CatalogItemRecord]
+}>()
+
 const state = props.editor.state
 const totals = props.editor.totals
 const categoryItems = props.editor.categoryItems
@@ -71,6 +75,7 @@ async function createNewLine() {
 
 function addCatalogItem(item: CatalogItemRecord) {
   props.editor.addCatalogItem(item)
+  emit('catalogItemAdded', item)
   resetSearch()
   void focusSearch()
 }
@@ -142,6 +147,7 @@ async function handleBarcodeScan(value: string) {
           size="md"
           class="w-full sm:w-auto sm:min-w-0 sm:flex-1"
           :placeholder="searchPlaceholder"
+          :aria-label="searchPlaceholder"
           :autofocus="resolvedMode === 'document'"
           @keydown="handleSearchKeydown"
         />
@@ -154,7 +160,7 @@ async function handleBarcodeScan(value: string) {
         />
         <UButton
           icon="i-lucide-plus"
-          label="Nouvelle ligne"
+          :label="resolvedMode === 'ticket' ? 'Ligne libre' : 'Nouvelle ligne'"
           color="neutral"
           variant="soft"
           size="md"
