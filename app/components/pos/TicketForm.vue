@@ -245,10 +245,10 @@ function handleImeiScan(value: string) {
         <div class="space-y-3">
           <div class="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(24rem,0.9fr)]">
             <UCard
-              variant="outline"
+              variant="soft"
               :ui="{
-                root: 'overflow-visible rounded-lg border border-default shadow-none',
-                body: 'space-y-3 p-3'
+                root: 'overflow-visible rounded-md border border-default bg-elevated shadow-none',
+                body: 'space-y-3 p-3 sm:p-3'
               }"
             >
               <div class="space-y-3">
@@ -285,10 +285,10 @@ function handleImeiScan(value: string) {
             </UCard>
 
             <UCard
-              variant="outline"
+              variant="soft"
               :ui="{
-                root: 'rounded-lg border border-default shadow-none',
-                body: 'space-y-3 p-3'
+                root: 'rounded-md border border-default bg-elevated shadow-none',
+                body: 'space-y-3 p-3 sm:p-3'
               }"
             >
               <div class="flex items-center justify-between gap-2">
