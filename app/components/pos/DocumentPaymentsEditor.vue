@@ -30,6 +30,7 @@ const confirmDelete = useConfirmDelete()
 const { can } = useCapabilities()
 const paymentMutation = useIdempotentMutation()
 const paymentOpen = ref(false)
+const quickPaymentMethod = ref<PaymentMethod>('cash')
 
 const methodItems = paymentMethods.map(method => ({
   label: paymentMethodLabels[method],
@@ -419,31 +420,31 @@ async function removePayment(payment: PaymentRecord) {
 
           <template v-if="isPayableDocument">
             <div class="space-y-2">
-              <h3 class="text-sm font-medium text-highlighted">
-                Paiement direct
-              </h3>
-
-              <div class="grid gap-2">
-                <UButton
-                  v-for="method in paymentMethods"
-                  :key="method"
-                  type="button"
-                  :label="`Encaisser · ${paymentMethodLabels[method]}`"
-                  :icon="creatingMethod === method ? 'i-lucide-loader-circle' : 'i-lucide-badge-check'"
-                  :loading="creatingMethod === method"
+              <UFormField label="Mode de paiement">
+                <USelect
+                  v-model="quickPaymentMethod"
+                  :items="methodItems"
+                  value-key="value"
+                  class="w-full"
                   :disabled="!canCreatePayment || mutationPending"
-                  size="lg"
-                  class="justify-center"
-                  @click="createQuickPayment(method)"
                 />
-              </div>
+              </UFormField>
+              <UButton
+                type="button"
+                :label="`Encaisser le solde · ${formatCurrency(balanceDue)}`"
+                icon="i-lucide-wallet"
+                :loading="creatingMethod === quickPaymentMethod"
+                :disabled="!canCreatePayment || mutationPending"
+                block
+                @click="createQuickPayment(quickPaymentMethod)"
+              />
             </div>
 
             <PosFormFeedback :saving="Boolean(creatingMethod)" :error="createError" />
 
             <UButton
               type="button"
-              label="Paiement détaillé"
+              label="Acompte / autre montant"
               icon="i-lucide-sliders-horizontal"
               color="neutral"
               variant="soft"
@@ -470,6 +471,7 @@ async function removePayment(payment: PaymentRecord) {
           v-model:open="paymentOpen"
           :disabled="props.disabled"
           :balance-due="balanceDue"
+          :initial-method="quickPaymentMethod"
           :save-error="createError"
           :loading="creatingMethod === 'details'"
           @save="addPayment($event, 'details')"

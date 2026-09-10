@@ -6,12 +6,15 @@ import type { PaymentMethod } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
 import type { DossierClientState } from '~/utils/dossier-client'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   balanceDue: number
   disabled?: boolean
   loading?: boolean
   saveError?: string | null
-}>()
+  initialMethod?: PaymentMethod
+}>(), {
+  initialMethod: 'cash'
+})
 
 const open = defineModel<boolean>('open', { default: false })
 const focusReturn = usePosFocusReturn(open)
@@ -49,7 +52,7 @@ const dirty = computed(() => open.value && snapshot.value !== initialSnapshot.va
 
 watch(open, async (value) => {
   if (!value) return
-  Object.assign(state, { method: 'cash', amount: Math.max(props.balanceDue / 100, 0), notes: '' })
+  Object.assign(state, { method: props.initialMethod, amount: Math.max(props.balanceDue / 100, 0), notes: '' })
   initialSnapshot.value = snapshot.value
   if (!dossier?.value) return
   reserving.value = true
@@ -75,7 +78,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
     :dismissible="!props.loading"
     :close="!props.loading"
     title="Enregistrer un paiement"
-    description="Les paiements restent séparés du document pour permettre un reporting de caisse fiable."
+    description="Encaissez tout ou partie du montant restant."
     side="right"
     :ui="{ content: 'max-w-xl' }"
   >
@@ -97,15 +100,6 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           </p>
         </div>
 
-        <UFormField label="Mode de paiement" name="method">
-          <USelectMenu
-            v-model="state.method"
-            :items="methodItems"
-            value-key="value"
-            class="w-full"
-          />
-        </UFormField>
-
         <UFormField label="Montant (CHF)" name="amount">
           <UInputNumber
             v-model="state.amount"
@@ -113,6 +107,15 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             :max="balanceDue / 100"
             :step="0.05"
             :format-options="{ style: 'currency', currency: 'CHF', currencyDisplay: 'narrowSymbol' }"
+            class="w-full"
+          />
+        </UFormField>
+
+        <UFormField label="Mode de paiement" name="method">
+          <USelect
+            v-model="state.method"
+            :items="methodItems"
+            value-key="value"
             class="w-full"
           />
         </UFormField>
