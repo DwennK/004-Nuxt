@@ -18,12 +18,14 @@ describe('Cloudflare email journal', () => {
   let directory: string
   let client: ReturnType<typeof createClient>
   let database: PosDatabase
+  let queries: string[]
   const send = vi.fn(async () => ({ messageId: 'cf-message-1' }))
 
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'pos-email-'))
     client = createClient({ url: `file:${join(directory, 'mail.db')}` })
-    database = drizzle({ client, relations: defineRelations(schema) })
+    queries = []
+    database = drizzle({ client, relations: defineRelations(schema), logger: { logQuery: query => queries.push(query) } })
     await client.batch([
       'CREATE TABLE documents (id INTEGER PRIMARY KEY)', 'CREATE TABLE users (id INTEGER PRIMARY KEY)',
       'INSERT INTO documents VALUES (1)', 'INSERT INTO users VALUES (1)', 'INSERT INTO users VALUES (2)'
@@ -151,12 +153,30 @@ describe('Cloudflare email journal', () => {
     expect(await deliver()).toMatchObject({ status: 'delivered' })
   })
 
+  it('reconciles duplicated early events in timestamp order when the provider ID becomes available', async () => {
+    send.mockImplementationOnce(async () => {
+      const delivered = deliveryEvent('delivered', { at: '2026-09-02T10:00:00.000Z' })
+      await persistEmailEvent(database, deliveryEvent('deferred', { at: '2026-09-02T11:00:00.000Z' }), 'info@microwest.ch')
+      await persistEmailEvent(database, delivered, 'info@microwest.ch')
+      await persistEmailEvent(database, delivered, 'info@microwest.ch')
+      return { messageId: 'cf-message-1' }
+    })
+    expect(await deliver()).toMatchObject({ status: 'delivered' })
+    expect(await database.select().from(schema.sentEmailEvents)).toHaveLength(2)
+  })
+
   it('deduplicates events and never downgrades terminal delivery', async () => {
     const result = await deliver()
     const event = deliveryEvent('delivered', { at: '2026-09-02T10:00:00.000Z' })
     await persistEmailEvent(database, event, 'info@microwest.ch')
+    queries.length = 0
     await persistEmailEvent(database, event, 'info@microwest.ch')
+    expect(queries.filter(query => /^select\b/i.test(query))).toHaveLength(0)
+    queries.length = 0
     await persistEmailEvent(database, deliveryEvent('deferred', { at: '2026-09-02T11:00:00.000Z' }), 'info@microwest.ch')
+    expect(queries.filter(query => /^select\b/i.test(query))).toHaveLength(1)
+    expect(queries.some(query => /from "sent_email_events"/i.test(query))).toBe(false)
+    expect(queries.some(query => /^update\b/i.test(query))).toBe(false)
     expect((await getSentEmail(result.id, database)).lastEvent).toBe('delivered')
     expect(await database.select().from(schema.sentEmailEvents)).toHaveLength(2)
   })
@@ -170,6 +190,41 @@ describe('Cloudflare email journal', () => {
     await persistEmailEvent(database, deliveryEvent('bounced', { at: '2026-09-02T13:00:00.000Z' }), 'info@microwest.ch')
     await persistEmailEvent(database, deliveryEvent('deferred', { at: '2026-09-02T14:00:00.000Z' }), 'info@microwest.ch')
     expect((await getSentEmail(result.id, database)).lastEvent).toBe('bounced')
+  })
+
+  it('applies delayed events without rereading the event history or full message', async () => {
+    const result = await deliver()
+    queries.length = 0
+    for (let i = 0; i < 10; i++) {
+      await persistEmailEvent(database, deliveryEvent('deferred', { at: `2026-09-02T10:00:0${i}.000Z` }), 'info@microwest.ch')
+    }
+    const reads = queries.filter(query => /^select\b/i.test(query))
+    expect(reads).toHaveLength(10)
+    expect(reads.every(query => !query.includes('sent_email_events') && !query.includes('body_text'))).toBe(true)
+    expect((await getSentEmail(result.id, database)).lastEvent).toBe('delivery_delayed')
+  })
+
+  it('ignores a notification for another recipient while retaining the event history', async () => {
+    const result = await deliver()
+    const event = deliveryEvent()
+    event.payload.recipient = 'another@example.test'
+    await persistEmailEvent(database, event, 'info@microwest.ch')
+    expect((await getSentEmail(result.id, database)).lastEvent).toBe('sent')
+    expect(await database.select().from(schema.sentEmailEvents)).toHaveLength(1)
+    await persistEmailEvent(database, deliveryEvent('deferred'), 'info@microwest.ch')
+    expect((await getSentEmail(result.id, database)).lastEvent).toBe('delivery_delayed')
+  })
+
+  it('rolls back the new event if the status update fails, allowing the same notification to recover', async () => {
+    const result = await deliver()
+    const event = deliveryEvent()
+    await client.execute(`CREATE TRIGGER reject_email_update BEFORE UPDATE ON sent_emails BEGIN SELECT RAISE(FAIL, 'offline'); END`)
+    await expect(persistEmailEvent(database, event, 'info@microwest.ch')).rejects.toThrow()
+    expect(await database.select().from(schema.sentEmailEvents)).toHaveLength(0)
+    await client.execute('DROP TRIGGER reject_email_update')
+    await persistEmailEvent(database, event, 'info@microwest.ch')
+    expect((await getSentEmail(result.id, database)).lastEvent).toBe('delivered')
+    expect(await database.select().from(schema.sentEmailEvents)).toHaveLength(1)
   })
 
   it('rejects malformed and wrong-domain events without changing delivery', async () => {
@@ -212,6 +267,17 @@ describe('Cloudflare email journal', () => {
     client = createClient({ url: `file:${join(directory, 'mail.db')}` })
     database = drizzle({ client, relations: defineRelations(schema) })
     expect((await getSentEmail(first.items[0]!.id, database)).bodyText).toBe(mailFixture().text)
+  })
+
+  it('preserves list previews with long whitespace runs and Unicode while omitting unused journal fields', async () => {
+    const mail = { ...mailFixture(), text: `${' \n\t'.repeat(500)}Bonjour\u00a0\u2003😀 ${'texte\n\t'.repeat(100)}` }
+    const result = await deliver('preview', mail)
+    queries.length = 0
+    const list = await listSentEmails({ limit: 20 }, database)
+    expect(list.items[0]?.preview).toBe(mail.text.replace(/\s+/g, ' ').trim().slice(0, 140))
+    expect(queries).toHaveLength(1)
+    expect(queries[0]).not.toMatch(/attachments|fingerprint|idempotency_key|error_message|provider_message_id/)
+    expect((await getSentEmail(result.id, database)).bodyText).toBe(mail.text)
   })
 
   it('preserves history if the document or author is removed', async () => {

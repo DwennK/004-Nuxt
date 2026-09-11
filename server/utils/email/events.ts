@@ -3,7 +3,7 @@ import type { MessageBatch } from '@cloudflare/workers-types'
 import { z } from 'zod'
 import { sentEmails, sentEmailEvents } from '~~/server/db/schema'
 import type { PosDatabase } from '../turso'
-import { applyStoredEmailEvents } from './journal'
+import { applyEmailEvents } from './journal'
 
 const eventStatuses = { delivered: 'delivered', deferred: 'delivery_delayed', bounced: 'bounced', failed: 'failed', rejected: 'rejected' } as const
 const eventKinds = ['delivered', 'deferred', 'bounced', 'failed', 'rejected'] as const
@@ -23,14 +23,24 @@ export async function persistEmailEvent(database: PosDatabase, body: unknown, se
     throw new Error('Unexpected email sending domain or sender')
   }
   await database.transaction(async (tx) => {
-    await tx.insert(sentEmailEvents).values({
+    const [stored] = await tx.insert(sentEmailEvents).values({
       id: event.payload.eventId, providerMessageId: event.payload.messageId,
       recipient: event.payload.recipient, sender: event.payload.sender,
       status: eventStatuses[event.payload.delivery.status],
       occurredAt: new Date(event.metadata.eventTimestamp).toISOString(), createdAt: new Date().toISOString()
-    }).onConflictDoNothing({ target: sentEmailEvents.id })
-    const [record] = await tx.select().from(sentEmails).where(eq(sentEmails.providerMessageId, event.payload.messageId)).limit(1)
-    if (record) await applyStoredEmailEvents(tx, record)
+    }).onConflictDoNothing({ target: sentEmailEvents.id }).returning({
+      providerMessageId: sentEmailEvents.providerMessageId, sender: sentEmailEvents.sender,
+      recipient: sentEmailEvents.recipient, status: sentEmailEvents.status, occurredAt: sentEmailEvents.occurredAt
+    })
+    // Insertion and status application commit together. Early events are reconciled
+    // when send() records the provider ID, so a duplicate needs no history replay.
+    if (!stored) return
+    const [record] = await tx.select({
+      id: sentEmails.id, providerMessageId: sentEmails.providerMessageId,
+      from: sentEmails.from, to: sentEmails.to, status: sentEmails.status,
+      lastEventAt: sentEmails.lastEventAt, errorCode: sentEmails.errorCode, errorMessage: sentEmails.errorMessage
+    }).from(sentEmails).where(eq(sentEmails.providerMessageId, stored.providerMessageId)).limit(1)
+    if (record) await applyEmailEvents(tx, record, [stored])
   })
 }
 

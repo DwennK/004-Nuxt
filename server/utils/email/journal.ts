@@ -8,6 +8,8 @@ import { fingerprintIdempotencyPayload } from '../idempotency'
 import { classifyEmailError, prepareEmail, parseMailAddress, type EmailBinding, type OutgoingMail } from './transport'
 
 export type SentEmailRecord = typeof sentEmails.$inferSelect
+type EmailDeliveryRecord = Pick<SentEmailRecord, 'id' | 'providerMessageId' | 'from' | 'to' | 'status' | 'lastEventAt' | 'errorCode' | 'errorMessage'>
+type EmailDeliveryEvent = Pick<typeof sentEmailEvents.$inferSelect, 'providerMessageId' | 'sender' | 'recipient' | 'status' | 'occurredAt'>
 export const terminalMailStatuses = new Set<SentMailStatus>(['delivered', 'bounced', 'rejected', 'failed'])
 
 export function effectiveMailStatus(record: Pick<SentEmailRecord, 'status' | 'createdAt'>, now = Date.now()): SentMailStatus {
@@ -25,16 +27,13 @@ function sendResult(record: SentEmailRecord, replayed: boolean): SentMailSendRes
   }
 }
 
-export async function applyStoredEmailEvents(tx: PosDatabaseExecutor, record: SentEmailRecord) {
-  if (!record.providerMessageId) return record
+export async function applyEmailEvents<T extends EmailDeliveryRecord>(tx: PosDatabaseExecutor, record: T, events: EmailDeliveryEvent[]): Promise<T> {
+  if (!record.providerMessageId || terminalMailStatuses.has(record.status)) return record
   const from = parseMailAddress(record.from)
-  const events = await tx.select().from(sentEmailEvents).where(and(
-    eq(sentEmailEvents.providerMessageId, record.providerMessageId),
-    eq(sentEmailEvents.recipient, record.to[0]!),
-    eq(sentEmailEvents.sender, typeof from === 'string' ? from : from.email)
-  )).orderBy(asc(sentEmailEvents.occurredAt), asc(sentEmailEvents.id))
+  const sender = typeof from === 'string' ? from : from.email
   let next = record
   for (const event of events) {
+    if (event.providerMessageId !== record.providerMessageId || event.recipient !== record.to[0] || event.sender !== sender) continue
     if (terminalMailStatuses.has(next.status) || (next.lastEventAt && event.occurredAt < next.lastEventAt)) continue
     next = {
       ...next, status: event.status, lastEventAt: event.occurredAt,
@@ -49,6 +48,20 @@ export async function applyStoredEmailEvents(tx: PosDatabaseExecutor, record: Se
     }).where(eq(sentEmails.id, record.id))
   }
   return next
+}
+
+export async function applyStoredEmailEvents<T extends EmailDeliveryRecord>(tx: PosDatabaseExecutor, record: T): Promise<T> {
+  if (!record.providerMessageId || terminalMailStatuses.has(record.status)) return record
+  const from = parseMailAddress(record.from)
+  const events = await tx.select({
+    providerMessageId: sentEmailEvents.providerMessageId, sender: sentEmailEvents.sender,
+    recipient: sentEmailEvents.recipient, status: sentEmailEvents.status, occurredAt: sentEmailEvents.occurredAt
+  }).from(sentEmailEvents).where(and(
+    eq(sentEmailEvents.providerMessageId, record.providerMessageId),
+    eq(sentEmailEvents.recipient, record.to[0]!),
+    eq(sentEmailEvents.sender, typeof from === 'string' ? from : from.email)
+  )).orderBy(asc(sentEmailEvents.occurredAt), asc(sentEmailEvents.id))
+  return applyEmailEvents(tx, record, events)
 }
 
 const deliveryErrors: Partial<Record<SentMailStatus, string>> = {

@@ -7,12 +7,13 @@ import { useDb, type PosDatabase } from './turso'
 import { effectiveMailStatus, type SentEmailRecord } from './email/journal'
 
 type ListSentEmailsOptions = { limit: number, after?: string, before?: string }
+type SentEmailSummaryRecord = Pick<SentEmailRecord, 'id' | 'from' | 'to' | 'replyTo' | 'subject' | 'createdAt' | 'status' | 'bodyText'>
 
 function preview(text: string) {
   return text.replace(/\s+/g, ' ').trim().slice(0, 140)
 }
 
-function summary(record: SentEmailRecord): SentMailSummary {
+function summary(record: SentEmailSummaryRecord): SentMailSummary {
   return {
     id: record.id, from: record.from, to: record.to, replyTo: record.replyTo,
     subject: record.subject, createdAt: record.createdAt,
@@ -20,7 +21,7 @@ function summary(record: SentEmailRecord): SentMailSummary {
   }
 }
 
-function cursor(record: SentEmailRecord) {
+function cursor(record: Pick<SentEmailRecord, 'createdAt' | 'id'>) {
   return btoa(record.createdAt + '|' + record.id)
 }
 
@@ -41,7 +42,12 @@ export async function listSentEmails(options: ListSentEmailsOptions, database: P
   const [date, id] = token ? parseCursor(token) : []
   const compare = options.before ? gt : lt
   const order = options.before ? asc : desc
-  const records = await database.select().from(sentEmails).where(date && id
+  const records = await database.select({
+    id: sentEmails.id, from: sentEmails.from, to: sentEmails.to, replyTo: sentEmails.replyTo,
+    subject: sentEmails.subject, createdAt: sentEmails.createdAt, status: sentEmails.status,
+    // Keep the original text: truncating before whitespace normalization changes previews.
+    bodyText: sentEmails.bodyText
+  }).from(sentEmails).where(date && id
     ? or(compare(sentEmails.createdAt, date), and(eq(sentEmails.createdAt, date), compare(sentEmails.id, id)))
     : undefined
   ).orderBy(order(sentEmails.createdAt), order(sentEmails.id)).limit(options.limit + 1)
