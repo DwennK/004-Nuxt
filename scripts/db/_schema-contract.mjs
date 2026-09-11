@@ -210,8 +210,27 @@ export function parseSchemaContract(source, fileName = 'server/db/schema.ts') {
         throw new Error(`Cannot parse index in table ${table.tableName}`)
       }
 
+      const expressions = []
       const columns = onCall.arguments.map((argument) => {
         const value = unwrapExpression(argument)
+
+        // Keep expression support deliberately narrow: SQL templates containing
+        // function calls and references to this table's columns, without literals.
+        if (ts.isTaggedTemplateExpression(value) && value.tag.getText(sourceFile) === 'sql' && ts.isTemplateExpression(value.template)) {
+          let expression = value.template.head.text
+          for (const span of value.template.templateSpans) {
+            const reference = unwrapExpression(span.expression)
+            const name = ts.isPropertyAccessExpression(reference)
+              && columnNameByTableVariable.get(table.variableName)?.get(reference.name.text)
+            if (!name) throw new Error(`Cannot parse index expression for ${indexName}`)
+            expression += quoteIdentifier(name) + span.literal.text
+          }
+          if (!/^[a-zA-Z0-9_"(),\s]+$/.test(expression)) {
+            throw new Error(`Unsupported index expression for ${indexName}`)
+          }
+          expressions.push(expression)
+          return null
+        }
 
         if (!ts.isPropertyAccessExpression(value)) {
           throw new Error(`Cannot parse index column for ${indexName}`)
@@ -223,13 +242,15 @@ export function parseSchemaContract(source, fileName = 'server/db/schema.ts') {
           throw new Error(`Unknown index column ${value.name.text} for ${indexName}`)
         }
 
+        expressions.push(quoteIdentifier(columnName))
         return columnName
       })
 
       contract[table.tableName].indexes.push({
         name: indexName,
         unique: callName(indexCall) === 'uniqueIndex',
-        columns
+        columns,
+        ...(columns.includes(null) ? { expressions } : {})
       })
     }
   }
@@ -348,7 +369,7 @@ export async function verifyDatabaseSchemaContract(client, contract, tableSet) {
         unique: Number(row.unique) === 1,
         columns: [...indexInfo.rows]
           .sort((left, right) => Number(left.seqno) - Number(right.seqno))
-          .map(indexRow => String(indexRow.name))
+          .map(indexRow => indexRow.name === null ? null : String(indexRow.name))
       })
     }
 
@@ -380,6 +401,21 @@ export async function verifyDatabaseSchemaContract(client, contract, tableSet) {
           expected: index.columns,
           actual: actual.columns
         })
+      }
+
+      if (index.expressions) {
+        const result = await client.execute({
+          sql: 'SELECT sql FROM sqlite_schema WHERE type = ? AND name = ?',
+          args: ['index', index.name]
+        })
+        const definition = String(result.rows[0]?.sql || '')
+        const expectedDefinition = `CREATE ${index.unique ? 'UNIQUE ' : ''}INDEX ${quoteIdentifier(index.name)} ON ${quoteIdentifier(tableName)} (${index.expressions.join(', ')})`
+        // Supported expressions contain no string literals; identifier quoting,
+        // whitespace and keyword case are immaterial. Predicates remain checked.
+        const normalize = value => value.replace(/\bIF\s+NOT\s+EXISTS\s+/i, '').replace(/[\s"`[\];]/g, '').toLowerCase()
+        if (normalize(definition) !== normalize(expectedDefinition)) {
+          violations.push({ kind: 'index_expression', table: tableName, index: index.name, expected: expectedDefinition, actual: definition })
+        }
       }
     }
 

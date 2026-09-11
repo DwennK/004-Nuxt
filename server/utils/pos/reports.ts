@@ -1,5 +1,5 @@
-import { settlementSql } from './document-settlement'
-import { and, desc, eq, gte, inArray, lte, sql, sum } from 'drizzle-orm'
+import { settlementCtes } from './document-settlement'
+import { and, eq, gte, lte, sql, sum, type SQL } from 'drizzle-orm'
 import { catalogItems, customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
 import type { DailySummary, ReportsLeaders, ReportsOverview } from '~~/shared/types/pos'
@@ -191,6 +191,50 @@ type TopItemRow = {
   quantity: number | string | null
 }
 
+// Direct invoice receipts and inherited order deposits are disjoint sets.
+// Start with the selected cashflow period, then settle only its invoice candidates.
+export function paidReportCtes(start: string, end: string): SQL {
+  return sql`
+    report_period_payments AS MATERIALIZED (
+      SELECT document_id, sum(amount) AS amount, max(paid_at) AS paid_at
+      FROM payments WHERE status = 'paid' AND paid_at >= ${start} AND paid_at <= ${end}
+      GROUP BY document_id
+    ),
+    report_period_receipts AS MATERIALIZED (
+      SELECT d.id, p.amount, p.paid_at
+      FROM report_period_payments p INNER JOIN documents d ON d.id = p.document_id
+      WHERE d.type = 'invoice'
+      UNION ALL
+      SELECT invoice.id, p.amount, p.paid_at
+      FROM report_period_payments p
+      INNER JOIN documents original ON original.id = p.document_id AND original.type = 'customer_order'
+      INNER JOIN documents invoice ON invoice.ticket_id = original.ticket_id
+        AND invoice.customer_id = original.customer_id AND invoice.type = 'invoice'
+    ),
+    report_invoice_period AS MATERIALIZED (
+      SELECT id, sum(amount) AS period_paid_amount, max(paid_at) AS period_paid_at
+      FROM report_period_receipts GROUP BY id
+    ),
+    ${settlementCtes(sql`SELECT documents.* FROM report_invoice_period
+      INNER JOIN documents ON documents.id = report_invoice_period.id`)},
+    report_paid_documents AS MATERIALIZED (
+      SELECT d.*, period.period_paid_amount, period.period_paid_at
+      FROM settled_documents d INNER JOIN report_invoice_period period ON period.id = d.id
+      WHERE d.settlement_status = 'paid'
+    )
+  `
+}
+
+function documentIdsFilter(column: SQL, ids: number[]) {
+  // One bound JSON value avoids SQLite's parameter limit on long report periods.
+  return sql`${column} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`
+}
+
+async function getPaidReportDocumentIds(db: ReturnType<typeof useDb>, start: string, end: string) {
+  return db.all<{ documentId: number }>(sql`WITH ${paidReportCtes(start, end)}
+    SELECT id AS "documentId" FROM report_paid_documents`)
+}
+
 function normalizeDateRange(startDate: string, endDate: string) {
   return startDate <= endDate
     ? { startDate, endDate }
@@ -249,7 +293,7 @@ async function getTopLeaders(
     })
       .from(documents)
       .innerJoin(customers, eq(documents.customerId, customers.id))
-      .where(inArray(documents.id, paidDocumentIds))
+      .where(documentIdsFilter(sql`${documents.id}`, paidDocumentIds))
       .groupBy(customers.id),
     db.select({
       label: sql<string>`coalesce(${catalogItems.name}, ${documentLines.label})`,
@@ -259,7 +303,7 @@ async function getTopLeaders(
     })
       .from(documentLines)
       .leftJoin(catalogItems, eq(documentLines.catalogItemId, catalogItems.id))
-      .where(inArray(documentLines.documentId, paidDocumentIds))
+      .where(documentIdsFilter(sql`${documentLines.documentId}`, paidDocumentIds))
       .groupBy(
         sql`coalesce(${catalogItems.name}, ${documentLines.label})`,
         documentLines.categoryHint
@@ -276,10 +320,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
   const { start, end } = buildDayRange(date)
   const customerNameValue = sql<string>`coalesce(nullif(trim(${customers.companyName}), ''), nullif(trim(${customers.firstName} || ' ' || ${customers.lastName}), ''), 'Unknown customer')`
 
-  const [paymentTotalRows, totalsByMethodRows, paidDocumentRows, unpaidDocumentRows, openTicketRows, openedTodayRows, closedTodayRows] = await Promise.all([
-    db.select({ total: sum(payments.amount) })
-      .from(payments)
-      .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end))),
+  const [totalsByMethodRows, paidDocumentRows, unpaidDocumentRows, openTicketRows, openedTodayRows, closedTodayRows] = await Promise.all([
     db.select({
       method: payments.method,
       total: sum(payments.amount),
@@ -289,46 +330,22 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end)))
       .groupBy(payments.method)
       .orderBy(payments.method),
-    db.select({
-      id: documents.id,
-      documentNumber: documents.documentNumber,
-      type: documents.type,
-      status: settlementSql().status,
-      customerName: customerNameValue,
-      total: documents.total,
-      paidAmountToday: sum(payments.amount),
-      paidAt: sql<string>`max(${payments.paidAt})`
-    })
-      .from(payments)
-      .innerJoin(documents, settlementSql().paymentScope(payments.documentId))
-      .innerJoin(customers, eq(documents.customerId, customers.id))
-      .where(and(
-        eq(payments.status, 'paid'),
-        sql`${settlementSql().status} = 'paid'`,
-        inArray(documents.type, ['invoice']),
-        gte(payments.paidAt, start),
-        lte(payments.paidAt, end)
-      ))
-      .groupBy(documents.id, customers.id)
-      .orderBy(desc(sql`max(${payments.paidAt})`)),
-    db.select({
-      id: documents.id,
-      documentNumber: documents.documentNumber,
-      customerName: customerNameValue,
-      total: documents.total,
-      paidAmount: settlementSql().paidAmount
-    })
-      .from(documents)
-      .innerJoin(customers, eq(documents.customerId, customers.id))
-      .leftJoin(payments, settlementSql().paymentScope(payments.documentId))
-      .where(and(
-        eq(documents.type, 'invoice'),
-        sql`${documents.status} != 'cancelled'`,
-        gte(documents.issuedAt, start),
-        lte(documents.issuedAt, end)
-      ))
-      .groupBy(documents.id, customers.id)
-      .orderBy(desc(documents.issuedAt), desc(documents.id)),
+    db.all<DailySummary['paidDocuments'][number]>(sql`
+      WITH ${paidReportCtes(start, end)}
+      SELECT d.id, d.document_number AS "documentNumber", d.type, d.settlement_status AS status,
+        ${customerNameValue} AS "customerName", d.total,
+        d.period_paid_amount AS "paidAmountToday", d.period_paid_at AS "paidAt"
+      FROM report_paid_documents d INNER JOIN customers ON customers.id = d.customer_id
+      ORDER BY d.period_paid_at DESC
+    `),
+    db.all<{ id: number, documentNumber: string, customerName: string, total: number, paidAmount: number }>(sql`
+      WITH ${settlementCtes(sql`SELECT * FROM documents
+        WHERE type = 'invoice' AND status != 'cancelled' AND issued_at >= ${start} AND issued_at <= ${end}`)}
+      SELECT d.id, d.document_number AS "documentNumber", ${customerNameValue} AS "customerName",
+        d.total, d.paid_amount AS "paidAmount"
+      FROM settled_documents d INNER JOIN customers ON customers.id = d.customer_id
+      ORDER BY d.issued_at DESC, d.id DESC
+    `),
     db.select({ count: sql<number>`count(*)` })
       .from(tickets)
       .where(sql`${tickets.status} not in ('closed', 'cancelled')`),
@@ -348,7 +365,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       })
         .from(documentLines)
         .where(and(
-          inArray(documentLines.documentId, paidDocumentIds),
+          documentIdsFilter(sql`${documentLines.documentId}`, paidDocumentIds),
           sql`${documentLines.categoryHint} is not null`
         ))
         .groupBy(documentLines.categoryHint)
@@ -368,7 +385,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
 
   return {
     date,
-    totalPaid: Number(paymentTotalRows[0]?.total || 0),
+    totalPaid: totalsByMethodRows.reduce((total, row) => total + Number(row.total || 0), 0),
     paidDocuments: paidDocumentRows.map(row => ({
       id: row.id,
       documentNumber: row.documentNumber,
@@ -549,7 +566,7 @@ export function projectReportsOverview(input: ReportsOverviewProjectionInput): R
   }
 }
 
-export async function getReportsOverview(date: string): Promise<ReportsOverview> {
+export async function getReportsOverview(date: string, options: { includeLeaders?: boolean } = {}): Promise<ReportsOverview> {
   await ensurePosSchema()
 
   const db = useDb()
@@ -565,9 +582,8 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
   const { end: selectedYearEnd } = buildDayRange(yearEndDate)
   const { start: rollingYearStart } = buildDayRange(rollingYearStartDate)
   const monthBucketSql = sql<string>`substr(${payments.paidAt}, 1, 7)`
-  const yearBucketSql = sql<string>`substr(${payments.paidAt}, 1, 4)`
 
-  const [weeklyPaymentRows, monthlyPaymentRows, yearlyPaymentRows, paidDocumentRows, openTicketRows, openedRows, closedRows] = await Promise.all([
+  const [weeklyPaymentRows, periodPaymentRows, paidDocumentRows, openTicketRows, openedRows, closedRows] = await Promise.all([
     db.select({
       amount: payments.amount,
       method: payments.method,
@@ -578,34 +594,15 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
     db.select({
       bucket: monthBucketSql,
       method: payments.method,
-      total: sum(payments.amount)
-    })
-      .from(payments)
-      .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, selectedYearStart), lte(payments.paidAt, selectedYearEnd)))
-      .groupBy(monthBucketSql, payments.method)
-      .orderBy(monthBucketSql, payments.method),
-    db.select({
-      bucket: yearBucketSql,
-      method: payments.method,
-      total: sum(payments.amount)
+      total: sum(payments.amount),
+      selectedYearTotal: sql<number>`sum(CASE WHEN ${payments.paidAt} >= ${selectedYearStart} THEN ${payments.amount} ELSE 0 END)`,
+      selectedYearCount: sql<number>`sum(CASE WHEN ${payments.paidAt} >= ${selectedYearStart} THEN 1 ELSE 0 END)`
     })
       .from(payments)
       .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, rollingYearStart), lte(payments.paidAt, selectedYearEnd)))
-      .groupBy(yearBucketSql, payments.method)
-      .orderBy(yearBucketSql, payments.method),
-    db.select({
-      documentId: documents.id
-    })
-      .from(payments)
-      .innerJoin(documents, settlementSql().paymentScope(payments.documentId))
-      .where(and(
-        eq(payments.status, 'paid'),
-        sql`${settlementSql().status} = 'paid'`,
-        inArray(documents.type, ['invoice']),
-        gte(payments.paidAt, start),
-        lte(payments.paidAt, end)
-      ))
-      .groupBy(documents.id),
+      .groupBy(monthBucketSql, payments.method)
+      .orderBy(monthBucketSql, payments.method),
+    getPaidReportDocumentIds(db, start, end),
     db.select({ count: sql<number>`count(*)` })
       .from(tickets)
       .where(sql`${tickets.status} not in ('closed', 'cancelled')`),
@@ -617,9 +614,21 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
       .where(and(eq(tickets.status, 'closed'), gte(tickets.closedAt, start), lte(tickets.closedAt, end)))
   ])
 
+  const monthlyPaymentRows = periodPaymentRows
+    .filter(row => Number(row.selectedYearCount) > 0)
+    .map(row => ({ bucket: row.bucket, method: row.method, total: Number(row.selectedYearTotal) }))
+  const yearlyTotals = new Map<string, { bucket: string, method: (typeof paymentMethods)[number], total: number }>()
+  for (const row of periodPaymentRows) {
+    const bucket = row.bucket.slice(0, 4)
+    const key = `${bucket}:${row.method}`
+    const current = yearlyTotals.get(key) || { bucket, method: row.method, total: 0 }
+    current.total += Number(row.total || 0)
+    yearlyTotals.set(key, current)
+  }
+  const yearlyPaymentRows = [...yearlyTotals.values()]
   const paidDocumentIds = paidDocumentRows.map(row => row.documentId)
   const [{ topCustomers, topItems }, turnoverRows]: [Pick<ReportsLeaders, 'topCustomers' | 'topItems'>, TurnoverRow[]] = await Promise.all([
-    getTopLeaders(db, paidDocumentIds),
+    options.includeLeaders === false ? Promise.resolve({ topCustomers: [], topItems: [] }) : getTopLeaders(db, paidDocumentIds),
     paidDocumentIds.length
       ? db.select({
           category: documentLines.categoryHint,
@@ -627,7 +636,7 @@ export async function getReportsOverview(date: string): Promise<ReportsOverview>
         })
           .from(documentLines)
           .where(and(
-            inArray(documentLines.documentId, paidDocumentIds),
+            documentIdsFilter(sql`${documentLines.documentId}`, paidDocumentIds),
             sql`${documentLines.categoryHint} is not null`
           ))
           .groupBy(documentLines.categoryHint)
@@ -660,19 +669,7 @@ export async function getReportsLeaders(startDate: string, endDate: string): Pro
     db.select({ total: sum(payments.amount) })
       .from(payments)
       .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end))),
-    db.select({
-      documentId: documents.id
-    })
-      .from(payments)
-      .innerJoin(documents, settlementSql().paymentScope(payments.documentId))
-      .where(and(
-        eq(payments.status, 'paid'),
-        sql`${settlementSql().status} = 'paid'`,
-        inArray(documents.type, ['invoice']),
-        gte(payments.paidAt, start),
-        lte(payments.paidAt, end)
-      ))
-      .groupBy(documents.id)
+    getPaidReportDocumentIds(db, start, end)
   ])
 
   const leaders = await getTopLeaders(db, paidDocumentRows.map(row => row.documentId))

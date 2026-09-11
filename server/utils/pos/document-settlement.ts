@@ -1,37 +1,68 @@
-import { and, desc, eq, inArray, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm'
 import { documents, payments } from '~~/server/db/schema'
 import { getActivePayableDocument } from '~~/shared/domain/documents/settlement'
 import type { PosDatabaseExecutor } from '../turso'
 
-type DocumentRef = { id: SQLWrapper, type: SQLWrapper, status: SQLWrapper, ticketId: SQLWrapper, customerId: SQLWrapper, total: SQLWrapper }
-
-export function settlementSql(ref: DocumentRef = documents) {
-  const active = sql`(${ref.status} != 'cancelled' AND ${ref.type} IN ('customer_order', 'invoice') AND (
-    ${ref.type} = 'invoice' OR ${ref.ticketId} IS NULL OR NOT EXISTS (
-      SELECT 1 FROM documents settlement_invoice
-      WHERE settlement_invoice.ticket_id = ${ref.ticketId} AND settlement_invoice.customer_id = ${ref.customerId}
-        AND settlement_invoice.type = 'invoice' AND settlement_invoice.status != 'cancelled'
+/**
+ * Build one settlement projection for the requested documents. Materialization
+ * prevents SQLite from inlining the payment sums again for status/filter/order.
+ * Receipt IDs are deduplicated before summing, and every payment lookup uses
+ * document_id equality (never an OR over the whole paid-payment history).
+ */
+export function settlementCtes(source: SQL = sql`SELECT * FROM documents`): SQL {
+  return sql`
+    settlement_documents AS MATERIALIZED (${source}),
+    settlement_operations AS MATERIALIZED (
+      SELECT DISTINCT ticket_id, customer_id FROM settlement_documents WHERE ticket_id IS NOT NULL
+    ),
+    settlement_orders AS MATERIALIZED (
+      SELECT d.id, d.ticket_id, d.customer_id
+      FROM settlement_operations operation
+      INNER JOIN documents d ON d.ticket_id = operation.ticket_id
+        AND d.customer_id = operation.customer_id AND d.type = 'customer_order'
+    ),
+    settlement_receipts AS MATERIALIZED (
+      SELECT id FROM settlement_documents UNION SELECT id FROM settlement_orders
+    ),
+    settlement_payment_totals AS MATERIALIZED (
+      SELECT receipt.id, coalesce(sum(p.amount), 0) AS paid_amount
+      FROM settlement_receipts receipt
+      LEFT JOIN payments p ON p.document_id = receipt.id AND p.status = 'paid'
+      GROUP BY receipt.id
+    ),
+    settlement_order_totals AS MATERIALIZED (
+      SELECT d.ticket_id, d.customer_id, sum(p.paid_amount) AS paid_amount
+      FROM settlement_orders d INNER JOIN settlement_payment_totals p ON p.id = d.id
+      GROUP BY d.ticket_id, d.customer_id
+    ),
+    settlement_invoice_operations AS MATERIALIZED (
+      SELECT operation.ticket_id, operation.customer_id
+      FROM settlement_operations operation
+      WHERE EXISTS (
+        SELECT 1 FROM documents invoice
+        WHERE invoice.ticket_id = operation.ticket_id AND invoice.customer_id = operation.customer_id
+          AND invoice.type = 'invoice' AND invoice.status != 'cancelled'
+      )
+    ),
+    settlement_values AS MATERIALIZED (
+      SELECT d.*,
+        (d.status != 'cancelled' AND d.type IN ('customer_order', 'invoice')
+          AND (d.type = 'invoice' OR d.ticket_id IS NULL OR invoice.ticket_id IS NULL)) AS is_active,
+        coalesce(direct.paid_amount, 0) + CASE WHEN d.type = 'invoice'
+          THEN coalesce(deposit.paid_amount, 0) ELSE 0 END AS paid_amount
+      FROM settlement_documents d
+      LEFT JOIN settlement_payment_totals direct ON direct.id = d.id
+      LEFT JOIN settlement_order_totals deposit ON deposit.ticket_id = d.ticket_id AND deposit.customer_id = d.customer_id
+      LEFT JOIN settlement_invoice_operations invoice ON invoice.ticket_id = d.ticket_id AND invoice.customer_id = d.customer_id
+    ),
+    settled_documents AS MATERIALIZED (
+      SELECT settlement_values.*,
+        CASE WHEN is_active THEN max(total - paid_amount, 0) ELSE 0 END AS balance_due,
+        CASE WHEN is_active AND total > 0 AND paid_amount >= total THEN 'paid'
+          WHEN is_active AND status = 'paid' THEN 'issued' ELSE status END AS settlement_status
+      FROM settlement_values
     )
-  ))`
-  const paymentScope = (paymentDocumentId: SQLWrapper): SQL => sql`(${paymentDocumentId} = ${ref.id} OR (
-    ${ref.type} = 'invoice' AND ${ref.ticketId} IS NOT NULL AND ${paymentDocumentId} IN (
-      SELECT settlement_order.id FROM documents settlement_order
-      WHERE settlement_order.ticket_id = ${ref.ticketId} AND settlement_order.customer_id = ${ref.customerId}
-        AND settlement_order.type = 'customer_order'
-    )
-  ))`
-  const paidAmount = sql<number>`coalesce((SELECT sum(settlement_payment.amount) FROM payments settlement_payment
-    WHERE settlement_payment.status = 'paid' AND ${paymentScope(sql`settlement_payment.document_id`)}), 0)`
-  const balanceDue = sql<number>`CASE WHEN ${active} THEN max(${ref.total} - ${paidAmount}, 0) ELSE 0 END`
-  const status = sql<'draft' | 'issued' | 'paid' | 'cancelled'>`CASE WHEN ${active} AND ${ref.total} > 0 AND ${paidAmount} >= ${ref.total} THEN 'paid'
-    WHEN ${active} AND ${ref.status} = 'paid' THEN 'issued' ELSE ${ref.status} END`
-  return { active, paidAmount, balanceDue, paymentScope, status }
-}
-
-export function settlementSqlForAlias(alias: 'd' | 'report_document') {
-  // Quote table and column separately (SQLite treats "d.id" as a single name).
-  const ref = (name: string) => sql`${sql.identifier(alias)}.${sql.identifier(name)}`
-  return settlementSql({ id: ref('id'), type: ref('type'), status: ref('status'), ticketId: ref('ticket_id'), customerId: ref('customer_id'), total: ref('total') })
+  `
 }
 
 export async function getDocumentSettlement(executor: PosDatabaseExecutor, document: typeof documents.$inferSelect) {

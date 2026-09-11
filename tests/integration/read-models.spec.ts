@@ -204,17 +204,17 @@ describe('batched POS read models', () => {
     expect(result.diagnosisTickets.items.map(row => row.ticketNumber)).toEqual(['TIC-2'])
   })
 
-  it('loads the home payload through one six-statement batch without private ticket fields', async () => {
+  it('loads the home payload through one five-statement batch without private ticket fields', async () => {
     const batchSpy = vi.spyOn(client, 'batch')
     const observer = vi.fn()
     const result = await readHomeOverview(db, '2026-08-20', observer)
 
     expect(batchSpy).toHaveBeenCalledOnce()
-    expect(batchSpy.mock.calls[0]?.[0]).toHaveLength(6)
+    expect(batchSpy.mock.calls[0]?.[0]).toHaveLength(5)
     expect(observer).toHaveBeenCalledWith(expect.objectContaining({
       readModel: 'home-overview',
       databaseCalls: 1,
-      statementCount: 6,
+      statementCount: 5,
       outcome: 'success'
     }))
     expect(result.summary).toEqual({

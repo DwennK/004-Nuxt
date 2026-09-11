@@ -1,4 +1,4 @@
-import { settlementSqlForAlias } from './document-settlement'
+import { settlementCtes } from './document-settlement'
 import type { BatchItem, BatchResponse } from 'drizzle-orm/batch'
 import { sql } from 'drizzle-orm'
 import {
@@ -12,7 +12,6 @@ import {
 } from '~~/shared/constants/pos'
 import type {
   CounterOverviewResponse,
-  DocumentListItem,
   HomeActivityItem,
   HomeOverview,
   TicketListItem,
@@ -63,31 +62,10 @@ type CounterTicketQueueRow = {
   staleCount: number | string
 }
 
-type DueDocumentRow = {
-  id: number
-  documentNumber: string
-  type: DocumentListItem['type']
-  status: DocumentListItem['status']
-  customerId: number
-  ticketId: number | null
-  issuedAt: string
-  subtotal: number
-  taxAmount: number
-  total: number
-  notes: string | null
-  createdAt: string
-  updatedAt: string
-  customerName: string
-  ticketNumber: string | null
-  paidAmount: number | string
-  balanceDue: number | string
-  totalCount?: number | string
-  paidCount?: number | string
-  totalBalanceDue?: number | string
-}
+type DueDocumentRow = HomeOverview['dueDocuments'][number]
 
 type HomeKpiRow = {
-  totalPaid: number | string
+  dueDocumentsJson: string
   totalBalanceDue: number | string
   dueDocumentCount: number | string
   openTicketCount: number | string
@@ -338,7 +316,7 @@ function projectHomeOverview(input: {
   const activity = [...paymentActivity, ...eventActivity]
     .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())
     .slice(0, 12)
-  const totalPaid = Number(input.kpi.totalPaid || 0)
+  const totalPaid = input.methods.reduce((total, row) => total + Number(row.total || 0), 0)
   const totalBalanceDue = Number(input.kpi.totalBalanceDue || 0)
   const dueDocumentCount = Number(input.kpi.dueDocumentCount || 0)
   const openTicketCount = Number(input.kpi.openTicketCount || 0)
@@ -481,20 +459,20 @@ function createCounterQueries(db: PosDatabase, date: string) {
 function createHomeQueries(db: PosDatabase, date: string) {
   const { start, end } = buildDayRange(date)
   const kpis = db.all<HomeKpiRow>(sql`
-    WITH due AS (
-      SELECT ${settlementSqlForAlias('d').balanceDue} AS balance_due
-      FROM documents d
-      INNER JOIN customers c ON c.id = d.customer_id
-      LEFT JOIN tickets t ON t.id = d.ticket_id
-      LEFT JOIN payments p ON p.document_id = d.id
-      WHERE ${settlementSqlForAlias('d').active}
-      GROUP BY d.id, c.id, t.id
-      HAVING ${settlementSqlForAlias('d').balanceDue} > 0
+    WITH ${settlementCtes(sql`SELECT * FROM documents WHERE type IN ('customer_order', 'invoice') AND status != 'cancelled'`)},
+    due AS MATERIALIZED (
+      SELECT d.id, d.document_number, d.type, d.issued_at, d.total, d.balance_due,
+        coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS customer_name
+      FROM settled_documents d INNER JOIN customers c ON c.id = d.customer_id
+      WHERE d.balance_due > 0
     )
     SELECT
-      coalesce((SELECT sum(amount) FROM payments WHERE status = 'paid' AND paid_at >= ${start} AND paid_at <= ${end}), 0) AS "totalPaid",
       coalesce((SELECT sum(balance_due) FROM due), 0) AS "totalBalanceDue",
       (SELECT count(*) FROM due) AS "dueDocumentCount",
+      (SELECT json_group_array(json_object(
+        'id', id, 'documentNumber', document_number, 'type', type, 'issuedAt', issued_at,
+        'total', total, 'balanceDue', balance_due, 'customerName', customer_name
+      )) FROM (SELECT * FROM due ORDER BY balance_due DESC, issued_at DESC, id DESC LIMIT 5)) AS "dueDocumentsJson",
       (SELECT count(*) FROM tickets WHERE status NOT IN ('closed', 'cancelled')) AS "openTicketCount",
       (SELECT count(*) FROM tickets WHERE opened_at >= ${start} AND opened_at <= ${end}) AS "openedToday",
       (SELECT count(*) FROM tickets ready_ticket INNER JOIN customers ready_customer ON ready_customer.id = ready_ticket.customer_id WHERE ready_ticket.status = 'ready_for_pickup') AS "readyForPickupCount"
@@ -505,38 +483,6 @@ function createHomeQueries(db: PosDatabase, date: string) {
     WHERE status = 'paid' AND paid_at >= ${start} AND paid_at <= ${end}
     GROUP BY method
     ORDER BY method
-  `)
-  const dueDocuments = db.all<DueDocumentRow>(sql`
-    SELECT *
-    FROM (
-      SELECT
-        d.id,
-        d.document_number AS "documentNumber",
-        d.type,
-        ${settlementSqlForAlias('d').status} AS status,
-        d.customer_id AS "customerId",
-        d.ticket_id AS "ticketId",
-        d.issued_at AS "issuedAt",
-        d.subtotal,
-        d.tax_amount AS "taxAmount",
-        d.total,
-        d.notes,
-        d.created_at AS "createdAt",
-        d.updated_at AS "updatedAt",
-        coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS "customerName",
-        t.ticket_number AS "ticketNumber",
-        ${settlementSqlForAlias('d').paidAmount} AS "paidAmount",
-        ${settlementSqlForAlias('d').balanceDue} AS "balanceDue"
-      FROM documents d
-      INNER JOIN customers c ON c.id = d.customer_id
-      LEFT JOIN tickets t ON t.id = d.ticket_id
-      LEFT JOIN payments p ON p.document_id = d.id
-      WHERE ${settlementSqlForAlias('d').active}
-      GROUP BY d.id, c.id, t.id
-      HAVING ${settlementSqlForAlias('d').balanceDue} > 0
-    ) due
-    ORDER BY "balanceDue" DESC, "issuedAt" DESC, id DESC
-    LIMIT 5
   `)
   const readyTickets = db.all<HomeReadyTicketRow>(sql`
     SELECT
@@ -592,7 +538,7 @@ function createHomeQueries(db: PosDatabase, date: string) {
     LIMIT 20
   `)
 
-  return [kpis, methods, dueDocuments, readyTickets, paymentActivity, eventActivity] as const
+  return [kpis, methods, readyTickets, paymentActivity, eventActivity] as const
 }
 
 export async function readCounterOverview(
@@ -632,7 +578,7 @@ export async function readHomeOverview(
   observer?: PosReadModelObserver
 ): Promise<HomeOverview> {
   const queries = createHomeQueries(db, date)
-  const [kpiRows, methods, dueDocuments, readyTickets, paymentActivity, eventActivity] = await executeReadModelBatch(
+  const [kpiRows, methods, readyTickets, paymentActivity, eventActivity] = await executeReadModelBatch(
     db,
     'home-overview',
     queries,
@@ -642,7 +588,7 @@ export async function readHomeOverview(
   return projectHomeOverview({
     date,
     kpi: kpiRows[0] || {
-      totalPaid: 0,
+      dueDocumentsJson: '[]',
       totalBalanceDue: 0,
       dueDocumentCount: 0,
       openTicketCount: 0,
@@ -650,7 +596,7 @@ export async function readHomeOverview(
       readyForPickupCount: 0
     },
     methods,
-    dueDocuments,
+    dueDocuments: JSON.parse(kpiRows[0]?.dueDocumentsJson || '[]') as DueDocumentRow[],
     readyTickets,
     payments: paymentActivity,
     events: eventActivity

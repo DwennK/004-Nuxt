@@ -17,6 +17,12 @@ describe('database schema contract extraction', () => {
       unique: true,
       columns: ['document_number']
     })
+    expect(contract.customers.indexes).toContainEqual({
+      name: 'customers_normalized_email_idx',
+      unique: false,
+      columns: [null],
+      expressions: ['lower(trim("email"))']
+    })
     expect(contract.documents.foreignKeys).toEqual(expect.arrayContaining([
       { from: ['customer_id'], table: 'customers', to: ['id'], onDelete: 'RESTRICT' },
       { from: ['ticket_id'], table: 'tickets', to: ['id'], onDelete: 'SET NULL' }

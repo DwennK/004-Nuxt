@@ -45,7 +45,9 @@ export const customers = sqliteTable('customers', {
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, table => ({
   emailIdx: index('customers_email_idx').on(table.email),
+  normalizedEmailIdx: index('customers_normalized_email_idx').on(sql`lower(trim(${table.email}))`),
   lastNameIdx: index('customers_last_name_idx').on(table.lastName),
+  nameOrderIdx: index('customers_name_order_idx').on(table.lastName, table.firstName, table.id),
   phoneIdx: index('customers_phone_idx').on(table.phone)
 }))
 
@@ -96,6 +98,7 @@ export const catalogItems = sqliteTable('catalog_items', {
   nameIdx: index('catalog_items_name_idx').on(table.name),
   skuIdx: uniqueIndex('catalog_items_sku_idx').on(table.sku),
   typeIdx: index('catalog_items_type_idx').on(table.type),
+  typeOrderIdx: index('catalog_items_type_order_idx').on(table.type, table.category, table.name, table.id),
   categoryIdx: index('catalog_items_category_idx').on(table.category),
   brandIdx: index('catalog_items_brand_idx').on(table.brand),
   modelIdx: index('catalog_items_model_idx').on(table.model),
@@ -138,6 +141,7 @@ export const tickets = sqliteTable('tickets', {
   numberIdx: uniqueIndex('tickets_ticket_number_idx').on(table.ticketNumber),
   customerIdx: index('tickets_customer_id_idx').on(table.customerId),
   statusIdx: index('tickets_status_idx').on(table.status),
+  statusClosedAtIdx: index('tickets_status_closed_at_idx').on(table.status, table.closedAt),
   openedAtIdx: index('tickets_opened_at_idx').on(table.openedAt),
   statusOpenedAtIdIdx: index('tickets_status_opened_at_id_idx').on(table.status, table.openedAt, table.id)
 }))
@@ -177,7 +181,9 @@ export const documents = sqliteTable('documents', {
   numberIdx: uniqueIndex('documents_document_number_idx').on(table.documentNumber),
   customerIdx: index('documents_customer_id_idx').on(table.customerId),
   ticketIdx: index('documents_ticket_id_idx').on(table.ticketId),
+  settlementScopeIdx: index('documents_settlement_scope_idx').on(table.ticketId, table.customerId, table.type, table.status),
   typeIdx: index('documents_type_idx').on(table.type),
+  typeIssuedAtIdIdx: index('documents_type_issued_at_id_idx').on(table.type, table.issuedAt, table.id),
   statusIdx: index('documents_status_idx').on(table.status),
   issuedAtIdx: index('documents_issued_at_idx').on(table.issuedAt),
   issuedAtIdIdx: index('documents_issued_at_id_idx').on(table.issuedAt, table.id)
@@ -256,7 +262,9 @@ export const payments = sqliteTable('payments', {
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, table => ({
   documentIdx: index('payments_document_id_idx').on(table.documentId),
+  documentSettlementIdx: index('payments_document_settlement_idx').on(table.documentId, table.status, table.amount),
   paidAtIdx: index('payments_paid_at_idx').on(table.paidAt),
+  paidPeriodIdx: index('payments_paid_period_idx').on(table.status, table.paidAt, table.method, table.amount, table.documentId),
   methodIdx: index('payments_method_idx').on(table.method),
   statusIdx: index('payments_status_idx').on(table.status),
   customerIdx: index('payments_customer_id_idx').on(table.customerId),
@@ -273,6 +281,7 @@ export const smartphoneStocks = sqliteTable('smartphone_stocks', {
   sold: integer('sold', { mode: 'boolean' }).notNull().default(false)
 }, table => ({
   modelIdx: index('smartphone_stocks_model_idx').on(table.model),
+  soldIdIdx: index('smartphone_stocks_sold_id_idx').on(table.sold, table.id),
   imeiIdx: uniqueIndex('smartphone_stocks_imei_idx').on(table.imei),
   skuIdx: uniqueIndex('smartphone_stocks_sku_idx').on(table.sku)
 }))
@@ -383,5 +392,7 @@ export const smartphoneReservationRequests = sqliteTable('smartphone_reservation
 }, table => ({
   nameIdx: index('smartphone_reservation_requests_name_idx').on(table.name),
   requestedAtIdx: index('smartphone_reservation_requests_requested_at_idx').on(table.requestedAt),
-  statusIdx: index('smartphone_reservation_requests_status_idx').on(table.status)
+  requestedAtIdIdx: index('smartphone_reservation_requests_requested_at_id_idx').on(table.requestedAt, table.id),
+  statusIdx: index('smartphone_reservation_requests_status_idx').on(table.status),
+  statusRequestedAtIdIdx: index('smartphone_reservation_requests_status_requested_at_id_idx').on(table.status, table.requestedAt, table.id)
 }))

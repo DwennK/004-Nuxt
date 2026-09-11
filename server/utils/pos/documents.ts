@@ -1,9 +1,9 @@
-import { getDocumentSettlement, settlementSql } from './document-settlement'
+import { getDocumentSettlement, settlementCtes } from './document-settlement'
 import { syncDocumentStatus } from './document-balances'
 import { dossierReferenceSearch, dossierReferenceTerm } from './dossier-search'
 import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { getShopifyProvenance } from '../shopify/import'
-import { and, asc, desc, eq, gte, inArray, lte, ne, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, lte, ne, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import {
   customers,
@@ -351,167 +351,80 @@ export async function listDocuments(filters?: {
   const referenceTerm = dossierReferenceTerm(searchTerm)
   const dateFrom = filters?.dateFrom ? normalizeDocumentDateFrom(filters.dateFrom) : undefined
   const dateTo = filters?.dateTo ? normalizeDocumentDateTo(filters.dateTo) : undefined
-  const settlement = settlementSql()
-  const paidAmountValue = settlement.paidAmount
   const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
-  const balanceDueValue = settlement.balanceDue
-  const paidAmount = paidAmountValue.as('paid_amount')
-  const customerName = customerNameValue.as('customer_name')
-  const balanceDue = balanceDueValue.as('balance_due')
-  const baseFilters = [
+  // Apply cheap/search filters before calculating settlements. Related receipts
+  // and active invoices remain scoped by dossier + customer, outside these filters.
+  const candidateFilters = and(
     filters?.type ? eq(documents.type, filters.type as typeof documents.$inferSelect.type) : undefined,
-    filters?.status ? sql`${settlement.status} = ${filters.status}` : undefined,
     filters?.customerId ? eq(documents.customerId, filters.customerId) : undefined,
     filters?.ticketId ? eq(documents.ticketId, filters.ticketId) : undefined,
     dateFrom ? gte(documents.issuedAt, dateFrom) : undefined,
-    dateTo ? lte(documents.issuedAt, dateTo) : undefined
-  ] as const
-  const dueFilter = filters?.paymentState === 'due'
-    ? sql`${balanceDueValue} > 0`
-    : undefined
-  const useAggregateList = !!searchPattern || filters?.paymentState === 'due' || sortBy === 'balanceDue'
-
-  if (!useAggregateList) {
-    const filteredDocuments = db.select({
-      id: documents.id,
-      status: settlement.status.as('settlement_status'),
-      balanceDue
-    })
-      .from(documents)
-      .leftJoin(payments, eq(payments.documentId, documents.id))
-      .where(and(...baseFilters))
-      .groupBy(documents.id)
-      .as('filtered_documents')
-
-    const [summaryRows, pageIdRows] = await Promise.all([
-      db.select({
-        total: sql<number>`count(*)`,
-        paidCount: sql<number>`coalesce(sum(case when ${filteredDocuments.status} = 'paid' then 1 else 0 end), 0)`,
-        totalBalanceDue: sql<number>`coalesce(sum(${filteredDocuments.balanceDue}), 0)`
-      }).from(filteredDocuments),
-      db.select({ id: documents.id })
-        .from(documents)
-        .where(and(...baseFilters))
-        .orderBy(desc(documents.issuedAt), desc(documents.id))
-        .limit(pageSize)
-        .offset(offset)
-    ])
-
-    const pageIds = pageIdRows.map(row => row.id)
-    const rows = pageIds.length
-      ? await db.select({
-          id: documents.id,
-          documentNumber: documents.documentNumber,
-          type: documents.type,
-          status: settlement.status.as('settlement_status'),
-          customerId: documents.customerId,
-          ticketId: documents.ticketId,
-          issuedAt: documents.issuedAt,
-          subtotal: documents.subtotal,
-          taxAmount: documents.taxAmount,
-          total: documents.total,
-          notes: documents.notes,
-          createdAt: documents.createdAt,
-          updatedAt: documents.updatedAt,
-          customerName,
-          ticketNumber: tickets.ticketNumber,
-          paidAmount,
-          balanceDue
-        })
-          .from(documents)
-          .innerJoin(customers, eq(documents.customerId, customers.id))
-          .leftJoin(tickets, eq(documents.ticketId, tickets.id))
-          .leftJoin(payments, eq(payments.documentId, documents.id))
-          .where(inArray(documents.id, pageIds))
-          .groupBy(documents.id, customers.id, tickets.id)
-          .orderBy(desc(documents.issuedAt), desc(documents.id))
-      : []
-
-    const summary = summaryRows[0]
-
-    return {
-      items: rows.map(mapDocumentListItem),
-      page,
-      pageSize,
-      total: Number(summary?.total || 0),
-      summary: {
-        paidCount: Number(summary?.paidCount || 0),
-        totalBalanceDue: Number(summary?.totalBalanceDue || 0)
-      }
-    }
+    dateTo ? lte(documents.issuedAt, dateTo) : undefined,
+    searchPattern
+      ? or(
+          sql`lower(${documents.documentNumber}) like ${searchPattern}`,
+          sql`lower(${customerNameValue}) like ${searchPattern}`,
+          sql`${dossierReferenceSearch(sql`${tickets.ticketNumber}`)} like ${`%${referenceTerm}%`}`
+        )
+      : undefined
+  )
+  const source = sql`SELECT documents.* FROM documents
+    ${searchPattern
+      ? sql`INNER JOIN customers ON customers.id = documents.customer_id
+      LEFT JOIN tickets ON tickets.id = documents.ticket_id`
+      : sql``}
+    ${candidateFilters ? sql`WHERE ${candidateFilters}` : sql``}`
+  const settledFilters = and(
+    filters?.status ? sql`d.settlement_status = ${filters.status}` : undefined,
+    filters?.paymentState === 'due' ? sql`d.balance_due > 0` : undefined
+  )
+  const relevance = searchTerm
+    ? sql`CASE
+    WHEN lower(d.document_number) = ${searchTerm} THEN 0
+    WHEN ${dossierReferenceSearch(sql`t.ticket_number`)} = ${referenceTerm} THEN 0
+    WHEN lower(coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name))) = ${searchTerm} THEN 0
+    WHEN lower(d.document_number) LIKE ${`${searchTerm}%`} THEN 1
+    WHEN ${dossierReferenceSearch(sql`t.ticket_number`)} LIKE ${`${referenceTerm}%`} THEN 1
+    ELSE 2 END`
+    : sql`0`
+  type ListRow = Parameters<typeof mapDocumentListItem>[0] & {
+    resultTotal: number
+    paidCount: number
+    totalBalanceDue: number
   }
-
-  const baseQuery = db.select({
-    id: documents.id,
-    documentNumber: documents.documentNumber,
-    type: documents.type,
-    status: settlement.status.as('settlement_status'),
-    customerId: documents.customerId,
-    ticketId: documents.ticketId,
-    issuedAt: documents.issuedAt,
-    subtotal: documents.subtotal,
-    taxAmount: documents.taxAmount,
-    total: documents.total,
-    notes: documents.notes,
-    createdAt: documents.createdAt,
-    updatedAt: documents.updatedAt,
-    customerName,
-    ticketNumber: tickets.ticketNumber,
-    paidAmount,
-    balanceDue
-  })
-    .from(documents)
-    .innerJoin(customers, eq(documents.customerId, customers.id))
-    .leftJoin(tickets, eq(documents.ticketId, tickets.id))
-    .leftJoin(payments, eq(payments.documentId, documents.id))
-    .where(and(
-      searchPattern
-        ? or(
-            sql`lower(${documents.documentNumber}) like ${searchPattern}`,
-            sql`lower(${customerNameValue}) like ${searchPattern}`,
-            sql`${dossierReferenceSearch(sql`${tickets.ticketNumber}`)} like ${`%${referenceTerm}%`}`
-          )
-        : undefined,
-      ...baseFilters
-    ))
-    .groupBy(documents.id, customers.id, tickets.id)
-    .having(dueFilter)
-    .as('document_list')
-  const relevanceOrder = searchTerm
-    ? sql<number>`case
-        when lower(${baseQuery.documentNumber}) = ${searchTerm} then 0
-        when ${dossierReferenceSearch(sql`${baseQuery.ticketNumber}`)} = ${referenceTerm} then 0
-        when lower(${baseQuery.customerName}) = ${searchTerm} then 0
-        when lower(${baseQuery.documentNumber}) like ${`${searchTerm}%`} then 1
-        when ${dossierReferenceSearch(sql`${baseQuery.ticketNumber}`)} like ${`${referenceTerm}%`} then 1
-        else 2
-      end`
-    : undefined
-
-  const [summaryRows, rows] = await Promise.all([
-    db.select({
-      total: sql<number>`count(*)`,
-      paidCount: sql<number>`coalesce(sum(case when ${baseQuery.status} = 'paid' then 1 else 0 end), 0)`,
-      totalBalanceDue: sql<number>`coalesce(sum(${baseQuery.balanceDue}), 0)`
-    }).from(baseQuery),
-    db.select().from(baseQuery)
-      .orderBy(
-        ...(relevanceOrder ? [relevanceOrder] : []),
-        sortBy === 'balanceDue' ? desc(baseQuery.balanceDue) : desc(baseQuery.issuedAt),
-        desc(baseQuery.issuedAt),
-        desc(baseQuery.id)
-      )
-      .limit(pageSize)
-      .offset(offset)
-  ])
-
-  const summary = summaryRows[0]
-
+  const rows = await db.all<ListRow>(sql`
+    WITH ${settlementCtes(source)},
+    filtered AS MATERIALIZED (
+      SELECT d.*, coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS customer_name,
+        t.ticket_number, ${relevance} AS relevance
+      FROM settled_documents d
+      INNER JOIN customers c ON c.id = d.customer_id
+      LEFT JOIN tickets t ON t.id = d.ticket_id
+      ${settledFilters ? sql`WHERE ${settledFilters}` : sql``}
+    ), summary AS (
+      SELECT count(*) AS "resultTotal",
+        coalesce(sum(CASE WHEN settlement_status = 'paid' THEN 1 ELSE 0 END), 0) AS "paidCount",
+        coalesce(sum(balance_due), 0) AS "totalBalanceDue" FROM filtered
+    ), page AS MATERIALIZED (
+      SELECT * FROM filtered
+      ORDER BY relevance, ${sortBy === 'balanceDue' ? sql`balance_due DESC,` : sql``} issued_at DESC, id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
+    )
+    SELECT page.id, page.document_number AS "documentNumber", page.type, page.settlement_status AS status,
+      page.customer_id AS "customerId", page.ticket_id AS "ticketId", page.issued_at AS "issuedAt",
+      page.subtotal, page.tax_amount AS "taxAmount", page.total, page.notes,
+      page.created_at AS "createdAt", page.updated_at AS "updatedAt", page.customer_name AS "customerName",
+      page.ticket_number AS "ticketNumber", page.paid_amount AS "paidAmount", page.balance_due AS "balanceDue",
+      summary.*
+    FROM summary LEFT JOIN page ON 1 = 1
+    ORDER BY page.relevance, ${sortBy === 'balanceDue' ? sql`page.balance_due DESC,` : sql``} page.issued_at DESC, page.id DESC
+  `)
+  const summary = rows[0]
   return {
-    items: rows.map(mapDocumentListItem),
+    items: rows.filter(row => row.id != null).map(mapDocumentListItem),
     page,
     pageSize,
-    total: Number(summary?.total || 0),
+    total: Number(summary?.resultTotal || 0),
     summary: {
       paidCount: Number(summary?.paidCount || 0),
       totalBalanceDue: Number(summary?.totalBalanceDue || 0)
