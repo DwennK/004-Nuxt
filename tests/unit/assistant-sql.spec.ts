@@ -110,6 +110,50 @@ describe('assistant SQL guardrails', () => {
     expectRejected('SELECT * FROM payments', 'invalid_query')
   })
 
+  it.each([
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d ON 1 = 1 JOIN payments p ON 1 = 1',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d',
+    'SELECT COUNT(c.id) AS total FROM customers c, documents d',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d ON c.id = c.id',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d ON c.id = d.customer_id OR 1 = 1',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d ON (c.id = d.customer_id AND d.id > 0) OR d.id > 0',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d ON NOT (c.id = d.customer_id)',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d ON CASE WHEN 1 = 1 THEN 1 ELSE 1 AND c.id = d.customer_id AND 1 END',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d ON 0 BETWEEN -1 AND c.id = d.customer_id',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d ON \'c.id = d.customer_id\' = \'c.id = d.customer_id\'',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d ON c.id = d.customer_id JOIN payments p ON 1 = 1',
+    'SELECT COUNT(c.id) AS total FROM customers c LEFT JOIN documents d ON 1 = 1 LEFT JOIN payments p ON c.id = p.customer_id AND d.id = p.document_id',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN documents d ON 1 = 1 LEFT JOIN payments p ON c.id = p.customer_id AND d.id = p.document_id',
+    'SELECT COUNT(c.id) AS total FROM customers c LEFT JOIN documents d JOIN payments p ON c.id = p.customer_id AND d.id = p.document_id',
+    'SELECT COUNT(1) AS total FROM customers c JOIN documents c ON 1 = 1',
+    'SELECT COUNT(1) AS total FROM (documents JOIN documents d ON 1 = 1)',
+    'SELECT COUNT(1) AS total FROM documents d JOIN (documents JOIN documents other ON 1 = 1) ON d.id = other.id',
+    'SELECT COUNT(c.id) AS total FROM customers c JOIN (SELECT d.id FROM documents d) ON 1 = 1',
+    'SELECT COUNT(c.id) AS total FROM customers c, (SELECT d.id FROM documents d)',
+    'SELECT COUNT(1) AS total FROM (SELECT c.id FROM customers c), (SELECT d.id FROM documents d)',
+    'SELECT (SELECT COUNT(d.id) FROM documents d JOIN payments p ON 1 = 1) AS total FROM customers c',
+    'WITH totals AS (SELECT COUNT(d.id) AS total FROM documents d JOIN payments p ON 1 = 1) SELECT totals.total FROM totals'
+  ])('rejects disconnected or optional join predicates before execution: %s', (candidate) => {
+    expectRejected(candidate, 'complexity_budget')
+  })
+
+  it.each([
+    'SELECT c.id, SUM(p.amount) AS total FROM customers c JOIN documents d ON c.id = d.customer_id JOIN payments p ON d.id = p.document_id GROUP BY c.id',
+    'SELECT c.id, d.id FROM customers c LEFT JOIN documents d ON c.id = d.customer_id AND (d.status = \'paid\' OR d.status = \'issued\')',
+    'SELECT c.id, d.id FROM customers c JOIN documents d ON ((c.id) = (d.customer_id))',
+    'SELECT c.id, d.id FROM customers c JOIN documents d ON c.id = d.customer_id AND d.total BETWEEN 0 AND 10000',
+    'SELECT c.id, d.id, p.id FROM customers c LEFT JOIN documents d ON c.id = d.customer_id LEFT JOIN payments p ON c.id = p.customer_id AND d.id = p.document_id',
+    'SELECT c.id, d.id FROM customers c JOIN documents d ON (c.id = d.customer_id AND d.id > 0) OR (d.customer_id = c.id AND d.id < 10)',
+    'SELECT c.id, d.id FROM customers c, documents d WHERE c.id = d.customer_id',
+    'SELECT c.id, d.id FROM customers c JOIN documents d ON 1 = 1 WHERE c.id = d.customer_id',
+    'SELECT d.id, p.amount FROM documents d JOIN payments p USING (id)',
+    'SELECT c.id, (SELECT SUM(p.amount) FROM payments p WHERE p.customer_id = c.id) AS total FROM customers c',
+    'SELECT COUNT(1) AS total FROM (SELECT d.id FROM documents d)',
+    'WITH totals AS (SELECT p.document_id, SUM(p.amount) AS total FROM payments p GROUP BY p.document_id) SELECT d.id, totals.total FROM documents d JOIN totals ON d.id = totals.document_id'
+  ])('preserves connected joins and independent single-source queries: %s', (candidate) => {
+    expect(validateAssistantSql(candidate).executionSql).toContain(candidate)
+  })
+
   it('keeps SQL literals out of audit metadata', () => {
     const secretLiteral = 'customer-secret-marker'
     const validated = validateAssistantSql(

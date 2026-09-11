@@ -349,6 +349,188 @@ function assertComplexityBudget(sqlText: string, analysis: AssistantSqlAnalysis)
   }
 }
 
+// A returned-row LIMIT does not bound aggregate work. Require each SELECT's
+// sources to be connected by predicates which hold on every boolean branch.
+// This also covers comma joins and nested SELECTs without trusting model text.
+function unwrapJoinExpression(tokens: string[]) {
+  while (tokens[0] === '(' && tokens.at(-1) === ')') {
+    let depth = 0
+    const closesEarly = tokens.slice(0, -1).some((token) => {
+      if (token === '(') depth++
+      if (token === ')') depth--
+      return depth === 0
+    })
+    if (closesEarly) break
+    tokens = tokens.slice(1, -1)
+  }
+  return tokens
+}
+
+function mandatoryJoinEdges(tokens: string[]): Set<string> {
+  tokens = unwrapJoinExpression(tokens)
+  for (const operator of ['or', 'and']) {
+    const parts: string[][] = []
+    let depth = 0
+    let caseDepth = 0
+    let betweenDepth = 0
+    let start = 0
+    for (let index = 0; index < tokens.length; index++) {
+      if (tokens[index] === '(') depth++
+      if (tokens[index] === ')') depth--
+      if (tokens[index] === 'case') caseDepth++
+      if (tokens[index] === 'end') caseDepth--
+      if (depth === 0 && caseDepth === 0 && tokens[index] === 'between') betweenDepth++
+      if (depth === 0 && caseDepth === 0 && tokens[index] === 'and' && betweenDepth > 0) {
+        betweenDepth--
+        continue
+      }
+      if (depth === 0 && caseDepth === 0 && tokens[index] === operator) {
+        parts.push(tokens.slice(start, index))
+        start = index + 1
+      }
+    }
+    if (!parts.length) continue
+    parts.push(tokens.slice(start))
+    const branches = parts.map(mandatoryJoinEdges)
+    if (operator === 'or') {
+      return new Set([...branches[0]!].filter(edge => branches.every(branch => branch.has(edge))))
+    }
+    return new Set(branches.flatMap(branch => [...branch]))
+  }
+  let depth = 0
+  for (let index = 0; index < tokens.length; index++) {
+    if (tokens[index] === '(') depth++
+    if (tokens[index] === ')') depth--
+    if (depth !== 0 || !['=', '==', 'is'].includes(tokens[index]!)) continue
+    const column = /^([a-z_][a-z0-9_]*)\.[a-z_][a-z0-9_]*$/
+    const left = column.exec(unwrapJoinExpression(tokens.slice(0, index)).join(''))?.[1]
+    const right = column.exec(unwrapJoinExpression(tokens.slice(index + 1)).join(''))?.[1]
+    if (left && right && left !== right) return new Set([[left, right].sort().join('|')])
+  }
+  return new Set()
+}
+
+function assertConnectedJoins(sqlText: string) {
+  const tokens = (sqlText.match(/'(?:''|[^'])*'|[a-z_][a-z0-9_]*|\d+(?:\.\d+)?|==|<=|>=|!=|<>|[^\s]/gi) || [])
+    .map(token => token.toLowerCase())
+  let depth = 0
+  const depths = tokens.map((token) => {
+    if (token === ')') depth--
+    const current = depth
+    if (token === '(') depth++
+    return current
+  })
+  const clauseEnds = new Set(['where', 'group', 'having', 'order', 'limit'])
+  const joinEnds = new Set(['join', 'left', 'right', 'inner', 'outer', 'full', 'cross', 'natural', ','])
+  for (let select = 0; select < tokens.length; select++) {
+    if (tokens[select] !== 'select') continue
+    const level = depths[select]!
+    let end = select + 1
+    while (end < tokens.length && depths[end]! >= level
+      && !(depths[end] === level && ['union', 'intersect', 'except'].includes(tokens[end]!))) end++
+    const from = tokens.findIndex((token, index) => index > select && index < end && depths[index] === level && token === 'from')
+    if (from < 0) continue
+    let fromEnd = from + 1
+    while (fromEnd < end && !(depths[fromEnd] === level && clauseEnds.has(tokens[fromEnd]!))) fromEnd++
+
+    const sources: string[] = []
+    const edges = new Set<string>()
+    const unlinkedOuterSources = new Set<string>()
+    let needsSource = true
+    let nextJoinIsOuter = false
+    let currentJoinIsOuter = false
+    for (let index = from + 1; index < fromEnd; index++) {
+      if (depths[index] !== level) continue
+      const token = tokens[index]!
+      if (['left', 'right', 'full'].includes(token)) nextJoinIsOuter = true
+      if (token === 'join' || token === ',') {
+        currentJoinIsOuter = token === 'join' && nextJoinIsOuter
+        nextJoinIsOuter = false
+        needsSource = true
+        continue
+      }
+      if (needsSource) {
+        let source = token
+        if (token === '(') {
+          if (!['select', 'with'].includes(tokens[index + 1]!)) {
+            throw new AssistantSqlValidationError(
+              'Les groupes de tables entre parenthèses ne sont pas pris en charge. Utilisez des jointures explicites.',
+              'complexity_budget'
+            )
+          }
+          index++
+          while (index < fromEnd && depths[index]! > level) index++
+          // An anonymous derived table still contributes rows to a join.
+          // Keep it in the graph even though no qualifier can refer to it.
+          source = `subquery:${index}`
+        }
+        if (tokens[index + 1] === 'as') index++
+        const alias = tokens[index + 1]
+        if (alias && /^[a-z_][a-z0-9_]*$/.test(alias) && !tableAliasStopTokens.has(alias)) {
+          source = alias
+          index++
+        }
+        if (source) {
+          sources.push(source)
+          if (currentJoinIsOuter) unlinkedOuterSources.add(source)
+        }
+        needsSource = false
+        continue
+      }
+      if (token === 'on') {
+        let conditionEnd = index + 1
+        while (conditionEnd < fromEnd && !(depths[conditionEnd] === level && joinEnds.has(tokens[conditionEnd]!))) conditionEnd++
+        const conditionEdges = mandatoryJoinEdges(tokens.slice(index + 1, conditionEnd))
+        if (currentJoinIsOuter) {
+          // A LEFT JOIN cannot retroactively constrain a preceding cartesian
+          // product: its ON predicates are optional for the preserved rows.
+          const source = sources.at(-1)!
+          const connection = [...conditionEdges].find((edge) => {
+            const ends = edge.split('|')
+            return ends.includes(source) && ends.some(end => end !== source && sources.includes(end))
+          })
+          if (connection) {
+            edges.add(connection)
+            unlinkedOuterSources.delete(source)
+          }
+        } else {
+          for (const edge of conditionEdges) edges.add(edge)
+        }
+      }
+      if (token === 'using' && tokens[index + 1] === '(' && sources.length > 1) {
+        const columns: string[] = []
+        let cursor = index + 2
+        while (cursor < fromEnd && depths[cursor]! > level) columns.push(tokens[cursor++]!)
+        if (columns.length && columns.every(column => column === ',' || /^[a-z_][a-z0-9_]*$/.test(column))) {
+          edges.add(sources.slice(-2).sort().join('|'))
+          unlinkedOuterSources.delete(sources.at(-1)!)
+        }
+      }
+    }
+    if (sources.length < 2) continue
+    if (tokens[fromEnd] === 'where') {
+      let whereEnd = fromEnd + 1
+      while (whereEnd < end && !(depths[whereEnd] === level && clauseEnds.has(tokens[whereEnd]!))) whereEnd++
+      for (const edge of mandatoryJoinEdges(tokens.slice(fromEnd + 1, whereEnd))) edges.add(edge)
+    }
+    const connected = new Set([sources[0]!])
+    for (let pass = 1; pass < sources.length; pass++) {
+      for (const edge of edges) {
+        const [left, right] = edge.split('|') as [string, string]
+        if (!sources.includes(left) || !sources.includes(right)) continue
+        if (connected.has(left)) connected.add(right)
+        if (connected.has(right)) connected.add(left)
+      }
+    }
+    if (unlinkedOuterSources.size || new Set(sources).size !== sources.length || sources.some(source => !connected.has(source))) {
+      throw new AssistantSqlValidationError(
+        'Les jointures doivent relier les tables par des colonnes correspondantes. Les produits cartésiens ne sont pas autorisés.',
+        'complexity_budget'
+      )
+    }
+  }
+}
+
 function extractTableReferences(sqlText: string) {
   const tokens = tokenizeSql(sqlText)
   const references: TableReference[] = []
@@ -607,6 +789,7 @@ export function validateAssistantSql(candidate: string): AssistantValidatedQuery
   assertComplexityBudget(normalizedSql, analysis)
   assertAllowedTables(normalizedSql, analysis.tableReferences)
   assertAllowedColumns(normalizedSql)
+  assertConnectedJoins(normalizedSql)
 
   const limitMatch = normalizedSql.match(limitPattern)
   const limitApplied = !limitMatch
