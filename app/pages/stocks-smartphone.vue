@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { Row } from '@tanstack/table-core'
-import { getPaginationRowModel } from '@tanstack/table-core'
 import { format, isValid, parseISO } from 'date-fns'
 import { upperFirst } from 'scule'
 import { formatImei } from '~~/shared/utils/pos'
@@ -9,10 +8,7 @@ import type { SmartphoneStock } from '~/types'
 
 type SmartphoneTableInstance = {
   tableApi?: {
-    getFilteredSelectedRowModel: () => { rows: Row<SmartphoneStock>[] }
     getColumn: (id: string) => {
-      getFilterValue: () => unknown
-      setFilterValue: (value: string | boolean | undefined) => void
       toggleVisibility: (value: boolean) => void
     } | undefined
     getAllColumns: () => Array<{
@@ -20,14 +16,6 @@ type SmartphoneTableInstance = {
       getCanHide: () => boolean
       getIsVisible: () => boolean
     }>
-    getFilteredRowModel: () => { rows: Row<SmartphoneStock>[] }
-    getState: () => {
-      pagination: {
-        pageIndex: number
-        pageSize: number
-      }
-    }
-    setPageIndex: (page: number) => void
   }
 }
 
@@ -42,16 +30,17 @@ const table = useTemplateRef<SmartphoneTableInstance>('table')
 const editModalOpen = ref(false)
 const editingItem = ref<SmartphoneStock | null>(null)
 
-const columnFilters = ref([{
-  id: 'model',
-  value: ''
-}])
 const columnVisibility = ref()
-const rowSelection = ref({})
-
-const { data, status } = await useFetch<SmartphoneStock[]>('/api/smartphone-stocks', {
+const model = ref('')
+const soldFilter = ref<'all' | 'available' | 'sold'>('all')
+const search = refDebounced(model, 250)
+const filters = computed(() => ({ search: search.value, sold: soldFilter.value }))
+const { data, status, pagination, sorting, rowSelection, selectedIds: selectedSmartphoneIds, total } = useSmartphoneList<SmartphoneStock>({
   key: 'smartphone-stocks',
-  lazy: true
+  endpoint: '/api/smartphone-stocks/list',
+  filters,
+  matches: item => (filters.value.sold === 'all' || item.sold === (filters.value.sold === 'sold'))
+    && item.model.toLowerCase().includes(search.value.toLowerCase())
 })
 
 function formatSwissDate(value: string) {
@@ -165,10 +154,6 @@ function getRowItems(row: Row<SmartphoneStock>) {
   return items
 }
 
-const selectedSmartphoneIds = computed<number[]>(() => {
-  return table.value?.tableApi?.getFilteredSelectedRowModel().rows.map(row => row.original.id) || []
-})
-
 const columns: TableColumn<SmartphoneStock>[] = [
   {
     id: 'select',
@@ -270,35 +255,6 @@ const columns: TableColumn<SmartphoneStock>[] = [
   }
 ]
 
-const soldFilter = ref('all')
-
-watch(() => soldFilter.value, (newVal) => {
-  if (!table.value?.tableApi) return
-
-  const soldColumn = table.value.tableApi.getColumn('sold')
-  if (!soldColumn) return
-
-  if (newVal === 'all') {
-    soldColumn.setFilterValue(undefined)
-  } else {
-    soldColumn.setFilterValue(newVal === 'sold')
-  }
-})
-
-const model = computed({
-  get: (): string => {
-    return (table.value?.tableApi?.getColumn('model')?.getFilterValue() as string) || ''
-  },
-  set: (value: string) => {
-    table.value?.tableApi?.getColumn('model')?.setFilterValue(value || undefined)
-  }
-})
-
-const pagination = ref({
-  pageIndex: 0,
-  pageSize: 10
-})
-
 function handleImeiScan(value: string) {
   model.value = value
 }
@@ -344,11 +300,11 @@ function handleImeiScan(value: string) {
         <div class="flex flex-wrap items-center gap-1.5">
           <SmartphonesDeleteModal
             v-if="can('records:delete')"
-            :count="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
+            :count="selectedSmartphoneIds.length"
             :ids="selectedSmartphoneIds"
           >
             <UButton
-              v-if="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
+              v-if="selectedSmartphoneIds.length"
               label="Supprimer"
               color="error"
               variant="subtle"
@@ -356,7 +312,7 @@ function handleImeiScan(value: string) {
             >
               <template #trailing>
                 <UKbd>
-                  {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length }}
+                  {{ selectedSmartphoneIds.length }}
                 </UKbd>
               </template>
             </UButton>
@@ -412,15 +368,19 @@ function handleImeiScan(value: string) {
 
       <UTable
         ref="table"
-        v-model:column-filters="columnFilters"
         v-model:column-visibility="columnVisibility"
         v-model:row-selection="rowSelection"
         v-model:pagination="pagination"
+        v-model:sorting="sorting"
+        :get-row-id="(row: SmartphoneStock) => String(row.id)"
+        :sorting-options="{ manualSorting: true }"
+        :column-filters-options="{ manualFiltering: true }"
         :pagination-options="{
-          getPaginationRowModel: getPaginationRowModel()
+          manualPagination: true,
+          rowCount: total
         }"
         class="shrink-0"
-        :data="data"
+        :data="data?.items"
         :columns="columns"
         :loading="status === 'pending'"
         :ui="{
@@ -445,16 +405,16 @@ function handleImeiScan(value: string) {
 
       <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
         <div class="text-sm text-muted">
-          {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length || 0 }} sur
-          {{ table?.tableApi?.getFilteredRowModel().rows.length || 0 }} ligne(s) sélectionnée(s).
+          {{ selectedSmartphoneIds.length || 0 }} sur
+          {{ total || 0 }} ligne(s) sélectionnée(s).
         </div>
 
         <div class="flex items-center gap-1.5">
           <UPagination
-            :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-            :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-            :total="table?.tableApi?.getFilteredRowModel().rows.length"
-            @update:page="(p: number) => table?.tableApi?.setPageIndex(p - 1)"
+            :page="pagination.pageIndex + 1"
+            :items-per-page="pagination.pageSize"
+            :total="total"
+            @update:page="(p: number) => pagination.pageIndex = p - 1"
           />
         </div>
       </div>

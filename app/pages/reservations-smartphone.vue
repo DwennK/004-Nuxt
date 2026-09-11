@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn, TabsItem } from '@nuxt/ui'
 import type { Row } from '@tanstack/table-core'
-import { getPaginationRowModel } from '@tanstack/table-core'
 import { format, isValid, parseISO } from 'date-fns'
 import { upperFirst } from 'scule'
 import type { SmartphoneReservationRequest, SmartphoneReservationStatus } from '~/types'
 
 type ReservationTableInstance = {
   tableApi?: {
-    getFilteredSelectedRowModel: () => { rows: Row<SmartphoneReservationRequest>[] }
     getColumn: (id: string) => {
-      getFilterValue: () => unknown
-      setFilterValue: (value: string | undefined) => void
       toggleVisibility: (value: boolean) => void
     } | undefined
     getAllColumns: () => Array<{
@@ -19,14 +15,6 @@ type ReservationTableInstance = {
       getCanHide: () => boolean
       getIsVisible: () => boolean
     }>
-    getFilteredRowModel: () => { rows: Row<SmartphoneReservationRequest>[] }
-    getState: () => {
-      pagination: {
-        pageIndex: number
-        pageSize: number
-      }
-    }
-    setPageIndex: (page: number) => void
   }
 }
 
@@ -41,16 +29,17 @@ const table = useTemplateRef<ReservationTableInstance>('table')
 const editModalOpen = ref(false)
 const editingItem = ref<SmartphoneReservationRequest | null>(null)
 
-const columnFilters = ref([{
-  id: 'name',
-  value: ''
-}])
 const columnVisibility = ref()
-const rowSelection = ref({})
-
-const { data, status } = await useFetch<SmartphoneReservationRequest[]>('/api/smartphone-reservations', {
+const name = ref('')
+const requestStatusFilter = ref<SmartphoneReservationStatus>('pending')
+const search = refDebounced(name, 250)
+const filters = computed(() => ({ search: search.value, status: requestStatusFilter.value }))
+const { data, status, pagination, sorting, rowSelection, selectedIds: selectedReservationIds, total } = useSmartphoneList<SmartphoneReservationRequest>({
   key: 'smartphone-reservation-requests',
-  lazy: true
+  endpoint: '/api/smartphone-reservations/list',
+  filters,
+  matches: item => item.status === filters.value.status
+    && item.name.toLowerCase().includes(search.value.toLowerCase())
 })
 
 const statusLabels: Record<SmartphoneReservationStatus, string> = {
@@ -218,10 +207,6 @@ function getRowItems(row: Row<SmartphoneReservationRequest>) {
   return items
 }
 
-const selectedReservationIds = computed<number[]>(() => {
-  return table.value?.tableApi?.getFilteredSelectedRowModel().rows.map(row => row.original.id) || []
-})
-
 const columns: TableColumn<SmartphoneReservationRequest>[] = [
   {
     id: 'select',
@@ -323,31 +308,6 @@ const columns: TableColumn<SmartphoneReservationRequest>[] = [
     )
   }
 ]
-
-const requestStatusFilter = ref<SmartphoneReservationStatus>('pending')
-
-watch([() => requestStatusFilter.value, () => table.value?.tableApi], ([newVal, tableApi]) => {
-  if (!tableApi) return
-
-  const statusColumn = tableApi.getColumn('status')
-  if (!statusColumn) return
-
-  statusColumn.setFilterValue(newVal)
-}, { immediate: true })
-
-const name = computed({
-  get: (): string => {
-    return (table.value?.tableApi?.getColumn('name')?.getFilterValue() as string) || ''
-  },
-  set: (value: string) => {
-    table.value?.tableApi?.getColumn('name')?.setFilterValue(value || undefined)
-  }
-})
-
-const pagination = ref({
-  pageIndex: 0,
-  pageSize: 10
-})
 </script>
 
 <template>
@@ -398,11 +358,11 @@ const pagination = ref({
           <div class="flex flex-wrap items-center gap-1.5">
             <ReservationsDeleteModal
               v-if="can('records:delete')"
-              :count="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
+              :count="selectedReservationIds.length"
               :ids="selectedReservationIds"
             >
               <UButton
-                v-if="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
+                v-if="selectedReservationIds.length"
                 label="Supprimer"
                 color="error"
                 variant="subtle"
@@ -410,7 +370,7 @@ const pagination = ref({
               >
                 <template #trailing>
                   <UKbd>
-                    {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length }}
+                    {{ selectedReservationIds.length }}
                   </UKbd>
                 </template>
               </UButton>
@@ -456,15 +416,19 @@ const pagination = ref({
 
       <UTable
         ref="table"
-        v-model:column-filters="columnFilters"
         v-model:column-visibility="columnVisibility"
         v-model:row-selection="rowSelection"
         v-model:pagination="pagination"
+        v-model:sorting="sorting"
+        :get-row-id="(row: SmartphoneReservationRequest) => String(row.id)"
+        :sorting-options="{ manualSorting: true }"
+        :column-filters-options="{ manualFiltering: true }"
         :pagination-options="{
-          getPaginationRowModel: getPaginationRowModel()
+          manualPagination: true,
+          rowCount: total
         }"
         class="shrink-0"
-        :data="data"
+        :data="data?.items"
         :columns="columns"
         :loading="status === 'pending'"
         :ui="{
@@ -490,16 +454,16 @@ const pagination = ref({
 
       <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
         <div class="text-sm text-muted">
-          {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length || 0 }} sur
-          {{ table?.tableApi?.getFilteredRowModel().rows.length || 0 }} ligne(s) sélectionnée(s).
+          {{ selectedReservationIds.length || 0 }} sur
+          {{ total || 0 }} ligne(s) sélectionnée(s).
         </div>
 
         <div class="flex items-center gap-1.5">
           <UPagination
-            :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-            :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-            :total="table?.tableApi?.getFilteredRowModel().rows.length"
-            @update:page="(p: number) => table?.tableApi?.setPageIndex(p - 1)"
+            :page="pagination.pageIndex + 1"
+            :items-per-page="pagination.pageSize"
+            :total="total"
+            @update:page="(p: number) => pagination.pageIndex = p - 1"
           />
         </div>
       </div>

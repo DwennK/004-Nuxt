@@ -1,7 +1,9 @@
-import { asc, eq, inArray } from 'drizzle-orm'
+import { asc, eq, inArray, sql } from 'drizzle-orm'
 import type { SmartphoneReservationRequest, SmartphoneReservationStatus } from '~~/shared/types/smartphones'
+import type { SmartphoneListResponse, SmartphoneReservationListQuery } from '~~/shared/types/smartphone-list'
 import { smartphoneReservationRequests } from '../db/schema'
 import { useDb, useTursoClient } from './turso'
+import { filterAndSortSmartphoneCandidates, smartphoneListPage } from './smartphone-list'
 
 type SmartphoneReservationRow = typeof smartphoneReservationRequests.$inferSelect
 
@@ -95,6 +97,51 @@ export async function listSmartphoneReservations() {
     .orderBy(asc(smartphoneReservationRequests.requestedAt), asc(smartphoneReservationRequests.id))
 
   return result.map(mapSmartphoneReservation)
+}
+
+export async function listSmartphoneReservationsPage(query: SmartphoneReservationListQuery): Promise<SmartphoneListResponse<SmartphoneReservationRequest>> {
+  await ensureSmartphoneReservationsTable()
+
+  const db = useDb()
+  const where = query.status === 'all' ? undefined : eq(smartphoneReservationRequests.status, query.status)
+  const orderBy = [asc(smartphoneReservationRequests.requestedAt), asc(smartphoneReservationRequests.id)]
+  let total: number | undefined
+  let page = query.page
+  let rows: SmartphoneReservationRow[]
+
+  if (query.search || query.sort !== 'default') {
+    const candidates = await db.select({ id: smartphoneReservationRequests.id, label: smartphoneReservationRequests.name })
+      .from(smartphoneReservationRequests).where(where).orderBy(...orderBy)
+    const matching = filterAndSortSmartphoneCandidates(candidates, query)
+    total = matching.length
+    page = smartphoneListPage(total, query)
+    const pageIds = matching.slice((page - 1) * query.pageSize, page * query.pageSize).map(row => row.id)
+    const pageRows = pageIds.length
+      ? await db.select().from(smartphoneReservationRequests).where(inArray(smartphoneReservationRequests.id, pageIds))
+      : []
+    const byId = new Map(pageRows.map(row => [row.id, row]))
+    rows = pageIds.flatMap(id => byId.has(id) ? [byId.get(id)!] : [])
+  } else {
+    if (query.includeTotal) {
+      const counts = await db.select({ total: sql<number>`count(*)` }).from(smartphoneReservationRequests).where(where)
+      total = Number(counts[0]?.total || 0)
+      page = smartphoneListPage(total, query)
+    }
+    rows = await db.select().from(smartphoneReservationRequests).where(where).orderBy(...orderBy)
+      .limit(query.pageSize).offset((page - 1) * query.pageSize)
+  }
+
+  const selectedRows = query.selectedIds.length
+    ? await db.select().from(smartphoneReservationRequests).where(inArray(smartphoneReservationRequests.id, query.selectedIds))
+    : []
+
+  return {
+    items: rows.map(mapSmartphoneReservation),
+    selectedItems: selectedRows.map(mapSmartphoneReservation),
+    total,
+    page,
+    pageSize: query.pageSize
+  }
 }
 
 export async function createSmartphoneReservation(input: Omit<SmartphoneReservationRequest, 'id'>) {

@@ -1,7 +1,9 @@
 import { asc, eq, inArray, sql } from 'drizzle-orm'
 import type { SmartphoneStock } from '~~/shared/types/smartphones'
+import type { SmartphoneListResponse, SmartphoneStockListQuery } from '~~/shared/types/smartphone-list'
 import { smartphoneStocks } from '../db/schema'
 import { useDb, useTursoClient } from './turso'
+import { filterAndSortSmartphoneCandidates, smartphoneListPage } from './smartphone-list'
 
 type SmartphoneStockRow = typeof smartphoneStocks.$inferSelect
 
@@ -233,6 +235,52 @@ export async function listSmartphoneStocks() {
   const result = await db.select().from(smartphoneStocks).orderBy(asc(smartphoneStocks.id))
 
   return result.map(mapSmartphoneStock)
+}
+
+export async function listSmartphoneStocksPage(query: SmartphoneStockListQuery): Promise<SmartphoneListResponse<SmartphoneStock>> {
+  await ensureSmartphoneStocksTable()
+
+  const db = useDb()
+  const where = query.sold === 'all' ? undefined : eq(smartphoneStocks.sold, query.sold === 'sold')
+  let total: number | undefined
+  let page = query.page
+  let rows: SmartphoneStockRow[]
+
+  if (query.search || query.sort !== 'default') {
+    const candidates = await db.select({ id: smartphoneStocks.id, label: smartphoneStocks.model })
+      .from(smartphoneStocks).where(where).orderBy(asc(smartphoneStocks.id))
+    const matching = filterAndSortSmartphoneCandidates(candidates, query)
+    total = matching.length
+    page = smartphoneListPage(total, query)
+    const pageIds = matching.slice((page - 1) * query.pageSize, page * query.pageSize).map(row => row.id)
+    const pageRows = pageIds.length
+      ? await db.select().from(smartphoneStocks).where(inArray(smartphoneStocks.id, pageIds))
+      : []
+    const byId = new Map(pageRows.map(row => [row.id, row]))
+    rows = pageIds.flatMap(id => byId.has(id) ? [byId.get(id)!] : [])
+  } else {
+    if (query.includeTotal) {
+      const counts = await db.select({ total: sql<number>`count(*)` }).from(smartphoneStocks).where(where)
+      total = Number(counts[0]?.total || 0)
+      page = smartphoneListPage(total, query)
+    }
+    rows = await db.select().from(smartphoneStocks).where(where).orderBy(asc(smartphoneStocks.id))
+      .limit(query.pageSize).offset((page - 1) * query.pageSize)
+  }
+
+  // Reconcile only explicitly selected records, including selections on other
+  // pages/filters. Refreshes must not silently turn stale row indexes into IDs.
+  const selectedRows = query.selectedIds.length
+    ? await db.select().from(smartphoneStocks).where(inArray(smartphoneStocks.id, query.selectedIds))
+    : []
+
+  return {
+    items: rows.map(mapSmartphoneStock),
+    selectedItems: selectedRows.map(mapSmartphoneStock),
+    total,
+    page,
+    pageSize: query.pageSize
+  }
 }
 
 export async function createSmartphoneStock(input: Omit<SmartphoneStock, 'id'>) {
