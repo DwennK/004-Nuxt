@@ -1,17 +1,12 @@
 import 'dotenv/config'
 import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
-import { createClient } from '@libsql/client'
 import { Hash } from '@adonisjs/hash'
 import { Scrypt } from '@adonisjs/hash/drivers/scrypt'
+import { createDatabaseClient } from './db/_shared.mjs'
+import { readSeedTarget } from './seed-target.mjs'
 
-const url = process.env.TURSO_URL
-const authToken = process.env.TURSO_TOKEN
-
-if (!url || !authToken) {
-  console.error('TURSO_URL / TURSO_TOKEN manquants dans .env')
-  process.exit(1)
-}
+const target = readSeedTarget()
 
 const rl = createInterface({ input: stdin, output: stdout })
 const email = (await rl.question('Email: ')).trim().toLowerCase()
@@ -27,7 +22,7 @@ if (!email || !name || password.length < 8) {
 const hash = new Hash(new Scrypt({}))
 const passwordHash = await hash.make(password)
 
-const client = createClient({ url, authToken })
+const client = createDatabaseClient(target)
 
 const existing = await client.execute({
   sql: 'SELECT id FROM users WHERE email = ? LIMIT 1',

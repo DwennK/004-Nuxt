@@ -131,7 +131,14 @@ Create the first administrator on the same development database:
 node scripts/seed-user.mjs
 ```
 
-The script prompts for email, name and password. Alternatively, `npm run seed:test-user` creates or refreshes the temporary account documented in [Development Login](./docs/dev-login.md). Both seed commands write to the configured database; they do not provide the safe migration CLI's target confirmations. Never use the temporary account in production.
+The script prompts for email, name and password. Pass an explicit local target
+(`--url file:./test.db`) or the remote environment and exact host confirmation
+described in [Database migrations](./docs/database-migrations.md). Remote targets
+must be allowlisted; production administrator creation also requires
+`--allow-production-write`. Alternatively, `npm run seed:test-user -- --url
+file:./test.db` creates the temporary account documented in
+[Development Login](./docs/dev-login.md). Test accounts and report fixtures are
+restricted to explicit local development or test databases.
 
 Run the dev server:
 

@@ -1,7 +1,7 @@
-import { config as loadEnv } from 'dotenv'
-import { createClient } from '@libsql/client'
+import { createDatabaseClient } from './db/_shared.mjs'
+import { readSeedTarget } from './seed-target.mjs'
 
-loadEnv()
+const target = readSeedTarget({ testOnly: true })
 
 const MARKER = '[codex-report-fixture]'
 const FIXTURE_DOMAIN = 'fixture.microwest.local'
@@ -81,14 +81,7 @@ const serviceLabels = [
   'Paramétrage eSIM'
 ]
 
-const client = createClient({
-  url: process.env.TURSO_URL,
-  authToken: process.env.TURSO_TOKEN
-})
-
-if (!process.env.TURSO_URL || !process.env.TURSO_TOKEN) {
-  throw new Error('Missing TURSO_URL or TURSO_TOKEN in environment')
-}
+const client = createDatabaseClient(target)
 
 function mulberry32(seed) {
   return function rand() {

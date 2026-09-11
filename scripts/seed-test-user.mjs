@@ -1,24 +1,26 @@
 import 'dotenv/config'
-import { createClient } from '@libsql/client'
 import { Hash } from '@adonisjs/hash'
 import { Scrypt } from '@adonisjs/hash/drivers/scrypt'
+import { createDatabaseClient } from './db/_shared.mjs'
+import { readSeedTarget } from './seed-target.mjs'
 
 const email = 'test@live.fr'
 const password = 'test'
 const name = 'Compte test POS'
 
-const url = process.env.TURSO_URL || process.env.NUXT_TURSO_URL
-const authToken = process.env.TURSO_TOKEN || process.env.NUXT_TURSO_TOKEN
-
-if (!url || !authToken) {
-  console.error('Missing TURSO_URL/TURSO_TOKEN. Check .env before seeding the test POS user.')
-  process.exit(1)
+// Preserve the runtime-config aliases supported by this development command.
+if (!process.env.TURSO_URL && process.env.NUXT_TURSO_URL) {
+  process.env.TURSO_URL = process.env.NUXT_TURSO_URL
+}
+if (!process.env.TURSO_TOKEN && process.env.NUXT_TURSO_TOKEN) {
+  process.env.TURSO_TOKEN = process.env.NUXT_TURSO_TOKEN
 }
 
+const target = readSeedTarget({ testOnly: true })
 const hash = new Hash(new Scrypt())
 const passwordHash = await hash.make(password)
 const now = new Date().toISOString()
-const client = createClient({ url, authToken })
+const client = createDatabaseClient(target)
 
 try {
   await client.execute({
