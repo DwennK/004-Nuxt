@@ -2,6 +2,7 @@ import { and, asc, eq, or, sql } from 'drizzle-orm'
 import { catalogItems } from '~~/server/db/schema'
 import { normalizeSearchText } from '~~/shared/utils/pos'
 import type { CatalogItemInput, CatalogItemListResponse, CatalogItemRecord, CatalogItemType } from '~~/shared/types/pos'
+import type { CatalogSuggestionsResponse, CatalogSummaryResponse } from '~~/shared/types/lookups'
 import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
 import { normalizeOptionalText, normalizeRequiredText } from '~~/shared/lib/text'
@@ -110,16 +111,10 @@ function mapCatalogItem(row: typeof catalogItems.$inferSelect): CatalogItemRecor
   }
 }
 
-export async function listCatalogItems(options: ListCatalogItemsOptions = {}): Promise<CatalogItemListResponse> {
-  await ensurePosSchema()
-
-  const db = useDb()
+function catalogSearchQuery(options: ListCatalogItemsOptions) {
   const normalizedSearch = normalizeSearchText(options.search)
   const searchTokens = normalizedSearch.split(' ').filter(Boolean)
   const normalizedCategory = options.category?.trim()
-  const page = Math.max(options.page || 1, 1)
-  const pageSize = Math.min(Math.max(options.pageSize || 50, 1), 250)
-  const offset = (page - 1) * pageSize
   const descriptiveColumns = [
     sql`lower(${catalogItems.name})`,
     sql`lower(coalesce(${catalogItems.brand}, ''))`,
@@ -172,18 +167,56 @@ export async function listCatalogItems(options: ListCatalogItemsOptions = {}): P
       end`
     : undefined
 
+  return {
+    whereClause,
+    orderBy: [
+      ...(matchOrder ? [matchOrder] : []),
+      ...(relevanceOrder ? [relevanceOrder] : []),
+      asc(catalogItems.category),
+      asc(catalogItems.name),
+      asc(catalogItems.id)
+    ]
+  }
+}
+
+export async function suggestCatalogItems(options: Omit<ListCatalogItemsOptions, 'page'> = {}): Promise<CatalogSuggestionsResponse> {
+  await ensurePosSchema()
+  const { whereClause, orderBy } = catalogSearchQuery(options)
+  const rows = await useDb().select().from(catalogItems)
+    .where(whereClause)
+    .orderBy(...orderBy)
+    .limit(Math.min(Math.max(options.pageSize || 25, 1), 250))
+
+  return { items: rows.map(mapCatalogItem) }
+}
+
+export async function getCatalogSummary(filters: Partial<Record<CatalogItemType, Pick<ListCatalogItemsOptions, 'search' | 'category' | 'activeOnly'>>> = {}): Promise<CatalogSummaryResponse> {
+  await ensurePosSchema()
+  const types = ['product', 'repair', 'service'] as const
+  const rows = await useDb().select({ type: catalogItems.type, total: sql<number>`count(*)` })
+    .from(catalogItems)
+    .where(or(...types.map(type => catalogSearchQuery({ ...filters[type], type }).whereClause)))
+    .groupBy(catalogItems.type)
+  const totals: CatalogSummaryResponse = { product: 0, repair: 0, service: 0 }
+  for (const row of rows) totals[row.type] = Number(row.total)
+  return totals
+}
+
+export async function listCatalogItems(options: ListCatalogItemsOptions = {}): Promise<CatalogItemListResponse> {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const page = Math.max(options.page || 1, 1)
+  const pageSize = Math.min(Math.max(options.pageSize || 50, 1), 250)
+  const offset = (page - 1) * pageSize
+  const { whereClause, orderBy } = catalogSearchQuery(options)
+
   const [totalRows, rows] = await Promise.all([
     db.select({ total: sql<number>`count(*)` }).from(catalogItems).where(whereClause),
     db.select()
       .from(catalogItems)
       .where(whereClause)
-      .orderBy(
-        ...(matchOrder ? [matchOrder] : []),
-        ...(relevanceOrder ? [relevanceOrder] : []),
-        asc(catalogItems.category),
-        asc(catalogItems.name),
-        asc(catalogItems.id)
-      )
+      .orderBy(...orderBy)
       .limit(pageSize)
       .offset(offset)
   ])

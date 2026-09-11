@@ -3,22 +3,13 @@ import { customers } from '~~/server/db/schema'
 import { mapCustomer } from '~~/server/modules/customers/mapper'
 import { normalizeOptionalText, normalizeRequiredText, splitLegacyName } from '~~/shared/lib/text'
 import type { CustomerListResponse, CustomerUpsertInput } from '~~/shared/types/pos'
+import type { CustomerSuggestionsResponse } from '~~/shared/types/lookups'
 import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
 
-export async function listCustomers(filters?: {
-  search?: string
-  page?: number
-  pageSize?: number
-}): Promise<CustomerListResponse> {
-  await ensurePosSchema()
-
-  const db = useDb()
-  const normalizedSearch = filters?.search?.trim().toLowerCase()
+function customerSearchQuery(search?: string) {
+  const normalizedSearch = search?.trim().toLowerCase()
   const searchPattern = normalizedSearch ? `%${normalizedSearch}%` : null
-  const page = Math.max(filters?.page || 1, 1)
-  const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
-  const offset = (page - 1) * pageSize
 
   const whereClause = and(
     searchPattern
@@ -44,17 +35,50 @@ export async function listCustomers(filters?: {
       end`
     : undefined
 
+  return {
+    whereClause,
+    orderBy: [
+      ...(relevanceOrder ? [relevanceOrder] : []),
+      asc(customers.lastName),
+      asc(customers.firstName),
+      asc(customers.id)
+    ]
+  }
+}
+
+export async function suggestCustomers(filters: {
+  search?: string
+  pageSize?: number
+} = {}): Promise<CustomerSuggestionsResponse> {
+  await ensurePosSchema()
+  const { whereClause, orderBy } = customerSearchQuery(filters.search)
+  const rows = await useDb().select().from(customers)
+    .where(whereClause)
+    .orderBy(...orderBy)
+    .limit(Math.min(Math.max(filters.pageSize || 20, 1), 250))
+
+  return { items: rows.map(mapCustomer) }
+}
+
+export async function listCustomers(filters?: {
+  search?: string
+  page?: number
+  pageSize?: number
+}): Promise<CustomerListResponse> {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const page = Math.max(filters?.page || 1, 1)
+  const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
+  const offset = (page - 1) * pageSize
+  const { whereClause, orderBy } = customerSearchQuery(filters?.search)
+
   const [totalRows, rows] = await Promise.all([
     db.select({ total: sql<number>`count(*)` }).from(customers).where(whereClause),
     db.select()
       .from(customers)
       .where(whereClause)
-      .orderBy(
-        ...(relevanceOrder ? [relevanceOrder] : []),
-        asc(customers.lastName),
-        asc(customers.firstName),
-        asc(customers.id)
-      )
+      .orderBy(...orderBy)
       .limit(pageSize)
       .offset(offset)
   ])

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn, TabsItem } from '@nuxt/ui'
 import type { LocationQueryValue } from 'vue-router'
+import type { CatalogSummaryResponse } from '~~/shared/types/lookups'
 import type {
   CatalogItemInput,
   CatalogItemListResponse,
@@ -72,19 +73,49 @@ function buildQuery(
 const articleQuery = computed(() => buildQuery('product', debouncedArticleSearch.value, articleCategory.value, articleActiveOnly.value, articlePagination.value))
 const repairQuery = computed(() => buildQuery('repair', debouncedRepairSearch.value, repairCategory.value, repairActiveOnly.value, repairPagination.value))
 const serviceQuery = computed(() => buildQuery('service', debouncedServiceSearch.value, serviceCategory.value, serviceActiveOnly.value, servicePagination.value))
+const summaryQuery = computed(() => ({
+  productSearch: debouncedArticleSearch.value.trim() || undefined,
+  productCategory: articleCategory.value === ALL_CATEGORIES ? undefined : articleCategory.value,
+  productActiveOnly: articleActiveOnly.value || undefined,
+  repairSearch: debouncedRepairSearch.value.trim() || undefined,
+  repairCategory: repairCategory.value === ALL_CATEGORIES ? undefined : repairCategory.value,
+  repairActiveOnly: repairActiveOnly.value || undefined,
+  serviceSearch: debouncedServiceSearch.value.trim() || undefined,
+  serviceCategory: serviceCategory.value === ALL_CATEGORIES ? undefined : serviceCategory.value,
+  serviceActiveOnly: serviceActiveOnly.value || undefined
+}))
 
 const [
   { data: articleResponse, status: articleStatus, error: articleError, refresh: refreshArticles },
   { data: repairResponse, status: repairStatus, error: repairError, refresh: refreshRepairs },
-  { data: serviceResponse, status: serviceStatus, error: serviceError, refresh: refreshServices }
+  { data: serviceResponse, status: serviceStatus, error: serviceError, refresh: refreshServices },
+  { data: catalogSummary, refresh: refreshSummary }
 ] = await Promise.all([
-  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: articleQuery, key: 'catalog-articles', lazy: true }),
-  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: repairQuery, key: 'catalog-repairs', lazy: true }),
-  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: serviceQuery, key: 'catalog-services', lazy: true })
+  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: articleQuery, key: 'catalog-articles', lazy: true, immediate: activeView.value === 'articles', watch: false }),
+  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: repairQuery, key: 'catalog-repairs', lazy: true, immediate: activeView.value === 'repairs', watch: false }),
+  useFetch<CatalogItemListResponse>('/api/catalog-items', { query: serviceQuery, key: 'catalog-services', lazy: true, immediate: activeView.value === 'services', watch: false }),
+  useFetch<CatalogSummaryResponse>('/api/catalog-items/summary', { query: summaryQuery, key: 'catalog-summary', lazy: true, watch: false })
 ])
 
-async function refresh() {
-  await Promise.all([refreshArticles(), refreshRepairs(), refreshServices()])
+watch(summaryQuery, () => refreshSummary(), { flush: 'post' })
+
+const catalogSources = {
+  articles: { query: articleQuery, refresh: refreshArticles },
+  repairs: { query: repairQuery, refresh: refreshRepairs },
+  services: { query: serviceQuery, refresh: refreshServices }
+}
+
+// Only the visible table is read. Returning to a tab also reloads changes made
+// while it was hidden, including items moved from one type to another.
+watch([activeView, () => catalogSources[activeView.value].query.value], async () => {
+  await catalogSources[activeView.value].refresh()
+}, { flush: 'post' })
+
+async function refreshChangedTypes(types: CatalogItemType[]) {
+  await Promise.all([
+    refreshSummary(),
+    ...(types.includes(getViewType(activeView.value)) ? [catalogSources[activeView.value].refresh()] : [])
+  ])
 }
 
 const articleItems = computed(() => articleResponse.value?.items || [])
@@ -523,6 +554,7 @@ const serviceColumns: TableColumn<CatalogItemRecord>[] = [
 ]
 
 async function saveItem(payload: CatalogItemInput) {
+  const originalType = editingItem.value?.type
   if (editingItem.value) {
     const result = await save(
       () => $fetch(`/api/catalog-items/${editingItem.value!.id}`, {
@@ -554,7 +586,7 @@ async function saveItem(payload: CatalogItemInput) {
     createOpen.value = false
   }
 
-  await refresh()
+  await refreshChangedTypes(originalType ? [originalType, payload.type] : [payload.type])
 }
 
 async function removeItem(item: CatalogItemRecord) {
@@ -577,7 +609,7 @@ async function removeItem(item: CatalogItemRecord) {
   )
 
   if (result.ok) {
-    await refresh()
+    await refreshChangedTypes([item.type])
   }
 }
 
@@ -717,17 +749,17 @@ watch(editOpen, (open) => {
         <div class="grid gap-4 md:grid-cols-3">
           <PosSummaryCard
             title="Articles"
-            :value="String(articleTotal)"
+            :value="catalogSummary ? String(catalogSummary.product) : '—'"
             icon="i-lucide-package-search"
           />
           <PosSummaryCard
             title="Réparations"
-            :value="String(repairTotal)"
+            :value="catalogSummary ? String(catalogSummary.repair) : '—'"
             icon="i-lucide-wrench"
           />
           <PosSummaryCard
             title="Services"
-            :value="String(serviceTotal)"
+            :value="catalogSummary ? String(catalogSummary.service) : '—'"
             icon="i-lucide-briefcase-business"
           />
         </div>

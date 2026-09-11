@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { CustomerFormValue, CustomerListResponse, CustomerRecord } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerRecord } from '~~/shared/types/pos'
+import type { CustomerSuggestionsResponse } from '~~/shared/types/lookups'
 
 type CustomerSelectItem = CustomerRecord & {
   label: string
@@ -73,17 +74,22 @@ const customerItems = computed<CustomerSelectItem[]>(() => customersList.value.m
 const trimmedSearch = computed(() => searchTerm.value.trim())
 const debouncedSearch = refDebounced(trimmedSearch, 250)
 
-watch(debouncedSearch, async (term) => {
+watch(debouncedSearch, async (term, _previous, onCleanup) => {
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
   if (term.length < 2) {
+    remoteSearchPending.value = false
     return
   }
 
   remoteSearchPending.value = true
 
   try {
-    const response = await $fetch<CustomerListResponse>('/api/customers', {
-      query: { search: term, pageSize: 20 }
+    const response = await $fetch<CustomerSuggestionsResponse>('/api/customers/suggestions', {
+      query: { search: term, pageSize: 20 },
+      signal: controller.signal
     })
+    if (controller.signal.aborted) return
 
     const merged = new Map(remoteCustomers.value.map(customer => [customer.id, customer]))
 
@@ -95,7 +101,7 @@ watch(debouncedSearch, async (term) => {
   } catch {
     // La recherche serveur est un complément : la liste locale reste utilisable.
   } finally {
-    remoteSearchPending.value = false
+    if (!controller.signal.aborted) remoteSearchPending.value = false
   }
 })
 

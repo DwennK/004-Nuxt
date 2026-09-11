@@ -25,6 +25,7 @@ import type {
   TicketWorkflowSummary
 } from '~~/shared/types/pos'
 import type { PosDatabaseExecutor } from '../turso'
+import type { SuggestionsResponse, TicketLookupItem } from '~~/shared/types/lookups'
 import { useDb } from '../turso'
 import { calculateCommercialTotals as calculateDocumentTotals } from '~~/shared/domain/commercial/money'
 import { createTicketEvent } from '~~/server/utils/pos/ticket-events'
@@ -111,14 +112,7 @@ async function getTicketLines(ticketId: number, executor?: PosDatabaseExecutor) 
 async function replaceTicketLines(ticketId: number, lines: TicketLineInput[], executor?: PosDatabaseExecutor) {
   const db = executor || useDb()
   const totals = calculateDocumentTotals(lines)
-
-  await db.delete(ticketLines).where(eq(ticketLines.ticketId, ticketId))
-
-  if (!totals.lines.length) {
-    return []
-  }
-
-  await db.insert(ticketLines).values(totals.lines.map((line, index) => ({
+  const values = totals.lines.map((line, index) => ({
     ticketId,
     catalogItemId: lines[index]?.catalogItemId ?? null,
     label: lines[index]!.label,
@@ -127,9 +121,17 @@ async function replaceTicketLines(ticketId: number, lines: TicketLineInput[], ex
     vatRate: lines[index]!.vatRate,
     lineTotal: line.lineTotal,
     categoryHint: lines[index]!.categoryHint ?? null
-  })))
+  }))
+  const existing = await getTicketLines(ticketId, db)
+  const fields = ['catalogItemId', 'label', 'quantity', 'unitPrice', 'vatRate', 'lineTotal', 'categoryHint'] as const
+  if (existing.length === values.length && existing.every((line, index) => fields.every(field => line[field] === values[index]![field]))) {
+    return
+  }
 
-  return getTicketLines(ticketId, db)
+  await db.delete(ticketLines).where(eq(ticketLines.ticketId, ticketId))
+  if (values.length) {
+    await db.insert(ticketLines).values(values)
+  }
 }
 
 export async function cloneTicketLines(ticketId: number) {
@@ -555,25 +557,19 @@ function buildSyntheticEvents(ticket: TicketRecord, documentRows: DocumentRecord
   })
 }
 
-export async function listTickets(filters?: {
+type TicketListFilters = {
   q?: string
   status?: string
   customerId?: number
   page?: number
   pageSize?: number
-}): Promise<TicketListResponse> {
-  await ensurePosSchema()
+}
 
-  const db = useDb()
-
-  const page = Math.max(filters?.page || 1, 1)
-  const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
-  const offset = (page - 1) * pageSize
+function ticketSearchQuery(filters?: TicketListFilters) {
   const searchTerm = filters?.q?.trim().toLowerCase()
   const searchPattern = searchTerm ? `%${searchTerm}%` : null
   const referenceTerm = dossierReferenceTerm(searchTerm)
   const referenceColumn = dossierReferenceSearch(sql`${tickets.ticketNumber}`)
-  const staleCutoff = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString()
 
   const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
   const relevanceOrder = searchTerm
@@ -607,6 +603,50 @@ export async function listTickets(filters?: {
       : undefined
   )
 
+  return {
+    searchTerm,
+    customerNameValue,
+    whereClause,
+    orderBy: [
+      ...(relevanceOrder ? [relevanceOrder] : []),
+      desc(tickets.openedAt),
+      desc(tickets.id)
+    ]
+  }
+}
+
+export async function suggestTickets(filters: Pick<TicketListFilters, 'q' | 'pageSize'> = {}): Promise<SuggestionsResponse<TicketLookupItem>> {
+  await ensurePosSchema()
+  const { whereClause, orderBy } = ticketSearchQuery(filters)
+  const items = await useDb().select({
+    id: tickets.id,
+    ticketNumber: tickets.ticketNumber,
+    type: tickets.type,
+    status: tickets.status,
+    brand: tickets.brand,
+    model: tickets.model,
+    serialNumber: tickets.serialNumber,
+    imei: tickets.imei,
+    customerName: sql<string>`coalesce(nullif(${customers.companyName}, ''), ${customers.firstName} || ' ' || ${customers.lastName})`
+  }).from(tickets)
+    .innerJoin(customers, eq(tickets.customerId, customers.id))
+    .where(whereClause)
+    .orderBy(...orderBy)
+    .limit(Math.min(Math.max(filters.pageSize || 5, 1), 250))
+
+  return { items }
+}
+
+export async function listTickets(filters?: TicketListFilters): Promise<TicketListResponse> {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const page = Math.max(filters?.page || 1, 1)
+  const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
+  const offset = (page - 1) * pageSize
+  const staleCutoff = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString()
+  const { searchTerm, whereClause, orderBy } = ticketSearchQuery(filters)
+
   const [summaryRows, pageIdRows] = await Promise.all([
     db.select({
       total: sql<number>`count(*)`,
@@ -621,11 +661,7 @@ export async function listTickets(filters?: {
       .from(tickets)
       .innerJoin(customers, eq(tickets.customerId, customers.id))
       .where(whereClause)
-      .orderBy(
-        ...(relevanceOrder ? [relevanceOrder] : []),
-        desc(tickets.openedAt),
-        desc(tickets.id)
-      )
+      .orderBy(...orderBy)
       .limit(pageSize)
       .offset(offset)
   ])

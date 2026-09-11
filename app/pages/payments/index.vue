@@ -103,9 +103,13 @@ const paymentQuery = computed(() => ({
 }))
 
 const { data: paymentsResponse, status, refresh } = await useFetch<PaymentListResponse>('/api/payments', {
+  key: 'payments-list',
   query: paymentQuery,
-  lazy: true
+  lazy: true,
+  watch: false
 })
+
+watch(paymentQuery, () => refresh(), { flush: 'post' })
 
 const payments = computed(() => paymentsResponse.value?.items || [])
 const totalResults = computed(() => paymentsResponse.value?.total || 0)

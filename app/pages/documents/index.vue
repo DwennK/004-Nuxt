@@ -104,10 +104,14 @@ const query = computed(() => ({
   pageSize: pagination.value.pageSize
 }))
 
-const { data: documentsResponse, status } = await useFetch<DocumentListResponse>('/api/documents', {
+const { data: documentsResponse, status, refresh } = await useFetch<DocumentListResponse>('/api/documents', {
+  key: 'documents-list',
   query,
-  lazy: true
+  lazy: true,
+  watch: false
 })
+
+watch(query, () => refresh(), { flush: 'post' })
 
 const documents = computed(() => documentsResponse.value?.items || [])
 const totalResults = computed(() => documentsResponse.value?.total || 0)

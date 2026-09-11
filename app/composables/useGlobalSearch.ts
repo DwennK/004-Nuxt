@@ -1,9 +1,9 @@
-import type { GlobalSearchResponse } from '~~/shared/types/pos'
+import type { GlobalLookupResponse } from '~~/shared/types/lookups'
 
 export function useGlobalSearch(search: Ref<string>, limit = 5) {
   const minimumSearchLength = 2
   const debouncedSearch = refDebounced(search, 200)
-  const results = shallowRef<GlobalSearchResponse | null>(null)
+  const results = shallowRef<GlobalLookupResponse | null>(null)
   const loading = ref(false)
   const failed = ref(false)
   let requestSequence = 0
@@ -11,8 +11,10 @@ export function useGlobalSearch(search: Ref<string>, limit = 5) {
   const searchTerm = computed(() => debouncedSearch.value.trim())
   const canSearch = computed(() => searchTerm.value.length >= minimumSearchLength)
 
-  watch(searchTerm, async (query) => {
+  watch(searchTerm, async (query, _previous, onCleanup) => {
     const requestId = ++requestSequence
+    const controller = new AbortController()
+    onCleanup(() => controller.abort())
 
     if (query.length < minimumSearchLength) {
       results.value = null
@@ -25,8 +27,9 @@ export function useGlobalSearch(search: Ref<string>, limit = 5) {
     failed.value = false
 
     try {
-      const response = await $fetch<GlobalSearchResponse>('/api/search', {
-        query: { q: query, limit }
+      const response = await $fetch<GlobalLookupResponse>('/api/search', {
+        query: { q: query, limit },
+        signal: controller.signal
       })
 
       if (requestId === requestSequence) {

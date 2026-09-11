@@ -1,4 +1,5 @@
-import type { CatalogItemListResponse, CatalogItemRecord } from '~~/shared/types/pos'
+import type { CatalogItemRecord } from '~~/shared/types/pos'
+import type { CatalogSuggestionsResponse } from '~~/shared/types/lookups'
 
 type UseCatalogItemSearchOptions = {
   minSearchLength?: number
@@ -62,8 +63,11 @@ export function useCatalogItemSearch(options: UseCatalogItemSearchOptions = {}) 
     cancelSearchClose()
   })
 
-  watch(debouncedSearch, async (value) => {
+  watch(debouncedSearch, async (value, _previous, onCleanup) => {
     const query = value.trim()
+    const requestId = ++remoteSearchRequestId
+    const controller = new AbortController()
+    onCleanup(() => controller.abort())
 
     if (query.length < minSearchLength) {
       remoteItems.value = []
@@ -71,17 +75,18 @@ export function useCatalogItemSearch(options: UseCatalogItemSearchOptions = {}) 
       return
     }
 
-    const requestId = ++remoteSearchRequestId
     remoteSearchPending.value = true
 
     try {
-      const items = await searchCatalogItems(query)
+      const items = await searchCatalogItems(query, controller.signal)
 
       if (requestId !== remoteSearchRequestId) {
         return
       }
 
       remoteItems.value = items
+    } catch (error) {
+      if (!controller.signal.aborted) throw error
     } finally {
       if (requestId === remoteSearchRequestId) {
         remoteSearchPending.value = false
@@ -89,13 +94,14 @@ export function useCatalogItemSearch(options: UseCatalogItemSearchOptions = {}) 
     }
   })
 
-  async function searchCatalogItems(query: string) {
-    const response = await $fetch<CatalogItemListResponse>('/api/catalog-items', {
+  async function searchCatalogItems(query: string, signal?: AbortSignal) {
+    const response = await $fetch<CatalogSuggestionsResponse>('/api/catalog-items/suggestions', {
       query: {
         search: query,
         activeOnly: true,
         pageSize
-      }
+      },
+      signal
     })
 
     return response.items.filter(filterItem)

@@ -207,7 +207,7 @@ function clearSearch() {
   search.value = ''
 }
 
-function getTicketSubtitle(ticket: TicketListItem) {
+function getTicketSubtitle(ticket: Pick<TicketListItem, 'customerName' | 'brand' | 'model'>) {
   return [ticket.customerName, [ticket.brand, ticket.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ')
 }
 

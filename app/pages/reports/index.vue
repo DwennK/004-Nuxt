@@ -28,14 +28,15 @@ const tabs: TabsItem[] = [
 ]
 
 const { data: overview, refresh, status } = await useFetch<ReportsOverview>('/api/reports/overview', {
+  key: 'reports-overview',
   query: computed(() => ({
-    date: date.value
-  }))
+    date: date.value,
+    includeLeaders: false
+  })),
+  watch: false
 })
 
-watch(date, async () => {
-  await refresh()
-})
+watch(date, () => refresh(), { flush: 'post' })
 
 const normalizedLeadersRange = computed(() => {
   return leadersStartDate.value <= leadersEndDate.value
@@ -50,13 +51,17 @@ const normalizedLeadersRange = computed(() => {
 })
 
 const { data: leaders, refresh: refreshLeaders, status: leadersStatus } = await useFetch<ReportsLeadersData>('/api/reports/leaders', {
+  key: 'reports-leaders',
   query: computed(() => ({
     startDate: normalizedLeadersRange.value.startDate,
     endDate: normalizedLeadersRange.value.endDate
-  }))
+  })),
+  immediate: false,
+  watch: false
 })
 
-watch([leadersStartDate, leadersEndDate], async () => {
+watch([() => selectedTab.value !== 'revenue', normalizedLeadersRange], async ([visible]) => {
+  if (!visible) return
   await refreshLeaders()
 })
 

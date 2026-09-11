@@ -32,9 +32,13 @@ const query = computed(() => ({
 }))
 
 const { data: customersResponse, status, error, refresh } = await useFetch<CustomerListResponse>('/api/customers', {
+  key: 'customers-list',
   query,
-  lazy: true
+  lazy: true,
+  watch: false
 })
+
+watch(query, () => refresh(), { flush: 'post' })
 
 const customers = computed(() => customersResponse.value?.items || [])
 const totalResults = computed(() => customersResponse.value?.total || 0)

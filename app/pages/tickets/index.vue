@@ -44,9 +44,13 @@ const query = computed(() => ({
 }))
 
 const { data: ticketsResponse, status, refresh } = await useFetch<TicketListResponse>('/api/tickets', {
+  key: 'tickets-list',
   query,
-  lazy: true
+  lazy: true,
+  watch: false
 })
+
+watch(query, () => refresh(), { flush: 'post' })
 
 const tickets = computed(() => ticketsResponse.value?.items || [])
 const totalResults = computed(() => ticketsResponse.value?.total || 0)
