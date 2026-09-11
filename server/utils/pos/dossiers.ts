@@ -213,13 +213,22 @@ export async function dossierSession(
         403
       )
     const key = input.standalone ? `document:${input.target.id}` : resolvedKey
-    await tx.insert(dossierScopes).values({ key }).onConflictDoNothing()
-    const [scope] = await tx
+    let [scope] = await tx
       .select()
       .from(dossierScopes)
       .where(eq(dossierScopes.key, key))
       .limit(1)
+    if (!scope) {
+      const [inserted] = await tx.insert(dossierScopes).values({ key }).onConflictDoNothing().returning()
+      scope = inserted
+      // Retain the existing scope if another session created it concurrently.
+      if (!scope) {
+        const [existing] = await tx.select().from(dossierScopes).where(eq(dossierScopes.key, key)).limit(1)
+        scope = existing
+      }
+    }
     if (!scope) throw new Error('Dossier scope missing')
+    let current = scope
     const owns
       = scope.ownerUserId === actor.userId
         && scope.ownerTabId === input.tabId
@@ -227,11 +236,14 @@ export async function dossierSession(
         && scope.expiresAt > now
     let revealToken = owns
     if (input.action === 'release') {
-      if (owns)
-        await tx
+      if (owns) {
+        const [released] = await tx
           .update(dossierScopes)
           .set({ token: null, expiresAt: 0 })
           .where(eq(dossierScopes.key, key))
+          .returning()
+        current = released!
+      }
       await tx
         .delete(dossierPresences)
         .where(eq(dossierPresences.id, `${key}:${actor.userId}:${input.tabId}`))
@@ -258,7 +270,7 @@ export async function dossierSession(
       const acquire = input.action === 'acquire' && scope.expiresAt <= now
       if (owns || takeover || acquire) {
         revealToken = true
-        await tx
+        const [renewed] = await tx
           .update(dossierScopes)
           .set({
             token: owns && !takeover ? scope.token : crypto.randomUUID(),
@@ -271,6 +283,8 @@ export async function dossierSession(
             expiresAt: now + DOSSIER_LEASE_MS
           })
           .where(eq(dossierScopes.key, key))
+          .returning()
+        current = renewed!
       }
     }
     const expired = await tx
@@ -285,11 +299,6 @@ export async function dossierSession(
           expired.map(row => row.id)
         )
       )
-    const [current] = await tx
-      .select()
-      .from(dossierScopes)
-      .where(eq(dossierScopes.key, key))
-      .limit(1)
     const presences = await tx
       .select()
       .from(dossierPresences)

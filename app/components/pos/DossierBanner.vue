@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { DossierClientState } from '~/utils/dossier-client'
 
-const props = defineProps<{ state: DossierClientState | null }>()
+const props = defineProps<{
+  state: DossierClientState | null
+  refresh: () => Promise<unknown>
+}>()
 const { $dossiers } = useNuxtApp()
 const toast = useToast()
 const modalOpen = ref(false)
@@ -59,7 +62,7 @@ async function confirm() {
   try {
     await $dossiers.reload(
       props.state,
-      () => refreshNuxtData(),
+      props.refresh,
       !!owner.value && !props.state.token
     )
     modalOpen.value = false

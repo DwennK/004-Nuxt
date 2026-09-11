@@ -670,7 +670,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
     </template>
 
     <template #body>
-      <PosDossierBanner :state="dossier.current.value" />
+      <PosDossierBanner :state="dossier.current.value" :refresh="refreshTicket" />
       <div v-if="ticket" class="space-y-4">
         <PosFormFeedback :saving="actionSaving" :error="actionError" />
 

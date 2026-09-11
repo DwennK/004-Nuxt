@@ -310,7 +310,7 @@ function startNewEmailAttempt() {
     </template>
 
     <template #body>
-      <PosDossierBanner :state="dossier.current.value" />
+      <PosDossierBanner :state="dossier.current.value" :refresh="refresh" />
       <div v-if="document && customers?.items" class="space-y-3">
         <UAlert
           v-if="successorDocument"

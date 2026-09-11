@@ -9,7 +9,7 @@ const id = computed(() => Number(route.params.id))
 const formId = 'ticket-editor-form'
 const dirty = ref(false)
 
-const [{ data: ticket }, { data: customers }] = await Promise.all([
+const [{ data: ticket, refresh: refreshTicket }, { data: customers }] = await Promise.all([
   useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
   useFetch<CustomerListResponse>('/api/customers', {
     query: { pageSize: 250 }
@@ -98,7 +98,7 @@ async function saveTicket(payload: {
     </template>
 
     <template #body>
-      <PosDossierBanner :state="dossier.current.value" />
+      <PosDossierBanner :state="dossier.current.value" :refresh="refreshTicket" />
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
         <PosTicketForm
           v-if="ticket && customers?.items"

@@ -23,6 +23,7 @@ describe('dossier reservations on real local SQLite transactions', () => {
   let client: ReturnType<typeof createClient>
   let directory: string
   let db: PosDatabase
+  let queries: string[]
   const a = { userId: 1, name: 'Alice', isAdmin: true }
   const b = { userId: 2, name: 'Bob', isAdmin: true }
   const tabA = crypto.randomUUID()
@@ -34,7 +35,8 @@ describe('dossier reservations on real local SQLite transactions', () => {
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'pos-dossiers-'))
     client = createClient({ url: `file:${join(directory, 'test.db')}` })
-    db = drizzle({ client }) as unknown as PosDatabase
+    queries = []
+    db = drizzle({ client, logger: { logQuery: query => queries.push(query) } }) as unknown as PosDatabase
     await client.executeMultiple(`
       CREATE TABLE tickets (id INTEGER PRIMARY KEY, internal_notes TEXT);
       CREATE TABLE documents (id INTEGER PRIMARY KEY, ticket_id INTEGER, notes TEXT);
@@ -122,6 +124,35 @@ describe('dossier reservations on real local SQLite transactions', () => {
     )
     expect(renewed.token).toBe(owner.token)
     expect(renewed.generation).toBe(owner.generation)
+  })
+
+  it('renews the same lease and presence with bounded database work per heartbeat', async () => {
+    const now = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    const owner = await dossierSession(input(ticket), a, db)
+    queries.length = 0
+    vi.spyOn(Date, 'now').mockReturnValue(now + 15_000)
+    const renewed = await dossierSession(
+      input(ticket, tabA, { action: 'observe', token: owner.token, dirty: true }),
+      a,
+      db
+    )
+    expect(renewed).toMatchObject({
+      token: owner.token,
+      revision: owner.revision,
+      generation: owner.generation,
+      expiresAt: now + 15_000 + DOSSIER_LEASE_MS,
+      owner: { userId: a.userId, dirty: true }
+    })
+    const statements = queries.filter(query => /^(select|insert|update|delete)\b/i.test(query))
+    expect(statements).toHaveLength(6)
+    expect(statements.filter(query => /^insert into "dossier_scopes"/i.test(query))).toHaveLength(0)
+
+    queries.length = 0
+    const observer = await dossierSession(input(ticket, tabB, { action: 'observe' }), b, db)
+    expect(observer).toMatchObject({ token: null, expiresAt: renewed.expiresAt, owner: { dirty: true } })
+    expect(observer.peers).toContainEqual({ tabId: tabA, userId: a.userId, name: a.name, station: 'PC A', dirty: true })
+    expect(queries.filter(query => /^(select|insert|update|delete)\b/i.test(query))).toHaveLength(5)
   })
 
   it('invalidates the old token atomically on takeover, including queued old saves', async () => {

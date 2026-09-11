@@ -27,7 +27,7 @@ const pageDescription = computed(() => requestedDocumentType.value
   ? `${documentTypeLabels[requestedDocumentType.value]} sélectionné pour cette création.`
   : 'Choisissez le type commercial avant de saisir les lignes et le client.')
 
-const { data: customers } = await useFetch<CustomerListResponse>('/api/customers', {
+const { data: customers, refresh: refreshCustomers } = await useFetch<CustomerListResponse>('/api/customers', {
   query: { pageSize: 250 }
 })
 
@@ -74,7 +74,7 @@ async function saveDocument(payload: {
     </template>
 
     <template #body>
-      <PosDossierBanner :state="dossier.current.value" />
+      <PosDossierBanner :state="dossier.current.value" :refresh="refreshCustomers" />
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-4">
         <div>
           <h2 class="text-lg font-semibold text-highlighted">
