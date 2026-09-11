@@ -22,6 +22,7 @@ logs
 .idea
 .playwright-cli
 output/playwright/
+output/query-audit/
 public/vendor/zxing/*.wasm
 
 # Local env files
