@@ -25,6 +25,7 @@
     "db:introspect": "node scripts/db/introspect.mjs",
     "db:verify": "node scripts/db/verify.mjs",
     "db:status": "node scripts/db/status.mjs",
+    "db:usage": "node scripts/db/usage.mjs",
     "db:migrate": "node scripts/db/migrate-safe.mjs",
     "db:backfill:document-totals": "node scripts/db/backfill-document-totals.mjs",
     "seed:test-user": "node scripts/seed-test-user.mjs",
