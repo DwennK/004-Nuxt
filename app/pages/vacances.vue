@@ -9,6 +9,7 @@ import type {
   VacationEntryRecord,
   VacationEntryStatus
 } from '~~/shared/types/pos'
+import type { VacationYearData } from '~~/shared/types/vacations'
 import { vacationEntryTypeLabels, vacationEntryStatusLabels, vacationEntryStatusColors } from '~~/shared/constants/pos'
 import { formatDate, getSwissHolidayMap, getSwissHolidays } from '~~/shared/utils/pos'
 
@@ -43,17 +44,12 @@ const tabs: TabsItem[] = [
 ]
 
 // --- Data ---
-const { data: employees, refresh: refreshEmployees } = await useFetch<EmployeeRecord[]>('/api/employees')
-const { data: entries, refresh: refreshEntries } = await useFetch<VacationEntryListItem[]>('/api/vacations', {
+const { data: vacationYear, refresh: refreshAll } = await useFetch<VacationYearData>('/api/vacations/year', {
   query: { year: selectedYear }
 })
-const { data: summaries, refresh: refreshSummaries } = await useFetch<EmployeeVacationSummary[]>('/api/vacations/summary', {
-  query: { year: selectedYear }
-})
-
-async function refreshAll() {
-  await Promise.all([refreshEmployees(), refreshEntries(), refreshSummaries()])
-}
+const employees = computed(() => vacationYear.value?.employees ?? [])
+const entries = computed(() => vacationYear.value?.entries ?? [])
+const summaries = computed(() => vacationYear.value?.summaries ?? [])
 
 // --- Employee CRUD ---
 const createEmployeeOpen = ref(false)

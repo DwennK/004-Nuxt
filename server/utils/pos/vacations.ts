@@ -9,6 +9,7 @@ import type {
   VacationEntryStatus,
   VacationEntryType
 } from '~~/shared/types/pos'
+import type { VacationYearData } from '~~/shared/types/vacations'
 import { countBusinessDays, countBusinessDaysInYear } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
@@ -281,6 +282,14 @@ export async function getVacationSummariesByYear(year: number): Promise<Employee
       gte(vacationEntries.endDate, `${year}-01-01`)
     ))
 
+  return summarizeVacationEntries(year, allEmployees, entries)
+}
+
+function summarizeVacationEntries(
+  year: number,
+  employeeRows: (typeof employees.$inferSelect)[],
+  entries: (typeof vacationEntries.$inferSelect)[]
+): EmployeeVacationSummary[] {
   const entriesByEmployeeId = new Map<number, typeof entries>()
 
   for (const entry of entries) {
@@ -294,7 +303,7 @@ export async function getVacationSummariesByYear(year: number): Promise<Employee
     entriesByEmployeeId.set(entry.employeeId, [entry])
   }
 
-  return allEmployees.map((emp) => {
+  return employeeRows.filter(employee => employee.isActive).map((emp) => {
     const employeeEntries = entriesByEmployeeId.get(emp.id) ?? []
     const employee = mapEmployee(emp)
 
@@ -323,4 +332,44 @@ export async function getVacationSummariesByYear(year: number): Promise<Employee
       remainingDays: emp.vacationDaysPerYear - usedDays
     }
   })
+}
+
+export async function getVacationYearData(year: number): Promise<VacationYearData> {
+  await ensurePosSchema()
+  const db = useDb()
+
+  // The calendar, employee table and annual balances share these two reads.
+  // A batch also keeps them on the same snapshot during concurrent edits.
+  const [employeeRows, entryRows] = await db.batch([
+    db.select().from(employees).orderBy(asc(employees.lastName), asc(employees.firstName)),
+    db.select().from(vacationEntries)
+      .where(and(
+        lte(vacationEntries.startDate, `${year}-12-31`),
+        gte(vacationEntries.endDate, `${year}-01-01`)
+      ))
+      .orderBy(asc(vacationEntries.startDate))
+  ])
+
+  const employeeById = new Map(employeeRows.map(employee => [employee.id, employee]))
+  const entries: VacationEntryListItem[] = []
+
+  for (const entry of entryRows) {
+    const employee = employeeById.get(entry.employeeId)
+    // Match the existing list endpoint's inner join, including inactive employees.
+    if (!employee) continue
+
+    entries.push({
+      ...mapVacationEntry(entry),
+      employeeName: [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim(),
+      employeeColor: employee.color,
+      employeeInitials: ((employee.firstName?.[0] || '') + (employee.lastName?.[0] || '')).toUpperCase()
+    })
+  }
+
+  return {
+    year,
+    employees: employeeRows.map(mapEmployee),
+    entries,
+    summaries: summarizeVacationEntries(year, employeeRows, entryRows)
+  }
 }
