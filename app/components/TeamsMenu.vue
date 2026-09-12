@@ -6,7 +6,7 @@ defineProps<{
 
 <template>
   <UButton
-    to="/comptoir"
+    to="/"
     color="neutral"
     variant="ghost"
     block

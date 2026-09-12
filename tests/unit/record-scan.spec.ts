@@ -7,7 +7,7 @@ const navigate = vi.fn()
 const addToast = vi.fn()
 
 beforeEach(() => {
-  vi.stubGlobal('useRequestURL', () => new URL('https://pos.example.test/comptoir'))
+  vi.stubGlobal('useRequestURL', () => new URL('https://pos.example.test/'))
   vi.stubGlobal('useToast', () => ({ add: addToast }))
   vi.stubGlobal('$fetch', fetchRecord)
   vi.stubGlobal('navigateTo', navigate)

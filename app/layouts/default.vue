@@ -10,7 +10,8 @@ const toolRoutes = ['/tools', '/vacances', '/inbox', '/assistant']
 const primaryLinks = computed(() => [{
   label: 'Accueil',
   icon: 'i-lucide-scan-line',
-  to: '/comptoir',
+  to: '/',
+  exact: true,
   onSelect: () => {
     open.value = false
   }

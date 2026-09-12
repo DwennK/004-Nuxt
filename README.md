@@ -146,7 +146,7 @@ Run the dev server:
 npm run dev
 ```
 
-Open `/login`, then `/comptoir`. Complete company settings before issuing real documents. The development login uses Turnstile test keys by default; production builds and Worker previews need explicit Turnstile configuration.
+Open `/login`, then `/`. The legacy `/comptoir` URL redirects to `/`. Complete company settings before issuing real documents. The development login uses Turnstile test keys by default; production builds and Worker previews need explicit Turnstile configuration.
 
 ## Environment Variables
 
@@ -214,7 +214,7 @@ Notes:
 Core dashboard routes:
 
 - overview: [`app/pages/index.vue`](./app/pages/index.vue)
-- counter workspace: [`app/pages/comptoir.vue`](./app/pages/comptoir.vue)
+- counter workspace: [`app/pages/index.vue`](./app/pages/index.vue)
 - customers: [`app/pages/customers/index.vue`](./app/pages/customers/index.vue)
 - catalog: [`app/pages/catalog/index.vue`](./app/pages/catalog/index.vue)
 - tickets: [`app/pages/tickets/index.vue`](./app/pages/tickets/index.vue)
