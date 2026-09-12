@@ -48,7 +48,7 @@ async function saveTicket(payload: {
   }), { success: 'Dossier enregistré' })
   if (!result?.ok) return
   dirty.value = false
-  await navigateTo(`/tickets/${id.value}`)
+  await navigateTo(`/dossiers/${id.value}`)
 }
 </script>
 
@@ -65,7 +65,7 @@ async function saveTicket(payload: {
             <span id="ticket-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />
             <UButton
               v-if="ticket"
-              :to="`/tickets/${id}/print`"
+              :to="`/dossiers/${id}/print`"
               label="Imprimer"
               aria-label="Imprimer"
               icon="i-lucide-printer"
@@ -74,7 +74,7 @@ async function saveTicket(payload: {
               :ui="{ label: 'hidden sm:inline' }"
             />
             <UButton
-              :to="`/tickets/${id}`"
+              :to="`/dossiers/${id}`"
               label="Annuler"
               aria-label="Annuler"
               icon="i-lucide-x"

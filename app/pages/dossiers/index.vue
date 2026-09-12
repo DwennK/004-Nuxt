@@ -115,7 +115,7 @@ function getRowItems(ticket: TicketListItem) {
     label: 'Ouvrir le dossier',
     icon: 'i-lucide-arrow-up-right',
     onSelect() {
-      navigateTo(`/tickets/${ticket.id}`)
+      navigateTo(`/dossiers/${ticket.id}`)
     }
   }]
   const groups = [primaryItems]
@@ -197,7 +197,7 @@ const columns: TableColumn<TicketListItem>[] = [
         </template>
 
         <template #right>
-          <UButton to="/tickets/new" icon="i-lucide-plus" label="Nouveau dossier" />
+          <UButton to="/dossiers/new" icon="i-lucide-plus" label="Nouveau dossier" />
         </template>
       </UDashboardNavbar>
 
@@ -281,7 +281,7 @@ const columns: TableColumn<TicketListItem>[] = [
             td: 'align-top',
             separator: 'h-0'
           }"
-          @select="(_, row) => navigateTo(`/tickets/${row.original.id}`)"
+          @select="(_, row) => navigateTo(`/dossiers/${row.original.id}`)"
         >
           <template #empty>
             <div v-if="status === 'pending'" class="space-y-3 px-4 py-6">

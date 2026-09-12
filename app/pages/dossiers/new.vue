@@ -16,7 +16,7 @@ const completionHandled = ref(false)
 async function openCreatedTicket(print = false) {
   if (!createdTicket.value) return
   completionHandled.value = true
-  await navigateTo(`/tickets/${createdTicket.value.id}${print ? '/print?profile=thermal' : ''}`)
+  await navigateTo(`/dossiers/${createdTicket.value.id}${print ? '/print?profile=thermal' : ''}`)
 }
 
 function startNewTicket() {
@@ -83,7 +83,7 @@ async function saveTicket(payload: {
           <div class="flex items-center gap-2">
             <span id="ticket-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />
             <UButton
-              to="/tickets"
+              to="/dossiers"
               label="Annuler"
               aria-label="Annuler"
               icon="i-lucide-x"

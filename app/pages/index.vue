@@ -73,7 +73,7 @@ const counterActions: CounterAction[] = [{
   label: 'Nouveau dossier',
   description: 'Créer une réparation',
   icon: 'i-lucide-wrench',
-  to: '/tickets/new',
+  to: '/dossiers/new',
   variant: 'soft'
 }]
 
@@ -102,7 +102,7 @@ const blockedQueues = computed<WorkQueue[]>(() => [{
   icon: 'i-lucide-stethoscope',
   count: diagnosisTickets.value?.total || 0,
   tone: 'info',
-  to: '/tickets?status=diagnosis',
+  to: '/dossiers?status=diagnosis',
   items: diagnosisTickets.value?.items || []
 }, {
   id: 'approval',
@@ -111,7 +111,7 @@ const blockedQueues = computed<WorkQueue[]>(() => [{
   icon: 'i-lucide-badge-help',
   count: approvalTickets.value?.total || 0,
   tone: 'warning',
-  to: '/tickets?status=awaiting_customer_approval',
+  to: '/dossiers?status=awaiting_customer_approval',
   items: approvalTickets.value?.items || []
 }, {
   id: 'parts',
@@ -120,7 +120,7 @@ const blockedQueues = computed<WorkQueue[]>(() => [{
   icon: 'i-lucide-package-search',
   count: waitingPartsTickets.value?.total || 0,
   tone: 'warning',
-  to: '/tickets?status=waiting_parts',
+  to: '/dossiers?status=waiting_parts',
   items: waitingPartsTickets.value?.items || []
 }])
 
@@ -145,7 +145,7 @@ const counterWorkItems = computed<CounterWorkItem[]>(() => {
   const pickupItems = readyTicketItems.value.map(ticket => ({
     id: `pickup-${ticket.id}`,
     kind: 'pickup' as const,
-    to: `/tickets/${ticket.id}`,
+    to: `/dossiers/${ticket.id}`,
     icon: 'i-lucide-package-check',
     tone: 'success' as const,
     eyebrow: 'Restitution',
@@ -159,7 +159,7 @@ const counterWorkItems = computed<CounterWorkItem[]>(() => {
   const blockedItems = blockedQueues.value.flatMap(queue => queue.items.map(ticket => ({
     id: `blocked-${queue.id}-${ticket.id}`,
     kind: 'blocked' as const,
-    to: `/tickets/${ticket.id}`,
+    to: `/dossiers/${ticket.id}`,
     icon: queue.icon,
     tone: queue.tone,
     eyebrow: queue.title,
@@ -238,7 +238,7 @@ useHead({
             class="hidden bg-default text-primary hover:bg-muted sm:inline-flex"
           />
           <UButton
-            to="/tickets/new"
+            to="/dossiers/new"
             label="Nouveau dossier"
             icon="i-lucide-wrench"
             color="neutral"
@@ -355,7 +355,7 @@ useHead({
                   <NuxtLink
                     v-for="ticket in ticketResults?.items || []"
                     :key="ticket.id"
-                    :to="`/tickets/${ticket.id}`"
+                    :to="`/dossiers/${ticket.id}`"
                     class="block rounded-md border border-default px-3 py-2 transition hover:border-primary hover:bg-muted"
                   >
                     <div class="flex items-center justify-between gap-2">
@@ -447,7 +447,7 @@ useHead({
               </p>
             </NuxtLink>
             <NuxtLink
-              to="/tickets?status=ready_for_pickup"
+              to="/dossiers?status=ready_for_pickup"
               class="border-r border-default px-3 py-2.5 transition hover:bg-muted"
             >
               <p class="text-xs font-semibold uppercase tracking-wide text-primary">
@@ -459,7 +459,7 @@ useHead({
               </p>
             </NuxtLink>
             <NuxtLink
-              to="/tickets"
+              to="/dossiers"
               class="px-3 py-2.5 transition hover:bg-muted"
             >
               <p class="text-xs font-semibold uppercase tracking-wide text-sky-700">
@@ -660,7 +660,7 @@ useHead({
                 Blocages
               </h2>
               <UButton
-                to="/tickets"
+                to="/dossiers"
                 label="Dossiers"
                 color="neutral"
                 variant="ghost"

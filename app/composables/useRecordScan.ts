@@ -20,7 +20,8 @@ export function useRecordScan(search: Ref<string>, beforeNavigate?: () => void) 
     pending = true
     try {
       // Use the existing authenticated endpoint to check existence and access.
-      await $fetch(`/api${result.path}`)
+      const apiPath = result.path.replace(/^\/dossiers\//, '/tickets/')
+      await $fetch(`/api${apiPath}`)
       beforeNavigate?.()
       await navigateTo(result.path)
     } catch (error) {

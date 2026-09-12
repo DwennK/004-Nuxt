@@ -15,6 +15,12 @@ beforeEach(() => {
 })
 
 describe('camera record lookup', () => {
+  it.each(['tickets', 'dossiers'])('opens a %s QR through the existing ticket API', async (path) => {
+    await useRecordScan(ref(''))(`https://pos.example.test/${path}/42`)
+    expect(fetchRecord).toHaveBeenCalledWith('/api/tickets/42')
+    expect(navigate).toHaveBeenCalledWith('/dossiers/42')
+  })
+
   it('checks access before closing search and navigating', async () => {
     const search = ref('previous search')
     const close = vi.fn()

@@ -24,7 +24,7 @@ test('reservation, takeover, preserved draft, save, reminders and mobile layout'
 
   const other = await context.newPage()
   other.on('pageerror', error => errors.push(error.message))
-  await other.goto('/tickets/1/edit')
+  await other.goto('/dossiers/1/edit')
   await expect(other.getByTestId('dossier-banner')).toContainText('Dossier ouvert sur un autre poste')
   await expect(other.getByRole('textbox', { name: 'Libellé de la ligne', exact: true })).toBeDisabled()
   await expect(other.getByRole('button', { name: /^Cloner /, exact: false })).toBeDisabled()
@@ -43,7 +43,7 @@ test('reservation, takeover, preserved draft, save, reminders and mobile layout'
 
   await other.getByRole('textbox', { name: 'Libellé de la ligne', exact: true }).fill('Travail enregistré du poste B')
   await other.getByRole('button', { name: 'Enregistrer les modifications', exact: true }).click()
-  await expect(other).toHaveURL(/\/tickets\/1$/)
+  await expect(other).toHaveURL(/\/dossiers\/1$/)
   const saved = await other.evaluate(async () => (await fetch('/api/tickets/1')).json())
   expect(saved.lines[0].label).toBe('Travail enregistré du poste B')
   // An HTTP request cannot bypass the visual lock by omitting its proof.
@@ -57,7 +57,7 @@ test('reservation, takeover, preserved draft, save, reminders and mobile layout'
 
   // Local form reminder clock; server lease expiry is tested separately in SQLite tests.
   page.on('dialog', dialog => dialog.accept())
-  await page.goto('/tickets/new')
+  await page.goto('/dossiers/new')
   await page.clock.install()
   await page.getByRole('textbox', { name: 'Problème signalé', exact: false }).fill('Brouillon pour le rappel sonore')
   await expect(page.getByTestId('unsaved-changes')).toBeVisible()
@@ -116,7 +116,7 @@ test('an explicitly retried payment with a lost response is recorded only once',
 
 test('different accounts retain their drafts across offline takeover and reconnection', async ({ page, context, browser }) => {
   expect((await context.request.post('/api/auth/login', { data: { email: 'test@live.fr', password: 'test', turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX' } })).ok()).toBe(true)
-  await page.goto('/tickets')
+  await page.goto('/dossiers')
   const credentials = { email: `dossier-${crypto.randomUUID()}@example.test`, password: 'Local-only-test-123!', name: 'Collègue test local', isAdmin: false }
   const user = await page.evaluate(async (data) => {
     const response = await fetch('/api/settings/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
@@ -139,7 +139,7 @@ test('different accounts retain their drafts across offline takeover and reconne
 
     expect((await colleague.request.post('/api/auth/login', { data: { email: credentials.email, password: credentials.password, turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX' } })).ok()).toBe(true)
     const other = await colleague.newPage()
-    await other.goto('/tickets/1/edit')
+    await other.goto('/dossiers/1/edit')
     await expect(other.getByTestId('dossier-banner')).toContainText('Compte test POS')
     await other.getByRole('button', { name: 'Reprendre la main', exact: true }).click()
     await other.getByRole('button', { name: 'Charger et continuer', exact: true }).click()

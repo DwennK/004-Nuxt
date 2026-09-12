@@ -268,7 +268,7 @@ function projectHomeOverview(input: {
         title: `${row.ticketNumber} ouvert`,
         subtitle: buildTicketContext(row),
         occurredAt: row.occurredAt,
-        to: `/tickets/${row.ticketId}`,
+        to: `/dossiers/${row.ticketId}`,
         badgeLabel: 'Nouveau dossier',
         badgeColor: 'info'
       })
@@ -282,7 +282,7 @@ function projectHomeOverview(input: {
         title: `${row.ticketNumber} prêt pour retrait`,
         subtitle: buildTicketContext(row),
         occurredAt: row.occurredAt,
-        to: `/tickets/${row.ticketId}`,
+        to: `/dossiers/${row.ticketId}`,
         badgeLabel: ticketStatusLabels.ready_for_pickup,
         badgeColor: ticketStatusColors.ready_for_pickup
       })
@@ -363,7 +363,7 @@ function projectHomeOverview(input: {
       title: 'Dossiers prêts pour retrait',
       value: String(readyForPickupCount),
       description: readyForPickupCount ? 'Clients à prévenir ou restitutions à préparer' : 'Aucun dossier prêt actuellement',
-      to: '/tickets?status=ready_for_pickup',
+      to: '/dossiers?status=ready_for_pickup',
       badgeLabel: 'Voir',
       badgeColor: 'success'
     }, {
@@ -371,7 +371,7 @@ function projectHomeOverview(input: {
       title: 'Dossiers ouverts',
       value: String(openTicketCount),
       description: `${openedToday} nouveau(x) aujourd’hui`,
-      to: '/tickets',
+      to: '/dossiers',
       badgeLabel: 'Traiter',
       badgeColor: 'info'
     }, {

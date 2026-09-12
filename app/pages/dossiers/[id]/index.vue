@@ -661,7 +661,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             icon="i-lucide-pencil"
             color="neutral"
             variant="ghost"
-            :to="`/tickets/${id}/edit`"
+            :to="`/dossiers/${id}/edit`"
             :disabled="dossier.blocked.value || !isTicketMutable"
             :ui="{ label: 'hidden sm:inline' }"
           />
@@ -997,7 +997,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 </p>
                 <UButton
                   v-if="supportsThermalPrint"
-                  :to="`/tickets/${id}/print`"
+                  :to="`/dossiers/${id}/print`"
                   label="Imprimer le dossier"
                   icon="i-lucide-printer"
                   color="neutral"

@@ -46,7 +46,7 @@ const primaryLinks = computed(() => [{
 }, {
   label: 'Dossiers clients',
   icon: 'i-lucide-wrench',
-  to: '/tickets',
+  to: '/dossiers',
   onSelect: () => {
     open.value = false
   }
@@ -164,7 +164,7 @@ const counterActions = [{
   id: 'new-ticket',
   label: 'Nouveau dossier',
   icon: 'i-lucide-wrench',
-  to: '/tickets/new'
+  to: '/dossiers/new'
 }]
 
 const quickActions = [...counterActions, {
@@ -233,7 +233,7 @@ const groups = computed(() => {
     id: `ticket-${ticket.id}`,
     label: ticket.ticketNumber,
     icon: 'i-lucide-wrench',
-    to: `/tickets/${ticket.id}`,
+    to: `/dossiers/${ticket.id}`,
     suffix: ticket.customerName,
     description: [ticket.imei, ticket.serialNumber, ticket.brand, ticket.model].filter(Boolean).join(' · ')
   }))

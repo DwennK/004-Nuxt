@@ -102,7 +102,7 @@ function printTicket() {
             variant="subtle"
             icon="i-lucide-arrow-left"
             label="Retour"
-            @click="navigateTo(`/tickets/${id}`)"
+            @click="navigateTo(`/dossiers/${id}`)"
           />
           <UButton
             icon="i-lucide-printer"

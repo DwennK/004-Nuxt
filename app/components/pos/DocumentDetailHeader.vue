@@ -94,7 +94,7 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
             </NuxtLink>
             <NuxtLink
               v-if="props.document.ticket"
-              :to="`/tickets/${props.document.ticket.id}`"
+              :to="`/dossiers/${props.document.ticket.id}`"
               class="inline-flex items-center gap-0.5 text-primary hover:underline"
             >
               {{ props.document.ticket.ticketNumber }}<UIcon name="i-lucide-arrow-up-right" class="size-3" />

@@ -217,7 +217,7 @@ Core dashboard routes:
 - counter workspace: [`app/pages/index.vue`](./app/pages/index.vue)
 - customers: [`app/pages/customers/index.vue`](./app/pages/customers/index.vue)
 - catalog: [`app/pages/catalog/index.vue`](./app/pages/catalog/index.vue)
-- tickets: [`app/pages/tickets/index.vue`](./app/pages/tickets/index.vue)
+- tickets: [`app/pages/dossiers/index.vue`](./app/pages/dossiers/index.vue)
 - documents: [`app/pages/documents/index.vue`](./app/pages/documents/index.vue)
 - payments: [`app/pages/payments/index.vue`](./app/pages/payments/index.vue)
 - reports and rankings: [`app/pages/reports/index.vue`](./app/pages/reports/index.vue)
@@ -226,9 +226,9 @@ Core dashboard routes:
 Operator flows:
 
 - quick sale: [`app/pages/sales/new.vue`](./app/pages/sales/new.vue)
-- new ticket: [`app/pages/tickets/new.vue`](./app/pages/tickets/new.vue)
-- ticket detail: [`app/pages/tickets/[id]/index.vue`](./app/pages/tickets/[id]/index.vue)
-- ticket editing and print: [`edit.vue`](./app/pages/tickets/[id]/edit.vue), [`print.vue`](./app/pages/tickets/[id]/print.vue)
+- new ticket: [`app/pages/dossiers/new.vue`](./app/pages/dossiers/new.vue)
+- ticket detail: [`app/pages/dossiers/[id]/index.vue`](./app/pages/dossiers/[id]/index.vue)
+- ticket editing and print: [`edit.vue`](./app/pages/dossiers/[id]/edit.vue), [`print.vue`](./app/pages/dossiers/[id]/print.vue)
 - new document: [`app/pages/documents/new.vue`](./app/pages/documents/new.vue)
 - document detail: [`app/pages/documents/[id]/index.vue`](./app/pages/documents/[id]/index.vue)
 - document print: [`app/pages/documents/[id]/print.vue`](./app/pages/documents/[id]/print.vue)

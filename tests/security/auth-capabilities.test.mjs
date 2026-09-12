@@ -91,7 +91,7 @@ const guardedUiPolicies = {
     'app/pages/catalog/index.vue',
     'app/pages/customers/index.vue',
     'app/pages/payments/index.vue',
-    'app/pages/tickets/index.vue',
+    'app/pages/dossiers/index.vue',
     'app/pages/vacances.vue',
     'app/pages/stocks-smartphone.vue',
     'app/pages/reservations-smartphone.vue',

@@ -13,7 +13,8 @@ export function buildRecordQrUrl(type: RecordQrType, id: number, appOrigin: stri
   if (!Number.isSafeInteger(id) || id <= 0) {
     throw new Error('Identifiant de document invalide')
   }
-  return new URL(`/${type}/${id}`, origin.origin).href
+  const path = type === 'tickets' ? 'dossiers' : type
+  return new URL(`/${path}/${id}`, origin.origin).href
 }
 
 export function parseRecordScan(value: string, appOrigin: string): RecordScanResult {
@@ -26,14 +27,15 @@ export function parseRecordScan(value: string, appOrigin: string): RecordScanRes
 
   try {
     const url = new URL(query)
-    const match = /^\/(tickets|documents)\/([1-9]\d*)\/?$/.exec(url.pathname)
+    const match = /^\/(tickets|dossiers|documents)\/([1-9]\d*)\/?$/.exec(url.pathname)
     if (!['http:', 'https:'].includes(url.protocol)
       || url.origin !== new URL(appOrigin).origin
       || url.username || url.password || url.search || url.hash
       || !match || !Number.isSafeInteger(Number(match[2]))) {
       return { kind: 'unsupported' }
     }
-    return { kind: 'record', path: `/${match[1]}/${match[2]}` }
+    const path = match[1] === 'tickets' ? 'dossiers' : match[1]
+    return { kind: 'record', path: `/${path}/${match[2]}` }
   } catch {
     return { kind: 'unsupported' }
   }

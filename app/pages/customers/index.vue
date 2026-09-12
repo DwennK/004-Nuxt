@@ -170,7 +170,7 @@ function getRowItems(customer: CustomerRecord) {
     label: 'Nouveau dossier',
     icon: 'i-lucide-wrench',
     onSelect() {
-      navigateTo(`/tickets/new?customerId=${customer.id}`)
+      navigateTo(`/dossiers/new?customerId=${customer.id}`)
     }
   }, {
     label: 'Nouveau devis / facture',

@@ -88,7 +88,7 @@ const ticketColumns: TableColumn<TicketListItem>[] = [
     accessorKey: 'ticketNumber',
     header: 'Dossier',
     cell: ({ row }) => h('div', { class: 'space-y-1' }, [
-      h(NuxtLink, { to: `/tickets/${row.original.id}`, class: 'font-medium text-highlighted' }, () => row.original.ticketNumber),
+      h(NuxtLink, { to: `/dossiers/${row.original.id}`, class: 'font-medium text-highlighted' }, () => row.original.ticketNumber),
       h(UBadge, { color: ticketStatusColors[row.original.status], variant: 'subtle' }, () => ticketStatusLabels[row.original.status])
     ])
   },
@@ -171,7 +171,7 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
             @click="editOpen = true"
           />
           <UButton
-            :to="`/tickets/new?customerId=${id}`"
+            :to="`/dossiers/new?customerId=${id}`"
             label="Nouveau dossier"
             icon="i-lucide-wrench"
             variant="subtle"

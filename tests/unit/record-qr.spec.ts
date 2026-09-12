@@ -6,12 +6,13 @@ const origin = 'https://pos.example.test'
 describe('printed record QR links', () => {
   it.each(['tickets', 'documents'] as const)('round trips a %s identifier', (type) => {
     const url = buildRecordQrUrl(type, 30034, origin)
-    expect(url).toBe(`${origin}/${type}/30034`)
-    expect(parseRecordScan(url, origin)).toEqual({ kind: 'record', path: `/${type}/30034` })
+    const path = type === 'tickets' ? 'dossiers' : type
+    expect(url).toBe(`${origin}/${path}/30034`)
+    expect(parseRecordScan(url, origin)).toEqual({ kind: 'record', path: `/${path}/30034` })
   })
 
   it('reads existing workshop ticket URLs and trims scanned whitespace', () => {
-    expect(parseRecordScan(` ${origin}/tickets/42\n`, origin)).toEqual({ kind: 'record', path: '/tickets/42' })
+    expect(parseRecordScan(` ${origin}/tickets/42\n`, origin)).toEqual({ kind: 'record', path: '/dossiers/42' })
   })
 
   it.each([

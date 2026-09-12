@@ -2,8 +2,10 @@
 
 Le nom métier est **Dossier client** ; l'interface utilise **Dossiers clients** pour
 la rubrique et **Dossier** dans les actions. Les identifiants techniques `ticket`,
-les tables, les API et les routes `/tickets/{id}` restent inchangés. Les QR déjà
-imprimés continuent donc à ouvrir le même dossier.
+les tables et les API restent inchangés. Les pages utilisent `/dossiers` et
+`/dossiers/{id}` (y compris édition et impression). Les anciennes routes `/tickets`
+redirigent vers `/dossiers` en conservant les paramètres et les ancres. Les nouveaux
+QR utilisent `/dossiers/{id}` ; les QR déjà imprimés ouvrent toujours le même dossier.
 
 Les nouveaux numéros sont `DOS-N`. Le script ci-dessous convertit aussi les anciens
 `TIC-N`, sans changer N, les identifiants, les relations ou les notes. La recherche
