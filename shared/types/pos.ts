@@ -226,6 +226,8 @@ export interface DocumentRecord {
   customerId: number
   ticketId: number | null
   issuedAt: string
+  /** Calendar date: payment deadline for invoices, validity deadline for quotes. */
+  dueDate?: string | null
   subtotal: number
   taxAmount: number
   total: number
@@ -235,6 +237,7 @@ export interface DocumentRecord {
 }
 
 export interface DocumentDetail extends DocumentRecord {
+  relatedDocuments?: Pick<DocumentRecord, 'id' | 'documentNumber' | 'type' | 'status'>[]
   settlement?: {
     isPayable: boolean
     paidAmount: number

@@ -70,7 +70,7 @@ describe('editing recorded financial data', () => {
         status TEXT NOT NULL,
         customer_id INTEGER NOT NULL,
         ticket_id INTEGER,
-        issued_at TEXT NOT NULL,
+        issued_at TEXT NOT NULL, due_date TEXT,
         subtotal INTEGER NOT NULL,
         tax_amount INTEGER NOT NULL,
         total INTEGER NOT NULL,
@@ -563,5 +563,30 @@ describe('editing recorded financial data', () => {
     const pending = await createPaymentRecord({ customerId: 1, documentId: invoice.id, ...paymentInput, amount: 10000, status: 'pending' }, 'pending-invoice')
     await updateDocumentRecord(invoice.id, { ...invoice, status: 'cancelled' })
     await expect(updatePaymentRecord(pending.id, { ...pending, status: 'paid' })).rejects.toMatchObject({ data: { code: 'DOCUMENT_CANCELLED' } })
+  })
+  it('persists, preserves and clears the optional calendar deadline', async () => {
+    const { createDocumentRecord, getDocumentById } = await import('../../server/utils/pos/documents')
+    const invoice = await createDocumentRecord({
+      type: 'invoice', customerId: 1, issuedAt: paymentInput.paidAt, dueDate: '2026-09-30',
+      lines: [{ label: 'Service', quantity: 1, unitPrice: 39300, vatRate: 8.1 }]
+    }, { key: 'deadline-invoice' })
+    expect((await getDocumentById(invoice.id)).dueDate).toBe('2026-09-30')
+    const { dueDate: _dueDate, ...legacyPayload } = invoice
+    expect((await updateDocumentRecord(invoice.id, legacyPayload)).dueDate).toBe('2026-09-30')
+    expect((await updateDocumentRecord(invoice.id, { ...invoice, dueDate: null })).dueDate).toBeNull()
+    const quote = await createDocumentRecord({ ...legacyPayload, type: 'quote', dueDate: '2026-10-15' }, { key: 'deadline-quote' })
+    expect((await getDocumentById(quote.id)).dueDate).toBe('2026-10-15')
+    const order = await createDocumentRecord({ ...legacyPayload, type: 'customer_order', dueDate: '2026-10-15' }, { key: 'deadline-order' })
+    expect(order.dueDate).toBeNull()
+  })
+
+  it('returns only other documents in the same customer dossier', async () => {
+    const order = await prepareOrder(0, true)
+    const { createInvoiceFromTicket } = await import('../../server/utils/pos/tickets')
+    const { getDocumentById } = await import('../../server/utils/pos/documents')
+    const invoice = await createInvoiceFromTicket(1, 'summary-invoice', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    expect(invoice.relatedDocuments?.map(row => row.type)).toEqual(['quote', 'customer_order'])
+    expect((await getDocumentById(order.id)).relatedDocuments?.map(row => row.id)).toContain(invoice.id)
+    expect(invoice.relatedDocuments?.map(row => row.id)).not.toContain(invoice.id)
   })
 })

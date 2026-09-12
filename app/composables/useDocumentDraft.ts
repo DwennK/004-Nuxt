@@ -1,5 +1,6 @@
 import { computed, reactive, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { z } from 'zod'
+import { documentDueDateSchema } from '~~/shared/validation/pos'
 import {
   documentStatusLabels,
   documentStatuses,
@@ -21,7 +22,7 @@ import {
 
 type EditableLinePayload = EditableCommercialLinePayload
 
-export type DocumentInitialValue = Partial<Pick<DocumentDetail, 'id' | 'type' | 'status' | 'customerId' | 'ticketId' | 'issuedAt' | 'notes'>> & {
+export type DocumentInitialValue = Partial<Pick<DocumentDetail, 'id' | 'type' | 'status' | 'customerId' | 'ticketId' | 'issuedAt' | 'dueDate' | 'notes'>> & {
   lines?: EditableLinePayload[]
 }
 
@@ -33,6 +34,7 @@ export type DocumentDraftState = {
   customerId: number
   ticketId: number | null
   issuedAt: string
+  dueDate: string
   notes: string
   lines: DocumentDraftLine[]
 }
@@ -43,6 +45,7 @@ export type DocumentSavePayload = {
   customerId: number
   ticketId: number | null
   issuedAt: string
+  dueDate?: string | null
   notes: string
   lines: EditableLinePayload[]
 }
@@ -115,6 +118,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     customerId: z.coerce.number().int().positive('Le client est obligatoire'),
     ticketId: z.coerce.number().int().positive().optional().nullable(),
     issuedAt: z.string().min(1, 'La date d’émission est obligatoire'),
+    dueDate: documentDueDateSchema,
     notes: z.string().optional().default(''),
     lines: z.array(lineSchema).min(1, 'Au moins une ligne est obligatoire')
   }).superRefine((value, ctx) => {
@@ -137,6 +141,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     customerId: 0,
     ticketId: null,
     issuedAt: toDateTimeLocal(),
+    dueDate: '',
     notes: '',
     get lines() { return lineEditor.state.lines },
     set lines(value) { lineEditor.state.lines = value }
@@ -168,6 +173,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
       customerId: options.fixedCustomerId.value ?? initialValue?.customerId ?? 0,
       ticketId: options.fixedTicketId.value ?? initialValue?.ticketId ?? null,
       issuedAt: toDateTimeLocal(initialValue?.issuedAt),
+      dueDate: initialValue?.dueDate || '',
       notes: initialValue?.notes || ''
     }
   }
@@ -210,6 +216,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
       customerId: state.customerId,
       ticketId: state.ticketId ?? null,
       issuedAt: new Date(state.issuedAt).toISOString(),
+      dueDate: state.type === 'customer_order' ? null : state.dueDate || null,
       notes: state.notes,
       lines: lineEditor.serializeLines()
     }

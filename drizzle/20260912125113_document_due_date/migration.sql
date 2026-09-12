@@ -1,0 +1,1 @@
+ALTER TABLE `documents` ADD `due_date` text;

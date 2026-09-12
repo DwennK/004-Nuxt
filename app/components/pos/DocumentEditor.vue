@@ -77,7 +77,7 @@ function onSubmit() {
 function onSubmitError(event: { errors?: Array<{ name?: string, message?: string }> }) {
   const errors = event.errors || []
   const firstError = errors[0]
-  contextOpen.value = firstError?.name === 'notes'
+  contextOpen.value = ['notes', 'dueDate'].includes(firstError?.name || '')
 
   toast.add({
     title: 'Document incomplet',
@@ -165,7 +165,7 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
               color="neutral"
               variant="soft"
               icon="i-lucide-panel-right-open"
-              label="Informations complémentaires"
+              :label="state.type === 'customer_order' ? 'Message client' : 'Dates et message client'"
               @click="contextOpen = true"
             />
             <div class="flex items-center gap-2">

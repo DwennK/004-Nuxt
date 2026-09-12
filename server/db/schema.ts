@@ -171,6 +171,7 @@ export const documents = sqliteTable('documents', {
   customerId: integer('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' }),
   ticketId: integer('ticket_id').references(() => tickets.id, { onDelete: 'set null' }),
   issuedAt: text('issued_at').notNull(),
+  dueDate: text('due_date'),
   subtotal: integer('subtotal').notNull(),
   taxAmount: integer('tax_amount').notNull(),
   total: integer('total').notNull(),

@@ -45,6 +45,7 @@ export function mapDocument(row: typeof documents.$inferSelect): DocumentRecord 
     customerId: row.customerId,
     ticketId: row.ticketId,
     issuedAt: row.issuedAt,
+    dueDate: row.dueDate,
     subtotal: row.subtotal,
     taxAmount: row.taxAmount,
     total: row.total,
@@ -150,6 +151,7 @@ type DocumentWriteInput = {
   customerId: number
   ticketId?: number | null
   issuedAt: string
+  dueDate?: string | null
   notes?: string | null
   lines: DocumentWriteLineInput[]
 }
@@ -272,6 +274,7 @@ async function insertDocumentWithLines(
     customerId: input.customerId,
     ticketId: input.ticketId ?? null,
     issuedAt: input.issuedAt,
+    dueDate: input.type === 'customer_order' ? null : input.dueDate ?? null,
     subtotal: totals.subtotal,
     taxAmount: totals.taxAmount,
     total: totals.total,
@@ -456,13 +459,20 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
     })
   }
 
-  const [lineRows, settlement] = await Promise.all([
+  const [lineRows, settlement, relatedDocuments] = await Promise.all([
     db.select().from(documentLines).where(eq(documentLines.documentId, id)).orderBy(asc(documentLines.id)),
-    getDocumentSettlement(db, header.document)
+    getDocumentSettlement(db, header.document),
+    header.document.ticketId
+      ? db.select({ id: documents.id, documentNumber: documents.documentNumber, type: documents.type, status: documents.status })
+          .from(documents)
+          .where(and(eq(documents.ticketId, header.document.ticketId), eq(documents.customerId, header.document.customerId), ne(documents.id, id)))
+          .orderBy(asc(documents.issuedAt), asc(documents.id))
+      : Promise.resolve([])
   ])
 
   return {
     ...mapDocument(header.document),
+    relatedDocuments,
     customer: mapCustomer(header.customer),
     ticket: header.ticket
       ? {
@@ -744,6 +754,7 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
         customerId: input.customerId,
         ticketId: input.ticketId ?? null,
         issuedAt: input.issuedAt,
+        dueDate: input.type === 'customer_order' ? null : input.dueDate === undefined ? existingDocument.dueDate : input.dueDate,
         subtotal: totals.subtotal,
         taxAmount: totals.taxAmount,
         total: totals.total,

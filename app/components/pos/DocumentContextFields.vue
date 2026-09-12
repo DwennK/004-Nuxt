@@ -23,13 +23,26 @@ const state = props.editor.state
     :content="focusReturn"
     :dismissible="!saving"
     :close="!saving"
-    title="Informations complémentaires"
-    description="Ajoutez un message destiné au client."
+    :title="state.type === 'customer_order' ? 'Message client' : 'Dates et message client'"
+    :description="state.type === 'customer_order' ? 'Ajoutez un message destiné au client.' : 'Précisez la date limite et le message destiné au client.'"
     side="right"
     :ui="{ content: 'max-w-xl' }"
   >
     <template #body>
       <div class="space-y-4">
+        <UFormField
+          v-if="state.type !== 'customer_order'"
+          :label="state.type === 'quote' ? 'Valable jusqu’au' : 'Date d’échéance'"
+          name="dueDate"
+          hint="Facultatif"
+        >
+          <UInput
+            v-model="state.dueDate"
+            type="date"
+            class="w-full"
+            :disabled="saving"
+          />
+        </UFormField>
         <UFormField
           label="Message visible sur le document"
           name="notes"

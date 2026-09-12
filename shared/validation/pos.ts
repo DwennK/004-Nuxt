@@ -151,12 +151,16 @@ export const ticketCreateInputSchema = ticketInputSchema.extend({
 
 export const documentLineInputSchema = commercialLineInputSchema
 
+export const documentDueDateSchema = z.union([isoDateSchema, z.literal('')])
+  .nullable().optional().transform(value => value === '' ? null : value)
+
 export const documentInputSchema = z.object({
   type: z.enum(documentTypes),
   status: z.enum(documentStatuses).default('issued'),
   customerId: z.coerce.number().int().positive(),
   ticketId: z.coerce.number().int().positive().optional().nullable(),
   issuedAt: z.string().trim().min(1),
+  dueDate: documentDueDateSchema,
   notes: optionalText,
   lines: z.array(commercialLineInputSchema).min(1, 'Au moins une ligne est obligatoire')
 })

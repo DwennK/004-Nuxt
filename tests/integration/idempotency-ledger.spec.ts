@@ -31,7 +31,7 @@ describe('idempotent financial mutation ledger', () => {
         status TEXT NOT NULL,
         customer_id INTEGER NOT NULL,
         ticket_id INTEGER,
-        issued_at TEXT NOT NULL,
+        issued_at TEXT NOT NULL, due_date TEXT,
         subtotal INTEGER NOT NULL,
         tax_amount INTEGER NOT NULL,
         total INTEGER NOT NULL,
