@@ -29,7 +29,7 @@ const pagination = ref({
   pageIndex: 0,
   pageSize: 50
 })
-const columnVisibility = ref()
+const columnVisibility = ref({ type: false })
 
 const statusItems = [
   { label: 'Tous les statuts', value: 'all' },
@@ -138,39 +138,59 @@ const columns: TableColumn<TicketListItem>[] = [
   {
     accessorKey: 'ticketNumber',
     header: 'Dossier',
-    cell: ({ row }) => h('div', { class: 'space-y-1' }, [
-      h('p', { class: 'font-medium text-highlighted' }, row.original.ticketNumber),
-      h('div', { class: 'flex flex-wrap items-center gap-2' }, [
-        h(UBadge, { color: ticketStatusColors[row.original.status], variant: 'subtle' }, () => ticketStatusLabels[row.original.status]),
-        h('span', { class: 'text-xs text-toned' }, ticketTypeLabels[row.original.type])
-      ])
+    meta: { class: { th: 'w-52' } },
+    cell: ({ row }) => h('div', { class: 'flex min-w-0 items-center gap-2' }, [
+      h('p', { class: 'shrink-0 font-medium text-highlighted', title: ticketTypeLabels[row.original.type] }, row.original.ticketNumber),
+      h(UBadge, {
+        color: ticketStatusColors[row.original.status],
+        variant: 'subtle',
+        size: 'sm',
+        class: 'min-w-0',
+        title: `${ticketStatusLabels[row.original.status]} · ${ticketTypeLabels[row.original.type]}`
+      }, () => h('span', { class: 'truncate' }, ticketStatusLabels[row.original.status]))
     ])
   },
   {
     accessorKey: 'customerName',
     header: 'Client',
-    cell: ({ row }) => h('div', { class: 'min-w-0' }, [
-      h('p', { class: 'font-medium truncate' }, row.original.customerName),
-      h('p', { class: 'text-sm text-toned truncate' }, [row.original.brand, row.original.model].filter(Boolean).join(' ') || 'Appareil non défini')
-    ])
+    meta: { class: { th: 'w-44' } },
+    cell: ({ row }) => h('div', { class: 'truncate font-medium', title: row.original.customerName }, row.original.customerName)
+  },
+  {
+    id: 'device',
+    header: 'Appareil',
+    meta: { class: { th: 'w-44' } },
+    cell: ({ row }) => {
+      const device = [row.original.brand, row.original.model].filter(Boolean).join(' ') || 'Appareil non défini'
+      return h('div', { class: 'truncate text-toned', title: device }, device)
+    }
+  },
+  {
+    accessorKey: 'type',
+    header: 'Type',
+    meta: { class: { th: 'w-28' } },
+    cell: ({ row }) => ticketTypeLabels[row.original.type]
   },
   {
     accessorKey: 'issueDescription',
     header: 'Problème',
-    cell: ({ row }) => h('p', { class: 'line-clamp-2 max-w-md text-toned' }, row.original.issueDescription)
+    cell: ({ row }) => h('p', { class: 'truncate text-toned', title: row.original.issueDescription }, row.original.issueDescription)
   },
   {
     accessorKey: 'documentCount',
     header: 'Documents',
+    meta: { class: { th: 'w-24' } },
     cell: ({ row }) => `${row.original.documentCount}`
   },
   {
     accessorKey: 'openedAt',
     header: 'Ouvert le',
+    meta: { class: { th: 'w-44' } },
     cell: ({ row }) => formatDateTime(row.original.openedAt)
   },
   {
     id: 'actions',
+    meta: { class: { th: 'w-16' } },
     cell: ({ row }) => h('div', { class: 'text-right' }, h(
       UDropdownMenu,
       {
@@ -227,6 +247,8 @@ const columns: TableColumn<TicketListItem>[] = [
                 label: ({
                   ticketNumber: 'Dossier',
                   customerName: 'Client',
+                  device: 'Appareil',
+                  type: 'Type',
                   issueDescription: 'Problème',
                   documentCount: 'Documents',
                   openedAt: 'Ouvert le',
@@ -276,9 +298,9 @@ const columns: TableColumn<TicketListItem>[] = [
           :loading="status === 'pending'"
           class="shrink-0"
           :ui="{
-            base: 'table-fixed border-separate border-spacing-0',
-            th: 'py-2',
-            td: 'align-top',
+            base: 'w-full min-w-[70rem] table-fixed border-separate border-spacing-0',
+            th: 'py-2 text-xs',
+            td: 'py-2 align-middle text-sm',
             separator: 'h-0'
           }"
           @select="(_, row) => navigateTo(`/dossiers/${row.original.id}`)"
