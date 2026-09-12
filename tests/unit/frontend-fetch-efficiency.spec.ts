@@ -117,7 +117,7 @@ afterEach(async () => {
 
 describe('frontend query execution budget', () => {
   it.each([
-    ['documents', 'query'], ['customers', 'query'], ['tickets', 'query'], ['payments', 'paymentQuery']
+    ['documents', 'query'], ['customers', 'query'], ['dossiers', 'query'], ['payments', 'paymentQuery']
   ])('requests only the final filter and first page for %s', async (name, queryName) => {
     const app = await runtime()
     const search = vue.ref('')
@@ -138,7 +138,7 @@ describe('frontend query execution budget', () => {
     search.value = 'martin'
     await settle()
     expect(app.calls).toHaveLength(1)
-    expect(app.calls[0]!.query).toMatchObject({ page: 1, pageSize: 50, [name === 'documents' || name === 'tickets' ? 'q' : 'search']: 'martin' })
+    expect(app.calls[0]!.query).toMatchObject({ page: 1, pageSize: 50, [name === 'documents' || name === 'dossiers' ? 'q' : 'search']: 'martin' })
     expect(app.calls[0]!.aborted).toBe(false)
   })
 
