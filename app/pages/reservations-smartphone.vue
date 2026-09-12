@@ -113,7 +113,7 @@ function formatSwissDate(value: string) {
   }
 
   const date = parseISO(value)
-  return isValid(date) ? format(date, 'dd.MM.yyyy') : value
+  return isValid(date) ? format(date, 'dd/MM/yyyy') : value
 }
 
 function formatPhoneDisplay(value: string) {

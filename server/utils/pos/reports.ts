@@ -3,7 +3,7 @@ import { and, eq, gte, lte, sql, sum, type SQL } from 'drizzle-orm'
 import { catalogItems, customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
 import type { DailySummary, ReportsLeaders, ReportsOverview } from '~~/shared/types/pos'
-import { businessTimeZone, toDateInputValue, buildZonedDayRange as buildDayRange } from '~~/shared/utils/pos'
+import { businessTimeZone, formatDate, toDateInputValue, buildZonedDayRange as buildDayRange } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
 
@@ -19,38 +19,23 @@ function shiftIsoDate(date: string, days: number) {
 }
 
 function formatDayLabel(date: string) {
-  const [year, month, day] = date.split('-').map(Number)
-
-  return new Intl.DateTimeFormat('fr-CH', {
-    weekday: 'short',
-    day: '2-digit',
-    month: '2-digit',
-    timeZone: businessTimeZone
-  }).format(new Date(Date.UTC(year!, month! - 1, day!, 12, 0, 0)))
+  return formatDate(date)
 }
 
 function formatDetailedDayLabel(date: string) {
-  const [year, month, day] = date.split('-').map(Number)
-
-  return new Intl.DateTimeFormat('fr-CH', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: businessTimeZone
-  }).format(new Date(Date.UTC(year!, month! - 1, day!, 12, 0, 0)))
+  return formatDate(date)
 }
 
 function formatMonthLabel(year: number, month: number) {
-  return new Intl.DateTimeFormat('fr-CH', {
-    month: 'short',
+  return new Intl.DateTimeFormat('fr-FR', {
+    month: '2-digit',
     timeZone: businessTimeZone
   }).format(new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)))
 }
 
 function formatMonthTooltipLabel(year: number, month: number) {
-  return new Intl.DateTimeFormat('fr-CH', {
-    month: 'long',
+  return new Intl.DateTimeFormat('fr-FR', {
+    month: '2-digit',
     year: 'numeric',
     timeZone: businessTimeZone
   }).format(new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)))

@@ -54,7 +54,7 @@ export function toDateInputValue(value = new Date(), timeZone = businessTimeZone
   }).format(value)
 }
 
-export function formatDateTime(value: string | Date, locale = 'fr-CH', timeZone = businessTimeZone) {
+export function formatDateTime(value: string | Date, locale = 'fr-FR', timeZone = businessTimeZone) {
   const date = value instanceof Date ? value : new Date(value)
 
   if (Number.isNaN(date.getTime())) {
@@ -62,13 +62,16 @@ export function formatDateTime(value: string | Date, locale = 'fr-CH', timeZone 
   }
 
   return new Intl.DateTimeFormat(locale, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
     timeZone
   }).format(date)
 }
 
-export function formatDate(value: string | Date, locale = 'fr-CH', timeZone = businessTimeZone) {
+export function formatDate(value: string | Date, locale = 'fr-FR', timeZone = businessTimeZone) {
   const date = value instanceof Date ? value : new Date(value)
 
   if (Number.isNaN(date.getTime())) {
@@ -76,7 +79,9 @@ export function formatDate(value: string | Date, locale = 'fr-CH', timeZone = bu
   }
 
   return new Intl.DateTimeFormat(locale, {
-    dateStyle: 'medium',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
     timeZone
   }).format(date)
 }

@@ -3,7 +3,7 @@ import type { TabsItem } from '@nuxt/ui'
 import ReportsLeaders from '~/components/reports/ReportsLeaders.client.vue'
 import ReportsOverviewCharts from '~/components/reports/ReportsOverviewCharts.client.vue'
 import type { ReportsLeaders as ReportsLeadersData, ReportsOverview } from '~~/shared/types/pos'
-import { formatCurrency, toDateInputValue } from '~~/shared/utils/pos'
+import { formatCurrency, formatDate, toDateInputValue } from '~~/shared/utils/pos'
 
 function shiftIsoDate(date: string, days: number) {
   const [year, month, day] = date.split('-').map(Number)
@@ -66,12 +66,7 @@ watch([() => selectedTab.value !== 'revenue', normalizedLeadersRange], async ([v
 })
 
 function formatRangeDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number)
-
-  return new Intl.DateTimeFormat('fr-CH', {
-    day: 'numeric',
-    month: 'long'
-  }).format(new Date(Date.UTC(year!, month! - 1, day!, 12, 0, 0)))
+  return formatDate(value)
 }
 
 const stats = computed(() => {

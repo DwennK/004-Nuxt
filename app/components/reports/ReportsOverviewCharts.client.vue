@@ -3,7 +3,7 @@ import type { TabsItem } from '@nuxt/ui'
 import { BarChart, DonutChart } from 'vue-chrts'
 import { lineCategoryColors, paymentMethodColors, paymentMethodLabels } from '~~/shared/constants/pos'
 import type { PaymentMethod, ReportsOverview } from '~~/shared/types/pos'
-import { formatCurrency } from '~~/shared/utils/pos'
+import { formatCurrency, formatDate } from '~~/shared/utils/pos'
 
 type UiColorToken = 'primary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
@@ -80,13 +80,7 @@ const dayLabel = (tick: number | Date) => {
 const currencyLabel = (tick: number | Date) => formatCurrency(Number(tick))
 
 function formatTooltipDate(date: string) {
-  const [year, month, day] = date.split('-').map(Number)
-
-  return new Intl.DateTimeFormat('fr-CH', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long'
-  }).format(new Date(Date.UTC(year!, month! - 1, day!, 12, 0, 0)))
+  return formatDate(date)
 }
 
 const turnoverChartData = computed(() => props.overview.turnoverByCategory)

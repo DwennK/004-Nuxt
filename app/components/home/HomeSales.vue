@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { h, resolveComponent } from 'vue'
+import { formatDateTime } from '~~/shared/utils/pos'
 import type { TableColumn } from '@nuxt/ui'
 import type { Period, Range, Sale } from '~/types'
 
@@ -51,13 +52,7 @@ const columns: TableColumn<Sale>[] = [
     accessorKey: 'date',
     header: 'Date',
     cell: ({ row }) => {
-      return new Date(row.getValue('date')).toLocaleString('en-US', {
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      })
+      return formatDateTime(row.getValue('date'))
     }
   },
   {

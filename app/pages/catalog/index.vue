@@ -13,7 +13,7 @@ import {
   catalogRepairCategories,
   catalogServiceCategories
 } from '~~/shared/constants/pos'
-import { formatCurrency } from '~~/shared/utils/pos'
+import { formatCurrency, formatDate } from '~~/shared/utils/pos'
 
 type CatalogView = 'articles' | 'repairs' | 'services'
 const ALL_CATEGORIES = '__all__'
@@ -344,11 +344,7 @@ const articleColumns: TableColumn<CatalogItemRecord>[] = [
     accessorKey: 'updatedAt',
     header: 'Mis à jour',
     cell: ({ row }) =>
-      new Intl.DateTimeFormat('fr-CH', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      }).format(new Date(row.original.updatedAt))
+      formatDate(row.original.updatedAt)
   },
   {
     id: 'actions',
@@ -442,11 +438,7 @@ const repairColumns: TableColumn<CatalogItemRecord>[] = [
     accessorKey: 'updatedAt',
     header: 'Mis à jour',
     cell: ({ row }) =>
-      new Intl.DateTimeFormat('fr-CH', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      }).format(new Date(row.original.updatedAt))
+      formatDate(row.original.updatedAt)
   },
   {
     id: 'actions',
@@ -523,11 +515,7 @@ const serviceColumns: TableColumn<CatalogItemRecord>[] = [
     accessorKey: 'updatedAt',
     header: 'Mis à jour',
     cell: ({ row }) =>
-      new Intl.DateTimeFormat('fr-CH', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      }).format(new Date(row.original.updatedAt))
+      formatDate(row.original.updatedAt)
   },
   {
     id: 'actions',

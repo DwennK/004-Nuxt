@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import { lineCategoryLabels } from '~~/shared/constants/pos'
 import type { DailySummary } from '~~/shared/types/pos'
-import { businessTimeZone, formatCurrency, getPaymentMethodLabel } from '~~/shared/utils/pos'
+import { businessTimeZone, formatCurrency, formatDate, getPaymentMethodLabel } from '~~/shared/utils/pos'
 
 const props = defineProps<{ summary: DailySummary }>()
 
-const reportDate = computed(() => new Intl.DateTimeFormat('fr-CH', {
-  dateStyle: 'full',
-  timeZone: businessTimeZone
-}).format(new Date(`${props.summary.date}T12:00:00Z`)).replace(',', ''))
+const reportDate = computed(() => formatDate(props.summary.date))
 
 const paymentCount = computed(() => props.summary.totalsByMethod.reduce((sum, item) => sum + item.transactionCount, 0))
 const paidSubtotal = computed(() => props.summary.paidDocuments.reduce((sum, document) => sum + document.paidAmountToday, 0))

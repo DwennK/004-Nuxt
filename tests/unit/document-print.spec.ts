@@ -12,8 +12,8 @@ describe('printed document payments', () => {
     const model = buildDocumentA4PrintModel(document, printCompany())
 
     expect(model.payments).toEqual([
-      { id: 1, amount: 2500, label: 'Espèces', paidAt: '1 sept. 2026' },
-      { id: 2, amount: 3000, label: 'Carte Bancaire / TWINT', paidAt: '8 sept. 2026' }
+      { id: 1, amount: 2500, label: 'Espèces', paidAt: '01/09/2026' },
+      { id: 2, amount: 3000, label: 'Carte Bancaire / TWINT', paidAt: '08/09/2026' }
     ])
     expect(document.payments[0]?.id).toBe(2)
     expect(model.paidAmount).toBe(5500)

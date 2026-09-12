@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import * as z from 'zod'
+import { formatDate as formatPosDate } from '~~/shared/utils/pos'
 import type { DropdownMenuItem, FormSubmitEvent } from '@nuxt/ui'
 import type { UserRecord } from '~~/shared/types/users'
 import {
@@ -27,16 +28,10 @@ const filteredUsers = computed(() => {
   )
 })
 
-const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric'
-})
-
 function formatDate(value: string) {
   const d = new Date(value.includes('T') ? value : value.replace(' ', 'T') + 'Z')
   if (Number.isNaN(d.getTime())) return value
-  return dateFormatter.format(d)
+  return formatPosDate(d)
 }
 
 function isSelf(user: UserRecord) {

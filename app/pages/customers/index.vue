@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '~~/shared/utils/pos'
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
@@ -230,11 +231,7 @@ const columns: TableColumn<CustomerRecord>[] = [
   {
     accessorKey: 'updatedAt',
     header: 'Mis à jour',
-    cell: ({ row }) => new Intl.DateTimeFormat('fr-CH', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).format(new Date(row.original.updatedAt))
+    cell: ({ row }) => formatDate(row.original.updatedAt)
   },
   {
     id: 'actions',

@@ -49,7 +49,7 @@ function formatSwissDate(value: string) {
   }
 
   const date = parseISO(value)
-  return isValid(date) ? format(date, 'dd.MM.yyyy') : value
+  return isValid(date) ? format(date, 'dd/MM/yyyy') : value
 }
 
 async function updateSoldState(row: SmartphoneStock, sold: boolean) {

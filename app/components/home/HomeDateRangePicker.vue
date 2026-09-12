@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { DateFormatter, getLocalTimeZone, CalendarDate, today } from '@internationalized/date'
+import { getLocalTimeZone, CalendarDate, today } from '@internationalized/date'
 import type { Range } from '~/types'
-
-const df = new DateFormatter('fr-CH', {
-  dateStyle: 'medium'
-})
+import { formatDate } from '~~/shared/utils/pos'
 
 const selected = defineModel<Range>({ required: true })
 
@@ -88,10 +85,10 @@ const selectRange = (range: { days?: number, months?: number, years?: number }) 
       <span class="truncate">
         <template v-if="selected.start">
           <template v-if="selected.end">
-            {{ df.format(selected.start) }} - {{ df.format(selected.end) }}
+            {{ formatDate(selected.start) }} - {{ formatDate(selected.end) }}
           </template>
           <template v-else>
-            {{ df.format(selected.start) }}
+            {{ formatDate(selected.start) }}
           </template>
         </template>
         <template v-else>

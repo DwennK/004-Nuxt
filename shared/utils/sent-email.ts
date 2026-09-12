@@ -1,11 +1,8 @@
 import type { SentMailStatus } from '~~/shared/types/pos'
-import { businessTimeZone } from './pos'
+import { formatDateTime } from './pos'
 
 export function formatSentMailListDate(value: string) {
-  return new Intl.DateTimeFormat('fr-CH', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-    timeZone: businessTimeZone
-  }).format(new Date(value))
+  return formatDateTime(value)
 }
 
 export function getSentMailStatusMeta(status: SentMailStatus) {
