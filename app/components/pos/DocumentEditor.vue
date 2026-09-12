@@ -63,6 +63,7 @@ const resolvedSubmitLabel = computed(() => {
 
 const hasFixedCustomer = computed(() => props.fixedCustomerId !== null)
 const isExistingDocument = computed(() => props.initialValue.id != null)
+const showTypeSelector = computed(() => !isExistingDocument.value && props.allowedTypes.length > 1)
 
 watch(editor.isDirty, (value) => {
   dirty.value = value
@@ -109,9 +110,10 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
     >
       <fieldset :disabled="props.saving || props.disabled" class="min-w-0 space-y-4">
         <div
-          class="grid gap-3 rounded-lg border border-default bg-muted/30 p-3 sm:grid-cols-2 lg:grid-cols-[9rem_minmax(12rem,1fr)_12rem_9rem] lg:items-end"
+          class="grid gap-3 rounded-lg border border-default bg-muted/30 p-3 sm:grid-cols-2 lg:items-end"
+          :class="showTypeSelector ? 'lg:grid-cols-[9rem_minmax(12rem,1fr)_12rem_9rem]' : 'lg:grid-cols-[minmax(12rem,1fr)_12rem_9rem]'"
         >
-          <UFormField label="Type" name="type">
+          <UFormField v-if="showTypeSelector" label="Type" name="type">
             <USelectMenu
               v-model="state.type"
               :items="documentTypeItems"
