@@ -62,7 +62,7 @@
   },
   "devDependencies": {
     "@adonisjs/hash": "^10.1.0",
-    "@cloudflare/workers-types": "5.20260901.1",
+    "@cloudflare/workers-types": "5.20260914.1",
     "@nuxt/eslint": "^1.16.0",
     "@types/papaparse": "^5.5.2",
     "@types/qrcode": "^1.5.6",
