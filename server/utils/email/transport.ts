@@ -44,14 +44,6 @@ export function getEmailBinding(event: H3Event): EmailBinding {
   return env.EMAIL as EmailBinding
 }
 
-export function encodeMailAttachment(bytes: Uint8Array) {
-  let binary = ''
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
-  }
-  return btoa(binary)
-}
-
 export function prepareEmail(mail: OutgoingMail): EmailPayload {
   const from = parseMailAddress(mail.from)
   const to = parseMailAddress(mail.to)
@@ -71,8 +63,9 @@ export function prepareEmail(mail: OutgoingMail): EmailPayload {
     from, to, replyTo, subject: mail.subject, text: mail.text,
     attachments: mail.attachments.map(attachment => ({
       filename: attachment.filename, type: attachment.type, disposition: 'attachment',
-      // Base64 also works with Wrangler's local email simulator.
-      content: encodeMailAttachment(attachment.content)
+      // Pass the exact binary view: pre-encoded base64 can arrive as PDF text.
+      // The native binding handles MIME transfer encoding.
+      content: attachment.content
     }))
   }
 }

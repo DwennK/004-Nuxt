@@ -62,7 +62,7 @@ describe('Cloudflare email journal', () => {
     expect(result).toMatchObject({ ok: true, status: 'sent', replayed: false })
     expect(send).toHaveBeenCalledWith(expect.objectContaining({
       from: { name: 'Microwest', email: 'info@microwest.ch' }, replyTo: 'info@microwest.ch',
-      attachments: [expect.objectContaining({ filename: 'FA-123.pdf', type: 'application/pdf', content: btoa('%PDF-1.7\nTest') })]
+      attachments: [expect.objectContaining({ filename: 'FA-123.pdf', type: 'application/pdf', content: new TextEncoder().encode('%PDF-1.7\nTest') })]
     }))
     expect(await getSentEmail(result.id, database)).toMatchObject({ bodyText: mailFixture().text, lastEvent: 'sent' })
   })

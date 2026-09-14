@@ -25,7 +25,9 @@ Aucune réception, aucun pixel, suivi de clic, statut de lecture ou purge.
 ## Fonctionnement
 
 - `server/utils/email/transport.ts` prépare le constructeur structuré officiel,
-  avec texte exact, destinataire, sujet, réponse et PDF existant en base64.
+  avec texte exact, destinataire, sujet, réponse et PDF existant en binaire
+  (`Uint8Array`). Le binding assure l’encodage MIME : un préencodage base64
+  a produit une pièce jointe contenant du texte au lieu d’un PDF ouvrable.
   La borne MIME conservatrice inclut encodage, repliement et en-têtes dans les
   5 Mio ; certains messages proches de la limite sont donc refusés en amont.
 - `sent_emails` réserve la tentative avant l’appel externe. Une panne DB empêche
@@ -126,7 +128,10 @@ npm run build
 Contrôler `.output/server/wrangler.json` : binding restreint `EMAIL`, consommateur et
 file d’échec. Pour `npm run preview`, utiliser uniquement une base jetable et
 les valeurs locales, jamais les credentials de production. Le simulateur mail
-ne prouve ni la réception Internet ni les événements réels.
+ne prouve ni la réception Internet ni les événements réels. Sa limitation de
+sérialisation des pièces jointes binaires ne doit pas conduire à préencoder
+les PDF en base64 en production ; vérifier les octets dans les tests et la
+pièce jointe reçue lors d’un envoi réel autorisé.
 
 Avant bascule complète, obtenir une **adresse de test explicitement choisie**
 et envoyer un document d’essai. Vérifier le PDF reçu, `Reply-To`, le texte, le

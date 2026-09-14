@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { PDFDocument } from 'pdf-lib'
 import { classifyEmailError, getEmailBinding, maxEmailBytes, parseMailAddress, prepareEmail } from '../../server/utils/email/transport'
 import { effectiveMailStatus } from '../../server/utils/email/journal'
 import { formatSentMailListDate, getSentMailStatusMeta } from '../../shared/utils/sent-email'
@@ -34,10 +35,27 @@ describe('Cloudflare email transport', () => {
     expect(mail.attachments[0]!.content.byteLength).toBeLessThan(maxEmailBytes)
     expect(() => prepareEmail(mail)).toThrow('5 Mio')
   })
-  it('accepts a normal large PDF and uses base64 for the local simulator', () => {
+  it('accepts a normal large PDF as binary content', () => {
     const mail = mailFixture()
     mail.attachments[0]!.content = new Uint8Array(3 * 1024 * 1024)
-    expect(typeof prepareEmail(mail).attachments?.[0]?.content).toBe('string')
+    expect(prepareEmail(mail).attachments?.[0]?.content).toEqual(mail.attachments[0]!.content)
+  })
+  it('preserves a readable PDF and only the bytes in its binary view', async () => {
+    const pdf = await PDFDocument.create()
+    pdf.addPage().drawText('Invoice attachment regression')
+    const pdfBytes = await pdf.save()
+    const padded = new Uint8Array(pdfBytes.length + 16).fill(255)
+    padded.set(pdfBytes, 8)
+    const mail = mailFixture()
+    mail.attachments[0]!.content = padded.subarray(8, 8 + pdfBytes.length)
+
+    const attachment = prepareEmail(mail).attachments![0]!
+    expect(attachment).toMatchObject({ filename: 'FA-123.pdf', type: 'application/pdf', disposition: 'attachment' })
+    expect(attachment.content).toBeInstanceOf(Uint8Array)
+    const content = attachment.content as Uint8Array
+    expect(content).toEqual(pdfBytes)
+    expect(new TextDecoder().decode(content.subarray(0, 5))).toBe('%PDF-')
+    expect((await PDFDocument.load(content)).getPageCount()).toBe(1)
   })
   it('treats internal/network failures as uncertain, not confirmed failures', () => {
     expect(classifyEmailError({ code: 'E_INTERNAL_SERVER_ERROR' }).status).toBe('unknown')
