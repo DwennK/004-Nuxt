@@ -149,6 +149,10 @@ export const ticketCreateInputSchema = ticketInputSchema.extend({
   closedAt: optionalText.refine(value => value === null, 'Un nouveau dossier ne peut pas être déjà clôturé')
 })
 
+export const ticketLinesInputSchema = z.object({
+  lines: z.array(commercialLineInputSchema)
+})
+
 export const documentLineInputSchema = commercialLineInputSchema
 
 export const documentDueDateSchema = z.union([isoDateSchema, z.literal('')])

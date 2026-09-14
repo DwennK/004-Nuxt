@@ -454,6 +454,50 @@ describe('editing recorded financial data', () => {
     return order
   }
 
+  it('saves intake lines without changing ticket details or existing commercial documents', async () => {
+    await prepareOrder(10000, true)
+    const { updateTicketLines } = await import('../../server/utils/pos/tickets')
+    const ticketBefore = (await client.execute('SELECT * FROM tickets WHERE id = 1')).rows[0]!
+    const documentsBefore = (await client.execute('SELECT * FROM documents ORDER BY id')).rows
+    const documentLinesBefore = (await client.execute('SELECT * FROM document_lines ORDER BY id')).rows
+    const paymentsBefore = (await client.execute('SELECT * FROM payments ORDER BY id')).rows
+    const saved = await updateTicketLines(1, [
+      { label: 'Diagnostic ajouté', quantity: 2, unitPrice: 5000, vatRate: 8.1 },
+      { label: 'Remise', quantity: 1, unitPrice: -1000, vatRate: 8.1 }
+    ], await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    expect(saved.lines).toMatchObject([
+      { label: 'Diagnostic ajouté', quantity: 2, unitPrice: 5000, lineTotal: 10000 },
+      { label: 'Remise', quantity: 1, unitPrice: -1000, lineTotal: -1000 }
+    ])
+    const ticketAfter = (await client.execute('SELECT * FROM tickets WHERE id = 1')).rows[0]!
+    expect({ ...ticketAfter, updated_at: ticketBefore.updated_at }).toEqual(ticketBefore)
+    expect((await client.execute('SELECT * FROM documents ORDER BY id')).rows).toEqual(documentsBefore)
+    expect((await client.execute('SELECT * FROM document_lines ORDER BY id')).rows).toEqual(documentLinesBefore)
+    expect((await client.execute('SELECT * FROM payments ORDER BY id')).rows).toEqual(paymentsBefore)
+    expect(await updateTicketLines(1, [], await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))).toEqual({ lines: [] })
+  })
+
+  it.each(['closed', 'cancelled'])('rejects intake edits on a %s ticket without deleting its lines', async (status) => {
+    await prepareOrder()
+    await client.execute({ sql: 'UPDATE tickets SET status = ? WHERE id = 1', args: [status] })
+    const { updateTicketLines } = await import('../../server/utils/pos/tickets')
+    const before = (await client.execute('SELECT * FROM ticket_lines')).rows
+    await expect(updateTicketLines(1, [], await testDossierContext(useDb(), { kind: 'ticket', id: 1 })))
+      .rejects.toMatchObject({ data: { code: 'TICKET_FINALIZED' } })
+    expect((await client.execute('SELECT * FROM ticket_lines')).rows).toEqual(before)
+  })
+
+  it('requires a current dossier edit proof to save intake lines', async () => {
+    await prepareOrder()
+    const { updateTicketLines } = await import('../../server/utils/pos/tickets')
+    const before = (await client.execute('SELECT * FROM ticket_lines')).rows
+    await expect(updateTicketLines(1, [])).rejects.toMatchObject({ data: { code: 'DOSSIER_PROOF_REQUIRED' } })
+    const stale = await testDossierContext(useDb(), { kind: 'ticket', id: 1 })
+    await testDossierContext(useDb(), { kind: 'ticket', id: 1 })
+    await expect(updateTicketLines(1, [], stale)).rejects.toMatchObject({ statusCode: 409 })
+    expect((await client.execute('SELECT * FROM ticket_lines')).rows).toEqual(before)
+  })
+
   it.each([false, true])('counts a repair once and inherits the order lines (quote: %s)', async (withQuote) => {
     const order = await prepareOrder(0, withQuote)
     const { createInvoiceFromTicket, getTicketById } = await import('../../server/utils/pos/tickets')

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import QRCode from 'qrcode'
-import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
+import type { TableColumn } from '@nuxt/ui'
 import {
   documentStatusColors,
   documentStatusLabels,
@@ -31,6 +31,8 @@ import {
 } from '~~/shared/utils/customer-sms'
 import { ticketStatusTransitions } from '~~/shared/domain/tickets/workflow'
 import { canCreateTicketDocument } from '~~/shared/domain/tickets/document-policy'
+import { useCommercialLinesDraft } from '~~/app/composables/useCommercialLinesDraft'
+import { ticketLinesInputSchema } from '~~/shared/validation/pos'
 import { supportsDocumentPrintProfile, supportsTicketPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
@@ -54,6 +56,9 @@ const id = computed(() => Number(route.params.id))
 
 const workflowOpen = ref(false)
 const { isSaving: actionSaving, saveError: actionError, save: saveAction, clearSaveError: clearActionError } = useFormAction()
+const { isSaving: linesSaving, saveError: linesError, save: saveLinesAction, clearSaveError: clearLinesError } = useFormAction()
+const creatingDocument = ref(false)
+const commercialBusy = computed(() => linesSaving.value || actionSaving.value || creatingDocument.value)
 watch(workflowOpen, clearActionError)
 const paymentOpen = ref(false)
 const smsModalOpen = ref(false)
@@ -77,6 +82,14 @@ const [{ data: ticket, refresh: refreshTicket }, { data: customerSmsSettings }] 
 
 const dossier = useDossier(() => ({ kind: 'ticket', id: id.value }), { record: ticket })
 provide('pos-dossier-state', dossier.current)
+const lineEditor = useCommercialLinesDraft({
+  initialLines: computed(() => ticket.value?.lines),
+  catalogItems: ref([]),
+  draftKey: id,
+  lineIdPrefix: 'ticket-detail-line',
+  allowEmpty: true
+})
+const linesDirty = lineEditor.isDirty
 watch([workflowOpen, noteModalOpen], async (values) => {
   if (values.some(Boolean) && dossier.current.value) {
     try {
@@ -86,6 +99,8 @@ watch([workflowOpen, noteModalOpen], async (values) => {
 })
 
 watch(() => dossier.current.value?.epoch, () => {
+  lineEditor.resetLines(ticket.value?.lines)
+  clearLinesError()
   noteDraft.value = ''
   workflowOpen.value = false
   paymentOpen.value = false
@@ -93,6 +108,13 @@ watch(() => dossier.current.value?.epoch, () => {
 })
 
 const activeTab = ref('overview')
+watch(activeTab, async (tab) => {
+  if (tab === 'lines' && isTicketMutable.value && dossier.current.value) {
+    try {
+      await dossier.manager.session(dossier.current.value, 'acquire')
+    } catch { /* The dossier banner explains the lock or connection failure. */ }
+  }
+})
 const showAllHistory = ref(false)
 
 watch(id, () => {
@@ -102,6 +124,7 @@ watch(id, () => {
 
 const tabItems = computed(() => [
   { label: ticket.value?.type === 'repair' ? 'Réparation' : 'Vue d’ensemble', icon: 'i-lucide-wrench', value: 'overview' },
+  { label: 'Lignes', icon: 'i-lucide-list', value: 'lines', badge: lineEditor.state.lines.length },
   { label: 'Paiements', icon: 'i-lucide-wallet', value: 'payments', badge: ticket.value?.payments.length || 0 },
   { label: 'SMS', icon: 'i-lucide-message-square-share', value: 'sms', badge: smsTimelineItems.value.length || 0 },
   { label: 'Client & Appareil', icon: 'i-lucide-user', value: 'client' }
@@ -257,11 +280,31 @@ const statusMenuItems = computed(() => {
   return [statusItems, finalItems].filter(group => group.length > 0)
 })
 
-const createDocumentItems = computed<DropdownMenuItem[]>(() => [
-  ...(canCreateQuote.value ? [{ label: 'Créer un devis', icon: 'i-lucide-scroll-text', onSelect: createQuote }] : []),
-  ...(canCreateCustomerOrder.value ? [{ label: 'Créer une commande', icon: 'i-lucide-clipboard-plus', onSelect: createOrder }] : []),
-  ...(canCreateInvoice.value ? [{ label: 'Créer une facture', icon: 'i-lucide-file-text', onSelect: createInvoice }] : [])
-])
+const currentCommercialDocument = computed(() => {
+  const active = ticket.value?.documents.filter(document => document.status !== 'cancelled') || []
+  return active.find(document => document.type === 'invoice')
+    || active.find(document => document.type === 'customer_order')
+    || active.find(document => document.type === 'quote')
+    || null
+})
+const createDocumentItems = computed(() => {
+  // The API prefers an active order, then an active quote, over the intake lines.
+  // Documents are already returned newest first, as in cloneDocumentLinesFromLatest.
+  const quote = ticket.value?.documents.find(document => document.type === 'quote' && document.status !== 'cancelled')
+  const order = ticket.value?.documents.find(document => document.type === 'customer_order' && document.status !== 'cancelled')
+  const intakeSource = lineEditor.state.lines.length ? 'À partir des lignes du dossier' : 'Ligne à compléter dans le document'
+  const sourceLabel = (document: typeof quote) => document ? `À partir de ${document.documentNumber}` : intakeSource
+
+  return [
+    ...(canCreateQuote.value ? [{ label: 'Créer un devis', icon: 'i-lucide-scroll-text', source: intakeSource, onSelect: createQuote }] : []),
+    ...(canCreateCustomerOrder.value ? [{ label: 'Créer une commande', icon: 'i-lucide-clipboard-plus', source: sourceLabel(quote), onSelect: createOrder }] : []),
+    ...(canCreateInvoice.value ? [{ label: 'Créer une facture', icon: 'i-lucide-file-text', source: sourceLabel(order || quote), onSelect: createInvoice }] : [])
+  ]
+})
+const commonDocumentSource = computed(() => {
+  const source = createDocumentItems.value[0]?.source
+  return source && createDocumentItems.value.every(action => action.source === source) ? source : null
+})
 
 const paymentColumns: TableColumn<TicketDetail['payments'][number]>[] = [
   {
@@ -516,6 +559,39 @@ async function handleWorkflowSubmit(payload: {
   selectedWorkflowAction.value = null
 }
 
+async function saveTicketLines() {
+  if (!linesDirty.value) return true
+  if (linesSaving.value || actionSaving.value || dossier.blocked.value || !isTicketMutable.value) return false
+  const ticketId = id.value
+  const submitted = lineEditor.serializeLines()
+  const result = await saveLinesAction(async () => {
+    const parsed = ticketLinesInputSchema.safeParse({ lines: submitted })
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message || 'Vérifiez les prestations saisies.')
+    }
+    const saved = await $fetch<{ lines: TicketDetail['lines'] }>(`/api/tickets/${ticketId}/lines`, {
+      method: 'PATCH',
+      body: parsed.data
+    })
+    if (id.value !== ticketId) return
+    lineEditor.acceptSavedLines(saved.lines, submitted)
+    await refreshTicket()
+  }, { success: 'Lignes du dossier enregistrées' })
+  return Boolean(result?.ok && id.value === ticketId && !linesDirty.value)
+}
+
+async function createDocument(action: () => Promise<unknown>) {
+  if (commercialBusy.value || dossier.blocked.value || !isTicketMutable.value) return
+  creatingDocument.value = true
+  try {
+    // Serialize the save and creation so the document never uses a stale intake.
+    if (!await saveTicketLines()) return
+    await action()
+  } finally {
+    creatingDocument.value = false
+  }
+}
+
 async function createQuote() {
   const scope = `ticket-document:${id.value}:quote`
   const attempt = documentMutation.getAttempt(scope, { ticketId: id.value, type: 'quote' }, () => null)
@@ -655,6 +731,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <span id="ticket-lines-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />
           <UButton
             label="Modifier le dossier"
             aria-label="Modifier le dossier"
@@ -670,6 +747,12 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
     </template>
 
     <template #body>
+      <PosUnsavedChanges
+        to="#ticket-lines-unsaved-status"
+        :dirty="linesDirty"
+        :snapshot="JSON.stringify(lineEditor.serializeLines(), null, 2)"
+        :saving="commercialBusy"
+      />
       <PosDossierBanner :state="dossier.current.value" :refresh="refreshTicket" />
       <div v-if="ticket" class="space-y-4">
         <PosFormFeedback :saving="actionSaving" :error="actionError" />
@@ -778,19 +861,6 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                     <h2 id="ticket-documents-heading" class="text-sm font-semibold text-highlighted">
                       Documents liés <span class="ml-1 font-normal text-toned">{{ ticket.documents.length }}</span>
                     </h2>
-                    <UDropdownMenu v-if="createDocumentItems.length" :items="createDocumentItems" :content="{ align: 'end' }">
-                      <UButton
-                        label="Créer un document"
-                        icon="i-lucide-plus"
-                        color="neutral"
-                        variant="outline"
-                        size="sm"
-                        :loading="actionSaving"
-                        :disabled="dossier.blocked.value"
-                        :ui="{ label: 'hidden sm:inline' }"
-                        aria-label="Créer un document"
-                      />
-                    </UDropdownMenu>
                   </div>
                   <div v-if="ticket.documents.length" class="max-h-72 overflow-y-auto">
                     <div class="hidden grid-cols-[minmax(0,1fr)_9rem_7rem_1rem] gap-3 bg-muted/40 px-4 py-2 text-xs text-toned sm:grid" aria-hidden="true">
@@ -819,11 +889,86 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                       <UIcon name="i-lucide-chevron-right" class="col-start-2 row-start-2 size-4 justify-self-end text-dimmed sm:col-auto sm:row-auto" />
                     </NuxtLink>
                   </div>
-                  <p v-else class="px-4 py-5 text-sm text-toned">
-                    {{ createDocumentItems.length ? 'Aucun document lié. Créez un devis, une commande ou une facture.' : 'Aucun document lié à ce dossier.' }}
-                  </p>
+                  <div v-else class="space-y-2 px-4 py-4 text-sm text-toned">
+                    <p>Aucun document lié à ce dossier.</p>
+                    <UButton
+                      v-if="createDocumentItems.length"
+                      label="Voir les lignes et créer un document"
+                      icon="i-lucide-list"
+                      color="neutral"
+                      variant="link"
+                      class="p-0"
+                      @click="activeTab = 'lines'"
+                    />
+                  </div>
                 </section>
               </div>
+
+              <section v-else-if="activeTab === 'lines'" aria-labelledby="ticket-lines-heading" class="overflow-hidden rounded-xl border border-default bg-default">
+                <div class="space-y-3 border-b border-default px-4 py-3">
+                  <div>
+                    <h2 id="ticket-lines-heading" class="text-sm font-semibold text-highlighted">
+                      Prestations et articles du dossier
+                    </h2>
+                    <p v-if="ticket.documents.length" class="mt-1 text-xs text-toned">
+                      Les documents liés conservent leurs propres lignes.
+                    </p>
+                  </div>
+                  <div
+                    v-if="createDocumentItems.length"
+                    class="flex flex-wrap items-start gap-x-3 gap-y-3"
+                    role="group"
+                    aria-label="Créer un document à partir du dossier"
+                  >
+                    <div v-for="(action, index) in createDocumentItems" :key="action.label" class="space-y-1">
+                      <UButton
+                        :label="action.label"
+                        :icon="action.icon"
+                        variant="soft"
+                        size="sm"
+                        :loading="creatingDocument"
+                        :disabled="dossier.blocked.value || commercialBusy"
+                        :aria-describedby="commonDocumentSource ? 'ticket-document-source' : `ticket-document-source-${index}`"
+                        @click="createDocument(action.onSelect)"
+                      />
+                      <p v-if="!commonDocumentSource" :id="`ticket-document-source-${index}`" class="text-xs text-toned">
+                        {{ action.source }}
+                      </p>
+                    </div>
+                  </div>
+                  <p v-if="commonDocumentSource" id="ticket-document-source" class="text-xs text-toned">
+                    {{ commonDocumentSource }}
+                  </p>
+                </div>
+                <form class="space-y-3 p-3 sm:p-4" :aria-busy="commercialBusy" @submit.prevent="saveTicketLines">
+                  <PosFormFeedback :saving="linesSaving" :error="linesError" />
+                  <div v-if="currentCommercialDocument" class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-muted/50 px-3 py-2 text-xs text-toned">
+                    <span>Ces lignes ne modifient pas {{ currentCommercialDocument.documentNumber }}.</span>
+                    <UButton
+                      :to="`/documents/${currentCommercialDocument.id}?tab=lines`"
+                      :label="`Modifier les lignes de ${currentCommercialDocument.documentNumber}`"
+                      icon="i-lucide-external-link"
+                      color="neutral"
+                      variant="link"
+                      size="xs"
+                      class="p-0"
+                    />
+                  </div>
+                  <fieldset :disabled="dossier.blocked.value || !isTicketMutable || commercialBusy" class="min-w-0">
+                    <PosDocumentLinesEditor :editor="lineEditor" :catalog-items="[]" mode="ticket" />
+                  </fieldset>
+                  <div class="flex justify-end">
+                    <UButton
+                      v-if="isTicketMutable"
+                      type="submit"
+                      :label="linesSaving ? 'Enregistrement…' : 'Enregistrer les lignes'"
+                      icon="i-lucide-save"
+                      :loading="linesSaving"
+                      :disabled="!linesDirty || dossier.blocked.value || commercialBusy"
+                    />
+                  </div>
+                </form>
+              </section>
 
               <!-- Payments tab -->
               <div v-else-if="activeTab === 'payments'">
@@ -1171,7 +1316,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             variant="soft"
             block
             :loading="actionSaving"
-            @click="createInvoice"
+            @click="createDocument(createInvoice)"
           />
           <UButton
             v-if="canChargeCreatedDocument"

@@ -148,6 +148,25 @@ export async function cloneTicketLines(ticketId: number) {
   }))
 }
 
+/** Save only the intake lines; never rewrite ticket details or linked documents. */
+export async function updateTicketLines(ticketId: number, lines: TicketLineInput[], dossier?: DossierWriteContext) {
+  await ensurePosSchema()
+  const db = useDb()
+  return db.transaction(async (tx) => {
+    await guardDossierWrite(tx, [{ kind: 'ticket', id: ticketId }], dossier)
+    const [ticket] = await tx.select({ status: tickets.status }).from(tickets).where(eq(tickets.id, ticketId)).limit(1)
+    if (!ticket) {
+      throw createError({ statusCode: 404, statusMessage: 'Dossier introuvable' })
+    }
+    if (ticket.status === 'closed' || ticket.status === 'cancelled') {
+      throw createError({ statusCode: 409, statusMessage: 'Les lignes d’un dossier clôturé ou annulé ne peuvent plus être modifiées.', data: { code: 'TICKET_FINALIZED' } })
+    }
+    await replaceTicketLines(ticketId, lines, tx)
+    await tx.update(tickets).set({ updatedAt: new Date().toISOString() }).where(eq(tickets.id, ticketId))
+    return { lines: await getTicketLines(ticketId, tx) }
+  })
+}
+
 function parseEventMetadata(value: string | null) {
   if (!value) {
     return null
