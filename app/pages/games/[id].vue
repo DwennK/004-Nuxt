@@ -690,7 +690,7 @@ function startReflexRound() {
   }, 1200 + Math.random() * 2200)
 }
 
-function handleReflexClick() {
+function handleReflexPress() {
   if (reflexStatus.value === 'idle' || reflexStatus.value === 'done' || reflexStatus.value === 'too-soon') {
     startReflexRound()
     return
@@ -2049,7 +2049,11 @@ watch(wordLength, () => {
                       reflexStatus === 'done' ? 'border-info bg-info/15' : '',
                       reflexStatus === 'idle' ? 'border-default bg-elevated/60 hover:bg-elevated' : ''
                     ]"
-                    @click="handleReflexClick"
+                    @pointerdown.left="$event.isPrimary && handleReflexPress()"
+                    @keydown.enter.prevent="!$event.repeat && handleReflexPress()"
+                    @keydown.space.prevent="!$event.repeat && handleReflexPress()"
+                    @keyup.space.prevent
+                    @click="$event.detail === 0 && handleReflexPress()"
                   >
                     <div class="space-y-4 px-6">
                       <p class="text-sm font-bold uppercase text-toned">
