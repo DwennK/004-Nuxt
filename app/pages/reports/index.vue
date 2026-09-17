@@ -171,14 +171,6 @@ const stats = computed(() => {
                 {{ formatRangeDate(leaders.range.startDate) }} → {{ formatRangeDate(leaders.range.endDate) }}
               </UBadge>
             </div>
-
-            <UButton
-              to="/reports/daily"
-              label="Ouvrir la fin de journée"
-              color="neutral"
-              variant="outline"
-              icon="i-lucide-arrow-up-right"
-            />
           </div>
         </UDashboardToolbar>
 
