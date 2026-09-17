@@ -16,6 +16,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   editContext: []
+  editCustomer: []
 }>()
 
 const customer = computed(() => props.document.customer)
@@ -106,9 +107,23 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
       </div>
 
       <div class="min-w-0 border-t border-default px-3 py-2.5 md:border-t-0">
-        <h2 class="mb-2 flex h-8 items-center border-b border-default pb-1.5 text-xs font-semibold uppercase tracking-wide text-toned">
-          Informations du client
-        </h2>
+        <div class="mb-2 flex h-8 items-center gap-2 border-b border-default pb-1.5">
+          <h2 class="min-w-0 text-xs font-semibold uppercase tracking-wide text-toned">
+            Informations du client
+          </h2>
+          <UTooltip text="Modifier la fiche client">
+            <UButton
+              type="button"
+              icon="i-lucide-pencil"
+              aria-label="Modifier la fiche client"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              class="shrink-0"
+              @click="emit('editCustomer')"
+            />
+          </UTooltip>
+        </div>
         <div class="space-y-0.5 text-xs leading-5">
           <NuxtLink :to="`/customers/${customer.id}`" class="block w-fit max-w-full break-words font-semibold text-highlighted hover:text-primary hover:underline">
             {{ customer.displayName }}

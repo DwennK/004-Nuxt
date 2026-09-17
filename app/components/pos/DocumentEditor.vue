@@ -122,7 +122,7 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
       <fieldset :disabled="props.saving || props.disabled" class="min-w-0 space-y-4">
         <div
           class="grid gap-3 rounded-lg border border-default bg-muted/30 p-3 sm:grid-cols-2 lg:items-end"
-          :class="showTypeSelector ? 'lg:grid-cols-[9rem_minmax(12rem,1fr)_12rem_9rem]' : 'lg:grid-cols-[minmax(12rem,1fr)_12rem_9rem]'"
+          :class="isExistingDocument ? 'lg:grid-cols-[12rem_9rem]' : showTypeSelector ? 'lg:grid-cols-[9rem_minmax(12rem,1fr)_12rem_9rem]' : 'lg:grid-cols-[minmax(12rem,1fr)_12rem_9rem]'"
         >
           <UFormField v-if="showTypeSelector" label="Type" name="type">
             <USelectMenu
@@ -134,7 +134,7 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
             />
           </UFormField>
 
-          <UFormField label="Client" name="customerId">
+          <UFormField v-if="!isExistingDocument" label="Client" name="customerId">
             <PosCustomerSelectField
               :model-value="state.customerId || null"
               :customers="customers"

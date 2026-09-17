@@ -4,7 +4,7 @@ import type { z } from 'zod'
 import { nextTick } from 'vue'
 
 import type { DocumentSavePayload } from '~~/app/composables/useDocumentDraft'
-import type { DocumentDetail, TicketDetail, DocumentEmailInput, SentMailSendResult } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerRecord, DocumentDetail, TicketDetail, DocumentEmailInput, SentMailSendResult } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { documentEmailSchema } from '~~/shared/validation/pos'
 import { getDocumentEmailMessage, getDocumentEmailSubject } from '~~/shared/utils/document-email'
@@ -29,6 +29,8 @@ const emailFeedback = ref<string | null>(null)
 const emailFailed = ref(false)
 const { isSaving: isSavingDocument, saveError, save } = useFormAction()
 const isContextOpen = ref(false)
+const isCustomerOpen = ref(false)
+const { isSaving: isSavingCustomer, saveError: customerSaveError, save: saveCustomerAction, clearSaveError: clearCustomerSaveError } = useFormAction()
 const hasUnsavedDocumentChanges = ref(false)
 const hasOpenedInitialEmailModal = ref(false)
 const documentFormId = 'document-detail-form'
@@ -123,6 +125,44 @@ async function openContextEditor() {
   }
 
   isContextOpen.value = true
+}
+
+const customerForm = computed(() => {
+  const customer = document.value?.customer
+  if (!customer) return undefined
+
+  return {
+    displayName: customer.displayName,
+    firstName: customer.firstName,
+    lastName: customer.lastName,
+    companyName: customer.companyName || '',
+    phone: customer.phone,
+    email: customer.email,
+    addressLine1: customer.addressLine1 || '',
+    addressLine2: customer.addressLine2 || '',
+    postalCode: customer.postalCode || '',
+    city: customer.city || '',
+    notes: customer.notes || ''
+  }
+})
+
+function openCustomerEditor() {
+  clearCustomerSaveError()
+  isCustomerOpen.value = true
+}
+
+async function saveCustomer(payload: CustomerFormValue) {
+  const customerId = document.value?.customer.id
+  if (!customerId) return
+
+  const result = await saveCustomerAction(() => $fetch<CustomerRecord>(`/api/customers/${customerId}`, {
+    method: 'PATCH',
+    body: payload
+  }), { success: 'Client mis à jour' })
+
+  if (!result?.ok || document.value?.customer.id !== customerId) return
+  document.value = { ...document.value, customer: result.data }
+  isCustomerOpen.value = false
 }
 
 function selectTab(value: string | number) {
@@ -358,6 +398,7 @@ function startNewEmailAttempt() {
           :is-payable-document="isPayableDocument"
           :editable="canEditDocument && !dossier.blocked.value"
           @edit-context="openContextEditor"
+          @edit-customer="openCustomerEditor"
         />
 
         <PosSavEditor
@@ -482,6 +523,18 @@ function startNewEmailAttempt() {
       </div>
     </template>
   </UDashboardPanel>
+
+  <PosCustomerSlideover
+    v-if="document"
+    v-model:open="isCustomerOpen"
+    title="Modifier la fiche client"
+    description="Les modifications sont enregistrées dans la fiche client."
+    submit-label="Enregistrer le client"
+    :initial-value="customerForm"
+    :saving="isSavingCustomer"
+    :save-error="customerSaveError"
+    @save="saveCustomer"
+  />
 
   <UModal
     v-model:open="isEmailModalOpen"
