@@ -56,14 +56,24 @@ const primaryLinks = computed(() => [{
   onSelect: () => {
     open.value = false
   }
-}, {
+}] satisfies NavigationMenuItem[])
+
+const reportLinks = [{
   label: 'Total du jour',
   icon: 'i-lucide-calendar-check',
   to: '/reports/daily',
   onSelect: () => {
     open.value = false
   }
-}] satisfies NavigationMenuItem[])
+}, {
+  label: 'Rapports',
+  icon: 'i-lucide-chart-column',
+  to: '/reports',
+  exact: true,
+  onSelect: () => {
+    open.value = false
+  }
+}] satisfies NavigationMenuItem[]
 
 const secondaryLinks = [{
   label: 'Clients',
@@ -83,14 +93,6 @@ const secondaryLinks = [{
   label: 'Paiements',
   icon: 'i-lucide-wallet',
   to: '/payments',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
-  label: 'Rapports',
-  icon: 'i-lucide-chart-column',
-  to: '/reports',
-  exact: true,
   onSelect: () => {
     open.value = false
   }
@@ -224,6 +226,7 @@ const groups = computed(() => {
       label: 'Navigation',
       items: [
         ...flattenNavigationItems(primaryLinks.value),
+        ...flattenNavigationItems(reportLinks),
         ...flattenNavigationItems(secondaryLinks),
         ...flattenNavigationItems(footerLinks)
       ]
@@ -329,6 +332,16 @@ const groups = computed(() => {
           orientation="vertical"
           tooltip
           class="mt-3"
+          popover
+        />
+
+        <USeparator class="my-3" />
+
+        <UNavigationMenu
+          :collapsed="collapsed"
+          :items="reportLinks"
+          orientation="vertical"
+          tooltip
           popover
         />
 
