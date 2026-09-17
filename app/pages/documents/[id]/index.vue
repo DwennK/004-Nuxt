@@ -4,7 +4,7 @@ import type { z } from 'zod'
 import { nextTick } from 'vue'
 
 import type { DocumentSavePayload } from '~~/app/composables/useDocumentDraft'
-import type { CustomerListResponse, DocumentDetail, DocumentEmailInput, SentMailSendResult } from '~~/shared/types/pos'
+import type { DocumentDetail, DocumentEmailInput, SentMailSendResult } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { documentEmailSchema } from '~~/shared/validation/pos'
 import { getDocumentEmailMessage, getDocumentEmailSubject } from '~~/shared/utils/document-email'
@@ -47,9 +47,8 @@ const emailState = reactive<DocumentEmailInput>({
   message: ''
 })
 
-const [{ data: document, refresh }, { data: customers }, { data: company }] = await Promise.all([
+const [{ data: document, refresh }, { data: company }] = await Promise.all([
   useFetch<DocumentDetail>(() => `/api/documents/${id.value}`),
-  useFetch<CustomerListResponse>('/api/customers', { query: { pageSize: 250 } }),
   useFetch<CompanySettingsRecord>('/api/settings/company')
 ])
 
@@ -311,7 +310,7 @@ function startNewEmailAttempt() {
 
     <template #body>
       <PosDossierBanner :state="dossier.current.value" :refresh="refresh" />
-      <div v-if="document && customers?.items" class="space-y-3">
+      <div v-if="document" class="space-y-3">
         <UAlert
           v-if="successorDocument"
           icon="i-lucide-file-check-2"
@@ -342,7 +341,7 @@ function startNewEmailAttempt() {
 
         <div v-if="activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)]">
           <PosDocumentEditor
-            v-if="customers?.items && canEditDocument"
+            v-if="canEditDocument"
             ref="documentEditor"
             :key="dossier.current.value?.epoch"
             v-model:context-open="isContextOpen"
@@ -353,7 +352,7 @@ function startNewEmailAttempt() {
             unsaved-target="#document-unsaved-status"
             :saving="isSavingDocument"
             :save-error="saveError"
-            :customers="customers.items"
+            :customers="[document.customer]"
             :initial-value="document"
             :fixed-ticket-id="document.ticketId"
             submit-label="Enregistrer le document"

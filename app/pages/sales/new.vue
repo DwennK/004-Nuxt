@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { documentTypeLabels, paymentMethodLabels, paymentMethods } from '~~/shared/constants/pos'
 import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
-import type { CatalogItemRecord, CustomerListResponse, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
+import type { CatalogItemRecord, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import { formatCurrency, normalizeSearchText, parseCurrencyInput } from '~~/shared/utils/pos'
 import {
@@ -58,15 +58,6 @@ const {
   highlightPreviousResult,
   resetSearch
 } = useCatalogItemSearch()
-
-const { data: customers } = await useFetch<CustomerListResponse>('/api/customers', {
-  query: { pageSize: 50 },
-  lazy: true
-})
-
-watchEffect(() => {
-  customerPool.value = customers.value?.items ? [...customers.value.items] : []
-})
 
 const searchPanelTitle = computed(() => {
   return 'Résultats'

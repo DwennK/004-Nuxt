@@ -36,6 +36,7 @@ const createdCustomers = ref<CustomerRecord[]>([])
 
 const remoteCustomers = ref<CustomerRecord[]>([])
 const remoteSearchPending = ref(false)
+const remoteSearchFailed = ref(false)
 
 const customersList = computed(() => {
   const merged = new Map<number, CustomerRecord>()
@@ -73,14 +74,17 @@ const customerItems = computed<CustomerSelectItem[]>(() => customersList.value.m
 
 const trimmedSearch = computed(() => searchTerm.value.trim())
 const debouncedSearch = refDebounced(trimmedSearch, 250)
+const canSearch = computed(() => trimmedSearch.value.length >= 2)
+const searchPending = computed(() => canSearch.value && (trimmedSearch.value !== debouncedSearch.value || remoteSearchPending.value))
+const visibleCustomerItems = computed(() => canSearch.value ? customerItems.value : [])
+const selectedCustomer = computed(() => customerItems.value.find(customer => customer.id === props.modelValue))
 
-watch(debouncedSearch, async (term, _previous, onCleanup) => {
+watch([debouncedSearch, trimmedSearch], async ([term, currentTerm], _previous, onCleanup) => {
   const controller = new AbortController()
   onCleanup(() => controller.abort())
-  if (term.length < 2) {
-    remoteSearchPending.value = false
-    return
-  }
+  remoteSearchPending.value = false
+  remoteSearchFailed.value = false
+  if (currentTerm.length < 2 || term !== currentTerm) return
 
   remoteSearchPending.value = true
 
@@ -99,7 +103,7 @@ watch(debouncedSearch, async (term, _previous, onCleanup) => {
 
     remoteCustomers.value = Array.from(merged.values())
   } catch {
-    // La recherche serveur est un complément : la liste locale reste utilisable.
+    if (!controller.signal.aborted) remoteSearchFailed.value = true
   } finally {
     if (!controller.signal.aborted) remoteSearchPending.value = false
   }
@@ -107,12 +111,6 @@ watch(debouncedSearch, async (term, _previous, onCleanup) => {
 
 const createActionLabel = computed(() => {
   return trimmedSearch.value ? `Créer "${trimmedSearch.value}"` : 'Créer un client'
-})
-
-const createActionDescription = computed(() => {
-  return trimmedSearch.value
-    ? 'Aucun client ne correspond. Ouvrez une fiche rapide préremplie.'
-    : 'Ajoutez un client sans quitter ce formulaire.'
 })
 
 const quickInitialValue = computed<CustomerFormValue>(() => {
@@ -254,7 +252,7 @@ onBeforeUnmount(() => {
       v-model:open="menuOpen"
       v-model:search-term="searchTerm"
       :model-value="modelValue ?? undefined"
-      :items="customerItems"
+      :items="visibleCustomerItems"
       value-key="id"
       label-key="label"
       description-key="description"
@@ -269,7 +267,7 @@ onBeforeUnmount(() => {
       :filter-fields="['displayName', 'companyName', 'phone', 'email', 'label', 'description']"
       :clear="!disabled"
       :disabled="disabled"
-      :loading="remoteSearchPending"
+      :loading="searchPending"
       icon="i-lucide-user-round-search"
       class="w-full"
       :ui="{
@@ -281,6 +279,11 @@ onBeforeUnmount(() => {
       }"
       @update:model-value="emit('update:modelValue', $event ?? null)"
     >
+      <template #default="{ ui }">
+        <span v-if="selectedCustomer" :class="ui.value()">{{ selectedCustomer.label }}</span>
+        <span v-else :class="ui.placeholder()">{{ placeholder }}</span>
+      </template>
+
       <template #item-leading="{ item }">
         <div class="mt-0.5 flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
           <UIcon
@@ -297,22 +300,23 @@ onBeforeUnmount(() => {
       </template>
 
       <template #empty>
-        <div class="rounded-xl border border-dashed border-default bg-elevated/50 p-3">
-          <p class="text-sm font-medium text-highlighted">
-            {{ createActionLabel }}
-          </p>
-          <p class="mt-1 text-xs text-toned">
-            {{ createActionDescription }}
-          </p>
-          <UButton
-            class="mt-3"
-            color="primary"
-            variant="soft"
-            icon="i-lucide-user-plus"
-            :label="createActionLabel"
-            @click="openCreate"
-          />
-        </div>
+        <p class="px-2 py-3 text-sm text-muted" role="status">
+          <template v-if="!trimmedSearch">
+            Tapez un nom, un téléphone ou un e-mail
+          </template>
+          <template v-else-if="!canSearch">
+            Saisissez au moins 2 caractères.
+          </template>
+          <template v-else-if="searchPending">
+            Recherche en cours…
+          </template>
+          <template v-else-if="remoteSearchFailed">
+            Recherche indisponible. Réessayez.
+          </template>
+          <template v-else>
+            Aucun client trouvé.
+          </template>
+        </p>
       </template>
 
       <template #content-bottom>

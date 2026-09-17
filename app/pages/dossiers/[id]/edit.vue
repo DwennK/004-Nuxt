@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CustomerListResponse, TicketDetail } from '~~/shared/types/pos'
+import type { TicketDetail } from '~~/shared/types/pos'
 
 const $fetch = useDossierFetch()
 
@@ -9,12 +9,7 @@ const id = computed(() => Number(route.params.id))
 const formId = 'ticket-editor-form'
 const dirty = ref(false)
 
-const [{ data: ticket, refresh: refreshTicket }, { data: customers }] = await Promise.all([
-  useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
-  useFetch<CustomerListResponse>('/api/customers', {
-    query: { pageSize: 250 }
-  })
-])
+const { data: ticket, refresh: refreshTicket } = await useFetch<TicketDetail>(() => `/api/tickets/${id.value}`)
 
 const dossier = useDossier(() => ({ kind: 'ticket', id: id.value }), { record: ticket, edit: true })
 provide('pos-dossier-state', dossier.current)
@@ -101,7 +96,7 @@ async function saveTicket(payload: {
       <PosDossierBanner :state="dossier.current.value" :refresh="refreshTicket" />
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
         <PosTicketForm
-          v-if="ticket && customers?.items"
+          v-if="ticket"
           :key="dossier.current.value?.epoch"
           v-model:dirty="dirty"
           :disabled="dossier.blocked.value"
@@ -111,7 +106,7 @@ async function saveTicket(payload: {
           :save-error="saveError"
           layout="intake"
           :show-submit="false"
-          :customers="customers.items"
+          :customers="[ticket.customer]"
           :initial-value="ticket"
           @save="saveTicket"
         />

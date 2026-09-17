@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { CustomerListResponse, TicketRecord } from '~~/shared/types/pos'
+import type { CustomerRecord, TicketRecord } from '~~/shared/types/pos'
 
 const $fetch = useDossierFetch()
+const requestFetch = useRequestFetch()
 
 const route = useRoute()
 const { isSaving, saveError, save } = useFormAction()
@@ -31,9 +32,9 @@ function onCompletionClosed() {
   if (createdTicket.value && !completionHandled.value) void openCreatedTicket()
 }
 
-const { data: customers } = await useFetch<CustomerListResponse>('/api/customers', {
-  query: { pageSize: 250 }
-})
+const { data: customer } = await useAsyncData('new-ticket-customer', () => {
+  return customerId.value ? requestFetch<CustomerRecord>(`/api/customers/${customerId.value}`) : Promise.resolve(null)
+}, { watch: [customerId] })
 
 async function saveTicket(payload: {
   customerId: number
@@ -109,7 +110,6 @@ async function saveTicket(payload: {
     <template #body>
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
         <PosTicketForm
-          v-if="customers?.items"
           :key="formVersion"
           v-model:dirty="dirty"
           :form-id="formId"
@@ -119,7 +119,7 @@ async function saveTicket(payload: {
           :save-error="saveError"
           layout="intake"
           :show-submit="false"
-          :customers="customers.items"
+          :customers="customer ? [customer] : []"
           :initial-value="{ customerId: customerId || undefined, type: 'repair' }"
           @save="saveTicket"
         />

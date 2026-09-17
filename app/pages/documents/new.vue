@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { documentTypes, documentTypeLabels } from '~~/shared/constants/pos'
-import type { CustomerListResponse, DocumentDetail, DocumentStatus, DocumentType } from '~~/shared/types/pos'
+import type { CustomerRecord, DocumentDetail, DocumentStatus, DocumentType } from '~~/shared/types/pos'
 
 const $fetch = useDossierFetch()
+const requestFetch = useRequestFetch()
 
 const route = useRoute()
 const { isSaving, saveError, save } = useFormAction()
@@ -27,9 +28,9 @@ const pageDescription = computed(() => requestedDocumentType.value
   ? `${documentTypeLabels[requestedDocumentType.value]} sélectionné pour cette création.`
   : 'Choisissez le type commercial avant de saisir les lignes et le client.')
 
-const { data: customers, refresh: refreshCustomers } = await useFetch<CustomerListResponse>('/api/customers', {
-  query: { pageSize: 250 }
-})
+const { data: customer, refresh: refreshCustomers } = await useAsyncData('new-document-customer', () => {
+  return customerId.value ? requestFetch<CustomerRecord>(`/api/customers/${customerId.value}`) : Promise.resolve(null)
+}, { watch: [customerId] })
 
 const dossier = useDossier(() => ticketId.value ? { kind: 'ticket', id: ticketId.value } : null, { edit: true })
 provide('pos-dossier-state', dossier.current)
@@ -86,11 +87,10 @@ async function saveDocument(payload: {
         </div>
 
         <PosDocumentEditor
-          v-if="customers?.items"
           :key="dossier.current.value?.epoch"
           v-model:dirty="dirty"
           :disabled="dossier.blocked.value"
-          :customers="customers.items"
+          :customers="customer ? [customer] : []"
           :saving="isSaving"
           :save-error="saveError"
           :initial-value="initialDocumentValue"
