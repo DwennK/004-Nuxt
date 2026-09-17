@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CustomerRecord, PrintProfile, TicketRecord } from '~~/shared/types/pos'
+import type { CustomerRecord, LineCategoryHint, PrintProfile, TicketRecord } from '~~/shared/types/pos'
 
 const $fetch = useDossierFetch()
 const requestFetch = useRequestFetch()
@@ -56,7 +56,7 @@ async function saveTicket(payload: {
     quantity: number
     unitPrice: number
     vatRate: number
-    categoryHint: 'accessory' | 'repair' | 'service' | null
+    categoryHint: LineCategoryHint | null
   }>
 }) {
   if (createdTicket.value) return

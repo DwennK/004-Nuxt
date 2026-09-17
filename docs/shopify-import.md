@@ -76,6 +76,11 @@ connecté » sans appeler Shopify ni charger la base des commandes.
 - Facture en CHF avec numéro POS, date de commande et référence Shopify. Le client
   est retrouvé par e-mail insensible à la casse ; plusieurs correspondances
   bloquent l’import. Un client existant n’est pas écrasé.
+- Chaque nouvel import classe ses lignes dans « Ecommerce », y compris les frais
+  de livraison et la ligne de référence à montant nul. Les rapports quotidiens et
+  généraux les regroupent dans cette catégorie selon leurs règles habituelles de
+  règlement. Les factures déjà importées ne sont pas reclassées par un réimport
+  ni par l’actualisation des paiements.
 - Les remises allouées sont déduites des lignes ; leurs libellés conservent le
   produit, la variante, le SKU et les attributs publics. Les articles gratuits sont
   conservés. Une division inexacte du TTC par la quantité produit deux lignes avec

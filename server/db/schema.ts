@@ -2,6 +2,7 @@ import type { SavDetails } from '../../shared/types/sav'
 import { sql } from 'drizzle-orm'
 import { type AnySQLiteColumn, index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { sentMailStatuses } from '../../shared/constants/email'
+import { lineCategoryHints } from '../../shared/constants/pos'
 
 // Scope rows retain their monotonically increasing revision after lease expiry.
 export const dossierScopes = sqliteTable('dossier_scopes', {
@@ -208,7 +209,7 @@ export const documentLines = sqliteTable('document_lines', {
   unitPrice: integer('unit_price').notNull(),
   vatRate: real('vat_rate').notNull(),
   lineTotal: integer('line_total').notNull(),
-  categoryHint: text('category_hint', { enum: ['accessory', 'repair', 'service'] })
+  categoryHint: text('category_hint', { enum: lineCategoryHints })
 }, table => ({
   documentIdx: index('document_lines_document_id_idx').on(table.documentId),
   catalogItemIdx: index('document_lines_catalog_item_id_idx').on(table.catalogItemId),
@@ -247,7 +248,7 @@ export const ticketLines = sqliteTable('ticket_lines', {
   unitPrice: integer('unit_price').notNull(),
   vatRate: real('vat_rate').notNull(),
   lineTotal: integer('line_total').notNull(),
-  categoryHint: text('category_hint', { enum: ['accessory', 'repair', 'service'] })
+  categoryHint: text('category_hint', { enum: lineCategoryHints })
 }, table => ({
   ticketIdx: index('ticket_lines_ticket_id_idx').on(table.ticketId),
   catalogItemIdx: index('ticket_lines_catalog_item_id_idx').on(table.catalogItemId),

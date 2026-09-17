@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TicketDetail } from '~~/shared/types/pos'
+import type { LineCategoryHint, TicketDetail } from '~~/shared/types/pos'
 
 const $fetch = useDossierFetch()
 
@@ -34,7 +34,7 @@ async function saveTicket(payload: {
     quantity: number
     unitPrice: number
     vatRate: number
-    categoryHint: 'accessory' | 'repair' | 'service' | null
+    categoryHint: LineCategoryHint | null
   }>
 }) {
   const result = await save(() => $fetch(`/api/tickets/${id.value}`, {

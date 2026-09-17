@@ -8,6 +8,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { persistShopifyOrder, persistShopifyPaymentSync as syncPayments, getShopifyProvenance } from '../../server/utils/shopify/import'
 import type { PosDatabase } from '../../server/utils/turso'
+import * as turso from '../../server/utils/turso'
+import { getEndOfDaySummary, getReportsOverview } from '../../server/utils/pos/reports'
+import { commercialLineInputSchema } from '../../shared/validation/pos'
 import { importTables, money, orderFixture, unpaidOrder } from '../fixtures/shopify'
 
 const persistShopifyPaymentSync: typeof syncPayments = async (domain, order, id, db) => syncPayments(domain, order, id, db, await testDossierContext(db!, { kind: 'document', id }))
@@ -25,6 +28,7 @@ describe('Shopify atomic invoice and payment import', () => {
     await createDossierTables(client)
     vi.stubGlobal('useRuntimeConfig', () => ({ posAllowRuntimeSchemaBootstrap: false }))
     vi.stubGlobal('createError', createError)
+    vi.spyOn(turso, 'useDb').mockReturnValue(db)
   })
   afterEach(async () => {
     client.close()
@@ -44,6 +48,45 @@ describe('Shopify atomic invoice and payment import', () => {
     expect((await client.execute('SELECT status FROM documents')).rows[0]!.status).toBe('paid')
     expect((await client.execute('SELECT method, paid_at FROM payments')).rows[0]).toMatchObject({ method: 'shopify', paid_at: '2026-08-20T10:00:00Z' })
     expect(await getShopifyProvenance(first.documentId, db)).toMatchObject({ domain, orderName: '#1001' })
+    const lines = (await client.execute('SELECT category_hint FROM document_lines')).rows
+    expect(lines).toHaveLength(2)
+    expect(lines.every(line => line.category_hint === 'ecommerce')).toBe(true)
+  })
+
+  it('includes imported ecommerce totals in daily and overview reports on the historical payment date', async () => {
+    await client.batch([
+      'CREATE TABLE tickets (id INTEGER PRIMARY KEY, status TEXT, opened_at TEXT, closed_at TEXT)',
+      'CREATE TABLE catalog_items (id INTEGER PRIMARY KEY, name TEXT)'
+    ], 'write')
+    await persistShopifyOrder(domain, orderFixture(), db)
+    const daily = await getEndOfDaySummary('2026-08-20')
+    expect(daily.totalPaid).toBe(10810)
+    expect(daily.turnoverByCategory).toEqual([{ category: 'ecommerce', total: 10810 }])
+    const overview = await getReportsOverview('2026-08-20')
+    expect(overview.turnoverByCategory).toEqual([{ category: 'ecommerce', label: 'Ecommerce', total: 10810 }])
+    expect(overview.topItems.every(item => item.category === 'ecommerce')).toBe(true)
+    expect((await getEndOfDaySummary('2026-08-21')).turnoverByCategory).toEqual([])
+  })
+
+  it('categorizes split prices, discounted products, shipping and reference lines without changing totals', async () => {
+    const order = unpaidOrder()
+    Object.assign(order.lineItems[0]!, {
+      quantity: 3, currentQuantity: 3, originalTotalSet: money('12'),
+      discountAllocations: [{ allocatedAmountSet: money('2') }], taxLines: []
+    })
+    order.shippingLines = [{ id: 'shipping', title: 'Poste', isRemoved: false, discountedPriceSet: money('10.81'), taxLines: [{ rate: 0.081, priceSet: money('0.81') }] }]
+    order.currentTotalPriceSet = order.totalOutstandingSet = money('20.81')
+    order.currentTotalTaxSet = money('0.81')
+    await persistShopifyOrder(domain, order, db)
+    const lines = (await client.execute('SELECT * FROM document_lines ORDER BY id')).rows
+    expect(lines).toHaveLength(4)
+    expect(lines.every(line => line.category_hint === 'ecommerce')).toBe(true)
+    expect(lines.map(line => Number(line.line_total))).toEqual([666, 334, 1081, 0])
+    expect((await client.execute('SELECT total, tax_amount FROM documents')).rows[0]).toMatchObject({ total: 2081, tax_amount: 81 })
+    for (const line of lines) {
+      expect(commercialLineInputSchema.parse({ label: line.label, quantity: line.quantity, unitPrice: line.unit_price, vatRate: line.vat_rate, categoryHint: line.category_hint }).categoryHint).toBe('ecommerce')
+    }
+    expect(await count('payments')).toBe(0)
   })
 
   it('reuses a unique customer email without overwriting it', async () => {
@@ -84,6 +127,7 @@ describe('Shopify atomic invoice and payment import', () => {
     expect(await count('payments')).toBe(2)
     expect(await count('document_lines')).toBe(2)
     expect((await client.execute('SELECT status FROM documents')).rows[0]!.status).toBe('paid')
+    expect((await client.execute('SELECT DISTINCT category_hint FROM document_lines')).rows).toEqual([{ category_hint: 'ecommerce' }])
   })
 
   it.each(['line', 'payment', 'manual', 'shop', 'remote'])('refuses sync after conflict: %s', async (conflict) => {

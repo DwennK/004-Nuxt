@@ -122,7 +122,7 @@ export async function persistShopifyOrder(domain: string, order: ShopifyOrder, d
         issuedAt: order.createdAt, subtotal: normalized.totals.subtotal, taxAmount: normalized.totals.taxAmount, total: normalized.totals.total,
         notes: [`Import Shopify ${order.name} (${domain})`, order.note].filter(Boolean).join('\n\n'), createdAt: now, updatedAt: now }).returning()
       if (!document) return shopifyError('Impossible de créer la facture Shopify.', 'SHOPIFY_IMPORT_FAILED', 500)
-      await tx.insert(documentLines).values(normalized.totals.lines.map(line => ({ documentId: document.id, catalogItemId: null, label: line.label, quantity: line.quantity, unitPrice: line.unitPrice, vatRate: line.vatRate, lineTotal: line.lineTotal, categoryHint: null })))
+      await tx.insert(documentLines).values(normalized.totals.lines.map(line => ({ documentId: document.id, catalogItemId: null, label: line.label, quantity: line.quantity, unitPrice: line.unitPrice, vatRate: line.vatRate, lineTotal: line.lineTotal, categoryHint: 'ecommerce' as const })))
       await tx.insert(documentImports).values({ documentId: document.id, source: 'shopify_order', externalId: externalId(domain, order.id), externalNumber: JSON.stringify({ version: 1, name: order.name, fingerprint }), createdAt: now })
       await persistPayments(tx, domain, order, document, normalized.payments)
       return { documentId: document.id, documentNumber, orderName: order.name, paymentsAdded: normalized.payments.length, alreadyImported: false }

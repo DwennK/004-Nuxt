@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { documentTypes } from '~~/shared/constants/pos'
-import type { CustomerRecord, DocumentDetail, DocumentStatus, DocumentType, TicketDetail } from '~~/shared/types/pos'
+import type { CustomerRecord, DocumentDetail, DocumentStatus, DocumentType, LineCategoryHint, TicketDetail } from '~~/shared/types/pos'
 
 const $fetch = useDossierFetch()
 const requestFetch = useRequestFetch()
@@ -61,7 +61,7 @@ async function saveDocument(payload: {
     quantity: number
     unitPrice: number
     vatRate: number
-    categoryHint: 'accessory' | 'repair' | 'service' | null
+    categoryHint: LineCategoryHint | null
   }>
 }) {
   const attempt = documentMutation.getAttempt('create-document', payload, () => payload)
