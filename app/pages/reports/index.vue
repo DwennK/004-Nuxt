@@ -122,7 +122,12 @@ const stats = computed(() => {
               v-if="selectedTab === 'revenue'"
               class="flex flex-wrap items-center gap-2"
             >
-              <UInput v-model="date" type="date" class="w-52" />
+              <UInput
+                v-bind="posInputAttrs"
+                v-model="date"
+                type="date"
+                class="w-52"
+              />
 
               <UBadge
                 v-if="overview"
@@ -139,11 +144,21 @@ const stats = computed(() => {
               class="flex flex-wrap items-end gap-2"
             >
               <UFormField label="Date début">
-                <UInput v-model="leadersStartDate" type="date" class="w-40" />
+                <UInput
+                  v-bind="posInputAttrs"
+                  v-model="leadersStartDate"
+                  type="date"
+                  class="w-40"
+                />
               </UFormField>
 
               <UFormField label="Date fin">
-                <UInput v-model="leadersEndDate" type="date" class="w-40" />
+                <UInput
+                  v-bind="posInputAttrs"
+                  v-model="leadersEndDate"
+                  type="date"
+                  class="w-40"
+                />
               </UFormField>
 
               <UBadge

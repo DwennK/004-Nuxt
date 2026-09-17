@@ -160,7 +160,7 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
         required
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
-        <UInput v-model="state.name" autocomplete="off" />
+        <UInput v-bind="posInputAttrs" v-model="state.name" />
       </UFormField>
       <USeparator />
       <UFormField
@@ -169,7 +169,7 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
         description="Adresse principale structurée, utilisée sur les documents et la QR-facture."
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
-        <UInput v-model="state.address" autocomplete="off" />
+        <UInput v-bind="posInputAttrs" v-model="state.address" />
       </UFormField>
       <USeparator />
       <div class="grid gap-4 md:grid-cols-3">
@@ -178,14 +178,14 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
           label="Code postal"
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
-          <UInput v-model="state.postalCode" autocomplete="off" />
+          <UInput v-bind="posInputAttrs" v-model="state.postalCode" />
         </UFormField>
         <UFormField
           name="city"
           label="Ville"
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
-          <UInput v-model="state.city" autocomplete="off" />
+          <UInput v-bind="posInputAttrs" v-model="state.city" />
         </UFormField>
         <UFormField
           name="countryCode"
@@ -194,8 +194,8 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
           <UInput
+            v-bind="posInputAttrs"
             v-model="state.countryCode"
-            autocomplete="off"
             maxlength="2"
             class="uppercase"
           />
@@ -208,14 +208,14 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
           label="Téléphone"
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
-          <UInput v-model="state.phone" autocomplete="off" />
+          <UInput v-bind="posInputAttrs" v-model="state.phone" />
         </UFormField>
         <UFormField
           name="email"
           label="Email"
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
-          <UInput v-model="state.email" type="email" autocomplete="off" />
+          <UInput v-bind="posInputAttrs" v-model="state.email" type="email" />
         </UFormField>
       </div>
       <USeparator />
@@ -225,7 +225,7 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
         description="Affiché dans le pied de page ou l’en-tête du document."
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
-        <UInput v-model="state.website" autocomplete="off" placeholder="https://..." />
+        <UInput v-bind="posInputAttrs" v-model="state.website" placeholder="https://..." />
       </UFormField>
       <USeparator />
       <UFormField
@@ -234,7 +234,7 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
         description="Numéro de TVA / IDE si applicable."
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
-        <UInput v-model="state.vatNumber" autocomplete="off" />
+        <UInput v-bind="posInputAttrs" v-model="state.vatNumber" />
       </UFormField>
       <USeparator />
       <UFormField
@@ -243,7 +243,7 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
         description="Établissement bancaire affiché pour les virements."
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
-        <UInput v-model="state.bankName" autocomplete="off" />
+        <UInput v-bind="posInputAttrs" v-model="state.bankName" />
       </UFormField>
       <USeparator />
       <UFormField
@@ -252,7 +252,7 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
         description="Un IBAN valide est requis. La QR-facture suisse n’est générée qu’avec un IBAN CH ou LI."
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
-        <UInput v-model="state.iban" autocomplete="off" />
+        <UInput v-bind="posInputAttrs" v-model="state.iban" />
       </UFormField>
       <USeparator />
       <UFormField
@@ -261,7 +261,12 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
         description="Texte court affiché sous les totaux du document."
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
-        <UTextarea v-model="state.paymentTerms" :rows="4" class="w-full" />
+        <UTextarea
+          v-bind="posInputAttrs"
+          v-model="state.paymentTerms"
+          :rows="4"
+          class="w-full"
+        />
       </UFormField>
       <USeparator />
       <UFormField
@@ -270,7 +275,12 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
         description="Mentions commerciales ou légales visibles en pied de page."
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
-        <UTextarea v-model="state.footerNotes" :rows="4" class="w-full" />
+        <UTextarea
+          v-bind="posInputAttrs"
+          v-model="state.footerNotes"
+          :rows="4"
+          class="w-full"
+        />
       </UFormField>
       <USeparator />
       <UFormField

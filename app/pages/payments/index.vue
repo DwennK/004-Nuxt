@@ -350,6 +350,7 @@ const columns: TableColumn<PaymentListItem>[] = [
       <UDashboardToolbar class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex flex-wrap items-center gap-3">
           <UInput
+            v-bind="posInputAttrs"
             v-model="search"
             autofocus
             icon="i-lucide-search"
@@ -358,29 +359,42 @@ const columns: TableColumn<PaymentListItem>[] = [
           />
           <USelectMenu
             v-model="periodPreset"
+            :search-input="posInputAttrs"
             :items="periodItems"
             value-key="value"
             class="w-48"
           />
           <USelectMenu
             v-model="methodFilter"
+            :search-input="posInputAttrs"
             :items="methodItems"
             value-key="value"
             class="w-44"
           />
           <USelectMenu
             v-model="statusFilter"
+            :search-input="posInputAttrs"
             :items="statusItems"
             value-key="value"
             class="w-44"
           />
           <div class="flex items-center gap-2">
             <span class="text-xs text-toned">Début</span>
-            <UInput v-model="dateFrom" type="date" class="w-36" />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="dateFrom"
+              type="date"
+              class="w-36"
+            />
           </div>
           <div class="flex items-center gap-2">
             <span class="text-xs text-toned">Fin</span>
-            <UInput v-model="dateTo" type="date" class="w-36" />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="dateTo"
+              type="date"
+              class="w-36"
+            />
           </div>
           <UButton
             v-if="hasActiveFilters"

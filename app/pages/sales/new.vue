@@ -530,6 +530,7 @@ defineShortcuts({
               >
                 <div class="flex gap-2">
                   <UInput
+                    v-bind="posInputAttrs"
                     ref="searchInput"
                     v-model="search"
                     name="sale-search"
@@ -659,6 +660,7 @@ defineShortcuts({
                 >
                   <div class="min-w-0">
                     <UInput
+                      v-bind="posInputAttrs"
                       :id="`sale-line-label-${line.id}`"
                       :model-value="line.label"
                       size="sm"
@@ -673,6 +675,7 @@ defineShortcuts({
                       Prix unitaire
                     </label>
                     <UInputNumber
+                      v-bind="posInputAttrs"
                       :id="`sale-line-price-${line.id}`"
                       :model-value="line.unitPriceCents / 100"
                       :min="commercialLineUnitPriceMin"
@@ -854,6 +857,7 @@ defineShortcuts({
 
                   <div class="relative">
                     <UInputNumber
+                      v-bind="posInputAttrs"
                       v-model="cashReceived"
                       :min="0"
                       :step="0.05"

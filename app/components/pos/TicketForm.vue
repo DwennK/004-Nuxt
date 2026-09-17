@@ -273,6 +273,7 @@ function handleImeiScan(value: string) {
 
                 <UFormField label="Problème signalé" name="issueDescription" hint="Facultatif">
                   <UTextarea
+                    v-bind="posInputAttrs"
                     v-model="state.issueDescription"
                     class="w-full"
                     :rows="2"
@@ -299,10 +300,20 @@ function handleImeiScan(value: string) {
 
               <div class="grid grid-cols-2 gap-3">
                 <UFormField label="Marque" name="brand">
-                  <UInput v-model="state.brand" class="w-full" placeholder="Apple" />
+                  <UInput
+                    v-bind="posInputAttrs"
+                    v-model="state.brand"
+                    class="w-full"
+                    placeholder="Apple"
+                  />
                 </UFormField>
                 <UFormField label="Modèle" name="model">
-                  <UInput v-model="state.model" class="w-full" placeholder="iPhone 14" />
+                  <UInput
+                    v-bind="posInputAttrs"
+                    v-model="state.model"
+                    class="w-full"
+                    placeholder="iPhone 14"
+                  />
                 </UFormField>
               </div>
 
@@ -310,6 +321,7 @@ function handleImeiScan(value: string) {
                 <UFormField label="Code / accès appareil" name="accessCode">
                   <div class="flex items-center gap-2">
                     <UInput
+                      v-bind="posInputAttrs"
                       v-model="state.accessCode"
                       class="min-w-0 flex-1"
                       placeholder="PIN ou mot de passe"
@@ -327,7 +339,12 @@ function handleImeiScan(value: string) {
                 </UFormField>
 
                 <UFormField label="Code SIM" name="simCode">
-                  <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
+                  <UInput
+                    v-bind="posInputAttrs"
+                    v-model="state.simCode"
+                    class="w-full"
+                    placeholder="PIN SIM"
+                  />
                 </UFormField>
               </div>
             </UCard>
@@ -372,12 +389,18 @@ function handleImeiScan(value: string) {
 
             <div class="grid gap-3 md:grid-cols-2">
               <UFormField label="Numéro de série" name="serialNumber">
-                <UInput v-model="state.serialNumber" class="w-full" placeholder="N° de série" />
+                <UInput
+                  v-bind="posInputAttrs"
+                  v-model="state.serialNumber"
+                  class="w-full"
+                  placeholder="N° de série"
+                />
               </UFormField>
 
               <UFormField label="IMEI" name="imei">
                 <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                   <UInput
+                    v-bind="posInputAttrs"
                     :model-value="state.imei"
                     class="w-full tabular-nums"
                     placeholder="356 789 123 456 789"
@@ -418,12 +441,18 @@ function handleImeiScan(value: string) {
               </UFormField>
 
               <UFormField label="Ouvert le" name="openedAt" required>
-                <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
+                <UInput
+                  v-bind="posInputAttrs"
+                  v-model="state.openedAt"
+                  type="datetime-local"
+                  class="w-full"
+                />
               </UFormField>
             </div>
 
             <UFormField label="Notes internes" name="internalNotes">
               <UTextarea
+                v-bind="posInputAttrs"
                 v-model="state.internalNotes"
                 class="w-full"
                 :rows="2"
@@ -491,7 +520,12 @@ function handleImeiScan(value: string) {
               description="Date et heure d’entrée."
               required
             >
-              <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
+              <UInput
+                v-bind="posInputAttrs"
+                v-model="state.openedAt"
+                type="datetime-local"
+                class="w-full"
+              />
             </UFormField>
           </div>
         </UPageCard>
@@ -503,17 +537,18 @@ function handleImeiScan(value: string) {
         >
           <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <UFormField label="Marque" name="brand" hint="Optionnel">
-              <UInput v-model="state.brand" class="w-full" />
+              <UInput v-bind="posInputAttrs" v-model="state.brand" class="w-full" />
             </UFormField>
 
             <UFormField label="Modèle" name="model" hint="Optionnel">
-              <UInput v-model="state.model" class="w-full" />
+              <UInput v-bind="posInputAttrs" v-model="state.model" class="w-full" />
             </UFormField>
 
             <UFormField label="IMEI" name="imei" hint="Optionnel">
               <div class="space-y-1">
                 <div class="flex gap-2">
                   <UInput
+                    v-bind="posInputAttrs"
                     :model-value="state.imei"
                     class="flex-1"
                     placeholder="356 789 123 456 789"
@@ -534,7 +569,7 @@ function handleImeiScan(value: string) {
             </UFormField>
 
             <UFormField label="Numéro de série" name="serialNumber" hint="Optionnel">
-              <UInput v-model="state.serialNumber" class="w-full" />
+              <UInput v-bind="posInputAttrs" v-model="state.serialNumber" class="w-full" />
             </UFormField>
 
             <UFormField
@@ -545,6 +580,7 @@ function handleImeiScan(value: string) {
             >
               <div class="space-y-2">
                 <UInput
+                  v-bind="posInputAttrs"
                   v-model="state.accessCode"
                   class="w-full"
                   placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
@@ -561,7 +597,12 @@ function handleImeiScan(value: string) {
             </UFormField>
 
             <UFormField label="Code SIM" name="simCode" hint="Optionnel">
-              <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
+              <UInput
+                v-bind="posInputAttrs"
+                v-model="state.simCode"
+                class="w-full"
+                placeholder="PIN SIM"
+              />
             </UFormField>
           </div>
         </UPageCard>
@@ -576,7 +617,12 @@ function handleImeiScan(value: string) {
             name="issueDescription"
             description="Visible dans le suivi opérateur, si renseignée."
           >
-            <UTextarea v-model="state.issueDescription" class="w-full" :rows="4" />
+            <UTextarea
+              v-bind="posInputAttrs"
+              v-model="state.issueDescription"
+              class="w-full"
+              :rows="4"
+            />
           </UFormField>
           <USeparator />
           <UFormField
@@ -585,7 +631,12 @@ function handleImeiScan(value: string) {
             description="Réservé à l’équipe: diagnostic, remarques atelier, pièces attendues."
             hint="Optionnel"
           >
-            <UTextarea v-model="state.internalNotes" class="w-full" :rows="5" />
+            <UTextarea
+              v-bind="posInputAttrs"
+              v-model="state.internalNotes"
+              class="w-full"
+              :rows="5"
+            />
           </UFormField>
         </UPageCard>
       </template>
@@ -628,17 +679,18 @@ function handleImeiScan(value: string) {
           </UFormField>
 
           <UFormField label="Marque" name="brand" hint="Optionnel">
-            <UInput v-model="state.brand" class="w-full" />
+            <UInput v-bind="posInputAttrs" v-model="state.brand" class="w-full" />
           </UFormField>
 
           <UFormField label="Modèle" name="model" hint="Optionnel">
-            <UInput v-model="state.model" class="w-full" />
+            <UInput v-bind="posInputAttrs" v-model="state.model" class="w-full" />
           </UFormField>
 
           <UFormField label="IMEI" name="imei" hint="Optionnel">
             <div class="space-y-1">
               <div class="flex gap-2">
                 <UInput
+                  v-bind="posInputAttrs"
                   :model-value="state.imei"
                   class="flex-1"
                   placeholder="356 789 123 456 789"
@@ -661,12 +713,13 @@ function handleImeiScan(value: string) {
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <UFormField label="Numéro de série" name="serialNumber" hint="Optionnel">
-            <UInput v-model="state.serialNumber" class="w-full" />
+            <UInput v-bind="posInputAttrs" v-model="state.serialNumber" class="w-full" />
           </UFormField>
 
           <UFormField label="Code / accès appareil" name="accessCode" hint="Optionnel">
             <div class="space-y-2">
               <UInput
+                v-bind="posInputAttrs"
                 v-model="state.accessCode"
                 class="w-full"
                 placeholder="PIN, mot de passe ou Pattern 1-2-3-6-9"
@@ -683,20 +736,40 @@ function handleImeiScan(value: string) {
           </UFormField>
 
           <UFormField label="Code SIM" name="simCode" hint="Optionnel">
-            <UInput v-model="state.simCode" class="w-full" placeholder="PIN SIM" />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="state.simCode"
+              class="w-full"
+              placeholder="PIN SIM"
+            />
           </UFormField>
 
           <UFormField label="Ouvert le" name="openedAt" required>
-            <UInput v-model="state.openedAt" type="datetime-local" class="w-full" />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="state.openedAt"
+              type="datetime-local"
+              class="w-full"
+            />
           </UFormField>
         </div>
 
         <UFormField label="Description du problème" name="issueDescription">
-          <UTextarea v-model="state.issueDescription" class="w-full" :rows="4" />
+          <UTextarea
+            v-bind="posInputAttrs"
+            v-model="state.issueDescription"
+            class="w-full"
+            :rows="4"
+          />
         </UFormField>
 
         <UFormField label="Notes internes" name="internalNotes" hint="Optionnel">
-          <UTextarea v-model="state.internalNotes" class="w-full" :rows="5" />
+          <UTextarea
+            v-bind="posInputAttrs"
+            v-model="state.internalNotes"
+            class="w-full"
+            :rows="5"
+          />
         </UFormField>
 
         <PosDocumentLinesEditor

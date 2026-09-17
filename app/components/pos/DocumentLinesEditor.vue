@@ -141,6 +141,7 @@ async function handleBarcodeScan(value: string) {
     >
       <div class="flex flex-wrap items-center gap-2">
         <UInput
+          v-bind="posInputAttrs"
           ref="searchInput"
           v-model="search"
           icon="i-lucide-search"
@@ -253,6 +254,7 @@ async function handleBarcodeScan(value: string) {
               <div class="min-w-0">
                 <UFormField :name="`lines.${index}.label`" class="min-w-0">
                   <UTextarea
+                    v-bind="posInputAttrs"
                     :id="`document-line-label-${line.id}`"
                     :model-value="line.label"
                     :rows="1"
@@ -274,6 +276,7 @@ async function handleBarcodeScan(value: string) {
 
               <UFormField :name="`lines.${index}.unitPriceCents`" class="justify-self-end">
                 <UInputNumber
+                  v-bind="posInputAttrs"
                   :id="`document-line-price-${line.id}`"
                   :model-value="line.unitPriceCents / 100"
                   :min="commercialLineUnitPriceMin"
@@ -292,6 +295,7 @@ async function handleBarcodeScan(value: string) {
               <div class="flex justify-center">
                 <UFormField :name="`lines.${index}.quantity`">
                   <UInputNumber
+                    v-bind="posInputAttrs"
                     v-model="line.quantity"
                     :min="1"
                     :step="1"

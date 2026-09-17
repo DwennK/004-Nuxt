@@ -37,6 +37,7 @@ const state = props.editor.state
           hint="Facultatif"
         >
           <UInput
+            v-bind="posInputAttrs"
             v-model="state.dueDate"
             type="date"
             class="w-full"
@@ -50,6 +51,7 @@ const state = props.editor.state
           description="Ce message apparaît sur le PDF, l’impression A4 et le ticket thermique remis au client."
         >
           <UTextarea
+            v-bind="posInputAttrs"
             v-model="state.notes"
             :rows="4"
             placeholder="Ex. Merci de présenter ce document lors du retrait."

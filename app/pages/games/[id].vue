@@ -1968,6 +1968,7 @@ watch(wordLength, () => {
                       </div>
                       <div class="flex flex-col gap-3 sm:flex-row">
                         <UInput
+                          v-bind="posInputAttrs"
                           v-model="higherInput"
                           type="number"
                           min="1"

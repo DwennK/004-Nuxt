@@ -225,6 +225,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="space-y-2">
     <UInputMenu
+      v-bind="posInputAttrs"
       :key="createdCustomers.length"
       ref="customerSelect"
       v-model:open="menuOpen"
@@ -236,10 +237,6 @@ onBeforeUnmount(() => {
       description-key="description"
       :placeholder="placeholder"
       name="customer-lookup"
-      autocomplete="off"
-      data-bwignore="true"
-      data-1p-ignore="true"
-      data-lpignore="true"
       :spellcheck="false"
       :filter-fields="['displayName', 'companyName', 'phone', 'email', 'label', 'description']"
       :clear="!disabled"

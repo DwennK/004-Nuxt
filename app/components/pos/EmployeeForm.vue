@@ -61,16 +61,26 @@ function onSubmit() {
   >
     <div class="grid gap-4 md:grid-cols-2">
       <UFormField label="Prénom" name="firstName">
-        <UInput v-model="state.firstName" class="w-full" autofocus />
+        <UInput
+          v-bind="posInputAttrs"
+          v-model="state.firstName"
+          class="w-full"
+          autofocus
+        />
       </UFormField>
 
       <UFormField label="Nom" name="lastName">
-        <UInput v-model="state.lastName" class="w-full" />
+        <UInput v-bind="posInputAttrs" v-model="state.lastName" class="w-full" />
       </UFormField>
     </div>
 
     <UFormField label="E-mail" name="email" hint="Optionnel">
-      <UInput v-model="state.email" type="email" class="w-full" />
+      <UInput
+        v-bind="posInputAttrs"
+        v-model="state.email"
+        type="email"
+        class="w-full"
+      />
     </UFormField>
 
     <UFormField label="Couleur" name="color">
@@ -90,6 +100,7 @@ function onSubmit() {
     <div class="grid gap-4 md:grid-cols-2">
       <UFormField label="Jours de vacances / an" name="vacationDaysPerYear">
         <UInput
+          v-bind="posInputAttrs"
           v-model.number="state.vacationDaysPerYear"
           type="number"
           :min="0"

@@ -102,6 +102,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
         <UFormField label="Montant (CHF)" name="amount">
           <UInputNumber
+            v-bind="posInputAttrs"
             v-model="state.amount"
             :min="0.05"
             :max="balanceDue / 100"
@@ -122,6 +123,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
         <UFormField label="Notes" name="notes">
           <UTextarea
+            v-bind="posInputAttrs"
             v-model="state.notes"
             :rows="4"
             class="w-full"

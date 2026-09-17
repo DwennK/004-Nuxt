@@ -227,6 +227,7 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           description="Nom du client ou de la société si vous allez au plus vite."
         >
           <UInput
+            v-bind="posInputAttrs"
             v-model="state.displayName"
             class="w-full"
             placeholder="Ex. Jean Martin ou Atelier Pixel"
@@ -241,7 +242,12 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
             hint="Optionnel"
             description="Si le client accepte de le donner."
           >
-            <UInput v-model="state.phone" class="w-full" placeholder="+41 ..." />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="state.phone"
+              class="w-full"
+              placeholder="+41 ..."
+            />
           </UFormField>
 
           <UFormField
@@ -251,6 +257,7 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
             description="Pratique pour les devis et factures."
           >
             <UInput
+              v-bind="posInputAttrs"
               v-model="state.email"
               type="email"
               class="w-full"
@@ -265,7 +272,12 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           hint="Optionnel"
           description="Utile si vous facturez une entreprise ou un indépendant."
         >
-          <UInput v-model="state.companyName" class="w-full" placeholder="Nom de la société" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.companyName"
+            class="w-full"
+            placeholder="Nom de la société"
+          />
         </UFormField>
       </div>
     </template>
@@ -282,7 +294,12 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
             name="firstName"
             description="Optionnel si vous utilisez surtout la société ou un nom d’affichage."
           >
-            <UInput v-model="state.firstName" autofocus class="w-full" />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="state.firstName"
+              autofocus
+              class="w-full"
+            />
           </UFormField>
 
           <UFormField
@@ -290,7 +307,7 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
             name="lastName"
             description="Peut rester vide si la société est la référence principale."
           >
-            <UInput v-model="state.lastName" class="w-full" />
+            <UInput v-bind="posInputAttrs" v-model="state.lastName" class="w-full" />
           </UFormField>
         </div>
         <USeparator />
@@ -302,7 +319,7 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           orientation="horizontal"
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
-          <UInput v-model="state.companyName" class="w-full lg:max-w-sm" />
+          <UInput v-bind="posInputAttrs" v-model="state.companyName" class="w-full lg:max-w-sm" />
         </UFormField>
       </UPageCard>
 
@@ -318,7 +335,7 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
             description="Numéro principal pour les validations et retraits."
             hint="Optionnel"
           >
-            <UInput v-model="state.phone" class="w-full" />
+            <UInput v-bind="posInputAttrs" v-model="state.phone" class="w-full" />
           </UFormField>
 
           <UFormField
@@ -327,7 +344,12 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
             description="Adresse utile pour devis, factures et suivi."
             hint="Optionnel"
           >
-            <UInput v-model="state.email" type="email" class="w-full" />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="state.email"
+              type="email"
+              class="w-full"
+            />
           </UFormField>
         </div>
         <USeparator />
@@ -339,7 +361,7 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           orientation="horizontal"
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
-          <UInput v-model="state.addressLine1" class="w-full lg:max-w-sm" />
+          <UInput v-bind="posInputAttrs" v-model="state.addressLine1" class="w-full lg:max-w-sm" />
         </UFormField>
         <USeparator />
         <UFormField
@@ -350,24 +372,24 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           orientation="horizontal"
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
-          <UInput v-model="state.addressLine2" class="w-full lg:max-w-sm" />
+          <UInput v-bind="posInputAttrs" v-model="state.addressLine2" class="w-full lg:max-w-sm" />
         </UFormField>
         <USeparator />
         <div class="grid gap-4 md:grid-cols-2">
           <UFormField label="Code postal" name="postalCode" hint="Optionnel">
             <UInput
+              v-bind="posInputAttrs"
               v-model="state.postalCode"
               class="w-full"
               inputmode="numeric"
               maxlength="4"
-              autocomplete="off"
               placeholder="1003"
             />
           </UFormField>
 
           <UFormField label="Ville" name="city" hint="Optionnel">
             <div class="space-y-2">
-              <UInput v-model="state.city" class="w-full" autocomplete="off" />
+              <UInput v-bind="posInputAttrs" v-model="state.city" class="w-full" />
 
               <div v-if="isPostalCodeLookupPending" class="text-xs text-toned">
                 Recherche des localités du NPA…
@@ -396,7 +418,12 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
         variant="subtle"
       >
         <UFormField label="Notes internes" name="notes" hint="Optionnel">
-          <UTextarea v-model="state.notes" class="w-full" :rows="5" />
+          <UTextarea
+            v-bind="posInputAttrs"
+            v-model="state.notes"
+            class="w-full"
+            :rows="5"
+          />
         </UFormField>
       </UPageCard>
     </template>
@@ -404,51 +431,61 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
     <template v-else>
       <div class="grid gap-4 md:grid-cols-2">
         <UFormField label="Prénom" name="firstName">
-          <UInput v-model="state.firstName" autofocus class="w-full" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.firstName"
+            autofocus
+            class="w-full"
+          />
         </UFormField>
 
         <UFormField label="Nom" name="lastName">
-          <UInput v-model="state.lastName" class="w-full" />
+          <UInput v-bind="posInputAttrs" v-model="state.lastName" class="w-full" />
         </UFormField>
       </div>
 
       <UFormField label="Société" name="companyName" hint="Optionnel">
-        <UInput v-model="state.companyName" class="w-full" />
+        <UInput v-bind="posInputAttrs" v-model="state.companyName" class="w-full" />
       </UFormField>
 
       <div class="grid gap-4 md:grid-cols-2">
         <UFormField label="Téléphone" name="phone" hint="Optionnel">
-          <UInput v-model="state.phone" class="w-full" />
+          <UInput v-bind="posInputAttrs" v-model="state.phone" class="w-full" />
         </UFormField>
 
         <UFormField label="E-mail" name="email" hint="Optionnel">
-          <UInput v-model="state.email" type="email" class="w-full" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.email"
+            type="email"
+            class="w-full"
+          />
         </UFormField>
       </div>
 
       <UFormField label="Adresse ligne 1" name="addressLine1" hint="Optionnel">
-        <UInput v-model="state.addressLine1" class="w-full" />
+        <UInput v-bind="posInputAttrs" v-model="state.addressLine1" class="w-full" />
       </UFormField>
 
       <UFormField label="Adresse ligne 2" name="addressLine2" hint="Optionnel">
-        <UInput v-model="state.addressLine2" class="w-full" />
+        <UInput v-bind="posInputAttrs" v-model="state.addressLine2" class="w-full" />
       </UFormField>
 
       <div class="grid gap-4 md:grid-cols-2">
         <UFormField label="Code postal" name="postalCode" hint="Optionnel">
           <UInput
+            v-bind="posInputAttrs"
             v-model="state.postalCode"
             class="w-full"
             inputmode="numeric"
             maxlength="4"
-            autocomplete="off"
             placeholder="1003"
           />
         </UFormField>
 
         <UFormField label="Ville" name="city" hint="Optionnel">
           <div class="space-y-2">
-            <UInput v-model="state.city" class="w-full" autocomplete="off" />
+            <UInput v-bind="posInputAttrs" v-model="state.city" class="w-full" />
 
             <div v-if="isPostalCodeLookupPending" class="text-xs text-toned">
               Recherche des localités du NPA…
@@ -471,7 +508,12 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
       </div>
 
       <UFormField label="Notes" name="notes" hint="Optionnel">
-        <UTextarea v-model="state.notes" class="w-full" :rows="5" />
+        <UTextarea
+          v-bind="posInputAttrs"
+          v-model="state.notes"
+          class="w-full"
+          :rows="5"
+        />
       </UFormField>
     </template>
 

@@ -143,12 +143,18 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         @submit="onSubmit"
       >
         <UFormField label="Modèle" name="model">
-          <UInput v-model="state.model" class="w-full" placeholder="iPhone 13 Pro" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.model"
+            class="w-full"
+            placeholder="iPhone 13 Pro"
+          />
         </UFormField>
 
         <UFormField label="IMEI" name="imei">
           <div class="space-y-1">
             <UInput
+              v-bind="posInputAttrs"
               :model-value="state.imei"
               class="w-full"
               placeholder="356 789 123 456 789"
@@ -162,15 +168,30 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         </UFormField>
 
         <UFormField label="SKU" name="sku">
-          <UInput v-model="state.sku" class="w-full" placeholder="Optionnel" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.sku"
+            class="w-full"
+            placeholder="Optionnel"
+          />
         </UFormField>
 
         <UFormField label="Capacité" name="capacity">
-          <UInput v-model="state.capacity" class="w-full" placeholder="128 Go" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.capacity"
+            class="w-full"
+            placeholder="128 Go"
+          />
         </UFormField>
 
         <UFormField label="Entrée en stock" name="stockedAt">
-          <UInput v-model="state.stockedAt" type="date" class="w-full" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.stockedAt"
+            type="date"
+            class="w-full"
+          />
         </UFormField>
 
         <UFormField label="Vendu" name="sold">

@@ -210,6 +210,7 @@ watch(() => filteredItems.value.length, () => {
       <form class="space-y-2" @submit.prevent="search">
         <div class="flex gap-2">
           <UInput
+            v-bind="posInputAttrs"
             v-model="filters.text"
             aria-label="Recherche produit ou SKU"
             placeholder="Rechercher une pièce, une référence…"
@@ -227,6 +228,7 @@ watch(() => filteredItems.value.length, () => {
         </div>
         <div class="grid grid-cols-2 gap-2 lg:grid-cols-[1.2fr_1fr_1.2fr_1fr_auto]">
           <UInput
+            v-bind="posInputAttrs"
             v-model="filters.model"
             aria-label="Modèle"
             placeholder="Modèle : iPhone 15…"
@@ -366,6 +368,7 @@ watch(() => filteredItems.value.length, () => {
     <div class="flex min-h-0 min-w-0 flex-1">
       <aside v-if="mode === 'categories'" class="hidden w-60 shrink-0 flex-col border-r border-default lg:flex" aria-label="Familles fournisseur">
         <UInput
+          v-bind="posInputAttrs"
           v-model="categorySearch"
           aria-label="Filtrer les catégories"
           placeholder="Filtrer les familles…"

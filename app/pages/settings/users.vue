@@ -240,6 +240,7 @@ function getUserRowItems(user: UserRecord): DropdownMenuItem[] {
     >
       <template #header>
         <UInput
+          v-bind="posInputAttrs"
           v-model="q"
           icon="i-lucide-search"
           placeholder="Rechercher un utilisateur"
@@ -337,16 +338,16 @@ function getUserRowItems(user: UserRecord): DropdownMenuItem[] {
         >
           <UFormField name="email" label="Email" required>
             <UInput
+              v-bind="posInputAttrs"
               v-model="createState.email"
               type="email"
-              autocomplete="off"
               class="w-full"
             />
           </UFormField>
           <UFormField name="name" label="Nom" required>
             <UInput
+              v-bind="posInputAttrs"
               v-model="createState.name"
-              autocomplete="off"
               class="w-full"
             />
           </UFormField>
@@ -357,9 +358,9 @@ function getUserRowItems(user: UserRecord): DropdownMenuItem[] {
             help="8 caractères minimum."
           >
             <UInput
+              v-bind="posInputAttrs"
               v-model="createState.password"
               type="password"
-              autocomplete="new-password"
               class="w-full"
             />
           </UFormField>
@@ -401,10 +402,15 @@ function getUserRowItems(user: UserRecord): DropdownMenuItem[] {
           @submit="onEditSubmit"
         >
           <UFormField name="email" label="Email" required>
-            <UInput v-model="editState.email" type="email" class="w-full" />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="editState.email"
+              type="email"
+              class="w-full"
+            />
           </UFormField>
           <UFormField name="name" label="Nom" required>
-            <UInput v-model="editState.name" class="w-full" />
+            <UInput v-bind="posInputAttrs" v-model="editState.name" class="w-full" />
           </UFormField>
           <UFormField name="isActive" label="Compte actif">
             <USwitch
@@ -466,9 +472,9 @@ function getUserRowItems(user: UserRecord): DropdownMenuItem[] {
             help="8 caractères minimum."
           >
             <UInput
+              v-bind="posInputAttrs"
               v-model="passwordState.password"
               type="password"
-              autocomplete="new-password"
               class="w-full"
             />
           </UFormField>

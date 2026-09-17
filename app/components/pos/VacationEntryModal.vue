@@ -182,7 +182,12 @@ function onSubmit() {
         </UFormField>
 
         <UFormField label="Notes" name="notes" hint="Optionnel">
-          <UInput v-model="state.notes" class="w-full" placeholder="Ex. Vacances d'été" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.notes"
+            class="w-full"
+            placeholder="Ex. Vacances d'été"
+          />
         </UFormField>
 
         <div v-if="previewDays > 0" class="rounded-md bg-elevated p-3 text-sm">

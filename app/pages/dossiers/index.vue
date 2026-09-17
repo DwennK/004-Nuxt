@@ -225,6 +225,7 @@ const columns: TableColumn<TicketListItem>[] = [
       <UDashboardToolbar class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex flex-wrap items-center gap-3">
           <UInput
+            v-bind="posInputAttrs"
             v-model="search"
             autofocus
             icon="i-lucide-search"
@@ -234,6 +235,7 @@ const columns: TableColumn<TicketListItem>[] = [
 
           <USelectMenu
             v-model="statusFilter"
+            :search-input="posInputAttrs"
             :items="statusItems"
             value-key="value"
             class="w-64"

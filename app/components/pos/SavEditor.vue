@@ -57,10 +57,16 @@ const coverageItems = savCoverages.map(value => ({ label: savCoverageLabels[valu
           <span class="text-xs text-muted">{{ ticket?.imei || ticket?.serialNumber }}</span>
         </div>
         <UFormField label="Réparation concernée" name="repair" required>
-          <UInput v-model="state.repair" class="w-full" placeholder="Ex. Remplacement de l’écran" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.repair"
+            class="w-full"
+            placeholder="Ex. Remplacement de l’écran"
+          />
         </UFormField>
         <UFormField label="Motif du retour" name="reason" required>
           <UTextarea
+            v-bind="posInputAttrs"
             v-model="state.reason"
             :rows="3"
             class="w-full"
@@ -69,10 +75,20 @@ const coverageItems = savCoverages.map(value => ({ label: savCoverageLabels[valu
         </UFormField>
         <div v-if="document" class="grid gap-3 sm:grid-cols-2">
           <UFormField label="Diagnostic" name="diagnosis">
-            <UTextarea v-model="state.diagnosis" :rows="5" class="w-full" />
+            <UTextarea
+              v-bind="posInputAttrs"
+              v-model="state.diagnosis"
+              :rows="5"
+              class="w-full"
+            />
           </UFormField>
           <UFormField label="Travaux et pièces remplacées" name="work">
-            <UTextarea v-model="state.work" :rows="5" class="w-full" />
+            <UTextarea
+              v-bind="posInputAttrs"
+              v-model="state.work"
+              :rows="5"
+              class="w-full"
+            />
           </UFormField>
         </div>
       </UCard>

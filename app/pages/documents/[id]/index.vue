@@ -506,6 +506,7 @@ function startNewEmailAttempt() {
         />
         <UFormField label="Destinataire" name="to" required>
           <UInput
+            v-bind="posInputAttrs"
             v-model="emailState.to"
             :disabled="emailAttemptLocked"
             type="email"
@@ -516,6 +517,7 @@ function startNewEmailAttempt() {
 
         <UFormField label="Objet" name="subject" required>
           <UInput
+            v-bind="posInputAttrs"
             v-model="emailState.subject"
             :disabled="emailAttemptLocked"
             class="w-full"
@@ -525,6 +527,7 @@ function startNewEmailAttempt() {
 
         <UFormField label="Message" name="message" required>
           <UTextarea
+            v-bind="posInputAttrs"
             v-model="emailState.message"
             :disabled="emailAttemptLocked"
             :rows="8"

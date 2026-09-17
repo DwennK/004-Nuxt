@@ -1394,6 +1394,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
     <template #body>
       <UFormField label="Note" required>
         <UTextarea
+          v-bind="posInputAttrs"
           v-model="noteDraft"
           :disabled="dossier.blocked.value || noteSaving"
           :rows="5"

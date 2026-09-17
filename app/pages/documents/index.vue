@@ -310,6 +310,7 @@ const columns: TableColumn<DocumentListItem>[] = [
       <UDashboardToolbar class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex flex-wrap items-center gap-3">
           <UInput
+            v-bind="posInputAttrs"
             v-model="search"
             autofocus
             icon="i-lucide-search"
@@ -318,17 +319,28 @@ const columns: TableColumn<DocumentListItem>[] = [
           />
           <USelectMenu
             v-model="statusFilter"
+            :search-input="posInputAttrs"
             :items="statusItems"
             value-key="value"
             class="w-48"
           />
           <div class="flex items-center gap-2">
             <span class="text-xs text-toned">Début</span>
-            <UInput v-model="dateFrom" type="date" class="w-40" />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="dateFrom"
+              type="date"
+              class="w-40"
+            />
           </div>
           <div class="flex items-center gap-2">
             <span class="text-xs text-toned">Fin</span>
-            <UInput v-model="dateTo" type="date" class="w-40" />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="dateTo"
+              type="date"
+              class="w-40"
+            />
           </div>
           <UButton
             v-if="hasActiveFilters"

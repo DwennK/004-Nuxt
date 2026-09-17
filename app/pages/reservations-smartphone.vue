@@ -350,6 +350,7 @@ const columns: TableColumn<SmartphoneReservationRequest>[] = [
 
         <div class="flex flex-wrap items-center justify-between gap-1.5">
           <UInput
+            v-bind="posInputAttrs"
             v-model="name"
             class="max-w-sm"
             icon="i-lucide-search"

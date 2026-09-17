@@ -290,6 +290,7 @@ async function removePayment(payment: PaymentRecord) {
 
                 <UFormField label="Montant">
                   <UInputNumber
+                    v-bind="posInputAttrs"
                     v-model="paymentDrafts[payment.id]!.amount"
                     :min="0"
                     :step="0.05"
@@ -302,6 +303,7 @@ async function removePayment(payment: PaymentRecord) {
 
                 <UFormField label="Encaissé à">
                   <UInput
+                    v-bind="posInputAttrs"
                     v-model="paymentDrafts[payment.id]!.paidAt"
                     type="datetime-local"
                     size="sm"
@@ -324,6 +326,7 @@ async function removePayment(payment: PaymentRecord) {
             <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
               <UFormField label="Notes">
                 <UTextarea
+                  v-bind="posInputAttrs"
                   v-model="paymentDrafts[payment.id]!.notes"
                   :rows="2"
                   autoresize

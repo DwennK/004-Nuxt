@@ -318,6 +318,7 @@ async function submitPrompt() {
       <div class="shrink-0 bg-default px-4 pt-3 pb-4 sm:px-10 sm:pb-5">
         <div class="mx-auto w-full max-w-4xl sm:px-0">
           <UChatPrompt
+            v-bind="posInputAttrs"
             ref="composer"
             v-model="prompt"
             aria-label="Votre question"

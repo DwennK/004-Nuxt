@@ -180,28 +180,54 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         @submit="onSubmit"
       >
         <UFormField label="Nom" name="name">
-          <UInput v-model="state.name" class="w-full" placeholder="Jean Dupont" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.name"
+            class="w-full"
+            placeholder="Jean Dupont"
+          />
         </UFormField>
 
         <UFormField label="Téléphone" name="phone">
-          <UInput v-model="phoneDisplay" class="w-full" placeholder="+41 79 123 45 67" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="phoneDisplay"
+            class="w-full"
+            placeholder="+41 79 123 45 67"
+          />
         </UFormField>
 
         <UFormField label="Modèle" name="model">
-          <UInput v-model="state.model" class="w-full" placeholder="iPhone 15 Pro" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.model"
+            class="w-full"
+            placeholder="iPhone 15 Pro"
+          />
         </UFormField>
 
         <UFormField label="Stockage" name="storage" hint="Optionnel">
-          <UInput v-model="state.storage" class="w-full" placeholder="256 Go" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.storage"
+            class="w-full"
+            placeholder="256 Go"
+          />
         </UFormField>
 
         <UFormField label="Date de la demande" name="requestedAt">
-          <UInput v-model="state.requestedAt" type="date" class="w-full" />
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.requestedAt"
+            type="date"
+            class="w-full"
+          />
         </UFormField>
 
         <UFormField label="État" name="status">
           <USelectMenu
             v-model="state.status"
+            :search-input="posInputAttrs"
             :items="statusItems"
             value-key="value"
             class="w-full"
@@ -210,6 +236,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
 
         <UFormField label="Remarques" name="notes">
           <UTextarea
+            v-bind="posInputAttrs"
             v-model="state.notes"
             class="w-full"
             :rows="4"

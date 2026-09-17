@@ -147,12 +147,14 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
           <UFormField label="Émis le" name="issuedAt">
             <ClientOnly>
               <UInput
+                v-bind="posInputAttrs"
                 v-model="state.issuedAt"
                 type="datetime-local"
                 class="w-full"
               />
               <template #fallback>
                 <UInput
+                  v-bind="posInputAttrs"
                   type="datetime-local"
                   disabled
                   class="w-full"

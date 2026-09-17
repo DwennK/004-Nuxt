@@ -85,6 +85,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           hint="Optionnel"
         >
           <UTextarea
+            v-bind="posInputAttrs"
             v-model="state.internalNotes"
             class="w-full"
             :rows="6"

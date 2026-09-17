@@ -235,7 +235,12 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         <div class="space-y-4">
           <div class="grid gap-4 md:grid-cols-2">
             <UFormField :label="currentItemNameLabel" name="name" required>
-              <UInput v-model="state.name" autofocus class="w-full" />
+              <UInput
+                v-bind="posInputAttrs"
+                v-model="state.name"
+                autofocus
+                class="w-full"
+              />
             </UFormField>
 
             <UFormField label="Type" name="type" required>
@@ -250,7 +255,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
           <div class="grid gap-4 md:grid-cols-2">
             <UFormField label="SKU" name="sku" hint="Optionnel">
-              <UInput v-model="state.sku" class="w-full" />
+              <UInput v-bind="posInputAttrs" v-model="state.sku" class="w-full" />
             </UFormField>
 
             <UFormField
@@ -259,7 +264,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
               :description="categoryDescription"
               required
             >
-              <UInput v-model="state.category" class="w-full" />
+              <UInput v-bind="posInputAttrs" v-model="state.category" class="w-full" />
             </UFormField>
           </div>
 
@@ -289,16 +294,27 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         <div class="space-y-4">
           <div v-if="isRepair" class="grid gap-4 md:grid-cols-2">
             <UFormField label="Marque" name="brand" hint="Recommandé">
-              <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
+              <UInput
+                v-bind="posInputAttrs"
+                v-model="state.brand"
+                class="w-full"
+                placeholder="Apple, Samsung..."
+              />
             </UFormField>
 
             <UFormField label="Modèle" name="model" hint="Optionnel">
-              <UInput v-model="state.model" class="w-full" placeholder="iPhone 14, Galaxy S23..." />
+              <UInput
+                v-bind="posInputAttrs"
+                v-model="state.model"
+                class="w-full"
+                placeholder="iPhone 14, Galaxy S23..."
+              />
             </UFormField>
           </div>
 
           <UFormField :label="isRepair ? 'Type d’intervention' : 'Nature du service'" name="serviceKind" required>
             <UInput
+              v-bind="posInputAttrs"
               v-model="state.serviceKind"
               class="w-full"
               :placeholder="isRepair ? 'Remplacement écran' : 'Diagnostic, configuration, support...'"
@@ -325,6 +341,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             description="Séparez les variantes de recherche par des virgules."
           >
             <UInput
+              v-bind="posInputAttrs"
               v-model="state.keywordsText"
               class="w-full"
               placeholder="iphone 14 ecran, apple 14 screen, oled"
@@ -346,6 +363,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             required
           >
             <UInputNumber
+              v-bind="posInputAttrs"
               :model-value="state.defaultPrice"
               :min="0"
               :step="0.05"
@@ -362,6 +380,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             required
           >
             <UInputNumber
+              v-bind="posInputAttrs"
               v-model="state.vatRate"
               :min="0"
               :step="0.1"
@@ -390,7 +409,12 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
     <template v-else>
       <UFormField :label="currentItemNameLabel" name="name" required>
-        <UInput v-model="state.name" autofocus class="w-full" />
+        <UInput
+          v-bind="posInputAttrs"
+          v-model="state.name"
+          autofocus
+          class="w-full"
+        />
       </UFormField>
 
       <div class="grid gap-4 md:grid-cols-2">
@@ -404,7 +428,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         </UFormField>
 
         <UFormField label="SKU" name="sku" hint="Optionnel">
-          <UInput v-model="state.sku" class="w-full" />
+          <UInput v-bind="posInputAttrs" v-model="state.sku" class="w-full" />
         </UFormField>
       </div>
 
@@ -414,7 +438,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         :description="categoryDescription"
         required
       >
-        <UInput v-model="state.category" class="w-full" />
+        <UInput v-bind="posInputAttrs" v-model="state.category" class="w-full" />
       </UFormField>
 
       <div class="flex flex-wrap gap-2">
@@ -433,16 +457,27 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       <template v-if="isCatalogService">
         <div v-if="isRepair" class="grid gap-4 md:grid-cols-2">
           <UFormField label="Marque" name="brand" hint="Recommandé">
-            <UInput v-model="state.brand" class="w-full" placeholder="Apple, Samsung..." />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="state.brand"
+              class="w-full"
+              placeholder="Apple, Samsung..."
+            />
           </UFormField>
 
           <UFormField label="Modèle" name="model" hint="Optionnel">
-            <UInput v-model="state.model" class="w-full" placeholder="iPhone 14, Galaxy S23..." />
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="state.model"
+              class="w-full"
+              placeholder="iPhone 14, Galaxy S23..."
+            />
           </UFormField>
         </div>
 
         <UFormField :label="isRepair ? 'Type d’intervention' : 'Nature du service'" name="serviceKind" required>
           <UInput
+            v-bind="posInputAttrs"
             v-model="state.serviceKind"
             class="w-full"
             :placeholder="isRepair ? 'Remplacement écran' : 'Diagnostic, configuration, support...'"
@@ -469,6 +504,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           description="Séparez les variantes de recherche par des virgules."
         >
           <UInput
+            v-bind="posInputAttrs"
             v-model="state.keywordsText"
             class="w-full"
             placeholder="iphone 14 ecran, apple 14 screen, oled"
@@ -483,6 +519,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           required
         >
           <UInputNumber
+            v-bind="posInputAttrs"
             :model-value="state.defaultPrice"
             :min="0"
             :step="0.05"
@@ -494,6 +531,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
         <UFormField label="TVA" name="vatRate" required>
           <UInputNumber
+            v-bind="posInputAttrs"
             v-model="state.vatRate"
             :min="0"
             :step="0.1"
@@ -527,14 +565,25 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       <template v-if="state.mobileSentrix.status === 'matched'">
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <UFormField label="SKU fournisseur" name="mobileSentrix.sku" required>
-            <UInput :model-value="state.mobileSentrix.sku || undefined" class="w-full" @update:model-value="state.mobileSentrix.sku = $event || null" />
+            <UInput
+              v-bind="posInputAttrs"
+              :model-value="state.mobileSentrix.sku || undefined"
+              class="w-full"
+              @update:model-value="state.mobileSentrix.sku = $event || null"
+            />
           </UFormField>
           <UFormField label="Identifiant produit" name="mobileSentrix.productId">
-            <UInput :model-value="state.mobileSentrix.productId || undefined" class="w-full" @update:model-value="state.mobileSentrix.productId = $event || null" />
+            <UInput
+              v-bind="posInputAttrs"
+              :model-value="state.mobileSentrix.productId || undefined"
+              class="w-full"
+              @update:model-value="state.mobileSentrix.productId = $event || null"
+            />
           </UFormField>
         </div>
         <UFormField label="Fiche produit" name="mobileSentrix.url">
           <UInput
+            v-bind="posInputAttrs"
             :model-value="state.mobileSentrix.url || undefined"
             placeholder="https://www.mobilesentrix.com/…"
             class="w-full"
@@ -555,6 +604,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       </template>
       <UFormField label="Note / variante à choisir" name="mobileSentrix.note">
         <UInput
+          v-bind="posInputAttrs"
           :model-value="state.mobileSentrix.note || undefined"
           :maxlength="500"
           placeholder="Couleur, cadre, compatibilité Europe…"

@@ -181,14 +181,15 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
 
           <UFormField :name="`templates.${index}.label`" label="Libelle" required>
             <UInput
+              v-bind="posInputAttrs"
               v-model="template.label"
               class="w-full"
-              autocomplete="off"
             />
           </UFormField>
 
           <UFormField :name="`templates.${index}.body`" label="Message" required>
             <UTextarea
+              v-bind="posInputAttrs"
               v-model="template.body"
               :rows="5"
               autoresize

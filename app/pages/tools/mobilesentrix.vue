@@ -222,6 +222,7 @@ async function copyEnvTokens() {
 
           <div v-if="oauthResult" class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
             <UTextarea
+              v-bind="posInputAttrs"
               :model-value="`MOBILESENTRIX_ACCESS_TOKEN=${oauthResult.accessToken}\nMOBILESENTRIX_ACCESS_TOKEN_SECRET=${oauthResult.accessTokenSecret}`"
               readonly
               autoresize

@@ -261,6 +261,7 @@ function normalize(value: string) {
 
           <div class="flex flex-col gap-3 rounded-lg border border-default bg-default p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
             <UInput
+              v-bind="posInputAttrs"
               v-model="search"
               icon="i-lucide-search"
               placeholder="Chercher un jeu"

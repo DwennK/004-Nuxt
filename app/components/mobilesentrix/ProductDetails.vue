@@ -174,6 +174,7 @@ async function copySku() {
           </h3>
           <form class="flex gap-2" @submit.prevent="loadVariants()">
             <UInput
+              v-bind="posInputAttrs"
               v-model="variantQuery"
               aria-label="Recherche de variantes"
               placeholder="Modèle et type de pièce"

@@ -54,6 +54,7 @@ function printReport() {
         <div class="flex items-center gap-3">
           <label for="report-date" class="text-sm font-medium text-toned">Journée</label>
           <UInput
+            v-bind="posInputAttrs"
             id="report-date"
             v-model="date"
             type="date"

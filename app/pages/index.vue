@@ -256,6 +256,7 @@ useHead({
             <div class="grid gap-2 border-b border-default bg-default p-2 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center">
               <div class="flex items-center gap-2">
                 <UInput
+                  v-bind="posInputAttrs"
                   v-model="search"
                   icon="i-lucide-search"
                   size="xl"

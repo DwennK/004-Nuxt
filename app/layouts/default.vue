@@ -372,6 +372,7 @@ const groups = computed(() => {
     <UDashboardSearch
       v-model:open="dashboardSearchOpen"
       v-model:search-term="dashboardSearchTerm"
+      :input="posInputAttrs"
       :groups="groups"
       :loading="dashboardSearchLoading"
       title="Recherche globale"

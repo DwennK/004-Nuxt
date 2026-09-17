@@ -285,6 +285,7 @@ function handleImeiScan(value: string) {
       <div class="flex flex-wrap items-center justify-between gap-1.5">
         <div class="flex gap-2">
           <UInput
+            v-bind="posInputAttrs"
             v-model="model"
             class="max-w-sm"
             icon="i-lucide-search"

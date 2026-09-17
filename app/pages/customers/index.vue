@@ -273,6 +273,7 @@ const columns: TableColumn<CustomerRecord>[] = [
 
       <UDashboardToolbar class="flex flex-wrap items-center justify-between gap-3">
         <UInput
+          v-bind="posInputAttrs"
           v-model="search"
           autofocus
           icon="i-lucide-search"

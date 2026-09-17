@@ -99,6 +99,7 @@ async function importOrder(order: ShopifyOrderSummary) {
         <form class="flex w-full flex-wrap items-end gap-2" @submit.prevent="search">
           <UFormField label="Numéro de commande" class="min-w-0 flex-1 sm:max-w-sm">
             <UInput
+              v-bind="posInputAttrs"
               v-model="reference"
               placeholder="Ex. #1001 ou identifiant Shopify"
               icon="i-lucide-hash"
