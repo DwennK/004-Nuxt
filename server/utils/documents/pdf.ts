@@ -11,7 +11,7 @@ import { savStatusLabels } from '~~/shared/types/sav'
 import { documentStatusLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
-import { buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
+import { A4_POSTAL_LAYOUT, buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
 import { calculateIncludedVatAmount, formatCurrency, formatDate } from '~~/shared/utils/pos'
 import type { SwissQrAddress } from '~~/shared/utils/qr-bill'
 import { buildRecordQrUrl } from '~~/shared/utils/record-qr'
@@ -29,12 +29,7 @@ const SHEET_LEFT = OUTER_MARGIN
 const SHEET_RIGHT = PAGE_WIDTH - OUTER_MARGIN
 const TOP_START = PAGE_HEIGHT - OUTER_MARGIN
 const BOTTOM_LIMIT = OUTER_MARGIN
-const SWISS_WINDOW_LEFT = 20 * MM
-const SWISS_WINDOW_TOP = 45 * MM
-const SWISS_WINDOW_WIDTH = 100 * MM
-const SWISS_WINDOW_HEIGHT = 45 * MM
-const SWISS_REFERENCE_LEFT = SWISS_WINDOW_LEFT
-const SWISS_WINDOW_RIGHT_INSET = 14.2 * MM
+const SWISS_REFERENCE_LEFT = 20 * MM
 
 const FONT_BODY = 8
 const FONT_SMALL = 7
@@ -388,13 +383,11 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     metaY -= 10
   })
 
-  const windowTopY = PAGE_HEIGHT - SWISS_WINDOW_TOP
-  const windowBottomY = PAGE_HEIGHT - SWISS_WINDOW_TOP - SWISS_WINDOW_HEIGHT
-  const windowX = SECTION_RIGHT - SWISS_WINDOW_RIGHT_INSET - SWISS_WINDOW_WIDTH
-  const windowContentTop = windowTopY - (10.8 * MM)
-  const windowContentX = windowX + (6 * MM)
-  const windowContentWidth = SWISS_WINDOW_WIDTH - (12 * MM)
-  const referencesWidth = Math.max(windowX - (6 * MM) - SWISS_REFERENCE_LEFT, 36 * MM)
+  const windowTopY = PAGE_HEIGHT - (45 * MM)
+  const windowContentTop = PAGE_HEIGHT - (A4_POSTAL_LAYOUT.addressTopMm * MM)
+  const windowContentX = A4_POSTAL_LAYOUT.addressLeftMm * MM
+  const windowContentWidth = A4_POSTAL_LAYOUT.addressWidthMm * MM
+  const referencesWidth = 62 * MM
 
   drawTextBlock(context, 'Références', SWISS_REFERENCE_LEFT, windowTopY, referencesWidth, {
     font: context.boldFont,
@@ -420,19 +413,18 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     font: context.boldFont,
     size: FONT_BODY,
     color: COLORS.strong,
-    lineHeight: 10
+    lineHeight: 4 * MM
   })
 
   if (model.windowLines.length > 1) {
-    windowBottom = drawTextBlock(context, model.windowLines.slice(1).join('\n'), windowContentX, windowBottom - 2, windowContentWidth, {
+    windowBottom = drawTextBlock(context, model.windowLines.slice(1).join('\n'), windowContentX, windowBottom, windowContentWidth, {
       size: FONT_BODY,
       color: COLORS.text,
-      lineHeight: 9.8
+      lineHeight: 4 * MM
     })
   }
 
-  const headerBottom = Math.min(lookupBottom, windowBottom, windowBottomY)
-  const ruleY = headerBottom - (3.2 * MM)
+  const ruleY = Math.min(lookupBottom - (3.2 * MM), windowBottom - (3.2 * MM), PAGE_HEIGHT - (A4_POSTAL_LAYOUT.bodyTopMm * MM))
   drawHorizontalRule(context, ruleY)
   context.cursorY = ruleY - (3 * MM)
 }

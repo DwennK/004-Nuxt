@@ -6,6 +6,17 @@ import { isValidSwissQrBillAccount } from './iban'
 import { formatDate, isPayableDocumentType } from './pos'
 import { buildSwissQrBill, type SwissQrBillData } from './qr-bill'
 
+// ELCO Classic C5 37896: 229 × 162 mm, window 100 × 45 mm,
+// 12 mm from the right and 65 mm from the bottom. An A4 folded at
+// 148.5 mm can move by 19 × 13.5 mm inside it. Keep the address within
+// x=120..195 / y=55..80 mm, and other content below the window at y=100.
+export const A4_POSTAL_LAYOUT = {
+  addressLeftMm: 120,
+  addressTopMm: 55,
+  addressWidthMm: 75,
+  bodyTopMm: 100
+} as const
+
 export interface DocumentPrintPayment {
   id: number
   amount: number

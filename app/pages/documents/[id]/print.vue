@@ -5,7 +5,7 @@ import '~/assets/css/thermal-print.css'
 import { documentStatusLabels, documentTypeLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail, PrintProfile } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
-import { buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
+import { A4_POSTAL_LAYOUT, buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
 import { getDocumentPrintProfiles, printProfileLabels, supportsDocumentPrintProfile } from '~~/shared/utils/print'
 import type { SwissQrAddress } from '~~/shared/utils/qr-bill'
 import { calculateIncludedVatAmount, formatCurrency, formatDate, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
@@ -172,6 +172,12 @@ useHead(() => ({
         v-if="document && company && canRenderSelectedProfile && profile === 'a4'"
         class="sheet sheet--a4 w-full max-w-[210mm] bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:max-w-none print:shadow-none print:ring-0"
         :class="{ 'sheet--with-qr': !!qrBill }"
+        :style="{
+          '--a4-address-left': `${A4_POSTAL_LAYOUT.addressLeftMm}mm`,
+          '--a4-address-top': `${A4_POSTAL_LAYOUT.addressTopMm}mm`,
+          '--a4-address-width': `${A4_POSTAL_LAYOUT.addressWidthMm}mm`,
+          '--a4-body-top': `${A4_POSTAL_LAYOUT.bodyTopMm}mm`
+        }"
       >
         <header class="invoice-header">
           <div class="invoice-head">
@@ -648,8 +654,7 @@ body {
 }
 
 .sheet--a4 {
-  --a4-envelope-window-right: 14.2mm;
-  --a4-envelope-window-top: 45mm;
+  --a4-page-inset: 0mm;
   --a4-reference-left: 20mm;
   min-height: calc(297mm - 14mm);
   font-size: 10.5px;
@@ -668,7 +673,10 @@ body {
 .invoice-header {
   position: relative;
   display: grid;
-  grid-template-rows: minmax(calc(var(--a4-envelope-window-top) - 4.8mm), auto) auto;
+  grid-template-columns: calc(var(--a4-address-left) - var(--a4-page-inset) - 5.8mm) minmax(0, 1fr);
+  grid-template-rows: calc(var(--a4-address-top) - var(--a4-page-inset) - 4.8mm) auto;
+  align-content: start;
+  min-height: calc(var(--a4-body-top) - var(--a4-page-inset));
   box-sizing: border-box;
   padding-top: 4.8mm;
   padding-bottom: 3.2mm;
@@ -676,6 +684,7 @@ body {
 }
 
 .invoice-head {
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 25mm 40mm;
   gap: 6mm;
@@ -769,12 +778,7 @@ body {
 }
 
 .invoice-party-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 100mm;
-  gap: 7mm;
-  align-items: start;
-  margin-left: calc(var(--a4-reference-left) - 5.8mm);
-  margin-right: calc(var(--a4-envelope-window-right) - 5.8mm);
+  display: contents;
 }
 
 .invoice-party {
@@ -782,25 +786,39 @@ body {
 }
 
 .invoice-party--compact {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  margin-left: calc(var(--a4-reference-left) - 5.8mm);
+  transform: translateY(-10mm);
   max-width: 62mm;
   overflow-wrap: anywhere;
 }
 
 .invoice-window-wrap {
-  width: 100mm;
+  position: relative;
+  grid-column: 2;
+  grid-row: 2;
+  width: var(--a4-address-width);
   min-height: 0;
 }
 
 .invoice-window-label {
+  position: absolute;
+  bottom: 100%;
   margin-bottom: 1.2mm;
   text-align: left;
 }
 
 .invoice-window {
-  width: 100mm;
-  padding: 7mm 6mm 0;
+  width: 100%;
+  line-height: 4mm;
   color: #334155;
   overflow-wrap: anywhere;
+}
+
+.invoice-window p {
+  margin: 0;
 }
 
 .invoice-strong {
@@ -1123,8 +1141,7 @@ body {
   }
 
   .sheet--a4 {
-    --a4-envelope-window-right: 7.2mm;
-    --a4-envelope-window-top: 38mm;
+    --a4-page-inset: 7mm;
     --a4-reference-left: 13mm;
     width: 100%;
     min-height: auto;
