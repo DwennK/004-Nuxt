@@ -274,6 +274,7 @@ const columns: TableColumn<CustomerRecord>[] = [
       <UDashboardToolbar class="flex flex-wrap items-center justify-between gap-3">
         <UInput
           v-model="search"
+          autofocus
           icon="i-lucide-search"
           placeholder="Rechercher par nom, société, téléphone ou e-mail"
           class="max-w-md"

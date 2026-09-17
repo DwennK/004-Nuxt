@@ -225,6 +225,7 @@ const columns: TableColumn<TicketListItem>[] = [
         <div class="flex flex-wrap items-center gap-3">
           <UInput
             v-model="search"
+            autofocus
             icon="i-lucide-search"
             placeholder="Rechercher par dossier, client, appareil ou problème"
             class="max-w-md"

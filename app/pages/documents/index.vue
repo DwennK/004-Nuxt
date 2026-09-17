@@ -305,6 +305,7 @@ const columns: TableColumn<DocumentListItem>[] = [
         <div class="flex flex-wrap items-center gap-3">
           <UInput
             v-model="search"
+            autofocus
             icon="i-lucide-search"
             placeholder="Rechercher par document, client ou dossier"
             class="max-w-md"

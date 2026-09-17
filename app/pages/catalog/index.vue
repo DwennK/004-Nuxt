@@ -768,6 +768,7 @@ watch(editOpen, (open) => {
                 <div class="flex flex-wrap items-center gap-3">
                   <UInput
                     v-model="articleSearch"
+                    autofocus
                     icon="i-lucide-search"
                     placeholder="Rechercher des articles"
                     class="max-w-md"
@@ -838,6 +839,7 @@ watch(editOpen, (open) => {
                 <div class="flex flex-wrap items-center gap-3">
                   <UInput
                     v-model="repairSearch"
+                    autofocus
                     icon="i-lucide-search"
                     placeholder="Rechercher des réparations"
                     class="max-w-md"
@@ -908,6 +910,7 @@ watch(editOpen, (open) => {
                 <div class="flex flex-wrap items-center gap-3">
                   <UInput
                     v-model="serviceSearch"
+                    autofocus
                     icon="i-lucide-search"
                     placeholder="Rechercher des services"
                     class="max-w-md"

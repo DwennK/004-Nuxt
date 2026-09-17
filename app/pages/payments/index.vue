@@ -351,6 +351,7 @@ const columns: TableColumn<PaymentListItem>[] = [
         <div class="flex flex-wrap items-center gap-3">
           <UInput
             v-model="search"
+            autofocus
             icon="i-lucide-search"
             placeholder="Rechercher par client ou document"
             class="w-64"
