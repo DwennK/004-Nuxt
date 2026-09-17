@@ -852,6 +852,11 @@ body {
   vertical-align: top;
 }
 
+.invoice-table td {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
 .invoice-table th {
   font-size: 7.3px;
   letter-spacing: 0.16em;
@@ -861,36 +866,36 @@ body {
 
 .invoice-table th:nth-child(1),
 .invoice-table td:nth-child(1) {
-  width: 50%;
+  width: 41%;
 }
 
 .invoice-table th:nth-child(2),
 .invoice-table td:nth-child(2) {
-  width: 6%;
+  width: 5%;
   text-align: right;
 }
 
 .invoice-table th:nth-child(3),
 .invoice-table td:nth-child(3) {
-  width: 14%;
+  width: 16%;
   text-align: right;
 }
 
 .invoice-table th:nth-child(4),
 .invoice-table td:nth-child(4) {
-  width: 7%;
+  width: 8%;
   text-align: right;
 }
 
 .invoice-table th:nth-child(5),
 .invoice-table td:nth-child(5) {
-  width: 11%;
+  width: 13%;
   text-align: right;
 }
 
 .invoice-table th:nth-child(6),
 .invoice-table td:nth-child(6) {
-  width: 12%;
+  width: 17%;
   text-align: right;
 }
 

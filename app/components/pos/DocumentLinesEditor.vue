@@ -262,7 +262,7 @@ async function handleBarcodeScan(value: string) {
                     size="sm"
                     class="w-full"
                     placeholder="Libellé de la ligne"
-                    :ui="{ base: 'min-h-7 resize-none field-sizing-content' }"
+                    :ui="{ base: 'min-h-7 resize-none field-sizing-content text-base/5 md:text-sm/5' }"
                     @update:model-value="editor.updateLineLabel(index, String($event || ''))"
                   />
                 </UFormField>
