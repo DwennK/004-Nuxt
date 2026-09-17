@@ -262,7 +262,7 @@ async function removePayment(payment: PaymentRecord) {
               :to="`/documents/${payment.documentId}`"
               class="mb-2 block text-xs text-primary"
             >
-              Acompte repris de la commande
+              Acompte repris du document précédent
             </NuxtLink>
             <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
               <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[9rem_8rem_9rem_minmax(0,1fr)]">
@@ -464,7 +464,7 @@ async function removePayment(payment: PaymentRecord) {
               color="neutral"
               variant="subtle"
               title="Document non payable"
-              description="Cette section reste disponible uniquement pour les factures."
+              description="Les paiements sont disponibles sur le devis, la commande ou la facture en cours. Un document annulé ou remplacé ne peut plus être encaissé."
             />
           </template>
         </UCard>

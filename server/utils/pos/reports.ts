@@ -176,7 +176,7 @@ type TopItemRow = {
   quantity: number | string | null
 }
 
-// Direct invoice receipts and inherited order deposits are disjoint sets.
+// Direct invoice receipts and inherited quote/order deposits are disjoint sets.
 // Start with the selected cashflow period, then settle only its invoice candidates.
 export function paidReportCtes(start: string, end: string): SQL {
   return sql`
@@ -192,9 +192,9 @@ export function paidReportCtes(start: string, end: string): SQL {
       UNION ALL
       SELECT invoice.id, p.amount, p.paid_at
       FROM report_period_payments p
-      INNER JOIN documents original ON original.id = p.document_id AND original.type = 'customer_order'
+      INNER JOIN documents original ON original.id = p.document_id AND original.type IN ('quote', 'customer_order')
       INNER JOIN documents invoice ON invoice.ticket_id = original.ticket_id
-        AND invoice.customer_id = original.customer_id AND invoice.type = 'invoice'
+        AND invoice.customer_id = original.customer_id AND invoice.sav_id IS original.sav_id AND invoice.type = 'invoice'
     ),
     report_invoice_period AS MATERIALIZED (
       SELECT id, sum(amount) AS period_paid_amount, max(paid_at) AS period_paid_at

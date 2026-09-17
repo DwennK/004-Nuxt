@@ -19,13 +19,15 @@ const day = '2026-09-11T10:00:00.000Z'
 type Doc = { id: number, type: string, status: string, customer: number, ticket: number | null, total: number }
 type Pay = { id: number, document: number, amount: number, status: string, paidAt?: string }
 
-// Deliberately independent of SQL: the invoice inherits its own customer's order
+// Deliberately independent of SQL: each stage inherits earlier stages'
 // receipts, while every receipt remains attached to the original document.
 function oracle(doc: Doc, docs: Doc[], pays: Pay[]) {
   const related = docs.filter(other => doc.ticket != null && other.ticket === doc.ticket && other.customer === doc.customer)
-  const active = doc.status !== 'cancelled' && ['customer_order', 'invoice'].includes(doc.type)
-    && (doc.type === 'invoice' || doc.ticket == null || !related.some(other => other.type === 'invoice' && other.status !== 'cancelled'))
-  const receipts = new Set([doc.id, ...(doc.type === 'invoice' ? related.filter(other => other.type === 'customer_order').map(other => other.id) : [])])
+  const stages: Record<string, number> = { quote: 0, customer_order: 1, invoice: 2 }
+  const stage = stages[doc.type] ?? -1
+  const active = doc.status !== 'cancelled' && stage >= 0
+    && !related.some(other => other.status !== 'cancelled' && (stages[other.type] ?? -1) > stage)
+  const receipts = new Set([doc.id, ...related.filter(other => (stages[other.type] ?? -1) >= 0 && stages[other.type]! < stage).map(other => other.id)])
   const paid = pays.filter(pay => pay.status === 'paid' && receipts.has(pay.document)).reduce((total, pay) => total + pay.amount, 0)
   return {
     id: doc.id, paid_amount: paid, balance_due: active ? Math.max(doc.total - paid, 0) : 0,
@@ -102,6 +104,29 @@ describe('financial query equivalence and bounded query plans', () => {
     const candidate = await db.all(sql`WITH ${settlementCtes(sql`SELECT * FROM documents WHERE id IN (3, 4, 7)`)}
       SELECT id, paid_amount, balance_due, settlement_status FROM settled_documents ORDER BY id`)
     expect(candidate).toEqual(docs.filter(doc => [3, 4, 7].includes(doc.id)).map(doc => oracle(doc, docs, pays)))
+  })
+
+  it('deducts quote receipts once in each later stage and the paid invoice report', async () => {
+    const extra = [
+      { id: 11, type: 'quote', status: 'issued', customer: 1, ticket: 30, total: 1000 },
+      { id: 12, type: 'customer_order', status: 'issued', customer: 1, ticket: 30, total: 1000 },
+      { id: 13, type: 'invoice', status: 'issued', customer: 1, ticket: 30, total: 1000 },
+      { id: 14, type: 'quote', status: 'issued', customer: 1, ticket: null, total: 500 }
+    ]
+    const receipts = [
+      { id: 11, document: 11, amount: 300, status: 'paid' },
+      { id: 12, document: 12, amount: 200, status: 'paid' },
+      { id: 13, document: 13, amount: 500, status: 'paid' },
+      { id: 14, document: 14, amount: 100, status: 'paid' }
+    ]
+    await insertDocs(extra)
+    await insertPays(receipts)
+    const actual = await db.all(sql`WITH ${settlementCtes()}
+      SELECT id, paid_amount, balance_due, settlement_status FROM settled_documents WHERE id >= 11 ORDER BY id`)
+    expect(actual).toEqual(extra.map(doc => oracle(doc, extra, receipts)))
+    const reports = await db.all(sql`WITH ${paidReportCtes('2026-09-11T00:00:00.000Z', '2026-09-11T23:59:59.999Z')}
+      SELECT id, period_paid_amount FROM report_paid_documents WHERE id = 13`)
+    expect(reports).toEqual([{ id: 13, period_paid_amount: 1000 }])
   })
 
   it('keeps complete summaries when the selected page is empty and preserves due/search ordering', async () => {

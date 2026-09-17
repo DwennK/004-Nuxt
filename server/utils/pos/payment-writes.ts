@@ -27,7 +27,7 @@ export async function getPayablePaymentDocument(tx: PosTransaction, documentId: 
   const settlement = await getDocumentSettlement(tx, document)
   if (settlement.activeDocument && settlement.activeDocument.id !== document.id) {
     if (editingPayment) return settlement.activeDocument
-    throw createError({ statusCode: 409, statusMessage: 'Encaissez sur la facture qui reprend cette commande.', data: { code: 'DOCUMENT_SUPERSEDED', documentId: settlement.activeDocument.id } })
+    throw createError({ statusCode: 409, statusMessage: 'Encaissez sur le document courant qui reprend ce devis ou cette commande.', data: { code: 'DOCUMENT_SUPERSEDED', documentId: settlement.activeDocument.id } })
   }
   return document
 }
@@ -36,7 +36,7 @@ function assertPayableDocumentType(document: PaymentDocument) {
   if (!isPayableDocumentType(document.type)) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Only customer orders and invoices can receive payments'
+      statusMessage: 'Only quotes, customer orders and invoices can receive payments'
     })
   }
 }

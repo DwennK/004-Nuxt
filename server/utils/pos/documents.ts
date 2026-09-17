@@ -602,7 +602,7 @@ export async function createAndPayDocumentRecord(
   if (!isPayableDocumentType(input.type)) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Only customer orders and invoices can be created and paid'
+      statusMessage: 'Only quotes, customer orders and invoices can be created and paid'
     })
   }
 
@@ -739,7 +739,7 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
       })
     }
 
-    if (input.type === 'invoice' && input.ticketId && input.ticketId !== existingDocument.ticketId) {
+    if (isPayable && input.ticketId && input.ticketId !== existingDocument.ticketId) {
       const destination = await getDocumentSettlement(tx, { ...existingDocument, ticketId: input.ticketId, customerId: input.customerId, type: input.type })
       paymentSummary.count = destination.payments.length
       paymentSummary.paidTotal = destination.paidAmount

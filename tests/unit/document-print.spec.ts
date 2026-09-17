@@ -40,10 +40,10 @@ describe('printed document payments', () => {
     expect(model.qrBill).toBeNull()
   })
 
-  it('does not present a quote as payable', () => {
+  it('presents the remaining balance on a payable quote', () => {
     const model = buildDocumentA4PrintModel(printDocument({ type: 'quote' }), printCompany())
-    expect(model.isPayableDocument).toBe(false)
-    expect(model.balanceDue).toBe(0)
+    expect(model.isPayableDocument).toBe(true)
+    expect(model.balanceDue).toBe(10000)
     expect(model.qrBill).toBeNull()
   })
   it('generates a paginated SAV PDF without requiring commercial lines or a payment QR', async () => {

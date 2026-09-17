@@ -25,7 +25,8 @@ describe('POS money helpers', () => {
   it('keeps the payable-document boundary explicit', () => {
     expect(isPayableDocumentType('invoice')).toBe(true)
     expect(isPayableDocumentType('customer_order')).toBe(true)
-    expect(isPayableDocumentType('quote')).toBe(false)
+    expect(isPayableDocumentType('quote')).toBe(true)
+    expect(isPayableDocumentType('sav')).toBe(false)
   })
 })
 

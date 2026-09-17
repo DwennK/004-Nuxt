@@ -456,6 +456,61 @@ describe('editing recorded financial data', () => {
     return order
   }
 
+  it.each(['quote', 'customer_order'] as const)('accepts partial and full payments on a standalone %s', async (type) => {
+    const { createDocumentRecord, getDocumentById } = await import('../../server/utils/pos/documents')
+    const document = await createDocumentRecord({ ...anonymousSale, customerId: 1, type }, { key: `payable-${type}` })
+    const partial = await markDocumentAsPaid(document.id, { ...paymentInput, amount: 300 }, 'first-instalment')
+    expect(partial.settlement).toMatchObject({ isPayable: true, paidAmount: 300, balanceDue: 700 })
+    await expect(updateDocumentRecord(document.id, { ...document, status: 'cancelled' })).rejects.toMatchObject({ data: { code: 'PAID_DOCUMENT_CANNOT_BE_CANCELLED' } })
+    await expect(updateDocumentRecord(document.id, { ...document, lines: [{ label: 'Réduit', quantity: 1, unitPrice: 200, vatRate: 0 }] })).rejects.toMatchObject({ data: { code: 'DOCUMENT_TOTAL_BELOW_PAID' } })
+    await expect(markDocumentAsPaid(document.id, { ...paymentInput, amount: 701 }, 'excess')).rejects.toMatchObject({ data: { code: 'PAYMENT_EXCEEDS_BALANCE' } })
+    await createPaymentRecord({ customerId: 1, documentId: document.id, method: 'bank_transfer', status: 'paid', amount: 700, paidAt: paymentInput.paidAt, notes: null }, 'final-instalment')
+    const paid = await getDocumentById(document.id)
+    expect(paid.status).toBe('paid')
+    expect(paid.settlement).toMatchObject({ paidAmount: 1000, balanceDue: 0 })
+    await expect(markDocumentAsPaid(document.id, { ...paymentInput, amount: 1 }, 'extra')).rejects.toMatchObject({ data: { code: 'DOCUMENT_ALREADY_PAID' } })
+    const other = await createDocumentRecord({ ...anonymousSale, customerId: 1 }, { key: 'independent-invoice' })
+    expect(other.settlement).toMatchObject({ paidAmount: 0, balanceDue: 1000 })
+  })
+
+  it.each([false, true])('carries quote deposits through the active stages exactly once (order: %s)', async (withOrder) => {
+    const oldOrder = await prepareOrder(0, true)
+    await client.batch([
+      { sql: 'DELETE FROM document_imports WHERE document_id = ?', args: [oldOrder.id] },
+      { sql: 'DELETE FROM document_lines WHERE document_id = ?', args: [oldOrder.id] },
+      { sql: 'DELETE FROM documents WHERE id = ?', args: [oldOrder.id] }
+    ], 'write')
+    const { getDocumentById, listDocuments } = await import('../../server/utils/pos/documents')
+    const { createCustomerOrderFromTicket, createInvoiceFromTicket, getTicketById } = await import('../../server/utils/pos/tickets')
+    const quote = (await getTicketById(1)).commercialSummary.quote!
+    const partial = await markDocumentAsPaid(quote.id, { ...paymentInput, amount: 10000 }, 'quote-deposit')
+    const receipt = partial.payments[0]!
+    expect(partial.settlement).toMatchObject({ isPayable: true, paidAmount: 10000, balanceDue: 25000 })
+    expect((await getTicketById(1)).commercialSummary).toMatchObject({ balanceDue: 25000, totalPaid: 10000 })
+    expect((await listDocuments({ paymentState: 'due' })).summary.totalBalanceDue).toBe(25000)
+    if (withOrder) {
+      const order = await createCustomerOrderFromTicket(1, 'from-paid-quote', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+      expect(order.settlement).toMatchObject({ paidAmount: 10000, balanceDue: 25000 })
+      await markDocumentAsPaid(order.id, { ...paymentInput, amount: 5000 }, 'order-deposit')
+      await expect(markDocumentAsPaid(quote.id, { ...paymentInput, amount: 100 }, 'historical-quote')).rejects.toMatchObject({ data: { code: 'DOCUMENT_SUPERSEDED', documentId: order.id } })
+    }
+    const invoice = await createInvoiceFromTicket(1, 'from-paid-stage', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    const paidAmount = withOrder ? 15000 : 10000
+    expect(invoice.settlement).toMatchObject({ paidAmount, balanceDue: 35000 - paidAmount })
+    expect(invoice.payments.filter(payment => payment.id === receipt.id)).toEqual([receipt])
+    expect((await getDocumentById(quote.id)).settlement).toMatchObject({ isPayable: false, balanceDue: 0, activeDocument: { id: invoice.id } })
+    await expect(markDocumentAsPaid(quote.id, { ...paymentInput, amount: 100 }, 'historical-quote-invoice')).rejects.toMatchObject({ data: { code: 'DOCUMENT_SUPERSEDED', documentId: invoice.id } })
+    await updatePaymentRecord(receipt.id, { ...receipt, amount: 9000 })
+    expect((await getDocumentById(invoice.id)).settlement?.balanceDue).toBe(36000 - paidAmount)
+    expect((await listDocuments({ paymentState: 'due' })).summary.totalBalanceDue).toBe(36000 - paidAmount)
+    const { buildDocumentA4PrintModel } = await import('../../shared/utils/document-print')
+    const { printCompany } = await import('../fixtures/document-print')
+    expect(buildDocumentA4PrintModel(await getDocumentById(invoice.id), printCompany()).balanceDue).toBe(36000 - paidAmount)
+    await markDocumentAsPaid(invoice.id, paymentInput, 'remaining-invoice')
+    expect((await getTicketById(1)).commercialSummary).toMatchObject({ totalPaid: 35000, balanceDue: 0 })
+    expect((await listDocuments({ paymentState: 'due' })).items).toHaveLength(0)
+  })
+
   it('saves intake lines without changing ticket details or existing commercial documents', async () => {
     await prepareOrder(10000, true)
     const { updateTicketLines } = await import('../../server/utils/pos/tickets')
@@ -676,12 +731,14 @@ describe('editing recorded financial data', () => {
     async function create(type: 'quote' | 'customer_order' | 'invoice', savId: number, key: string) {
       return createDocumentRecord({ type, customerId: 1, ticketId: 1, savId, issuedAt: paymentInput.paidAt, lines: [line] }, { key, dossier: await testDossierContext(useDb(), { kind: 'ticket', id: 1 }) })
     }
+    const quote = await create('quote', first.id, 'sav-quote')
+    await markDocumentAsPaid(quote.id, { ...paymentInput, amount: 1000 }, 'sav-quote-deposit')
     const order = await create('customer_order', first.id, 'sav-order')
-    await markDocumentAsPaid(order.id, { ...paymentInput, amount: 2000 }, 'sav-deposit')
+    await markDocumentAsPaid(order.id, { ...paymentInput, amount: 1000 }, 'sav-deposit')
     const invoice = await create('invoice', first.id, 'sav-invoice')
     const other = await create('invoice', second.id, 'sav-second-invoice')
     expect(invoice.settlement).toMatchObject({ isPayable: true, paidAmount: 2000, balanceDue: 6000 })
-    expect(invoice.payments.every(payment => payment.documentId === order.id)).toBe(true)
+    expect(invoice.payments.every(payment => [quote.id, order.id].includes(payment.documentId))).toBe(true)
     expect(other.settlement).toMatchObject({ paidAmount: 0, balanceDue: 8000 })
     expect((await getDocumentById(1)).settlement).toMatchObject({ paidAmount: 12500, balanceDue: 0, activeDocument: { id: 1 } })
     expect((await getDocumentById(order.id)).settlement?.isPayable).toBe(false)
