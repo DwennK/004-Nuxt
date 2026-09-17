@@ -7,6 +7,7 @@ import {
   type PDFImage,
   type PDFPage
 } from 'pdf-lib'
+import { savStatusLabels } from '~~/shared/types/sav'
 import { documentStatusLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
@@ -337,7 +338,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     drawImageCentered(context.page, logoImage, SECTION_LEFT, logoBoxY, logoBoxSize, logoBoxSize)
   }
 
-  drawTextBlock(context, 'Document commercial', brandTextX, topY, brandTextWidth, {
+  drawTextBlock(context, document.type === 'sav' ? 'Service après-vente' : 'Document commercial', brandTextX, topY, brandTextWidth, {
     font: context.boldFont,
     size: FONT_KICKER,
     color: COLORS.muted,
@@ -375,7 +376,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
   const metaLines = [
     `Émis le ${formatDate(document.issuedAt)}`,
     document.ticket ? `Réf. dossier ${document.ticket.ticketNumber}` : null,
-    `Statut ${documentStatusLabels[document.status]}`
+    `Statut ${document.sav ? savStatusLabels[document.sav.status] : documentStatusLabels[document.status]}`
   ].filter(Boolean) as string[]
 
   let metaY = topY - 34
@@ -919,9 +920,23 @@ export async function generateDocumentPdf(document: DocumentDetail, company: Com
   }
 
   drawHeader(context, document, company, logoImage, lookupUrl)
-  drawDocumentLines(context, document)
-  drawPayments(context, document, company)
-  drawSummary(context, document, company)
+  if (document.type === 'sav') {
+    for (const block of buildDocumentA4PrintModel(document, company).noteBlocks) {
+      ensureSpace(context, 35)
+      drawTextBlock(context, block.label, SECTION_LEFT, context.cursorY, SECTION_WIDTH, { font: context.boldFont, size: FONT_LABEL, color: COLORS.muted })
+      context.cursorY -= 14
+      for (const line of wrapText(context.regularFont, block.content, FONT_BODY, SECTION_WIDTH)) {
+        ensureSpace(context, 14)
+        drawTextBlock(context, line, SECTION_LEFT, context.cursorY, SECTION_WIDTH, { size: FONT_BODY })
+        context.cursorY -= 13
+      }
+      context.cursorY -= 12
+    }
+  } else {
+    drawDocumentLines(context, document)
+    drawPayments(context, document, company)
+    drawSummary(context, document, company)
+  }
 
   const renderedQr = await drawQrSection(context, document, company)
 

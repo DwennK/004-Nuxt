@@ -25,6 +25,7 @@ describe('idempotent financial mutation ledger', () => {
     client = createClient({ url: `file:${join(temporaryDirectory, 'ledger.db')}` })
     await client.batch([
       `CREATE TABLE documents (
+        sav_id INTEGER, sav_details TEXT,
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         document_number TEXT NOT NULL UNIQUE,
         type TEXT NOT NULL,

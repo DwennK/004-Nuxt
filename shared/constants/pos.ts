@@ -54,7 +54,7 @@ export const ticketStatuses = [
   'cancelled'
 ] as const
 export const ticketWorkflowSteps = ['reception', 'diagnostic', 'workshop', 'pickup', 'closure'] as const
-export const documentTypes = ['quote', 'customer_order', 'invoice'] as const
+export const documentTypes = ['quote', 'customer_order', 'invoice', 'sav'] as const
 export const documentStatuses = ['draft', 'issued', 'paid', 'cancelled'] as const
 export const paymentMethods = ['cash', 'card_twint', 'bank_transfer', 'stripe', 'shopify'] as const
 export const paymentStatuses = ['pending', 'paid', 'refunded', 'cancelled'] as const
@@ -120,13 +120,15 @@ export const ticketWorkflowStepLabels: Record<(typeof ticketWorkflowSteps)[numbe
 export const documentTypeLabels: Record<(typeof documentTypes)[number], string> = {
   quote: 'Devis',
   customer_order: 'Commande',
-  invoice: 'Facture'
+  invoice: 'Facture',
+  sav: 'SAV'
 }
 
 export const documentTypeColors: Record<(typeof documentTypes)[number], 'neutral' | 'info' | 'warning'> = {
   quote: 'neutral',
   customer_order: 'warning',
-  invoice: 'info'
+  invoice: 'info',
+  sav: 'warning'
 }
 
 export const documentStatusLabels: Record<(typeof documentStatuses)[number], string> = {
@@ -188,7 +190,8 @@ export const lineCategoryColors: Record<(typeof lineCategoryHints)[number], 'inf
 export const documentTypePrefixes: Record<(typeof documentTypes)[number], string> = {
   quote: 'DE',
   customer_order: 'CO',
-  invoice: 'FA'
+  invoice: 'FA',
+  sav: 'SAV'
 }
 
 export const vacationEntryTypes = ['full_day', 'half_day_am', 'half_day_pm'] as const

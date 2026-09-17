@@ -1,3 +1,4 @@
+import { savStatusLabels, savCoverageLabels } from '../types/sav'
 import { documentTypeLabels, paymentMethodLabels } from '../constants/pos'
 import type { DocumentDetail } from '../types/pos'
 import type { CompanySettingsRecord } from '../types/settings'
@@ -95,6 +96,20 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
     noteBlocks.push({ label: 'Suivi', content: `Repris dans ${document.settlement.activeDocument.documentNumber}. Ce document ne constitue pas un montant supplémentaire à payer.` })
   }
 
+  if (document.sav) {
+    const sav = document.sav
+    const source = document.relatedDocuments?.find(row => row.id === sav.sourceDocumentId)
+    noteBlocks.push(
+      { label: 'Appareil', content: [document.ticket?.brand, document.ticket?.model, document.ticket?.imei || document.ticket?.serialNumber].filter(Boolean).join(' · ') || 'Voir dossier' },
+      { label: 'Réparation concernée', content: sav.repair + (source ? ` · ${source.documentNumber}` : '') },
+      { label: 'Motif du retour', content: sav.reason },
+      { label: 'Prise en charge', content: savCoverageLabels[sav.coverage] },
+      { label: 'Suivi', content: `${savStatusLabels[sav.status]} · Reçu le ${formatDate(sav.receivedAt)}${sav.deliveredAt ? ` · Remis le ${formatDate(sav.deliveredAt)}` : ''}` }
+    )
+    if (sav.diagnosis) noteBlocks.push({ label: 'Diagnostic', content: sav.diagnosis })
+    if (sav.work) noteBlocks.push({ label: 'Travaux et pièces remplacées', content: sav.work })
+  }
+
   if (document.notes) {
     noteBlocks.push({
       label: 'Notes',
@@ -102,7 +117,7 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
     })
   }
 
-  if (company.paymentTerms) {
+  if (company.paymentTerms && document.type !== 'sav') {
     noteBlocks.push({
       label: 'Conditions de paiement',
       content: company.paymentTerms
@@ -126,11 +141,13 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
         ? customerAddress
         : [document.customer.phone, document.customer.email].filter(Boolean) as string[])
     ],
-    referenceLines: [
-      company.vatNumber ? `TVA / IDE ${company.vatNumber}` : null,
-      company.bankName ? `Banque ${company.bankName}` : null,
-      company.iban ? `IBAN ${company.iban}` : null
-    ].filter(Boolean) as string[],
+    referenceLines: document.type === 'sav'
+      ? [document.ticket ? `Dossier ${document.ticket.ticketNumber}` : null, document.relatedDocuments?.find(row => row.id === document.sav?.sourceDocumentId)?.documentNumber].filter(Boolean) as string[]
+      : [
+          company.vatNumber ? `TVA / IDE ${company.vatNumber}` : null,
+          company.bankName ? `Banque ${company.bankName}` : null,
+          company.iban ? `IBAN ${company.iban}` : null
+        ].filter(Boolean) as string[],
     noteBlocks,
     footerNote: company.footerNotes,
     footerMeta: [company.phone, company.email, company.website].filter(Boolean) as string[],

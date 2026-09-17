@@ -141,6 +141,7 @@ const columns: TableColumn<TicketListItem>[] = [
     meta: { class: { th: 'w-52' } },
     cell: ({ row }) => h('div', { class: 'flex min-w-0 items-center gap-2' }, [
       h('p', { class: 'shrink-0 font-medium text-highlighted', title: ticketTypeLabels[row.original.type] }, row.original.ticketNumber),
+      ...(row.original.openSavCount ? [h(UBadge, { color: 'warning', variant: 'soft', size: 'xs' }, () => 'SAV en cours')] : []),
       h(UBadge, {
         color: ticketStatusColors[row.original.status],
         variant: 'subtle',

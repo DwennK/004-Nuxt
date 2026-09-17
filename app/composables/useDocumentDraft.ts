@@ -22,7 +22,7 @@ import {
 
 type EditableLinePayload = EditableCommercialLinePayload
 
-export type DocumentInitialValue = Partial<Pick<DocumentDetail, 'id' | 'type' | 'status' | 'customerId' | 'ticketId' | 'issuedAt' | 'dueDate' | 'notes'>> & {
+export type DocumentInitialValue = Partial<Pick<DocumentDetail, 'id' | 'type' | 'status' | 'customerId' | 'ticketId' | 'savId' | 'issuedAt' | 'dueDate' | 'notes'>> & {
   lines?: EditableLinePayload[]
 }
 
@@ -33,6 +33,7 @@ export type DocumentDraftState = {
   status: DocumentStatus
   customerId: number
   ticketId: number | null
+  savId?: number | null
   issuedAt: string
   dueDate: string
   notes: string
@@ -44,6 +45,7 @@ export type DocumentSavePayload = {
   status: DocumentStatus
   customerId: number
   ticketId: number | null
+  savId?: number | null
   issuedAt: string
   dueDate?: string | null
   notes: string
@@ -140,6 +142,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
     status: 'issued',
     customerId: 0,
     ticketId: null,
+    savId: null,
     issuedAt: toDateTimeLocal(),
     dueDate: '',
     notes: '',
@@ -172,6 +175,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
       status: initialValue?.status || 'issued',
       customerId: options.fixedCustomerId.value ?? initialValue?.customerId ?? 0,
       ticketId: options.fixedTicketId.value ?? initialValue?.ticketId ?? null,
+      savId: initialValue?.savId ?? null,
       issuedAt: toDateTimeLocal(initialValue?.issuedAt),
       dueDate: initialValue?.dueDate || '',
       notes: initialValue?.notes || ''
@@ -215,6 +219,7 @@ export function useDocumentDraft(options: UseDocumentDraftOptions): DocumentDraf
       status: state.status,
       customerId: state.customerId,
       ticketId: state.ticketId ?? null,
+      savId: state.savId,
       issuedAt: new Date(state.issuedAt).toISOString(),
       dueDate: state.type === 'customer_order' ? null : state.dueDate || null,
       notes: state.notes,

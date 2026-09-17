@@ -407,6 +407,9 @@ function getWorkflowActions(status: TicketStatus): TicketWorkflowAction[] {
 }
 
 function getTicketCommercialSummary(documentRows: DocumentRecord[], paymentRows: PaymentRecord[]): TicketCommercialSummary {
+  documentRows = documentRows.filter(document => !document.savId && document.type !== 'sav')
+  const documentIds = new Set(documentRows.map(document => document.id))
+  paymentRows = paymentRows.filter(payment => documentIds.has(payment.documentId))
   const quote = documentRows.find(document => document.type === 'quote') || null
   const customerOrder = documentRows.find(document => document.type === 'customer_order') || null
   const invoice = documentRows.find(document => document.type === 'invoice') || null
@@ -512,11 +515,13 @@ function buildSyntheticEvents(ticket: TicketRecord, documentRows: DocumentRecord
   }]
 
   for (const document of documentRows) {
-    const label = document.type === 'quote'
-      ? 'Devis créé'
-      : document.type === 'customer_order'
-        ? 'Commande créée'
-        : 'Facture créée'
+    const label = document.type === 'sav'
+      ? 'SAV créé'
+      : document.type === 'quote'
+        ? 'Devis créé'
+        : document.type === 'customer_order'
+          ? 'Commande créée'
+          : 'Facture créée'
 
     events.push({
       id: `synthetic-document-${document.id}`,
@@ -690,7 +695,8 @@ export async function listTickets(filters?: TicketListFilters): Promise<TicketLi
     ? await db.select({
         ticket: tickets,
         customer: customers,
-        documentCount: sql<number>`count(${documents.id})`
+        documentCount: sql<number>`count(${documents.id})`,
+        openSavCount: sql<number>`sum(case when ${documents.type} = 'sav' and json_extract(${documents.sav}, '$.status') not in ('delivered', 'cancelled') then 1 else 0 end)`
       })
         .from(tickets)
         .innerJoin(customers, eq(tickets.customerId, customers.id))
@@ -711,7 +717,8 @@ export async function listTickets(filters?: TicketListFilters): Promise<TicketLi
     items: orderedRows.map((row): TicketListItem => ({
       ...mapTicket(row.ticket),
       customerName: row.customer.companyName || `${row.customer.firstName} ${row.customer.lastName}`,
-      documentCount: Number(row.documentCount || 0)
+      documentCount: Number(row.documentCount || 0),
+      openSavCount: Number(row.openSavCount || 0)
     })),
     page,
     pageSize,
@@ -943,9 +950,9 @@ export async function deleteTicket(id: number, dossier?: DossierWriteContext) {
   return db.transaction(async (tx) => {
     // ON DELETE SET NULL detaches every linked document. Protect those
     // destinations too, including leases held before an earlier attachment.
-    const linked = await tx.select({ id: documents.id }).from(documents).where(eq(documents.ticketId, id))
+    const linked = await tx.select({ id: documents.id, type: documents.type, savId: documents.savId }).from(documents).where(eq(documents.ticketId, id))
     await guardDossierWrite(tx, [{ kind: 'ticket', id }], dossier, linked.map(document => `document:${document.id}`))
-    if (linked.length > 1) {
+    if (linked.length > 1 || linked.some(document => document.type === 'sav' || document.savId)) {
       throw createError({ statusCode: 409, statusMessage: 'Clôturez ce dossier pour conserver le lien entre ses documents.', data: { code: 'DOCUMENT_OPERATION_IMMUTABLE' } })
     }
     const result = await tx.delete(tickets).where(eq(tickets.id, id))

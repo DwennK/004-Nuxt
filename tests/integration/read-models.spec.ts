@@ -55,6 +55,7 @@ describe('batched POS read models', () => {
         updated_at TEXT NOT NULL
       )`,
       `CREATE TABLE documents (
+        sav_id INTEGER, sav_details TEXT,
         id INTEGER PRIMARY KEY,
         document_number TEXT NOT NULL,
         type TEXT NOT NULL,
@@ -114,7 +115,7 @@ describe('batched POS read models', () => {
         (3, 'TIC-3', 1, 'repair', 'awaiting_customer_approval', NULL, NULL, NULL, NULL, NULL, NULL, 'Accord', NULL, '2026-08-18T08:00:00.000Z', NULL, '2026-08-18T08:00:00.000Z', '2026-08-18T08:00:00.000Z'),
         (4, 'TIC-4', 1, 'repair', 'waiting_parts', NULL, NULL, NULL, NULL, NULL, NULL, 'Pièce', NULL, '2026-08-17T08:00:00.000Z', NULL, '2026-08-17T08:00:00.000Z', '2026-08-17T08:00:00.000Z'),
         (5, 'TIC-5', 1, 'repair', 'closed', NULL, NULL, NULL, NULL, NULL, NULL, 'Clos', NULL, '2026-08-20T09:00:00.000Z', '2026-08-20T11:00:00.000Z', '2026-08-20T09:00:00.000Z', '2026-08-20T11:00:00.000Z')`,
-      `INSERT INTO documents VALUES
+      `INSERT INTO documents (id, document_number, type, status, customer_id, ticket_id, issued_at, subtotal, tax_amount, total, notes, created_at, updated_at) VALUES
         (1, 'FAC-1', 'invoice', 'paid', 1, 1, '2026-08-20T09:00:00.000Z', 9250, 750, 10000, NULL, '2026-08-20T09:00:00.000Z', '2026-08-20T09:00:00.000Z'),
         (2, 'CMD-2', 'customer_order', 'issued', 1, 2, '2026-08-20T08:00:00.000Z', 4625, 375, 5000, NULL, '2026-08-20T08:00:00.000Z', '2026-08-20T08:00:00.000Z'),
         (3, 'FAC-3', 'invoice', 'issued', 1, 3, '2026-08-19T08:00:00.000Z', 6475, 525, 7000, NULL, '2026-08-19T08:00:00.000Z', '2026-08-19T08:00:00.000Z')`,
@@ -272,7 +273,7 @@ describe('batched POS read models', () => {
     expect(home.activity).toEqual([])
   })
   it('replaces orders with invoices in every due queue and reuses legacy deposits once', async () => {
-    await client.execute(`INSERT INTO documents VALUES
+    await client.execute(`INSERT INTO documents (id, document_number, type, status, customer_id, ticket_id, issued_at, subtotal, tax_amount, total, notes, created_at, updated_at) VALUES
       (4, 'FAC-4', 'invoice', 'issued', 1, 2, '2026-08-20T12:00:00.000Z', 6000, 0, 6000, NULL, '2026-08-20T12:00:00.000Z', '2026-08-20T12:00:00.000Z')`)
     const home = await readHomeOverview(db, '2026-08-20')
     expect(home.dueDocuments.map(row => row.documentNumber)).toEqual(['FAC-3', 'FAC-4'])

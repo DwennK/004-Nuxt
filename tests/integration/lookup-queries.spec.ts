@@ -42,6 +42,7 @@ describe('POS suggestions preserve search results without financial aggregation'
         created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
       );
       CREATE TABLE documents (
+        sav_id INTEGER, sav_details TEXT,
         id INTEGER PRIMARY KEY, document_number TEXT NOT NULL UNIQUE, type TEXT NOT NULL, status TEXT NOT NULL,
         customer_id INTEGER NOT NULL, ticket_id INTEGER, issued_at TEXT NOT NULL, due_date TEXT, subtotal INTEGER NOT NULL,
         tax_amount INTEGER NOT NULL, total INTEGER NOT NULL, notes TEXT,

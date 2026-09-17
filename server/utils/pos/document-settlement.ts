@@ -13,13 +13,13 @@ export function settlementCtes(source: SQL = sql`SELECT * FROM documents`): SQL 
   return sql`
     settlement_documents AS MATERIALIZED (${source}),
     settlement_operations AS MATERIALIZED (
-      SELECT DISTINCT ticket_id, customer_id FROM settlement_documents WHERE ticket_id IS NOT NULL
+      SELECT DISTINCT ticket_id, customer_id, sav_id FROM settlement_documents WHERE ticket_id IS NOT NULL
     ),
     settlement_orders AS MATERIALIZED (
-      SELECT d.id, d.ticket_id, d.customer_id
+      SELECT d.id, d.ticket_id, d.customer_id, d.sav_id
       FROM settlement_operations operation
       INNER JOIN documents d ON d.ticket_id = operation.ticket_id
-        AND d.customer_id = operation.customer_id AND d.type = 'customer_order'
+        AND d.customer_id = operation.customer_id AND d.sav_id IS operation.sav_id AND d.type = 'customer_order'
     ),
     settlement_receipts AS MATERIALIZED (
       SELECT id FROM settlement_documents UNION SELECT id FROM settlement_orders
@@ -31,17 +31,17 @@ export function settlementCtes(source: SQL = sql`SELECT * FROM documents`): SQL 
       GROUP BY receipt.id
     ),
     settlement_order_totals AS MATERIALIZED (
-      SELECT d.ticket_id, d.customer_id, sum(p.paid_amount) AS paid_amount
+      SELECT d.ticket_id, d.customer_id, d.sav_id, sum(p.paid_amount) AS paid_amount
       FROM settlement_orders d INNER JOIN settlement_payment_totals p ON p.id = d.id
-      GROUP BY d.ticket_id, d.customer_id
+      GROUP BY d.ticket_id, d.customer_id, d.sav_id
     ),
     settlement_invoice_operations AS MATERIALIZED (
-      SELECT operation.ticket_id, operation.customer_id
+      SELECT operation.ticket_id, operation.customer_id, operation.sav_id
       FROM settlement_operations operation
       WHERE EXISTS (
         SELECT 1 FROM documents invoice
         WHERE invoice.ticket_id = operation.ticket_id AND invoice.customer_id = operation.customer_id
-          AND invoice.type = 'invoice' AND invoice.status != 'cancelled'
+          AND invoice.sav_id IS operation.sav_id AND invoice.type = 'invoice' AND invoice.status != 'cancelled'
       )
     ),
     settlement_values AS MATERIALIZED (
@@ -52,8 +52,8 @@ export function settlementCtes(source: SQL = sql`SELECT * FROM documents`): SQL 
           THEN coalesce(deposit.paid_amount, 0) ELSE 0 END AS paid_amount
       FROM settlement_documents d
       LEFT JOIN settlement_payment_totals direct ON direct.id = d.id
-      LEFT JOIN settlement_order_totals deposit ON deposit.ticket_id = d.ticket_id AND deposit.customer_id = d.customer_id
-      LEFT JOIN settlement_invoice_operations invoice ON invoice.ticket_id = d.ticket_id AND invoice.customer_id = d.customer_id
+      LEFT JOIN settlement_order_totals deposit ON deposit.ticket_id = d.ticket_id AND deposit.customer_id = d.customer_id AND deposit.sav_id IS d.sav_id
+      LEFT JOIN settlement_invoice_operations invoice ON invoice.ticket_id = d.ticket_id AND invoice.customer_id = d.customer_id AND invoice.sav_id IS d.sav_id
     ),
     settled_documents AS MATERIALIZED (
       SELECT settlement_values.*,
@@ -67,9 +67,9 @@ export function settlementCtes(source: SQL = sql`SELECT * FROM documents`): SQL 
 
 export async function getDocumentSettlement(executor: PosDatabaseExecutor, document: typeof documents.$inferSelect) {
   const related = document.ticketId
-    ? await executor.select().from(documents).where(and(eq(documents.ticketId, document.ticketId), eq(documents.customerId, document.customerId))).orderBy(desc(documents.id))
+    ? await executor.select().from(documents).where(and(eq(documents.ticketId, document.ticketId), eq(documents.customerId, document.customerId), sql`${documents.savId} IS ${document.savId ?? null}`)).orderBy(desc(documents.id))
     : [document]
-  const activeDocument = getActivePayableDocument(related)
+  const activeDocument = document.type === 'sav' ? null : getActivePayableDocument(related)
   // Keep each receipt on its original document; the invoice also includes order deposits.
   const paymentDocumentIds = document.type === 'invoice'
     ? [...new Set([document.id, ...related.filter(row => row.type === 'customer_order').map(row => row.id)])]

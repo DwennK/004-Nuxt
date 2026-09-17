@@ -1,5 +1,6 @@
+import type { SavDetails } from '../../shared/types/sav'
 import { sql } from 'drizzle-orm'
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { type AnySQLiteColumn, index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { sentMailStatuses } from '../../shared/constants/email'
 
 // Scope rows retain their monotonically increasing revision after lease expiry.
@@ -166,10 +167,12 @@ export const ticketEvents = sqliteTable('ticket_events', {
 export const documents = sqliteTable('documents', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   documentNumber: text('document_number').notNull(),
-  type: text('type', { enum: ['quote', 'customer_order', 'invoice'] }).notNull(),
+  type: text('type', { enum: ['quote', 'customer_order', 'invoice', 'sav'] }).notNull(),
   status: text('status', { enum: ['draft', 'issued', 'paid', 'cancelled'] }).notNull().default('draft'),
   customerId: integer('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' }),
   ticketId: integer('ticket_id').references(() => tickets.id, { onDelete: 'set null' }),
+  savId: integer('sav_id').references((): AnySQLiteColumn => documents.id, { onDelete: 'restrict' }),
+  sav: text('sav_details', { mode: 'json' }).$type<SavDetails>(),
   issuedAt: text('issued_at').notNull(),
   dueDate: text('due_date'),
   subtotal: integer('subtotal').notNull(),
@@ -182,6 +185,7 @@ export const documents = sqliteTable('documents', {
   numberIdx: uniqueIndex('documents_document_number_idx').on(table.documentNumber),
   customerIdx: index('documents_customer_id_idx').on(table.customerId),
   ticketIdx: index('documents_ticket_id_idx').on(table.ticketId),
+  savIdx: index('documents_sav_id_idx').on(table.savId),
   settlementScopeIdx: index('documents_settlement_scope_idx').on(table.ticketId, table.customerId, table.type, table.status),
   typeIdx: index('documents_type_idx').on(table.type),
   typeIssuedAtIdIdx: index('documents_type_issued_at_id_idx').on(table.type, table.issuedAt, table.id),

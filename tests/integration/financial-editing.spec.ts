@@ -108,6 +108,7 @@ describe('editing recorded financial data', () => {
       )`
     ], 'write')
 
+    await client.executeMultiple(await readFile(new URL('../../drizzle/20260917101011_sav_documents/migration.sql', import.meta.url), 'utf8'))
     await createDossierTables(client)
     await client.executeMultiple(await readFile(new URL('../../docs/sql/counter-customer-additive.sql', import.meta.url), 'utf8'))
 
@@ -144,6 +145,7 @@ describe('editing recorded financial data', () => {
       'DELETE FROM number_sequences',
       'DELETE FROM payments',
       'DELETE FROM document_lines',
+      'DELETE FROM documents WHERE sav_id IS NOT NULL',
       'DELETE FROM documents',
       'DELETE FROM ticket_lines',
       'DELETE FROM tickets',
@@ -632,5 +634,91 @@ describe('editing recorded financial data', () => {
     expect(invoice.relatedDocuments?.map(row => row.type)).toEqual(['quote', 'customer_order'])
     expect((await getDocumentById(order.id)).relatedDocuments?.map(row => row.id)).toContain(invoice.id)
     expect(invoice.relatedDocuments?.map(row => row.id)).not.toContain(invoice.id)
+  })
+  async function prepareSav(coverage: 'warranty' | 'billable' = 'warranty', key = 'sav-test') {
+    const { createDocumentRecord } = await import('../../server/utils/pos/documents')
+    const existing = (await client.execute('SELECT id FROM tickets WHERE id = 1')).rows[0]
+    if (!existing) {
+      await client.execute({ sql: 'INSERT INTO tickets (id,ticket_number,customer_id,type,status,issue_description,opened_at,created_at,updated_at) VALUES (1,\'DOS-1\',1,\'repair\',\'closed\',\'Écran cassé\',?,?,?)', args: [paymentInput.paidAt, paymentInput.paidAt, paymentInput.paidAt] })
+      await client.execute('UPDATE tickets SET status = \'closed\' WHERE id = 1')
+      await client.execute('UPDATE documents SET ticket_id = 1 WHERE id = 1')
+    }
+    return createDocumentRecord({
+      type: 'sav', customerId: 1, ticketId: 1, issuedAt: paymentInput.paidAt, lines: [],
+      sav: { sourceDocumentId: 1, repair: 'Remplacement écran', reason: 'Tactile intermittent', coverage, status: 'received', diagnosis: '', work: '', receivedAt: paymentInput.paidAt, deliveredAt: null }
+    }, { key, dossier: await testDossierContext(useDb(), { kind: 'ticket', id: 1 }) })
+  }
+
+  it('creates repeat SAV returns on a closed dossier without altering its paid invoice, and replays creation', async () => {
+    const { getDocumentById, listDocuments } = await import('../../server/utils/pos/documents')
+    const { getTicketById, listTickets } = await import('../../server/utils/pos/tickets')
+    const first = await prepareSav()
+    const replay = await prepareSav()
+    const second = await prepareSav('warranty', 'second-sav')
+    expect(replay.id).toBe(first.id)
+    expect(second.id).not.toBe(first.id)
+    expect(first).toMatchObject({ type: 'sav', total: 0, lines: [], payments: [], settlement: { isPayable: false, activeDocument: null, balanceDue: 0 } })
+    expect(first.documentNumber).toMatch(/^SAV-/)
+    expect((await getDocumentById(1))).toMatchObject({ status: 'paid', total: 12500, settlement: { paidAmount: 12500 } })
+    const ticket = await getTicketById(1)
+    expect(ticket.status).toBe('closed')
+    expect(ticket.commercialSummary).toMatchObject({ totalPaid: 12500, balanceDue: 0, invoice: { id: 1 } })
+    expect((await listTickets()).items[0]?.openSavCount).toBe(2)
+    expect((await listDocuments({ type: 'sav' })).items).toHaveLength(2)
+    await expect(markDocumentAsPaid(first.id, paymentInput, 'forbidden-sav-payment')).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it('isolates deposits, invoice status and balances for each SAV in SQL and detail queries', async () => {
+    const { createDocumentRecord, getDocumentById, listDocuments } = await import('../../server/utils/pos/documents')
+    const first = await prepareSav('billable')
+    const second = await prepareSav('billable', 'second-billable-sav')
+    const line = { label: 'Intervention SAV', quantity: 1, unitPrice: 8000, vatRate: 0 }
+    async function create(type: 'quote' | 'customer_order' | 'invoice', savId: number, key: string) {
+      return createDocumentRecord({ type, customerId: 1, ticketId: 1, savId, issuedAt: paymentInput.paidAt, lines: [line] }, { key, dossier: await testDossierContext(useDb(), { kind: 'ticket', id: 1 }) })
+    }
+    const order = await create('customer_order', first.id, 'sav-order')
+    await markDocumentAsPaid(order.id, { ...paymentInput, amount: 2000 }, 'sav-deposit')
+    const invoice = await create('invoice', first.id, 'sav-invoice')
+    const other = await create('invoice', second.id, 'sav-second-invoice')
+    expect(invoice.settlement).toMatchObject({ isPayable: true, paidAmount: 2000, balanceDue: 6000 })
+    expect(invoice.payments.every(payment => payment.documentId === order.id)).toBe(true)
+    expect(other.settlement).toMatchObject({ paidAmount: 0, balanceDue: 8000 })
+    expect((await getDocumentById(1)).settlement).toMatchObject({ paidAmount: 12500, balanceDue: 0, activeDocument: { id: 1 } })
+    expect((await getDocumentById(order.id)).settlement?.isPayable).toBe(false)
+    expect((await listDocuments({ paymentState: 'due' })).summary.totalBalanceDue).toBe(14000)
+    await expect(create('invoice', first.id, 'duplicate-sav-invoice')).rejects.toMatchObject({ statusCode: 409 })
+    await markDocumentAsPaid(invoice.id, paymentInput, 'sav-final-payment')
+    expect((await getDocumentById(invoice.id)).status).toBe('paid')
+    expect((await getDocumentById(other.id)).status).toBe('issued')
+    expect((await getDocumentById(1)).total).toBe(12500)
+    await expect(updateDocumentRecord(invoice.id, { ...invoice, savId: null })).rejects.toMatchObject({ statusCode: 409 })
+  })
+
+  it('requires a billable SAV and matching origin before commercial creation', async () => {
+    const sav = await prepareSav()
+    const { createDocumentRecord } = await import('../../server/utils/pos/documents')
+    await expect(createDocumentRecord({ type: 'invoice', customerId: 1, ticketId: 1, savId: sav.id, issuedAt: paymentInput.paidAt, lines: [{ label: 'SAV', quantity: 1, unitPrice: 1000, vatRate: 0 }] }, { key: 'invalid-coverage', dossier: await testDossierContext(useDb(), { kind: 'ticket', id: 1 }) })).rejects.toMatchObject({ statusCode: 409 })
+    await expect(updateDocumentRecord(sav.id, { ...sav, sav: { ...sav.sav!, sourceDocumentId: 99999 } })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(updateDocumentRecord(sav.id, { ...sav, lines: [{ label: 'Charge interdite', quantity: 1, unitPrice: 1, vatRate: 0 }] })).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it('records diagnostics and delivery without changing the initial dossier and prints only SAV information', async () => {
+    const sav = await prepareSav()
+    const { updateSavRecord } = await import('../../server/utils/pos/sav')
+    const { getDocumentById } = await import('../../server/utils/pos/documents')
+    const changes = { ...sav.sav!, status: 'delivered' as const, diagnosis: 'Connecteur défectueux', work: 'Écran remplacé sous garantie' }
+    await expect(updateSavRecord(sav.id, changes)).rejects.toMatchObject({ statusCode: 428 })
+    await updateSavRecord(sav.id, changes, await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    const done = await getDocumentById(sav.id)
+    expect(done.sav?.deliveredAt).toBeTruthy()
+    expect(done.total).toBe(0)
+    const { buildDocumentA4PrintModel } = await import('../../shared/utils/document-print')
+    const { printCompany } = await import('../fixtures/document-print')
+    const model = buildDocumentA4PrintModel(done, printCompany())
+    expect(model.documentTitle).toBe('SAV')
+    expect(model.qrBill).toBeNull()
+    expect(model.noteBlocks).toEqual(expect.arrayContaining([{ label: 'Travaux et pièces remplacées', content: 'Écran remplacé sous garantie' }]))
+    expect(model.noteBlocks.some(block => block.label === 'Conditions de paiement')).toBe(false)
+    expect((await client.execute('SELECT status FROM tickets WHERE id = 1')).rows[0]?.status).toBe('closed')
   })
 })

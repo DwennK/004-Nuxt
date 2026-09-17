@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { savStatusLabels, savCoverageLabels } from '~~/shared/types/sav'
 import QRCode from 'qrcode'
 import type { TableColumn } from '@nuxt/ui'
 import {
@@ -162,8 +163,8 @@ const workshopBlocker = computed(() =>
 const isTicketMutable = computed(() => ticket.value ? !['closed', 'cancelled'].includes(ticket.value.status) : false)
 const ticketDocumentEligibility = computed(() => ({
   ticketStatus: ticket.value?.status || 'closed',
-  existingDocumentTypes: ticket.value?.documents.map(document => document.type) || [],
-  activeDocumentTypes: ticket.value?.documents.filter(document => document.status !== 'cancelled').map(document => document.type) || []
+  existingDocumentTypes: ticket.value?.documents.filter(document => !document.savId && document.type !== 'sav').map(document => document.type) || [],
+  activeDocumentTypes: ticket.value?.documents.filter(document => !document.savId && document.type !== 'sav' && document.status !== 'cancelled').map(document => document.type) || []
 }))
 const canCreateQuote = computed(() => canCreateTicketDocument(ticketDocumentEligibility.value, 'quote'))
 const canCreateCustomerOrder = computed(() => canCreateTicketDocument(ticketDocumentEligibility.value, 'customer_order'))
@@ -281,7 +282,7 @@ const statusMenuItems = computed(() => {
 })
 
 const currentCommercialDocument = computed(() => {
-  const active = ticket.value?.documents.filter(document => document.status !== 'cancelled') || []
+  const active = ticket.value?.documents.filter(document => !document.savId && document.type !== 'sav' && document.status !== 'cancelled') || []
   return active.find(document => document.type === 'invoice')
     || active.find(document => document.type === 'customer_order')
     || active.find(document => document.type === 'quote')
@@ -290,8 +291,8 @@ const currentCommercialDocument = computed(() => {
 const createDocumentItems = computed(() => {
   // The API prefers an active order, then an active quote, over the intake lines.
   // Documents are already returned newest first, as in cloneDocumentLinesFromLatest.
-  const quote = ticket.value?.documents.find(document => document.type === 'quote' && document.status !== 'cancelled')
-  const order = ticket.value?.documents.find(document => document.type === 'customer_order' && document.status !== 'cancelled')
+  const quote = ticket.value?.documents.find(document => !document.savId && document.type === 'quote' && document.status !== 'cancelled')
+  const order = ticket.value?.documents.find(document => !document.savId && document.type === 'customer_order' && document.status !== 'cancelled')
   const intakeSource = lineEditor.state.lines.length ? 'À partir des lignes du dossier' : 'Ligne à compléter dans le document'
   const sourceLabel = (document: typeof quote) => document ? `À partir de ${document.documentNumber}` : intakeSource
 
@@ -868,6 +869,14 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                     <h2 id="ticket-documents-heading" class="text-sm font-semibold text-highlighted">
                       Documents liés <span class="ml-1 font-normal text-toned">{{ ticket.documents.length }}</span>
                     </h2>
+                    <UButton
+                      v-if="ticket.status !== 'cancelled'"
+                      size="sm"
+                      icon="i-lucide-plus"
+                      label="Créer un SAV"
+                      variant="soft"
+                      :to="{ path: '/documents/new', query: { type: 'sav', ticketId: ticket.id, customerId: ticket.customerId } }"
+                    />
                   </div>
                   <div v-if="ticket.documents.length" class="max-h-72 overflow-y-auto">
                     <div class="hidden grid-cols-[minmax(0,1fr)_9rem_7rem_1rem] gap-3 bg-muted/40 px-4 py-2 text-xs text-toned sm:grid" aria-hidden="true">
@@ -877,7 +886,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                       v-for="document in ticket.documents"
                       :key="document.id"
                       :to="`/documents/${document.id}`"
-                      :aria-label="`Ouvrir ${documentTypeLabels[document.type]} ${document.documentNumber} · ${documentStatusLabels[document.status]} · ${formatCurrency(document.total)}`"
+                      :aria-label="`Ouvrir ${documentTypeLabels[document.type]} ${document.documentNumber} · ${document.sav ? savStatusLabels[document.sav.status] : documentStatusLabels[document.status]} · ${document.sav ? savCoverageLabels[document.sav.coverage] : formatCurrency(document.total)}`"
                       class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 border-t border-default px-4 py-3 text-sm transition-colors first:border-t-0 hover:bg-elevated/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary sm:grid-cols-[minmax(0,1fr)_9rem_7rem_1rem]"
                     >
                       <div class="min-w-0">
@@ -890,9 +899,9 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                         size="sm"
                         class="row-start-2 w-fit sm:row-auto"
                       >
-                        {{ documentStatusLabels[document.status] }}
+                        {{ document.sav ? savStatusLabels[document.sav.status] : documentStatusLabels[document.status] }}
                       </UBadge>
-                      <span class="col-start-2 row-start-1 text-right font-medium text-highlighted tabular-nums sm:col-auto sm:row-auto">{{ formatCurrency(document.total) }}</span>
+                      <span class="col-start-2 row-start-1 text-right font-medium text-highlighted tabular-nums sm:col-auto sm:row-auto">{{ document.sav ? savCoverageLabels[document.sav.coverage] : formatCurrency(document.total) }}</span>
                       <UIcon name="i-lucide-chevron-right" class="col-start-2 row-start-2 size-4 justify-self-end text-dimmed sm:col-auto sm:row-auto" />
                     </NuxtLink>
                   </div>

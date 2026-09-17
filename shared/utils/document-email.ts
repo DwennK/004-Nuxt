@@ -3,7 +3,7 @@ import type { DocumentDetail } from '../types/pos'
 import type { CompanySettingsRecord } from '../types/settings'
 
 export function getDocumentEmailSubject(document: Pick<DocumentDetail, 'type' | 'documentNumber'>) {
-  return `Votre ${documentTypeLabels[document.type].toLowerCase()} ${document.documentNumber}`
+  return `Votre ${(document.type === 'sav' ? 'SAV' : documentTypeLabels[document.type].toLowerCase())} ${document.documentNumber}`
 }
 
 export function getDocumentEmailMessage(
@@ -13,7 +13,7 @@ export function getDocumentEmailMessage(
   return [
     `Bonjour,`,
     '',
-    `Veuillez trouver en pièce jointe votre ${documentTypeLabels[document.type].toLowerCase()} ${document.documentNumber}.`,
+    `Veuillez trouver en pièce jointe votre ${(document.type === 'sav' ? 'SAV' : documentTypeLabels[document.type].toLowerCase())} ${document.documentNumber}.`,
     '',
     `Cordialement,`,
     company.name

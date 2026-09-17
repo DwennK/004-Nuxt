@@ -1,3 +1,4 @@
+import { savDetailsSchema } from './sav'
 import { z } from 'zod'
 import { normalizeImei } from '../utils/pos'
 import {
@@ -158,15 +159,27 @@ export const documentLineInputSchema = commercialLineInputSchema
 export const documentDueDateSchema = z.union([isoDateSchema, z.literal('')])
   .nullable().optional().transform(value => value === '' ? null : value)
 
-export const documentInputSchema = z.object({
+const documentWriteSchema = z.object({
   type: z.enum(documentTypes),
   status: z.enum(documentStatuses).default('issued'),
   customerId: z.coerce.number().int().positive(),
   ticketId: z.coerce.number().int().positive().optional().nullable(),
   issuedAt: z.string().trim().min(1),
   dueDate: documentDueDateSchema,
+  savId: z.number().int().positive().nullable().optional(),
+  sav: savDetailsSchema.nullable().optional(),
   notes: optionalText,
-  lines: z.array(commercialLineInputSchema).min(1, 'Au moins une ligne est obligatoire')
+  lines: z.array(commercialLineInputSchema)
+})
+
+export const documentInputSchema = documentWriteSchema.superRefine((value, ctx) => {
+  if (value.type === 'sav') {
+    if (!value.ticketId || !value.sav || value.savId || value.lines.length || value.status !== 'issued') {
+      ctx.addIssue({ code: 'custom', path: ['sav'], message: 'Un SAV doit être lié au dossier, sans lignes financières.' })
+    }
+  } else if (!value.lines.length || value.sav) {
+    ctx.addIssue({ code: 'custom', path: ['lines'], message: 'Au moins une ligne est obligatoire, sans informations SAV.' })
+  }
 })
 
 export const paymentInputSchema = z.object({
@@ -210,7 +223,8 @@ export const markDocumentPaidSchema = z.object({
 })
 
 export const createAndPayDocumentSchema = z.object({
-  document: documentInputSchema.omit({ status: true }).extend({
+  document: documentWriteSchema.omit({ status: true }).extend({
+    lines: z.array(commercialLineInputSchema).min(1),
     type: z.enum(payableDocumentTypes),
     customerId: z.coerce.number().int().positive().nullable()
   }).refine(value => value.customerId !== null || !value.ticketId, {

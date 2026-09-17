@@ -292,7 +292,7 @@ function projectHomeOverview(input: {
     if (row.kind === 'document_created') {
       const documentId = typeof metadata?.documentId === 'number' ? metadata.documentId : null
       const documentNumber = typeof metadata?.documentNumber === 'string' ? metadata.documentNumber : null
-      const documentType = metadata?.documentType === 'quote' || metadata?.documentType === 'customer_order' || metadata?.documentType === 'invoice'
+      const documentType = metadata?.documentType === 'sav' || metadata?.documentType === 'quote' || metadata?.documentType === 'customer_order' || metadata?.documentType === 'invoice'
         ? metadata.documentType
         : null
 

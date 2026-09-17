@@ -6,12 +6,13 @@ export type TicketDocumentEligibility = {
   activeDocumentTypes?: readonly DocumentType[]
 }
 
-const commercialStage: Record<DocumentType, number> = { quote: 0, customer_order: 1, invoice: 2 }
+const commercialStage: Record<DocumentType, number> = { quote: 0, customer_order: 1, invoice: 2, sav: -1 }
 
 export function canCreateTicketDocument(
   input: TicketDocumentEligibility,
   documentType: DocumentType
 ) {
+  if (documentType === 'sav') return input.ticketStatus !== 'cancelled'
   return input.ticketStatus !== 'closed'
     && input.ticketStatus !== 'cancelled'
     && !input.existingDocumentTypes.includes(documentType)

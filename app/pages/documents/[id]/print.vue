@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { savStatusLabels } from '~~/shared/types/sav'
 import QRCode from 'qrcode'
 import '~/assets/css/thermal-print.css'
 import { documentStatusLabels, documentTypeLabels } from '~~/shared/constants/pos'
@@ -184,7 +185,7 @@ useHead(() => ({
 
               <div>
                 <p class="invoice-kicker">
-                  Document commercial
+                  {{ document.type === 'sav' ? 'Service après-vente' : 'Document commercial' }}
                 </p>
                 <h2 class="invoice-company">
                   {{ company.name }}
@@ -220,7 +221,7 @@ useHead(() => ({
                 Réf. dossier {{ document.ticket.ticketNumber }}
               </p>
               <p>
-                Statut {{ documentStatusLabels[document.status] }}
+                Statut {{ document.sav ? savStatusLabels[document.sav.status] : documentStatusLabels[document.status] }}
               </p>
             </div>
           </div>
@@ -251,7 +252,7 @@ useHead(() => ({
           </div>
         </header>
 
-        <section class="invoice-lines">
+        <section v-if="document.type !== 'sav'" class="invoice-lines">
           <table class="invoice-table">
             <thead>
               <tr>
@@ -310,7 +311,7 @@ useHead(() => ({
           </table>
         </section>
 
-        <section class="invoice-summary">
+        <section class="invoice-summary" :style="document.type === 'sav' ? { gridTemplateColumns: '1fr' } : undefined">
           <div class="invoice-notes">
             <div v-for="block in a4PrintModel?.noteBlocks || []" :key="block.label" class="invoice-note-block">
               <p class="invoice-label">
@@ -322,7 +323,7 @@ useHead(() => ({
             </div>
           </div>
 
-          <div class="invoice-totals">
+          <div v-if="document.type !== 'sav'" class="invoice-totals">
             <div class="invoice-total-row">
               <span>Total HT</span>
               <strong>{{ formatCurrency(document.subtotal) }}</strong>
@@ -507,7 +508,7 @@ useHead(() => ({
               <p v-if="document.ticket">
                 Réf. dossier {{ document.ticket.ticketNumber }}
               </p>
-              <p>Statut {{ documentStatusLabels[document.status] }}</p>
+              <p>Statut {{ document.sav ? savStatusLabels[document.sav.status] : documentStatusLabels[document.status] }}</p>
             </div>
           </div>
         </header>

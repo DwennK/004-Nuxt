@@ -12,7 +12,7 @@ Nuxt 4 POS and shop-management app for a physical tech store.
 The app is built for day-to-day in-store operations with a strict business split between:
 
 - `ticket`: operational work case such as repair, diagnostic, support or tracked follow-up; displayed as **Dossier client** with a **DOS-** reference (see [conversion guide](docs/dossier-naming.md))
-- `document`: commercial object such as quote, customer order or invoice
+- `document`: commercial object such as quote, customer order or invoice, or an operational SAV return
 - `payment`: cashflow object tracked separately from tickets and documents
 
 The app uses Nuxt server routes, Drizzle ORM and Turso/libSQL, and targets Cloudflare Workers through Nitro. User-facing copy is in French.
@@ -55,6 +55,9 @@ Typical business flows:
 - Shopify import: `Shopify order -> POS invoice + Shopify payments`
 
 Within a dossier, quote, order and invoice are successive stages of one operation.
+Each SAV return can have its own independent commercial operation; its documents
+share a `savId` and never reuse payments from the initial repair or another SAV.
+See [SAV workflow](docs/sav.md).
 A quote is optional: an order can be created directly, and a direct invoice remains supported.
 The current invoice takes over from the order for collection; their totals are never added together.
 Invoice lines inherit the order, then the quote, then the dossier lines, in that order.

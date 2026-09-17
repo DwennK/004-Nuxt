@@ -155,7 +155,7 @@ export const checks = [
     name: 'invalid_document_enums',
     tables: ['documents'],
     sql: `SELECT COUNT(*) AS violations FROM documents
-      WHERE type NOT IN ('quote', 'customer_order', 'invoice')
+      WHERE type NOT IN ('quote', 'customer_order', 'invoice', 'sav')
         OR status NOT IN ('draft', 'issued', 'paid', 'cancelled')`
   },
   {
@@ -195,6 +195,7 @@ export const checks = [
       SELECT 'document:quote' AS scope, 'DE-' AS prefix
       UNION ALL SELECT 'document:customer_order', 'CO-'
       UNION ALL SELECT 'document:invoice', 'FA-'
+      UNION ALL SELECT 'document:sav', 'SAV-'
     ) expected
     WHERE (SELECT last_value FROM number_sequences WHERE scope = expected.scope) IS NOT NULL
       AND (SELECT last_value FROM number_sequences WHERE scope = expected.scope) <

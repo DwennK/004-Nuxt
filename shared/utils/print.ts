@@ -1,6 +1,7 @@
 import type { DocumentType, PrintProfile } from '../types/pos'
 
 const documentPrintProfiles: Record<DocumentType, PrintProfile[]> = {
+  sav: ['a4'],
   quote: ['a4'],
   customer_order: ['a4'],
   invoice: ['a4', 'thermal']

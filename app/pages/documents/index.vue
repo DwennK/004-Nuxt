@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { savStatusLabels, savCoverageLabels } from '~~/shared/types/sav'
 import type { DropdownMenuItem, TableColumn, TabsItem } from '@nuxt/ui'
 import { upperFirst } from 'scule'
 import type { DashboardTableColumn, DashboardTableInstance } from '~/types/table'
@@ -55,17 +56,22 @@ const tabItems: TabsItem[] = [
     value: 'customer_order'
   },
   {
+    label: documentTypeLabels.sav,
+    icon: 'i-lucide-wrench',
+    value: 'sav'
+  },
+  {
     label: documentTypeLabels.invoice,
     icon: 'i-lucide-file-text',
     value: 'invoice'
   }
 ]
 
-const createDocumentActions: Record<DocumentType, {
+const createDocumentActions: Partial<Record<DocumentType, {
   icon: string
   label: string
   to: string
-}> = {
+}>> = {
   quote: {
     icon: 'i-lucide-scroll-text',
     label: 'Nouveau devis',
@@ -223,7 +229,7 @@ const columns: TableColumn<DocumentListItem>[] = [
     accessorKey: 'documentNumber',
     header: 'Document',
     cell: ({ row }) => {
-      const statusBadge = getDocumentStatusBadge(row.original.status)
+      const statusBadge = row.original.sav ? { label: savStatusLabels[row.original.sav.status], color: 'warning' as const } : getDocumentStatusBadge(row.original.status)
 
       return h('div', { class: 'flex items-center gap-2 min-w-0' }, [
         h('p', { class: 'truncate font-medium text-highlighted' }, row.original.documentNumber),
@@ -241,7 +247,7 @@ const columns: TableColumn<DocumentListItem>[] = [
   {
     accessorKey: 'total',
     header: 'Total TTC',
-    cell: ({ row }) => h('div', { class: 'text-right font-medium text-highlighted' }, formatCurrency(row.original.total))
+    cell: ({ row }) => h('div', { class: 'text-right font-medium text-highlighted' }, row.original.sav ? savCoverageLabels[row.original.sav.coverage] : formatCurrency(row.original.total))
   },
   {
     accessorKey: 'balanceDue',

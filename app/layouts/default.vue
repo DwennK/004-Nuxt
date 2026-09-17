@@ -34,6 +34,12 @@ const primaryLinks = computed(() => [{
     active: route.path === '/documents' && route.query.type === 'customer_order',
     onSelect: () => { open.value = false }
   }, {
+    label: 'SAV',
+    icon: 'i-lucide-wrench',
+    to: '/documents?type=sav',
+    active: route.path === '/documents' && route.query.type === 'sav',
+    onSelect: () => { open.value = false }
+  }, {
     label: 'Factures',
     icon: 'i-lucide-file-text',
     to: '/documents?type=invoice',

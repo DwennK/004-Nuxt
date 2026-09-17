@@ -56,7 +56,8 @@ const toast = useToast()
 const documentTypeActionLabels: Record<DocumentType, string> = {
   quote: 'le devis',
   customer_order: 'la commande',
-  invoice: 'la facture'
+  invoice: 'la facture',
+  sav: 'le SAV'
 }
 
 const resolvedSubmitLabel = computed(() => {

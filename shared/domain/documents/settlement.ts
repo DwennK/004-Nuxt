@@ -1,6 +1,6 @@
 import type { DocumentRecord } from '../../types/pos'
 
-// A dossier has one commercial operation: invoice takes over from order.
+// Callers pass a single operation (initial dossier or one SAV): invoice takes over from order.
 // Standalone documents remain independent operations.
 export function getActivePayableDocument<T extends Pick<DocumentRecord, 'id' | 'type' | 'status'>>(documents: readonly T[]): T | null {
   const active = documents.filter(document => document.status !== 'cancelled')

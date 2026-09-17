@@ -14,7 +14,7 @@ export default defineNuxtPlugin(() => {
         if (method === 'GET' || method === 'HEAD' || !path.startsWith('/api/'))
           return
         const match = path.match(
-          /^\/api\/(tickets|documents|payments)\/(\d+)(?:\/(status|close|notes|lines|quote|order|invoice|mark-paid))?$/
+          /^\/api\/(tickets|documents|payments)\/(\d+)(?:\/(status|close|notes|lines|quote|order|invoice|mark-paid|sav))?$/
         )
         const body
           = options.body && typeof options.body === 'object'
@@ -43,7 +43,7 @@ export default defineNuxtPlugin(() => {
           && body.ticketId
         )
           targets.push({ kind: 'ticket', id: Number(body.ticketId) })
-        if (match?.[1] === 'documents' && method === 'PATCH' && !body.ticketId)
+        if (match?.[1] === 'documents' && !match[3] && method === 'PATCH' && !body.ticketId)
           targets.push({
             kind: 'document',
             id: Number(match[2]),

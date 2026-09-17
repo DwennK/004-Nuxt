@@ -1,3 +1,5 @@
+import { validateSavWrite } from './sav'
+import type { SavDetails } from '~~/shared/types/sav'
 import { getDocumentSettlement, settlementCtes } from './document-settlement'
 import { syncDocumentStatus } from './document-balances'
 import { dossierReferenceSearch, dossierReferenceTerm } from './dossier-search'
@@ -44,6 +46,8 @@ export function mapDocument(row: typeof documents.$inferSelect): DocumentRecord 
     status: row.status,
     customerId: row.customerId,
     ticketId: row.ticketId,
+    savId: row.savId,
+    sav: row.sav,
     issuedAt: row.issuedAt,
     dueDate: row.dueDate,
     subtotal: row.subtotal,
@@ -86,6 +90,8 @@ export function mapPayment(row: typeof payments.$inferSelect): PaymentRecord {
 
 function getDocumentCreatedLabel(type: DocumentRecord['type']) {
   switch (type) {
+    case 'sav':
+      return 'SAV créé'
     case 'quote':
       return 'Devis créé'
     case 'customer_order':
@@ -102,6 +108,8 @@ function mapDocumentListItem(row: {
   status: DocumentRecord['status']
   customerId: number
   ticketId: number | null
+  savId?: number | null
+  sav?: SavDetails | null
   issuedAt: string
   subtotal: number
   taxAmount: number
@@ -121,6 +129,8 @@ function mapDocumentListItem(row: {
     status: row.status,
     customerId: row.customerId,
     ticketId: row.ticketId,
+    savId: row.savId,
+    sav: row.sav,
     issuedAt: row.issuedAt,
     subtotal: row.subtotal,
     taxAmount: row.taxAmount,
@@ -150,6 +160,8 @@ type DocumentWriteInput = {
   status?: typeof documents.$inferSelect.status
   customerId: number
   ticketId?: number | null
+  savId?: number | null
+  sav?: SavDetails | null
   issuedAt: string
   dueDate?: string | null
   notes?: string | null
@@ -181,6 +193,7 @@ export async function assertTicketDocumentCreationAllowed(
     ticketId: number
     documentType: DocumentRecord['type']
     customerId: number
+    savId?: number | null
     excludeDocumentId?: number
   }
 ) {
@@ -196,6 +209,7 @@ export async function assertTicketDocumentCreationAllowed(
       .from(documents)
       .where(and(
         eq(documents.ticketId, input.ticketId),
+        sql`${documents.savId} IS ${input.savId ?? null}`,
         input.excludeDocumentId ? ne(documents.id, input.excludeDocumentId) : undefined
       ))
   ])
@@ -216,7 +230,7 @@ export async function assertTicketDocumentCreationAllowed(
   }
 
   if (canCreateTicketDocument({
-    ticketStatus: ticket.status,
+    ticketStatus: input.savId && ticket.status !== 'cancelled' ? 'in_progress' : ticket.status,
     existingDocumentTypes: existingDocuments.map(document => document.type),
     activeDocumentTypes: existingDocuments.filter(document => document.status !== 'cancelled').map(document => document.type)
   }, input.documentType)) {
@@ -256,6 +270,7 @@ async function insertDocumentWithLines(
 ) {
   const now = new Date().toISOString()
   const totals = calculateDocumentTotals(input.lines)
+  const sav = await validateSavWrite(executor, input)
 
   assertNonNegativeDocumentTotal(totals.total)
 
@@ -273,6 +288,8 @@ async function insertDocumentWithLines(
     status: input.status || 'issued',
     customerId: input.customerId,
     ticketId: input.ticketId ?? null,
+    savId: input.savId ?? null,
+    sav,
     issuedAt: input.issuedAt,
     dueDate: input.type === 'customer_order' ? null : input.dueDate ?? null,
     subtotal: totals.subtotal,
@@ -292,7 +309,7 @@ async function insertDocumentWithLines(
     })
   }
 
-  await executor.insert(documentLines).values(totals.lines.map((line, index) => ({
+  if (totals.lines.length) await executor.insert(documentLines).values(totals.lines.map((line, index) => ({
     documentId: document.id,
     catalogItemId: input.lines[index]?.catalogItemId ?? null,
     label: input.lines[index]!.label,
@@ -391,6 +408,7 @@ export async function listDocuments(filters?: {
     ELSE 2 END`
     : sql`0`
   type ListRow = Parameters<typeof mapDocumentListItem>[0] & {
+    savJson: string | null
     resultTotal: number
     paidCount: number
     totalBalanceDue: number
@@ -414,6 +432,7 @@ export async function listDocuments(filters?: {
       LIMIT ${pageSize} OFFSET ${offset}
     )
     SELECT page.id, page.document_number AS "documentNumber", page.type, page.settlement_status AS status,
+      page.sav_id AS "savId", page.sav_details AS "savJson",
       page.customer_id AS "customerId", page.ticket_id AS "ticketId", page.issued_at AS "issuedAt",
       page.subtotal, page.tax_amount AS "taxAmount", page.total, page.notes,
       page.created_at AS "createdAt", page.updated_at AS "updatedAt", page.customer_name AS "customerName",
@@ -424,7 +443,7 @@ export async function listDocuments(filters?: {
   `)
   const summary = rows[0]
   return {
-    items: rows.filter(row => row.id != null).map(mapDocumentListItem),
+    items: rows.filter(row => row.id != null).map(row => mapDocumentListItem({ ...row, sav: row.savJson ? JSON.parse(row.savJson) : null })),
     page,
     pageSize,
     total: Number(summary?.resultTotal || 0),
@@ -463,9 +482,9 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
     db.select().from(documentLines).where(eq(documentLines.documentId, id)).orderBy(asc(documentLines.id)),
     getDocumentSettlement(db, header.document),
     header.document.ticketId
-      ? db.select({ id: documents.id, documentNumber: documents.documentNumber, type: documents.type, status: documents.status })
+      ? db.select({ id: documents.id, documentNumber: documents.documentNumber, type: documents.type, status: documents.status, savId: documents.savId })
           .from(documents)
-          .where(and(eq(documents.ticketId, header.document.ticketId), eq(documents.customerId, header.document.customerId), ne(documents.id, id)))
+          .where(and(eq(documents.ticketId, header.document.ticketId), eq(documents.customerId, header.document.customerId), ne(documents.id, id), or(sql`${documents.savId} IS ${header.document.type === 'sav' ? id : header.document.savId ?? null}`, header.document.savId ? eq(documents.id, header.document.savId) : undefined, header.document.sav?.sourceDocumentId ? eq(documents.id, header.document.sav.sourceDocumentId) : undefined)))
           .orderBy(asc(documents.issuedAt), asc(documents.id))
       : Promise.resolve([])
   ])
@@ -529,6 +548,7 @@ export async function createDocumentRecord(input: DocumentWriteInput, idempotenc
         await assertTicketDocumentCreationAllowed(tx, {
           ticketId: input.ticketId,
           documentType: input.type,
+          savId: input.savId,
           customerId: input.customerId
         })
       }
@@ -612,6 +632,7 @@ export async function createAndPayDocumentRecord(
         await assertTicketDocumentCreationAllowed(tx, {
           ticketId: input.ticketId,
           documentType: input.type,
+          savId: input.savId,
           customerId
         })
       }
@@ -693,6 +714,7 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
       })
     }
 
+    const sav = await validateSavWrite(tx, input, existingDocument)
     const settlement = await getDocumentSettlement(tx, existingDocument)
     if (settlement.activeDocument && settlement.activeDocument.id !== id && existingDocument.status !== 'cancelled') {
       throw createError({ statusCode: 409, statusMessage: 'Modifiez le document courant du dossier ; cette étape est conservée dans l’historique.', data: { code: 'DOCUMENT_SUPERSEDED', documentId: settlement.activeDocument.id } })
@@ -709,6 +731,7 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
       await assertTicketDocumentCreationAllowed(tx, {
         ticketId: input.ticketId,
         documentType: input.type,
+        savId: input.savId,
         customerId: input.customerId,
         excludeDocumentId: id
       })
@@ -753,6 +776,8 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
         status: revision.status,
         customerId: input.customerId,
         ticketId: input.ticketId ?? null,
+        savId: input.savId ?? null,
+        sav,
         issuedAt: input.issuedAt,
         dueDate: input.type === 'customer_order' ? null : input.dueDate === undefined ? existingDocument.dueDate : input.dueDate,
         subtotal: totals.subtotal,
@@ -781,7 +806,7 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
     }
 
     await tx.delete(documentLines).where(eq(documentLines.documentId, id))
-    await tx.insert(documentLines).values(totals.lines.map((line, index) => ({
+    if (totals.lines.length) await tx.insert(documentLines).values(totals.lines.map((line, index) => ({
       documentId: id,
       catalogItemId: input.lines[index]?.catalogItemId ?? null,
       label: input.lines[index]!.label,
@@ -907,6 +932,8 @@ export async function cloneDocumentLinesFromLatest(ticketId: number, preferredTy
     .from(documents)
     .where(and(
       eq(documents.ticketId, ticketId),
+      sql`${documents.savId} IS NULL`,
+      ne(documents.type, 'sav'),
       ne(documents.status, 'cancelled'),
       preferredType ? eq(documents.type, preferredType) : undefined
     ))

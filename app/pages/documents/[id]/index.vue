@@ -4,7 +4,7 @@ import type { z } from 'zod'
 import { nextTick } from 'vue'
 
 import type { DocumentSavePayload } from '~~/app/composables/useDocumentDraft'
-import type { DocumentDetail, DocumentEmailInput, SentMailSendResult } from '~~/shared/types/pos'
+import type { DocumentDetail, TicketDetail, DocumentEmailInput, SentMailSendResult } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { documentEmailSchema } from '~~/shared/validation/pos'
 import { getDocumentEmailMessage, getDocumentEmailSubject } from '~~/shared/utils/document-email'
@@ -55,7 +55,9 @@ const [{ data: document, refresh }, { data: company }] = await Promise.all([
   useFetch<CompanySettingsRecord>('/api/settings/company')
 ])
 
-const dossier = useDossier(() => ({ kind: 'document', id: id.value }), { record: document, edit: () => can('financial:adjust') })
+const isSav = computed(() => document.value?.type === 'sav')
+const { data: savTicket } = await useAsyncData(() => `sav-ticket-${id.value}`, () => isSav.value && document.value?.ticketId ? useRequestFetch()<TicketDetail>(`/api/tickets/${document.value.ticketId}`) : Promise.resolve(null))
+const dossier = useDossier(() => isSav.value && document.value?.ticketId ? { kind: 'ticket', id: document.value.ticketId } : { kind: 'document', id: id.value }, { record: document, edit: () => isSav.value ? can('financial:record') : can('financial:adjust') })
 provide('pos-dossier-state', dossier.current)
 
 const paidAmount = computed(() => document.value?.payments
@@ -68,7 +70,7 @@ const successorDocument = computed(() => {
 })
 const isPayableDocument = computed(() => document.value?.settlement?.isPayable ?? (document.value ? isPayableDocumentType(document.value.type) && document.value.status !== 'cancelled' : false))
 const canAdjustFinancialRecords = computed(() => can('financial:adjust'))
-const canEditDocument = computed(() => canAdjustFinancialRecords.value && !successorDocument.value)
+const canEditDocument = computed(() => !isSav.value && canAdjustFinancialRecords.value && !successorDocument.value)
 const documentLockTitle = 'Modification réservée aux administrateurs'
 const documentLockDescription = 'Les opérateurs peuvent consulter, envoyer, imprimer et encaisser ce document sans modifier son écriture commerciale.'
 const balanceDue = computed(() => document.value?.settlement?.balanceDue ?? (isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0))
@@ -76,6 +78,19 @@ const supportsA4Print = computed(() => document.value ? supportsDocumentPrintPro
 const supportsThermalPrint = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'thermal') : false)
 const documentActionsDisabled = computed(() => hasUnsavedDocumentChanges.value || isSavingDocument.value)
 const saveButtonLabel = computed(() => isSavingDocument.value ? 'Enregistrement…' : hasUnsavedDocumentChanges.value ? 'Enregistrer les modifications' : 'Enregistrer')
+
+const savCommercialTypes = computed(() => {
+  const related = (document.value?.relatedDocuments || []).filter(row => row.savId === id.value)
+  const stage = { quote: 0, customer_order: 1, invoice: 2, sav: -1 }
+  return (['quote', 'customer_order', 'invoice'] as const).filter(type => !related.some(row => row.type === type) && !related.some(row => row.status !== 'cancelled' && stage[row.type] > stage[type]))
+})
+async function saveSav(sav: import('~~/shared/types/sav').SavDetails) {
+  const result = await save(() => $fetch<DocumentDetail>(`/api/documents/${id.value}/sav`, { method: 'PATCH', body: sav }), { success: 'SAV enregistré' })
+  if (result?.ok) {
+    document.value = result.data
+    hasUnsavedDocumentChanges.value = false
+  }
+}
 
 async function saveDocument(payload: DocumentSavePayload) {
   if (!canEditDocument.value) {
@@ -345,7 +360,30 @@ function startNewEmailAttempt() {
           @edit-context="openContextEditor"
         />
 
+        <PosSavEditor
+          v-if="isSav"
+          :key="dossier.current.value?.epoch"
+          v-model:dirty="hasUnsavedDocumentChanges"
+          :ticket="savTicket || null"
+          :document="document"
+          :disabled="dossier.blocked.value || !can('financial:record')"
+          :saving="isSavingDocument"
+          :save-error="saveError"
+          @save="saveSav"
+        />
+        <div v-if="isSav && document.sav?.coverage === 'billable' && document.sav.status !== 'cancelled'" class="flex flex-wrap gap-2">
+          <UButton
+            v-for="type in savCommercialTypes"
+            :key="type"
+            :disabled="documentActionsDisabled"
+            color="neutral"
+            variant="soft"
+            :label="type === 'quote' ? 'Créer un devis SAV' : type === 'customer_order' ? 'Créer une commande SAV' : 'Créer une facture SAV'"
+            :to="{ path: '/documents/new', query: { type, savId: id, ticketId: document.ticketId, customerId: document.customerId } }"
+          />
+        </div>
         <UTabs
+          v-if="!isSav"
           :model-value="activeTab"
           :items="tabItems"
           value-key="value"
@@ -355,7 +393,7 @@ function startNewEmailAttempt() {
           @update:model-value="selectTab"
         />
 
-        <div v-if="activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)]">
+        <div v-if="!isSav && activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)]">
           <PosDocumentEditor
             v-if="canEditDocument"
             ref="documentEditor"
@@ -424,7 +462,7 @@ function startNewEmailAttempt() {
           </div>
         </div>
 
-        <div v-else-if="activeTab === 'payments'" class="flex min-h-0 flex-col gap-3 xl:h-[calc(100vh-18.5rem)]">
+        <div v-else-if="!isSav && activeTab === 'payments'" class="flex min-h-0 flex-col gap-3 xl:h-[calc(100vh-18.5rem)]">
           <div v-if="document.shopify" class="flex flex-wrap items-center justify-between gap-2">
             <span class="text-sm text-muted">Shopify {{ document.shopify.orderName }} · {{ document.shopify.domain }}</span>
             <PosShopifyPaymentSync v-if="canAdjustFinancialRecords" :document-id="document.id" @refresh="refresh()" />

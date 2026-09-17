@@ -46,4 +46,20 @@ describe('printed document payments', () => {
     expect(model.balanceDue).toBe(0)
     expect(model.qrBill).toBeNull()
   })
+  it('generates a paginated SAV PDF without requiring commercial lines or a payment QR', async () => {
+    const { generateDocumentPdf } = await import('../../server/utils/documents/pdf')
+    const { PDFDocument } = await import('pdf-lib')
+    const document = printDocument({
+      type: 'sav', documentNumber: 'SAV-1', subtotal: 0, taxAmount: 0, total: 0, lines: [],
+      sav: {
+        sourceDocumentId: null, repair: 'Écran', reason: 'Tactile intermittent',
+        status: 'ready', coverage: 'warranty', receivedAt: '2026-09-17T10:00:00.000Z', deliveredAt: null,
+        diagnosis: 'Connecteur défectueux', work: 'Contrôle du tactile et de l’affichage. '.repeat(150)
+      }
+    })
+    const bytes = await generateDocumentPdf(document, printCompany(), 'https://pos.example.test')
+    const pdf = await PDFDocument.load(bytes)
+    expect(pdf.getTitle()).toBe('SAV-1')
+    expect(pdf.getPageCount()).toBeGreaterThan(1)
+  })
 })

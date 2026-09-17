@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { savStatusLabels } from '~~/shared/types/sav'
 import { documentStatusColors, documentStatusLabels, documentTypeLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail } from '~~/shared/types/pos'
 import { formatCurrency, formatDate, formatDateTime } from '~~/shared/utils/pos'
@@ -23,7 +24,7 @@ const address = computed(() => [
   customer.value.addressLine2,
   [customer.value.postalCode, customer.value.city].filter(Boolean).join(' ')
 ].filter(Boolean).join(', '))
-const documentOrder = { quote: 0, customer_order: 1, invoice: 2 }
+const documentOrder = { quote: 0, customer_order: 1, invoice: 2, sav: 3 }
 const relatedDocuments = computed(() => [...(props.document.relatedDocuments || [])]
   .sort((a, b) => documentOrder[a.type] - documentOrder[b.type] || a.id - b.id))
 const deadlineLabel = computed(() => props.document.type === 'quote' ? 'Valable jusqu’au' : 'Échéance')
@@ -37,10 +38,10 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
       <div class="min-w-0 px-3 py-2.5 md:border-r md:border-default">
         <div class="mb-2 flex h-8 items-center gap-2 border-b border-default pb-1.5">
           <h2 class="min-w-0 text-xs font-semibold uppercase tracking-wide text-toned">
-            Informations {{ documentTypeLabels[props.document.type].toLocaleLowerCase('fr-CH') }}
+            Informations {{ props.document.type === 'sav' ? 'SAV' : documentTypeLabels[props.document.type].toLocaleLowerCase('fr-CH') }}
           </h2>
           <UBadge :color="documentStatusColors[props.document.status]" variant="subtle" size="sm">
-            {{ documentStatusLabels[props.document.status] }}
+            {{ props.document.sav ? savStatusLabels[props.document.sav.status] : documentStatusLabels[props.document.status] }}
           </UBadge>
           <UTooltip v-if="props.editable" :text="contextLabel">
             <UButton
@@ -70,7 +71,7 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
               {{ formatDate(props.document.issuedAt) }}
             </time>
           </dd>
-          <template v-if="props.document.type !== 'customer_order'">
+          <template v-if="['quote', 'invoice'].includes(props.document.type)">
             <dt class="text-muted">
               {{ deadlineLabel }}
             </dt>
@@ -132,7 +133,7 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
       </div>
     </div>
 
-    <div class="flex flex-wrap items-center justify-end gap-x-5 gap-y-1 border-t border-default bg-muted/30 px-3 py-1.5 text-xs tabular-nums">
+    <div v-if="props.document.type !== 'sav'" class="flex flex-wrap items-center justify-end gap-x-5 gap-y-1 border-t border-default bg-muted/30 px-3 py-1.5 text-xs tabular-nums">
       <span class="text-toned">Total <strong class="ml-1 font-semibold text-highlighted">{{ formatCurrency(props.document.total) }}</strong></span>
       <template v-if="props.isPayableDocument">
         <span class="text-toned">Encaissé <strong class="ml-1 font-medium text-highlighted">{{ formatCurrency(props.paidAmount) }}</strong></span>

@@ -225,6 +225,8 @@ export interface DocumentRecord {
   status: DocumentStatus
   customerId: number
   ticketId: number | null
+  savId?: number | null
+  sav?: import('./sav').SavDetails | null
   issuedAt: string
   /** Calendar date: payment deadline for invoices, validity deadline for quotes. */
   dueDate?: string | null
@@ -237,7 +239,7 @@ export interface DocumentRecord {
 }
 
 export interface DocumentDetail extends DocumentRecord {
-  relatedDocuments?: Pick<DocumentRecord, 'id' | 'documentNumber' | 'type' | 'status'>[]
+  relatedDocuments?: Pick<DocumentRecord, 'id' | 'documentNumber' | 'type' | 'status' | 'savId'>[]
   settlement?: {
     isPayable: boolean
     paidAmount: number
@@ -266,6 +268,7 @@ export interface TicketDetail extends TicketRecord {
 export interface TicketListItem extends TicketRecord {
   customerName: string
   documentCount: number
+  openSavCount?: number
 }
 
 export interface DocumentListItem extends DocumentRecord {
