@@ -56,6 +56,13 @@ const primaryLinks = computed(() => [{
   onSelect: () => {
     open.value = false
   }
+}, {
+  label: 'Total du jour',
+  icon: 'i-lucide-calendar-check',
+  to: '/reports/daily',
+  onSelect: () => {
+    open.value = false
+  }
 }] satisfies NavigationMenuItem[])
 
 const secondaryLinks = [{
@@ -83,6 +90,7 @@ const secondaryLinks = [{
   label: 'Rapports',
   icon: 'i-lucide-chart-column',
   to: '/reports',
+  exact: true,
   onSelect: () => {
     open.value = false
   }
