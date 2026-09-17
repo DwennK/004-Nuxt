@@ -6,7 +6,7 @@ import {
   paymentStatusColors,
   paymentStatusLabels
 } from '~~/shared/constants/pos'
-import { canDeletePayment, canEditPayment } from '~~/shared/domain/payments/rules'
+import { canEditPayment } from '~~/shared/domain/payments/rules'
 import type { PaymentMethod, PaymentRecord, PaymentStatus } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
 
@@ -73,10 +73,6 @@ function isPaymentEditable(payment: PaymentRecord) {
 
 function isPaymentStatusEditable(payment: PaymentRecord) {
   return isPaymentEditable(payment)
-}
-
-function isPaymentDeletable(payment: PaymentRecord) {
-  return canDeletePayments.value && canDeletePayment(payment.status)
 }
 
 async function addPayment(input: {
@@ -180,7 +176,7 @@ async function savePayment(payment: PaymentRecord) {
 }
 
 async function removePayment(payment: PaymentRecord) {
-  if (!isPaymentDeletable(payment) || mutationPending.value) {
+  if (!canDeletePayments.value || mutationPending.value) {
     return
   }
 
@@ -337,8 +333,9 @@ async function removePayment(payment: PaymentRecord) {
                 />
               </UFormField>
 
-              <div v-if="isPaymentEditable(payment)" class="flex items-end justify-end gap-2">
+              <div v-if="isPaymentEditable(payment) || canDeletePayments" class="flex items-end justify-end gap-2">
                 <UButton
+                  v-if="isPaymentEditable(payment)"
                   type="button"
                   icon="i-lucide-rotate-ccw"
                   color="neutral"
@@ -349,7 +346,7 @@ async function removePayment(payment: PaymentRecord) {
                   @click="resetDraft(payment)"
                 />
                 <UButton
-                  v-if="isPaymentDeletable(payment)"
+                  v-if="canDeletePayments"
                   type="button"
                   icon="i-lucide-trash-2"
                   color="error"
@@ -361,6 +358,7 @@ async function removePayment(payment: PaymentRecord) {
                   @click="removePayment(payment)"
                 />
                 <UButton
+                  v-if="isPaymentEditable(payment)"
                   type="button"
                   :label="savingId === payment.id ? 'Enregistrement…' : 'Enregistrer les modifications'"
                   :disabled="mutationPending"

@@ -5,7 +5,6 @@ import { foldSearchText } from '~~/shared/utils/search'
 import { customers, documents, payments } from '~~/server/db/schema'
 import {
   canChangePaymentStatus,
-  canDeletePayment,
   canEditPayment
 } from '~~/shared/domain/payments/rules'
 import type { PaymentListItem, PaymentListResponse, PaymentRecord } from '~~/shared/types/pos'
@@ -325,14 +324,6 @@ export async function deletePayment(id: number, dossier?: DossierWriteContext) {
 
     if (!row) {
       return 0
-    }
-
-    if (!canDeletePayment(row.status)) {
-      throw createError({
-        statusCode: 409,
-        statusMessage: 'Recorded payments cannot be deleted. Use a correction or refund instead.',
-        data: { code: 'PAYMENT_IMMUTABLE' }
-      })
     }
 
     const result = await tx.delete(payments).where(eq(payments.id, id))

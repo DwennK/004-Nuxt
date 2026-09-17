@@ -9,7 +9,7 @@ import {
   paymentStatusColors,
   paymentStatusLabels
 } from '~~/shared/constants/pos'
-import { canDeletePayment, canEditPayment } from '~~/shared/domain/payments/rules'
+import { canEditPayment } from '~~/shared/domain/payments/rules'
 import type { PaymentListItem, PaymentListResponse } from '~~/shared/types/pos'
 import { formatCurrency, formatDateTime, toDateInputValue } from '~~/shared/utils/pos'
 
@@ -22,7 +22,6 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 const confirmDelete = useConfirmDelete()
 const runApiAction = useApiAction()
 const { can } = useCapabilities()
-const toast = useToast()
 const table = useTemplateRef<DashboardTableInstance>('table')
 
 type PeriodPreset = 'today' | 'month' | 'last_7_days' | 'all' | 'custom'
@@ -185,15 +184,6 @@ async function removePayment(payment: PaymentListItem) {
     return
   }
 
-  if (!canDeletePayment(payment.status)) {
-    toast.add({
-      title: 'Suppression impossible',
-      description: 'Un paiement enregistré doit être corrigé ou remboursé, pas supprimé.',
-      color: 'warning'
-    })
-    return
-  }
-
   const confirmed = await confirmDelete({
     title: `Supprimer le paiement de ${formatCurrency(payment.amount)} ?`,
     description: 'Le paiement sera définitivement supprimé et le solde du document recalculé.'
@@ -235,7 +225,6 @@ function getRowItems(payment: PaymentListItem) {
   if (
     can('financial:adjust')
     && can('records:delete')
-    && canDeletePayment(payment.status)
   ) {
     groups.push([{
       label: 'Supprimer',

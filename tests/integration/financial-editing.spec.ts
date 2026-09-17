@@ -13,6 +13,7 @@ describe('editing recorded financial data', () => {
   let updateDocumentRecord: typeof import('../../server/utils/pos/documents').updateDocumentRecord
   let updatePaymentRecord: typeof import('../../server/utils/pos/payments').updatePaymentRecord
   let createPaymentRecord: typeof import('../../server/utils/pos/payments').createPaymentRecord
+  let deletePayment: typeof import('../../server/utils/pos/payments').deletePayment
   let markDocumentAsPaid: typeof import('../../server/utils/pos/documents').markDocumentAsPaid
   let createAndPayDocumentRecord: typeof import('../../server/utils/pos/documents').createAndPayDocumentRecord
 
@@ -113,10 +114,11 @@ describe('editing recorded financial data', () => {
     await client.executeMultiple(await readFile(new URL('../../docs/sql/counter-customer-additive.sql', import.meta.url), 'utf8'))
 
     ;({ updateDocumentRecord, markDocumentAsPaid, createAndPayDocumentRecord } = await import('../../server/utils/pos/documents'))
-    ;({ updatePaymentRecord, createPaymentRecord } = await import('../../server/utils/pos/payments'))
-    const original = { updateDocumentRecord, updatePaymentRecord, createPaymentRecord, markDocumentAsPaid }
+    ;({ updatePaymentRecord, createPaymentRecord, deletePayment } = await import('../../server/utils/pos/payments'))
+    const original = { updateDocumentRecord, updatePaymentRecord, createPaymentRecord, deletePayment, markDocumentAsPaid }
     updateDocumentRecord = async (id, input) => original.updateDocumentRecord(id, input, await testDossierContext(useDb(), { kind: 'document', id }))
     updatePaymentRecord = async (id, input) => original.updatePaymentRecord(id, input, await testDossierContext(useDb(), { kind: 'payment', id }))
+    deletePayment = async id => original.deletePayment(id, await testDossierContext(useDb(), { kind: 'payment', id }))
     createPaymentRecord = async (input, key) => original.createPaymentRecord(input, key, await testDossierContext(useDb(), { kind: 'document', id: input.documentId }))
     markDocumentAsPaid = async (id, input, key) => original.markDocumentAsPaid(id, input, key, await testDossierContext(useDb(), { kind: 'document', id }))
   })
@@ -185,6 +187,52 @@ describe('editing recorded financial data', () => {
   })
 
   const paymentInput = { method: 'cash' as const, paidAt: '2026-08-20T12:30:00.000Z', notes: ' Encaissement ' }
+
+  it.each(['pending', 'paid', 'cancelled', 'refunded'])('deletes a %s payment and recalculates the invoice and daily receipts', async (status) => {
+    await client.execute({ sql: 'UPDATE payments SET status = ? WHERE id = 1', args: [status] })
+    await expect(deletePayment(1)).resolves.toBe(1)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM payments')).rows[0]?.n).toBe(0)
+    const { getDocumentById } = await import('../../server/utils/pos/documents')
+    expect(await getDocumentById(1)).toMatchObject({
+      status: 'issued', payments: [], settlement: { paidAmount: 0, balanceDue: 12500 }
+    })
+    const { getEndOfDaySummary } = await import('../../server/utils/pos/reports')
+    expect(await getEndOfDaySummary('2026-08-20')).toMatchObject({ totalPaid: 0 })
+  })
+
+  it('keeps the payment when the dossier proof is missing or stale', async () => {
+    const { deletePayment: remove } = await import('../../server/utils/pos/payments')
+    await expect(remove(1)).rejects.toMatchObject({ statusCode: 428 })
+    const context = await testDossierContext(useDb(), { kind: 'payment', id: 1 })
+    await testDossierContext(useDb(), { kind: 'payment', id: 1 })
+    await expect(remove(1, context)).rejects.toMatchObject({ statusCode: 409 })
+    expect((await client.execute('SELECT COUNT(*) AS n FROM payments')).rows[0]?.n).toBe(1)
+  })
+
+  it('rolls back deletion when updating the document status fails', async () => {
+    await client.execute(`CREATE TRIGGER fail_payment_deletion_status BEFORE UPDATE ON documents BEGIN SELECT RAISE(ABORT, 'status unavailable'); END`)
+    try {
+      await expect(deletePayment(1)).rejects.toThrow()
+      expect((await client.execute('SELECT COUNT(*) AS n FROM payments')).rows[0]?.n).toBe(1)
+      expect((await client.execute('SELECT status FROM documents WHERE id = 1')).rows[0]?.status).toBe('paid')
+    } finally {
+      await client.execute('DROP TRIGGER fail_payment_deletion_status')
+    }
+  })
+
+  it('reopens the current invoice when deleting a deposit carried over from its order', async () => {
+    await prepareOrder(10000)
+    const { createInvoiceFromTicket, getTicketById } = await import('../../server/utils/pos/tickets')
+    const { getDocumentById } = await import('../../server/utils/pos/documents')
+    const invoice = await createInvoiceFromTicket(1, 'delete-deposit-invoice', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
+    await markDocumentAsPaid(invoice.id, paymentInput, 'delete-deposit-remainder')
+    await deletePayment(invoice.payments[0]!.id)
+    expect(await getDocumentById(invoice.id)).toMatchObject({
+      status: 'issued', settlement: { paidAmount: 29300, balanceDue: 10000 }
+    })
+    expect((await getTicketById(1)).commercialSummary.balanceDue).toBe(10000)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM payments')).rows[0]?.n).toBe(1)
+  })
 
   const anonymousSale = {
     type: 'invoice' as const, customerId: null, issuedAt: paymentInput.paidAt,

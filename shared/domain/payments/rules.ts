@@ -14,10 +14,6 @@ export function getRemainingDocumentBalance(total: number, paidTotal: number) {
   return Math.max(total - paidTotal, 0)
 }
 
-export function canDeletePayment(status: PaymentStatus) {
-  return status === 'pending'
-}
-
 export function canEditPayment(status: PaymentStatus) {
   return status === 'pending' || status === 'paid'
 }

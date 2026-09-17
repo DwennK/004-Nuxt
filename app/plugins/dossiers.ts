@@ -26,6 +26,13 @@ export default defineNuxtPlugin(() => {
             kind: match[1]!.slice(0, -1) as DossierTarget['kind'],
             id: Number(match[2])
           })
+        if (match?.[1] === 'payments' && method === 'DELETE') {
+          // Release the lease through the document after its payment no longer exists.
+          const record = await original<{ documentId: number, dossier: { key: string, revision: number } }>(path)
+          const target = { kind: 'document' as const, id: record.documentId }
+          dossiers.snapshot(target, record)
+          targets.splice(0, 1, target)
+        }
         if (match?.[1] === 'tickets' && method === 'DELETE') {
           const target = { kind: 'ticket' as const, id: Number(match[2]) }
           const record = await original<{ documents: Array<{ id: number }>, dossier: { key: string, revision: number } }>(path)

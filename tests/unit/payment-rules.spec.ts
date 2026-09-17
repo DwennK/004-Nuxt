@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   canChangePaymentStatus,
-  canDeletePayment,
   canEditPayment,
   evaluateDocumentPayment,
   getRemainingDocumentBalance
@@ -52,13 +51,6 @@ describe('document payment policy', () => {
 
   it('never reports a negative remaining balance', () => {
     expect(getRemainingDocumentBalance(1_000, 1_500)).toBe(0)
-  })
-
-  it('allows deletion only while a payment is pending', () => {
-    expect(canDeletePayment('pending')).toBe(true)
-    expect(canDeletePayment('paid')).toBe(false)
-    expect(canDeletePayment('refunded')).toBe(false)
-    expect(canDeletePayment('cancelled')).toBe(false)
   })
 
   it('allows admins to edit pending and paid payments without turning paid cashflow into cancellation', () => {
