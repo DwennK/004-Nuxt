@@ -853,7 +853,7 @@ body {
 }
 
 .invoice-table td {
-  font-size: 14px;
+  font-size: 11.5px;
   overflow-wrap: anywhere;
 }
 
@@ -866,36 +866,36 @@ body {
 
 .invoice-table th:nth-child(1),
 .invoice-table td:nth-child(1) {
-  width: 41%;
+  width: 50%;
 }
 
 .invoice-table th:nth-child(2),
 .invoice-table td:nth-child(2) {
-  width: 5%;
+  width: 6%;
   text-align: right;
 }
 
 .invoice-table th:nth-child(3),
 .invoice-table td:nth-child(3) {
-  width: 16%;
+  width: 14%;
   text-align: right;
 }
 
 .invoice-table th:nth-child(4),
 .invoice-table td:nth-child(4) {
-  width: 8%;
+  width: 7%;
   text-align: right;
 }
 
 .invoice-table th:nth-child(5),
 .invoice-table td:nth-child(5) {
-  width: 13%;
+  width: 11%;
   text-align: right;
 }
 
 .invoice-table th:nth-child(6),
 .invoice-table td:nth-child(6) {
-  width: 17%;
+  width: 12%;
   text-align: right;
 }
 
