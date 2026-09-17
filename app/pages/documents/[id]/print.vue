@@ -528,6 +528,9 @@ useHead(() => ({
           <p class="thermal-strong">
             {{ document.customer.displayName }}
           </p>
+          <p v-if="a4PrintModel?.customerContactName">
+            {{ a4PrintModel.customerContactName }}
+          </p>
           <p v-for="line in customerAddress" :key="`thermal-customer-${line}`">
             {{ line }}
           </p>

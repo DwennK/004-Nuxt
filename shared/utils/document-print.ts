@@ -33,6 +33,7 @@ export interface DocumentA4PrintModel {
   documentTitle: string
   companyAddress: string[]
   customerAddress: string[]
+  customerContactName: string | null
   windowLines: string[]
   referenceLines: string[]
   noteBlocks: DocumentPrintNoteBlock[]
@@ -96,6 +97,12 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
   const payments = buildDocumentPrintPayments(document)
   const companyAddress = getCompanyAddress(company)
   const customerAddress = getCustomerAddress(document)
+  const personName = [document.customer.firstName, document.customer.lastName].map(part => part.trim()).filter(Boolean).join(' ')
+  const customerContactName = document.customer.companyName?.trim()
+    && personName
+    && personName.toLocaleLowerCase('fr-CH') !== document.customer.displayName.trim().toLocaleLowerCase('fr-CH')
+    ? personName
+    : null
   const paidAmount = payments.reduce((total, payment) => total + payment.amount, 0)
   const isPayableDocument = document.settlement?.isPayable ?? (isPayableDocumentType(document.type) && document.status !== 'cancelled')
   const balanceDue = document.settlement?.balanceDue ?? (isPayableDocument ? Math.max(document.total - paidAmount, 0) : 0)
@@ -146,8 +153,10 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
     documentTitle: documentTypeLabels[document.type],
     companyAddress,
     customerAddress,
+    customerContactName,
     windowLines: [
       document.customer.displayName,
+      ...(customerContactName ? [customerContactName] : []),
       ...(customerAddress.length
         ? customerAddress
         : [document.customer.phone, document.customer.email].filter(Boolean) as string[])

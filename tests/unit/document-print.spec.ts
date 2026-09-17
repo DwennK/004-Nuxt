@@ -2,6 +2,41 @@ import { describe, expect, it } from 'vitest'
 import { buildDocumentA4PrintModel } from '../../shared/utils/document-print'
 import { printCompany, printDocument, printPayment } from '../fixtures/document-print'
 
+describe('printed customer identity', () => {
+  it('prints the company and its contact before the postal address', () => {
+    const document = printDocument()
+    Object.assign(document.customer, {
+      firstName: 'Gregory', lastName: 'Bersac', companyName: 'Les Brasseurs',
+      displayName: 'Les Brasseurs', addressLine1: 'Faubourg du Lac 1'
+    })
+
+    const model = buildDocumentA4PrintModel(document, printCompany())
+
+    expect(model.customerContactName).toBe('Gregory Bersac')
+    expect(model.windowLines).toEqual(['Les Brasseurs', 'Gregory Bersac', 'Faubourg du Lac 1', '2000 Neuchâtel'])
+  })
+
+  it('prints a private customer name only once', () => {
+    const model = buildDocumentA4PrintModel(printDocument(), printCompany())
+
+    expect(model.customerContactName).toBeNull()
+    expect(model.windowLines).toEqual(['Camille Exemple', 'Rue du Test 8', '2000 Neuchâtel'])
+  })
+
+  it.each([
+    { firstName: '', lastName: '' },
+    { firstName: ' Les ', lastName: ' BRASSEURS ' }
+  ])('omits empty or duplicate company contacts: %j', (name) => {
+    const document = printDocument()
+    Object.assign(document.customer, name, { companyName: 'Les Brasseurs', displayName: 'Les Brasseurs' })
+
+    const model = buildDocumentA4PrintModel(document, printCompany())
+
+    expect(model.customerContactName).toBeNull()
+    expect(model.windowLines).toEqual(['Les Brasseurs', 'Rue du Test 8', '2000 Neuchâtel'])
+  })
+})
+
 describe('printed document payments', () => {
   it('lists all received payments chronologically and keeps the balance and QR amount consistent', () => {
     const document = printDocument({ payments: [
