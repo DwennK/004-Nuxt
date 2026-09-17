@@ -559,6 +559,13 @@ async function handleWorkflowSubmit(payload: {
   selectedWorkflowAction.value = null
 }
 
+function cancelTicketLineChanges() {
+  if (commercialBusy.value || !linesDirty.value) return
+  if (!window.confirm('Abandonner les modifications non enregistrées des lignes ?')) return
+  lineEditor.resetLines(ticket.value?.lines)
+  clearLinesError()
+}
+
 async function saveTicketLines() {
   if (!linesDirty.value) return true
   if (linesSaving.value || actionSaving.value || dossier.blocked.value || !isTicketMutable.value) return false
@@ -957,7 +964,18 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                   <fieldset :disabled="dossier.blocked.value || !isTicketMutable || commercialBusy" class="min-w-0">
                     <PosDocumentLinesEditor :editor="lineEditor" :catalog-items="[]" mode="ticket" />
                   </fieldset>
-                  <div class="flex justify-end">
+                  <div class="flex justify-end gap-2">
+                    <UButton
+                      v-if="linesDirty"
+                      type="button"
+                      label="Annuler"
+                      aria-label="Annuler les modifications des lignes"
+                      icon="i-lucide-x"
+                      color="error"
+                      variant="soft"
+                      :disabled="commercialBusy"
+                      @click="cancelTicketLineChanges"
+                    />
                     <UButton
                       v-if="isTicketMutable"
                       type="submit"
@@ -1386,8 +1404,8 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
         <PosUnsavedChanges :dirty="!!noteDraft" :snapshot="noteDraft" :saving="noteSaving" />
         <UButton
           label="Annuler"
-          color="neutral"
-          variant="ghost"
+          color="error"
+          variant="soft"
           :disabled="dossier.blocked.value || (noteSaving)"
           @click="noteModalOpen = false"
         />

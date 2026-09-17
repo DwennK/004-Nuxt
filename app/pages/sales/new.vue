@@ -209,6 +209,13 @@ function closeSaleCompletionModal() {
   saleCompletionOpen.value = false
 }
 
+function cancelSaleChanges() {
+  if (isSaving.value || !saleDirty.value) return
+  if (!window.confirm('Abandonner la vente en cours de saisie et vider le panier ?')) return
+  resetSaleState()
+  void focusSearch()
+}
+
 function focusNextSale(event: Event) {
   event.preventDefault()
   nextSaleButton.value?.$el?.focus()
@@ -355,6 +362,19 @@ defineShortcuts({
         </template>
 
         <template #right>
+          <UButton
+            v-if="saleDirty"
+            type="button"
+            label="Annuler"
+            aria-label="Annuler la saisie de la vente"
+            class="pos-cancel-button"
+            :ui="{ label: 'hidden sm:inline' }"
+            icon="i-lucide-x"
+            color="error"
+            variant="soft"
+            :disabled="Boolean(isSaving)"
+            @click="cancelSaleChanges"
+          />
           <UButton
             to="/documents/new"
             label="Devis / facture"

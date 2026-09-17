@@ -87,10 +87,12 @@ async function saveTicket(payload: {
               to="/dossiers"
               label="Annuler"
               aria-label="Annuler"
+              class="pos-cancel-button"
               icon="i-lucide-x"
               :ui="{ label: 'hidden sm:inline' }"
-              color="neutral"
-              variant="ghost"
+              color="error"
+              variant="soft"
+              :disabled="isSaving"
             />
             <UButton
               :form="formId"

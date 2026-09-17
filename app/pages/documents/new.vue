@@ -99,6 +99,7 @@ async function saveDocument(payload: {
           :fixed-ticket-id="ticketId"
           submit-label="Créer le document"
           @save="saveDocument"
+          @cancel="saveError = null"
         />
       </div>
     </template>

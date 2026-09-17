@@ -32,7 +32,10 @@ const isContextOpen = ref(false)
 const hasUnsavedDocumentChanges = ref(false)
 const hasOpenedInitialEmailModal = ref(false)
 const documentFormId = 'document-detail-form'
-const documentEditor = useTemplateRef<{ acceptSaved: (saved: DocumentDetail, submitted: DocumentSavePayload) => void }>('documentEditor')
+const documentEditor = useTemplateRef<{
+  acceptSaved: (saved: DocumentDetail, submitted: DocumentSavePayload) => void
+  cancelChanges: () => void
+}>('documentEditor')
 
 const tabItems = [
   { label: 'Lignes', value: 'lines', icon: 'i-lucide-list' },
@@ -294,6 +297,19 @@ function startNewEmailAttempt() {
           />
           <span v-if="activeTab === 'lines' && canEditDocument" id="document-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />
           <UButton
+            v-if="activeTab === 'lines' && canEditDocument && hasUnsavedDocumentChanges"
+            type="button"
+            label="Annuler"
+            aria-label="Annuler les modifications"
+            class="pos-cancel-button"
+            icon="i-lucide-x"
+            color="error"
+            variant="soft"
+            :ui="{ label: 'hidden sm:inline' }"
+            :disabled="isSavingDocument"
+            @click="documentEditor?.cancelChanges()"
+          />
+          <UButton
             v-if="activeTab === 'lines' && canEditDocument"
             :form="documentFormId"
             type="submit"
@@ -357,6 +373,7 @@ function startNewEmailAttempt() {
             :fixed-ticket-id="document.ticketId"
             submit-label="Enregistrer le document"
             @save="saveDocument"
+            @cancel="saveError = null"
           />
 
           <div v-else class="space-y-3">

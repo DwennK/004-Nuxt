@@ -192,6 +192,15 @@
     background: var(--ui-color-primary-50);
   }
 
+  .office-titlebar .pos-cancel-button {
+    color: white;
+    background: var(--ui-color-error-600);
+  }
+
+  .office-titlebar .pos-cancel-button:hover {
+    background: var(--ui-color-error-700);
+  }
+
   .office-command-ribbon {
     background: var(--ui-bg);
     box-shadow: var(--mw-theme-shadow);

@@ -29,6 +29,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   save: [payload: DocumentSavePayload]
+  cancel: []
 }>()
 
 const editor = useDocumentDraft({
@@ -68,7 +69,15 @@ const showTypeSelector = computed(() => !isExistingDocument.value && props.allow
 watch(editor.isDirty, (value) => {
   dirty.value = value
 }, { immediate: true, flush: 'sync' })
-defineExpose({ acceptSaved: editor.acceptSaved })
+defineExpose({ acceptSaved: editor.acceptSaved, cancelChanges })
+
+function cancelChanges() {
+  if (props.saving || !dirty.value) return
+  if (!window.confirm('Abandonner les modifications non enregistrées ?')) return
+  editor.resetDraft()
+  contextOpen.value = false
+  emit('cancel')
+}
 
 function onSubmit() {
   if (props.saving || props.disabled) return
@@ -176,6 +185,17 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
                 :dirty="dirty"
                 :snapshot="JSON.stringify(editor.serialize(), null, 2)"
                 :saving="props.saving"
+              />
+              <UButton
+                v-if="showSubmitButton && dirty"
+                type="button"
+                label="Annuler"
+                aria-label="Annuler les modifications"
+                icon="i-lucide-x"
+                color="error"
+                variant="soft"
+                :disabled="props.saving"
+                @click="cancelChanges"
               />
               <UButton
                 v-if="showSubmitButton"
