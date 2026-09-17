@@ -5,7 +5,7 @@ const open = ref(false)
 const dashboardSearchOpen = ref(false)
 const route = useRoute()
 const { currentDashboardTheme } = useDashboardTheme()
-const toolRoutes = ['/tools', '/vacances', '/inbox', '/assistant']
+const toolRoutes = ['/tools', '/stocks-smartphone', '/reservations-smartphone', '/vacances', '/inbox', '/assistant']
 
 const primaryLinks = computed(() => [{
   label: 'Accueil',
@@ -97,24 +97,24 @@ const secondaryLinks = [{
     open.value = false
   }
 }, {
-  label: 'Stock téléphones',
-  icon: 'i-lucide-smartphone',
-  to: '/stocks-smartphone',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
-  label: 'Réservations',
-  icon: 'i-lucide-book-user',
-  to: '/reservations-smartphone',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
   label: 'Outils',
   icon: 'i-lucide-folder-cog',
   defaultOpen: toolRoutes.some(prefix => route.path.startsWith(prefix)),
   children: [{
+    label: 'Stock téléphones',
+    icon: 'i-lucide-smartphone',
+    to: '/stocks-smartphone',
+    onSelect: () => {
+      open.value = false
+    }
+  }, {
+    label: 'Réservations',
+    icon: 'i-lucide-book-user',
+    to: '/reservations-smartphone',
+    onSelect: () => {
+      open.value = false
+    }
+  }, {
     label: 'MobileSentrix',
     icon: 'i-lucide-plug',
     to: '/tools/mobilesentrix',
