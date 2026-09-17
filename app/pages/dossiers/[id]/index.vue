@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { savStatusLabels, savCoverageLabels } from '~~/shared/types/sav'
-import QRCode from 'qrcode'
+import { createQrCodeDataUrl } from '~~/shared/utils/qr-code'
 import type { TableColumn } from '@nuxt/ui'
 import {
   documentStatusColors,
@@ -705,7 +705,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
   smsQrLoading.value = true
 
   try {
-    smsQrDataUrl.value = await QRCode.toDataURL(smsHref.value || buildSmsHref(normalizedCustomerPhone.value), {
+    smsQrDataUrl.value = createQrCodeDataUrl(smsHref.value || buildSmsHref(normalizedCustomerPhone.value), {
       errorCorrectionLevel: 'M',
       margin: 1,
       width: 320

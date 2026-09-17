@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import QRCode from 'qrcode'
+import { createQrCodeDataUrl } from '~~/shared/utils/qr-code'
 import { buildRecordQrUrl, type RecordQrType } from '~~/shared/utils/record-qr'
 
 const props = defineProps<{ type: RecordQrType, id: number, compact?: boolean }>()
@@ -8,7 +8,7 @@ const url = computed(() => buildRecordQrUrl(props.type, props.id, appOrigin))
 const label = computed(() => props.type === 'tickets' ? 'Ouvrir le dossier' : 'Ouvrir le document')
 const { data: qr } = await useAsyncData(
   () => `record-qr-${url.value}`,
-  () => QRCode.toDataURL(url.value, { errorCorrectionLevel: 'M', margin: 4, width: 300 }),
+  async () => createQrCodeDataUrl(url.value, { errorCorrectionLevel: 'M', margin: 4, width: 300 }),
   { watch: [url] }
 )
 </script>

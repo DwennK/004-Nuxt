@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { savStatusLabels } from '~~/shared/types/sav'
-import QRCode from 'qrcode'
+import { createQrCodeDataUrl } from '~~/shared/utils/qr-code'
 import '~/assets/css/thermal-print.css'
 import { documentStatusLabels, documentTypeLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail, PrintProfile } from '~~/shared/types/pos'
@@ -87,7 +87,7 @@ const { data: qrCodeDataUrl } = await useAsyncData(
       return null
     }
 
-    return QRCode.toDataURL(qrBill.value.payload, {
+    return createQrCodeDataUrl(qrBill.value.payload, {
       errorCorrectionLevel: 'M',
       margin: 0,
       width: 220
