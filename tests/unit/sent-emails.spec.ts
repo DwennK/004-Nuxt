@@ -38,7 +38,8 @@ describe('Cloudflare email transport', () => {
   it('accepts a normal large PDF as binary content', () => {
     const mail = mailFixture()
     mail.attachments[0]!.content = new Uint8Array(3 * 1024 * 1024)
-    expect(prepareEmail(mail).attachments?.[0]?.content).toEqual(mail.attachments[0]!.content)
+    // Preserve the original binary view without a costly deep comparison of 3 MiB.
+    expect(prepareEmail(mail).attachments?.[0]?.content).toBe(mail.attachments[0]!.content)
   })
   it('preserves a readable PDF and only the bytes in its binary view', async () => {
     const pdf = await PDFDocument.create()
