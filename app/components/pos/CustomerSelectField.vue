@@ -27,11 +27,12 @@ const toast = useToast()
 const formId = `customer-inline-${useId()}`
 const menuOpen = ref(false)
 const createOpen = ref(false)
-const customerSelect = useTemplateRef<{ triggerRef?: HTMLElement }>('customerSelect')
-const focusReturn = usePosFocusReturn(createOpen, () => customerSelect.value?.triggerRef)
+const customerSelect = useTemplateRef<{ inputRef?: HTMLInputElement }>('customerSelect')
+const focusReturn = usePosFocusReturn(createOpen, () => customerSelect.value?.inputRef)
 const isSaving = ref(false)
 const saveError = ref<string | null>(null)
 const searchTerm = ref('')
+const createSearchTerm = ref('')
 const createdCustomers = ref<CustomerRecord[]>([])
 
 const remoteCustomers = ref<CustomerRecord[]>([])
@@ -114,7 +115,7 @@ const createActionLabel = computed(() => {
 })
 
 const quickInitialValue = computed<CustomerFormValue>(() => {
-  const query = trimmedSearch.value
+  const query = createSearchTerm.value
   const emailMatch = query.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)
   const phoneMatch = query.match(/(?:\+|00)?\d[\d\s()./-]{5,}\d/)
 
@@ -151,6 +152,7 @@ function openCreate() {
   }
 
   saveError.value = null
+  createSearchTerm.value = trimmedSearch.value
   menuOpen.value = false
   createOpen.value = true
 }
@@ -188,20 +190,6 @@ async function createCustomer(payload: CustomerFormValue) {
   }
 }
 
-function hardenSearchInput() {
-  const input = document.querySelector<HTMLInputElement>('input[name="customer-lookup"]')
-
-  if (!input) {
-    return
-  }
-
-  input.setAttribute('autocomplete', 'off')
-  input.setAttribute('data-bwignore', 'true')
-  input.setAttribute('data-1p-ignore', 'true')
-  input.setAttribute('data-lpignore', 'true')
-  input.spellcheck = false
-}
-
 function releasePageScrollIfSafe() {
   if (typeof document === 'undefined') {
     return
@@ -217,17 +205,6 @@ function releasePageScrollIfSafe() {
   document.body.style.removeProperty('padding-right')
   document.documentElement.style.removeProperty('overflow')
 }
-
-watch(menuOpen, async (open) => {
-  if (!open) {
-    return
-  }
-
-  await nextTick()
-  requestAnimationFrame(() => {
-    hardenSearchInput()
-  })
-})
 
 watch(createOpen, async (open) => {
   if (open) {
@@ -247,23 +224,23 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-2">
-    <USelectMenu
+    <UInputMenu
+      :key="createdCustomers.length"
       ref="customerSelect"
       v-model:open="menuOpen"
       v-model:search-term="searchTerm"
-      :model-value="modelValue ?? undefined"
+      :model-value="selectedCustomer ?? null"
       :items="visibleCustomerItems"
-      value-key="id"
+      by="id"
       label-key="label"
       description-key="description"
       :placeholder="placeholder"
-      :search-input="{
-        placeholder: 'Rechercher un client, un téléphone ou un e-mail',
-        icon: 'i-lucide-search',
-        name: 'customer-lookup',
-        type: 'search',
-        autocomplete: 'off'
-      }"
+      name="customer-lookup"
+      autocomplete="off"
+      data-bwignore="true"
+      data-1p-ignore="true"
+      data-lpignore="true"
+      :spellcheck="false"
       :filter-fields="['displayName', 'companyName', 'phone', 'email', 'label', 'description']"
       :clear="!disabled"
       :disabled="disabled"
@@ -277,13 +254,9 @@ onBeforeUnmount(() => {
         content: 'overflow-hidden',
         empty: 'px-2 py-2'
       }"
-      @update:model-value="emit('update:modelValue', $event ?? null)"
+      @input="($event.target as HTMLInputElement).value === '' && emit('update:modelValue', null)"
+      @update:model-value="emit('update:modelValue', $event?.id ?? null)"
     >
-      <template #default="{ ui }">
-        <span v-if="selectedCustomer" :class="ui.value()">{{ selectedCustomer.label }}</span>
-        <span v-else :class="ui.placeholder()">{{ placeholder }}</span>
-      </template>
-
       <template #item-leading="{ item }">
         <div class="mt-0.5 flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
           <UIcon
@@ -327,11 +300,12 @@ onBeforeUnmount(() => {
             variant="ghost"
             icon="i-lucide-user-plus"
             :label="createActionLabel"
+            @pointerdown.prevent
             @click="openCreate"
           />
         </div>
       </template>
-    </USelectMenu>
+    </UInputMenu>
 
     <USlideover
       v-model:open="createOpen"
