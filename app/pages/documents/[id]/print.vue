@@ -876,6 +876,7 @@ body {
 .invoice-desc {
   font-weight: 600;
   color: #0f172a;
+  white-space: pre-line;
   overflow-wrap: anywhere;
 }
 
