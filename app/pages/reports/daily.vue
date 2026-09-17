@@ -467,7 +467,8 @@ function printReport() {
 @media print {
   @page daily-report {
     size: A4 portrait;
-    margin: 14mm;
+    /* Reserve the right edge for the attached thermal receipt on every sheet. */
+    margin: 14mm 70mm 14mm 14mm;
   }
 
   :global(body:has(.daily-report-print)) {
