@@ -7,7 +7,7 @@ const documentPrintProfiles: Record<DocumentType, PrintProfile[]> = {
   invoice: ['a4', 'thermal']
 }
 
-const ticketPrintProfiles: PrintProfile[] = ['thermal']
+const ticketPrintProfiles: PrintProfile[] = ['a4', 'thermal']
 
 export const printProfileLabels: Record<PrintProfile, string> = {
   a4: 'A4',

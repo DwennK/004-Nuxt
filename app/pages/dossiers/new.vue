@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CustomerRecord, TicketRecord } from '~~/shared/types/pos'
+import type { CustomerRecord, PrintProfile, TicketRecord } from '~~/shared/types/pos'
 
 const $fetch = useDossierFetch()
 const requestFetch = useRequestFetch()
@@ -14,10 +14,10 @@ const createdTicket = ref<TicketRecord | null>(null)
 const completionOpen = ref(false)
 const completionHandled = ref(false)
 
-async function openCreatedTicket(print = false) {
+async function openCreatedTicket(profile?: PrintProfile) {
   if (!createdTicket.value) return
   completionHandled.value = true
-  await navigateTo(`/dossiers/${createdTicket.value.id}${print ? '/print?profile=thermal' : ''}`)
+  await navigateTo(`/dossiers/${createdTicket.value.id}${profile ? `/print?profile=${profile}` : ''}`)
 }
 
 function startNewTicket() {
@@ -146,15 +146,26 @@ async function saveTicket(payload: {
             {{ createdTicket?.ticketNumber }}
           </p>
         </div>
-        <UButton
-          label="Imprimer thermique"
-          icon="i-lucide-printer"
-          color="neutral"
-          variant="outline"
-          size="lg"
-          block
-          @click="openCreatedTicket(true)"
-        />
+        <div class="grid gap-2">
+          <UButton
+            label="Imprimer A4"
+            icon="i-lucide-file-text"
+            color="neutral"
+            variant="outline"
+            size="lg"
+            block
+            @click="openCreatedTicket('a4')"
+          />
+          <UButton
+            label="Imprimer thermique"
+            icon="i-lucide-printer"
+            color="neutral"
+            variant="outline"
+            size="lg"
+            block
+            @click="openCreatedTicket('thermal')"
+          />
+        </div>
       </div>
     </template>
     <template #footer>

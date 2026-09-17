@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import '~/assets/css/thermal-print.css'
 import { ticketStatusLabels, ticketTypeLabels } from '~~/shared/constants/pos'
-import type { TicketDetail } from '~~/shared/types/pos'
+import type { PrintProfile, TicketDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
-import { printProfileLabels, supportsTicketPrintProfile } from '~~/shared/utils/print'
+import { getTicketPrintProfiles, printProfileLabels, supportsTicketPrintProfile } from '~~/shared/utils/print'
 import { formatDateTime } from '~~/shared/utils/pos'
 
 definePageMeta({
@@ -12,20 +12,26 @@ definePageMeta({
 
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
-const canRenderThermal = supportsTicketPrintProfile('thermal')
+const profile = computed<PrintProfile>(() => {
+  const value = Array.isArray(route.query.profile) ? route.query.profile[0] : route.query.profile
+  return value === 'a4' ? 'a4' : 'thermal'
+})
+const availableProfiles = getTicketPrintProfiles()
+const canRenderSelectedProfile = computed(() => supportsTicketPrintProfile(profile.value))
 
 const [{ data: ticket }, { data: company }] = await Promise.all([
   useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
   useFetch<CompanySettingsRecord>('/api/settings/company')
 ])
-useHead({
+useHead(() => ({
+  title: ticket.value?.ticketNumber || 'Dossier client',
   style: [
     {
       key: 'ticket-print-page-rule',
-      textContent: '@page { margin: 0; }'
+      textContent: profile.value === 'a4' ? '@page { size: A4; margin: 12mm; }' : '@page { margin: 0; }'
     }
   ]
-})
+}))
 
 const companyAddress = computed(() => {
   if (!company.value) {
@@ -84,12 +90,12 @@ function printTicket() {
 </script>
 
 <template>
-  <div class="print-preview print-preview--thermal min-h-screen bg-muted/20 text-default">
+  <div class="ticket-print-preview print-preview min-h-screen bg-muted/20 text-default" :class="`print-preview--${profile}`">
     <div class="print-toolbar border-b border-default bg-default/95 backdrop-blur print:hidden">
       <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div>
           <p class="text-xs uppercase tracking-[0.24em] text-toned">
-            Dossier client · {{ printProfileLabels.thermal }}
+            Dossier client · {{ printProfileLabels[profile] }}
           </p>
           <h1 class="text-lg font-semibold text-highlighted">
             {{ ticket?.ticketNumber || 'Dossier client' }}
@@ -97,6 +103,15 @@ function printTicket() {
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+          <UButton
+            v-for="option in availableProfiles"
+            :key="option"
+            :to="`/dossiers/${id}/print?profile=${option}`"
+            :icon="option === 'a4' ? 'i-lucide-file-text' : 'i-lucide-printer'"
+            :label="option === 'a4' ? 'A4' : 'Thermique'"
+            :color="profile === option ? 'primary' : 'neutral'"
+            :variant="profile === option ? 'solid' : 'soft'"
+          />
           <UButton
             color="neutral"
             variant="subtle"
@@ -115,8 +130,9 @@ function printTicket() {
 
     <main class="mx-auto flex max-w-5xl justify-center px-3 py-4 sm:px-6 sm:py-6 print:max-w-none print:px-0 print:py-0">
       <article
-        v-if="ticket && company && canRenderThermal"
+        v-if="ticket && company && canRenderSelectedProfile"
         class="thermal-sheet bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:shadow-none print:ring-0"
+        :class="{ 'ticket-sheet--a4': profile === 'a4' }"
       >
         <header class="thermal-header">
           <div class="thermal-brand-row">
@@ -160,7 +176,7 @@ function printTicket() {
           </div>
         </header>
 
-        <PosRecordLookupQr :id="id" type="tickets" compact />
+        <PosRecordLookupQr :id="id" type="tickets" :compact="profile === 'thermal'" />
 
         <section class="thermal-block">
           <p class="thermal-kicker">
@@ -281,6 +297,83 @@ function printTicket() {
 </template>
 
 <style>
+.ticket-sheet--a4 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: start;
+  column-gap: 8mm;
+  width: 100%;
+  max-width: 210mm;
+  padding: 12mm;
+  font-size: 11pt;
+  line-height: 1.5;
+}
+
+.ticket-sheet--a4 > section,
+.ticket-sheet--a4 > footer {
+  grid-column: 1 / -1;
+}
+
+.ticket-sheet--a4 .thermal-header {
+  border-bottom: 0;
+}
+
+.ticket-sheet--a4 .thermal-company {
+  font-size: 19pt;
+}
+
+.ticket-sheet--a4 .thermal-reference {
+  font-size: 16pt;
+}
+
+.ticket-sheet--a4 .thermal-block {
+  padding-block: 5mm;
+}
+
+.ticket-sheet--a4 .thermal-footer {
+  padding-top: 5mm;
+}
+
+@media screen and (max-width: 640px) {
+  .ticket-sheet--a4 {
+    column-gap: 3mm;
+    padding: 5mm;
+  }
+
+  .ticket-sheet--a4 .thermal-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ticket-sheet--a4 .thermal-meta-right {
+    text-align: left;
+  }
+}
+
+@media print {
+  .ticket-print-preview.print-preview--a4 {
+    min-height: 0 !important;
+    background: #fff !important;
+  }
+
+  .ticket-sheet--a4 {
+    display: block;
+    position: relative;
+    max-width: none;
+    padding: 0;
+  }
+
+  .ticket-sheet--a4 .thermal-header {
+    margin-right: 33mm;
+  }
+
+  .ticket-sheet--a4 > .record-lookup {
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 0;
+  }
+}
+
 .ticket-code-row {
   padding-block: 1.5mm;
   break-inside: avoid;
