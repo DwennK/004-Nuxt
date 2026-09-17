@@ -56,14 +56,14 @@ const tabItems: TabsItem[] = [
     value: 'customer_order'
   },
   {
-    label: documentTypeLabels.sav,
-    icon: 'i-lucide-wrench',
-    value: 'sav'
-  },
-  {
     label: documentTypeLabels.invoice,
     icon: 'i-lucide-file-text',
     value: 'invoice'
+  },
+  {
+    label: documentTypeLabels.sav,
+    icon: 'i-lucide-wrench',
+    value: 'sav'
   }
 ]
 
