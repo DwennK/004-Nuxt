@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<{
   saveError?: string | null
   submitLabel?: string
   unsavedTarget?: string
+  actionsTarget?: string
   formId?: string
   showSubmitButton?: boolean
   allowedTypes?: DocumentType[]
@@ -179,33 +180,43 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
               :label="state.type === 'customer_order' ? 'Message client' : 'Dates et message client'"
               @click="contextOpen = true"
             />
-            <div class="flex items-center gap-2">
-              <PosUnsavedChanges
-                v-if="!props.unsavedTarget"
-                :dirty="dirty"
-                :snapshot="JSON.stringify(editor.serialize(), null, 2)"
-                :saving="props.saving"
-              />
-              <UButton
-                v-if="showSubmitButton && dirty"
-                type="button"
-                label="Annuler"
-                aria-label="Annuler les modifications"
-                icon="i-lucide-x"
-                color="error"
-                variant="soft"
-                :disabled="props.saving"
-                @click="cancelChanges"
-              />
-              <UButton
-                v-if="showSubmitButton"
-                type="submit"
-                icon="i-lucide-save"
-                :label="props.saving ? 'Enregistrement…' : resolvedSubmitLabel"
-                :loading="props.saving"
-                class="shrink-0"
-              />
-            </div>
+            <ClientOnly>
+              <Teleport :to="props.actionsTarget || 'body'" :disabled="!props.actionsTarget" defer>
+                <div class="flex items-center gap-2">
+                  <PosUnsavedChanges
+                    v-if="!props.unsavedTarget"
+                    :dirty="dirty"
+                    :snapshot="JSON.stringify(editor.serialize(), null, 2)"
+                    :saving="props.saving"
+                  />
+                  <UButton
+                    v-if="showSubmitButton && dirty"
+                    type="button"
+                    label="Annuler"
+                    aria-label="Annuler les modifications"
+                    :class="{ 'pos-cancel-button': props.actionsTarget }"
+                    :ui="props.actionsTarget ? { label: 'hidden sm:inline' } : undefined"
+                    icon="i-lucide-x"
+                    color="error"
+                    variant="soft"
+                    :disabled="props.saving || props.disabled"
+                    @click="cancelChanges"
+                  />
+                  <UButton
+                    v-if="showSubmitButton"
+                    type="submit"
+                    :form="resolvedFormId"
+                    icon="i-lucide-save"
+                    :label="props.saving ? 'Enregistrement…' : resolvedSubmitLabel"
+                    :aria-label="props.saving ? 'Enregistrement…' : resolvedSubmitLabel"
+                    :ui="props.actionsTarget ? { label: 'hidden sm:inline' } : undefined"
+                    :loading="props.saving"
+                    :disabled="props.saving || props.disabled"
+                    class="shrink-0"
+                  />
+                </div>
+              </Teleport>
+            </ClientOnly>
           </div>
         </div>
 

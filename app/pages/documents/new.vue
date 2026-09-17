@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { documentTypes, documentTypeLabels } from '~~/shared/constants/pos'
+import { documentTypes } from '~~/shared/constants/pos'
 import type { CustomerRecord, DocumentDetail, DocumentStatus, DocumentType } from '~~/shared/types/pos'
 
 const $fetch = useDossierFetch()
@@ -24,9 +24,6 @@ const newDocumentTitleLabels: Record<DocumentType, string> = {
 const allowedDocumentTypes = computed<DocumentType[]>(() => requestedDocumentType.value ? [requestedDocumentType.value] : [...documentTypes])
 const initialDocumentValue = computed(() => requestedDocumentType.value ? { type: requestedDocumentType.value } : {})
 const pageTitle = computed(() => requestedDocumentType.value ? newDocumentTitleLabels[requestedDocumentType.value] : 'Nouveau devis / facture')
-const pageDescription = computed(() => requestedDocumentType.value
-  ? `${documentTypeLabels[requestedDocumentType.value]} sélectionné pour cette création.`
-  : 'Choisissez le type commercial avant de saisir les lignes et le client.')
 
 const { data: customer, refresh: refreshCustomers } = await useAsyncData('new-document-customer', () => {
   return customerId.value ? requestFetch<CustomerRecord>(`/api/customers/${customerId.value}`) : Promise.resolve(null)
@@ -71,24 +68,19 @@ async function saveDocument(payload: {
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
+        <template #right>
+          <div id="new-document-actions" class="flex items-center gap-2" />
+        </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <PosDossierBanner :state="dossier.current.value" :refresh="refreshCustomers" />
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-4">
-        <div>
-          <h2 class="text-lg font-semibold text-highlighted">
-            {{ pageTitle }}
-          </h2>
-          <p class="text-sm text-toned">
-            {{ pageDescription }}
-          </p>
-        </div>
-
         <PosDocumentEditor
           :key="dossier.current.value?.epoch"
           v-model:dirty="dirty"
+          actions-target="#new-document-actions"
           :disabled="dossier.blocked.value"
           :customers="customer ? [customer] : []"
           :saving="isSaving"
