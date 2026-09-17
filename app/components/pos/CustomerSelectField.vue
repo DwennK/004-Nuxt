@@ -248,9 +248,10 @@ onBeforeUnmount(() => {
       icon="i-lucide-user-round-search"
       class="w-full"
       :ui="{
-        item: 'items-start gap-3 py-2.5',
-        itemLabel: 'font-medium text-default',
-        itemDescription: 'text-xs text-toned',
+        item: 'min-h-9 items-center gap-2 py-1.5',
+        itemWrapper: 'flex-row items-center gap-1.5',
+        itemLabel: 'min-w-0 shrink-0 max-w-full not-last:max-w-[60%] font-medium text-default',
+        itemDescription: 'min-w-0 text-xs text-muted before:mr-1.5 before:content-[\'·\']',
         content: 'overflow-hidden',
         empty: 'px-2 py-2'
       }"
@@ -258,18 +259,14 @@ onBeforeUnmount(() => {
       @update:model-value="emit('update:modelValue', $event?.id ?? null)"
     >
       <template #item-leading="{ item }">
-        <div class="mt-0.5 flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <UIcon
-            :name="item.companyName ? 'i-lucide-building-2' : 'i-lucide-user-round'"
-            class="size-4"
-          />
-        </div>
+        <UIcon
+          :name="item.companyName ? 'i-lucide-building-2' : 'i-lucide-user-round'"
+          class="size-4 shrink-0 text-primary"
+        />
       </template>
 
-      <template #item-trailing>
-        <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-toned">
-          Existant
-        </span>
+      <template #item-label="{ item }">
+        <span :title="item.label">{{ item.label }}</span>
       </template>
 
       <template #empty>
@@ -293,13 +290,15 @@ onBeforeUnmount(() => {
       </template>
 
       <template #content-bottom>
-        <div v-if="!disabled" class="border-t border-default p-2">
+        <div v-if="!disabled" class="border-t border-default">
           <UButton
             block
             color="neutral"
             variant="ghost"
             icon="i-lucide-user-plus"
             :label="createActionLabel"
+            class="h-9 rounded-none"
+            :ui="{ leadingIcon: 'size-4', label: 'truncate' }"
             @pointerdown.prevent
             @click="openCreate"
           />
