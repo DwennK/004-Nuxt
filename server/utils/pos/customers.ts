@@ -1,4 +1,6 @@
 import { and, asc, eq, or, sql } from 'drizzle-orm'
+import { searchEquals, searchLike } from './search'
+import { foldSearchText } from '~~/shared/utils/search'
 import { customers } from '~~/server/db/schema'
 import { mapCustomer } from '~~/server/modules/customers/mapper'
 import { normalizeOptionalText, normalizeRequiredText, splitLegacyName } from '~~/shared/lib/text'
@@ -8,29 +10,29 @@ import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
 
 function customerSearchQuery(search?: string) {
-  const normalizedSearch = search?.trim().toLowerCase()
+  const normalizedSearch = foldSearchText(search).trim()
   const searchPattern = normalizedSearch ? `%${normalizedSearch}%` : null
 
   const whereClause = and(
     searchPattern
       ? or(
-          sql`lower(${customers.firstName}) like ${searchPattern}`,
-          sql`lower(${customers.lastName}) like ${searchPattern}`,
-          sql`lower(coalesce(${customers.companyName}, '')) like ${searchPattern}`,
-          sql`lower(${customers.phone}) like ${searchPattern}`,
-          sql`lower(${customers.email}) like ${searchPattern}`
+          searchLike(customers.firstName, searchPattern),
+          searchLike(customers.lastName, searchPattern),
+          searchLike(sql`coalesce(${customers.companyName}, '')`, searchPattern),
+          searchLike(customers.phone, searchPattern),
+          searchLike(customers.email, searchPattern)
         )
       : undefined
   )
-  const customerNameValue = sql<string>`lower(trim(${customers.firstName} || ' ' || ${customers.lastName}))`
+  const customerNameValue = sql<string>`trim(${customers.firstName} || ' ' || ${customers.lastName})`
   const relevanceOrder = normalizedSearch
     ? sql<number>`case
-        when lower(trim(coalesce(${customers.companyName}, ''))) = ${normalizedSearch} then 0
-        when ${customerNameValue} = ${normalizedSearch} then 0
-        when lower(trim(${customers.phone})) = ${normalizedSearch} then 0
-        when lower(trim(${customers.email})) = ${normalizedSearch} then 0
-        when lower(trim(coalesce(${customers.companyName}, ''))) like ${`${normalizedSearch}%`} then 1
-        when ${customerNameValue} like ${`${normalizedSearch}%`} then 1
+        when ${searchEquals(sql`trim(coalesce(${customers.companyName}, ''))`, normalizedSearch)} then 0
+        when ${searchEquals(customerNameValue, normalizedSearch)} then 0
+        when ${searchEquals(sql`trim(${customers.phone})`, normalizedSearch)} then 0
+        when ${searchEquals(sql`trim(${customers.email})`, normalizedSearch)} then 0
+        when ${searchLike(sql`trim(coalesce(${customers.companyName}, ''))`, `${normalizedSearch}%`)} then 1
+        when ${searchLike(customerNameValue, `${normalizedSearch}%`)} then 1
         else 2
       end`
     : undefined

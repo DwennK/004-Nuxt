@@ -10,6 +10,7 @@ import type { PosDatabase } from '../../server/utils/turso'
 import { listCustomers, suggestCustomers } from '../../server/utils/pos/customers'
 import { listCatalogItems, suggestCatalogItems } from '../../server/utils/pos/catalog'
 import { listTickets, mapTicket, suggestTickets, updateTicket } from '../../server/utils/pos/tickets'
+import { listPayments } from '../../server/utils/pos/payments'
 import { listDocuments } from '../../server/utils/pos/documents'
 import { suggestDocuments } from '../../server/utils/pos/document-lookups'
 import { testDossierContext } from '../fixtures/dossiers'
@@ -163,6 +164,56 @@ describe('POS suggestions preserve search results without financial aggregation'
     expect((await suggestTickets({ q: 'DOS-12', pageSize: 2 })).items.map(item => item.id)).toEqual([1, 12])
     expect((await suggestDocuments({ q: 'FAC-12', pageSize: 2 })).items.map(item => item.id)).toEqual([1, 2])
     expect((await suggestCustomers({ search: 'ada', pageSize: 2 })).items.map(item => item.id)).toEqual([3, 2])
+  })
+
+  it.each([
+    ['Theodore', 'Théodore'], ['François', 'Francois'], ['Müller', 'Muller'],
+    ['Àlâñ', 'Alan'], ['ÉÈÊËéèêë', 'eeeeeeee'], ['ÎÏîï', 'iiii'],
+    ['ÔÖôö', 'oooo'], ['ÙÚÛÜùúûü', 'uuuuuuuu'], ['Ÿÿ', 'yy'], ['Šimon', 'Simon']
+  ])('finds customers with or without accents in both directions: %s / %s', async (plain, accented) => {
+    await db.update(schema.customers).set({ firstName: plain, lastName: '', companyName: null }).where(eq(schema.customers.id, 1))
+    await db.update(schema.customers).set({ firstName: accented, lastName: '', companyName: null }).where(eq(schema.customers.id, 2))
+    const variants = [plain, accented, plain.toUpperCase(), accented.toUpperCase(), accented.normalize('NFD')]
+    const expectedIds = (await suggestCustomers({ search: plain })).items.map(item => item.id)
+    expect([...expectedIds].sort()).toEqual([1, 2])
+    for (const search of variants) {
+      const customers = await listCustomers({ search, pageSize: 1 })
+      expect(customers.total).toBe(2)
+      expect(customers.items).toHaveLength(1)
+      expect((await suggestCustomers({ search })).items.map(item => item.id)).toEqual(expectedIds)
+      const ticketIds = (await suggestTickets({ q: search })).items.map(item => item.id)
+      expect(ticketIds).toEqual((await listTickets({ q: search, pageSize: 5 })).items.map(item => item.id))
+      expect(ticketIds).toHaveLength(5)
+      const documentIds = (await suggestDocuments({ q: search })).items.map(item => item.id)
+      expect(documentIds).toEqual((await listDocuments({ q: search, pageSize: 5 })).items.map(item => item.id))
+      expect(documentIds).toHaveLength(5)
+      expect((await listPayments({ search })).total).toBe(2)
+    }
+    // Searching never rewrites the original spelling.
+    expect((await db.select().from(schema.customers).where(eq(schema.customers.id, 2)))[0]?.firstName).toBe(accented)
+  })
+
+  it('matches company names, surnames and accented issue descriptions', async () => {
+    await db.update(schema.customers).set({ lastName: 'Façonné', companyName: 'Société Noël' }).where(eq(schema.customers.id, 1))
+    expect((await suggestCustomers({ search: 'faconne' })).items.map(item => item.id)).toEqual([1])
+    for (const search of ['societe noel', 'SOCIÉTÉ NOËL']) {
+      expect((await suggestCustomers({ search })).items.map(item => item.id)).toEqual([1])
+      expect((await suggestTickets({ q: search })).items).toHaveLength(3)
+      expect((await suggestDocuments({ q: search })).items).toHaveLength(5)
+      expect((await listPayments({ search })).total).toBe(1)
+    }
+    expect((await listTickets({ q: 'ecran casse' })).total).toBe(6)
+    expect((await listTickets({ q: 'ÉCRAN CASSÉ' })).total).toBe(6)
+  })
+
+  it('matches accented catalogue names without relying on unaccented keywords', async () => {
+    await db.update(schema.catalogItems).set({ keywordsJson: null, serviceKind: null })
+    for (const search of ['ecran', 'écran', 'ÉCRAN']) {
+      const result = await listCatalogItems({ search, pageSize: 2 })
+      expect(result.total).toBe(36)
+      expect(result.items).toHaveLength(2)
+      expect((await suggestCatalogItems({ search, pageSize: 2 })).items).toEqual(result.items)
+    }
   })
 
   it('executes exactly four bounded SELECTs without counts, payment access or settlement for global suggestions', async () => {

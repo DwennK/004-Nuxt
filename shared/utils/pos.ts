@@ -1,3 +1,4 @@
+import { foldSearchText } from './search'
 import {
   catalogItemTypeLabels,
   documentStatusLabels,
@@ -199,10 +200,7 @@ export function getImeiWarning(value: string | null | undefined) {
 }
 
 export function normalizeSearchText(value: string | null | undefined) {
-  return (value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
+  return foldSearchText(value)
     .replace(/[^a-z0-9+/\s.-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()

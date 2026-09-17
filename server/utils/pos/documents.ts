@@ -1,4 +1,6 @@
 import { validateSavWrite } from './sav'
+import { searchEquals, searchLike } from './search'
+import { foldSearchText } from '~~/shared/utils/search'
 import type { SavDetails } from '~~/shared/types/sav'
 import { getDocumentSettlement, settlementCtes } from './document-settlement'
 import { syncDocumentStatus } from './document-balances'
@@ -366,7 +368,7 @@ export async function listDocuments(filters?: {
   const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
   const offset = (page - 1) * pageSize
   const sortBy = filters?.sortBy || 'issuedAt'
-  const searchTerm = filters?.q?.trim().toLowerCase()
+  const searchTerm = foldSearchText(filters?.q).trim()
   const searchPattern = searchTerm ? `%${searchTerm}%` : null
   const referenceTerm = dossierReferenceTerm(searchTerm)
   const dateFrom = filters?.dateFrom ? normalizeDocumentDateFrom(filters.dateFrom) : undefined
@@ -382,8 +384,8 @@ export async function listDocuments(filters?: {
     dateTo ? lte(documents.issuedAt, dateTo) : undefined,
     searchPattern
       ? or(
-          sql`lower(${documents.documentNumber}) like ${searchPattern}`,
-          sql`lower(${customerNameValue}) like ${searchPattern}`,
+          searchLike(documents.documentNumber, searchPattern),
+          searchLike(customerNameValue, searchPattern),
           sql`${dossierReferenceSearch(sql`${tickets.ticketNumber}`)} like ${`%${referenceTerm}%`}`
         )
       : undefined
@@ -400,10 +402,10 @@ export async function listDocuments(filters?: {
   )
   const relevance = searchTerm
     ? sql`CASE
-    WHEN lower(d.document_number) = ${searchTerm} THEN 0
+    WHEN ${searchEquals(sql`d.document_number`, searchTerm)} THEN 0
     WHEN ${dossierReferenceSearch(sql`t.ticket_number`)} = ${referenceTerm} THEN 0
-    WHEN lower(coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name))) = ${searchTerm} THEN 0
-    WHEN lower(d.document_number) LIKE ${`${searchTerm}%`} THEN 1
+    WHEN ${searchEquals(sql`coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name))`, searchTerm)} THEN 0
+    WHEN ${searchLike(sql`d.document_number`, `${searchTerm}%`)} THEN 1
     WHEN ${dossierReferenceSearch(sql`t.ticket_number`)} LIKE ${`${referenceTerm}%`} THEN 1
     ELSE 2 END`
     : sql`0`

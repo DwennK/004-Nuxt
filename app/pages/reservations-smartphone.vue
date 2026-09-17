@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { foldSearchText } from '~~/shared/utils/search'
 import type { DropdownMenuItem, TableColumn, TabsItem } from '@nuxt/ui'
 import type { Row } from '@tanstack/table-core'
 import { format, isValid, parseISO } from 'date-fns'
@@ -39,7 +40,7 @@ const { data, status, pagination, sorting, rowSelection, selectedIds: selectedRe
   endpoint: '/api/smartphone-reservations/list',
   filters,
   matches: item => item.status === filters.value.status
-    && item.name.toLowerCase().includes(search.value.toLowerCase())
+    && foldSearchText(item.name).includes(foldSearchText(search.value))
 })
 
 const statusLabels: Record<SmartphoneReservationStatus, string> = {

@@ -1,5 +1,6 @@
 import { createTable, getCoreRowModel, getFilteredRowModel, getSortedRowModel } from '@tanstack/table-core'
 import { z } from 'zod'
+import { foldSearchText } from '~~/shared/utils/search'
 import type { SmartphoneListQuery } from '~~/shared/types/smartphone-list'
 
 export const smartphoneListQuerySchema = z.object({
@@ -18,7 +19,7 @@ export function smartphoneListPage(total: number, query: SmartphoneListQuery) {
 }
 
 /**
- * Preserve the existing table's Unicode substring search and automatic natural
+ * Use accent-insensitive substring search and preserve the table's natural
  * sorting. SQLite LOWER/NOCASE does not provide equivalent Unicode semantics.
  * Only IDs and the searched/sorted label are read for this optional path; the
  * default list uses indexed SQL pagination without loading these candidates.
@@ -28,7 +29,10 @@ export function filterAndSortSmartphoneCandidates<T extends { id: number, label:
 ): T[] {
   const table = createTable({
     data: candidates,
-    columns: [{ accessorKey: 'label' }],
+    columns: [{
+      accessorKey: 'label',
+      filterFn: (row, columnId, value: string) => foldSearchText(row.getValue<string>(columnId)).includes(foldSearchText(value))
+    }],
     state: {
       columnFilters: query.search ? [{ id: 'label', value: query.search }] : [],
       sorting: query.sort === 'default' ? [] : [{ id: 'label', desc: query.sort === 'desc' }]

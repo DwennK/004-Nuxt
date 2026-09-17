@@ -1,4 +1,5 @@
 import { and, asc, eq, or, sql } from 'drizzle-orm'
+import { searchEquals, searchLike } from './search'
 import { catalogItems } from '~~/server/db/schema'
 import { normalizeSearchText } from '~~/shared/utils/pos'
 import type { CatalogItemInput, CatalogItemListResponse, CatalogItemRecord, CatalogItemType } from '~~/shared/types/pos'
@@ -116,22 +117,22 @@ function catalogSearchQuery(options: ListCatalogItemsOptions) {
   const searchTokens = normalizedSearch.split(' ').filter(Boolean)
   const normalizedCategory = options.category?.trim()
   const descriptiveColumns = [
-    sql`lower(${catalogItems.name})`,
-    sql`lower(coalesce(${catalogItems.brand}, ''))`,
-    sql`lower(coalesce(${catalogItems.model}, ''))`,
-    sql`lower(coalesce(${catalogItems.serviceKind}, ''))`,
-    sql`lower(coalesce(${catalogItems.keywordsJson}, ''))`
+    sql`${catalogItems.name}`,
+    sql`coalesce(${catalogItems.brand}, '')`,
+    sql`coalesce(${catalogItems.model}, '')`,
+    sql`coalesce(${catalogItems.serviceKind}, '')`,
+    sql`coalesce(${catalogItems.keywordsJson}, '')`
   ] as const
   const searchableColumns = [
     ...descriptiveColumns,
-    sql`lower(coalesce(${catalogItems.sku}, ''))`,
-    sql`lower(coalesce(json_extract(${catalogItems.mobileSentrixJson}, '$.sku'), ''))`,
-    sql`lower(${catalogItems.type})`,
-    sql`lower(${catalogItems.category})`
+    sql`coalesce(${catalogItems.sku}, '')`,
+    sql`coalesce(json_extract(${catalogItems.mobileSentrixJson}, '$.sku'), '')`,
+    sql`${catalogItems.type}`,
+    sql`${catalogItems.category}`
   ] as const
   const searchClause = searchTokens.length
     ? and(...searchTokens.map(token => or(
-        ...searchableColumns.map(column => sql`${column} like ${`%${token}%`}`)
+        ...searchableColumns.map(column => searchLike(column, `%${token}%`))
       )))
     : undefined
 
@@ -145,13 +146,13 @@ function catalogSearchQuery(options: ListCatalogItemsOptions) {
   // This must happen before LIMIT: the intake form only receives one page.
   const descriptiveMatch = searchTokens.length
     ? and(...searchTokens.map(token => or(
-        ...descriptiveColumns.map(column => sql`${column} like ${`%${token}%`}`)
+        ...descriptiveColumns.map(column => searchLike(column, `%${token}%`))
       )))
     : undefined
   const matchOrder = normalizedSearch
     ? sql<number>`case
-        when lower(coalesce(${catalogItems.sku}, '')) = ${normalizedSearch}
-          or lower(coalesce(json_extract(${catalogItems.mobileSentrixJson}, '$.sku'), '')) = ${normalizedSearch} then 0
+        when ${searchEquals(sql`coalesce(${catalogItems.sku}, '')`, normalizedSearch)}
+          or ${searchEquals(sql`coalesce(json_extract(${catalogItems.mobileSentrixJson}, '$.sku'), '')`, normalizedSearch)} then 0
         when ${descriptiveMatch} then 1
         else 2
       end`
@@ -159,10 +160,10 @@ function catalogSearchQuery(options: ListCatalogItemsOptions) {
 
   const relevanceOrder = normalizedSearch
     ? sql<number>`case
-        when lower(coalesce(${catalogItems.sku}, '')) = ${normalizedSearch} then 0
-        when lower(coalesce(${catalogItems.model}, '')) = ${normalizedSearch} then 1
-        when lower(${catalogItems.name}) like ${`${normalizedSearch}%`} then 2
-        when lower(coalesce(${catalogItems.keywordsJson}, '')) like ${`%${normalizedSearch}%`} then 3
+        when ${searchEquals(sql`coalesce(${catalogItems.sku}, '')`, normalizedSearch)} then 0
+        when ${searchEquals(sql`coalesce(${catalogItems.model}, '')`, normalizedSearch)} then 1
+        when ${searchLike(catalogItems.name, `${normalizedSearch}%`)} then 2
+        when ${searchLike(sql`coalesce(${catalogItems.keywordsJson}, '')`, `%${normalizedSearch}%`)} then 3
         else 4
       end`
     : undefined

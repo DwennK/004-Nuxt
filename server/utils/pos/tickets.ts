@@ -1,3 +1,5 @@
+import { searchEquals, searchLike } from './search'
+import { foldSearchText } from '~~/shared/utils/search'
 import { getActivePayableDocument } from '~~/shared/domain/documents/settlement'
 import { dossierEventLabel } from '~~/shared/utils/dossier-labels'
 import { dossierReferenceSearch, dossierReferenceTerm } from './dossier-search'
@@ -590,7 +592,7 @@ type TicketListFilters = {
 }
 
 function ticketSearchQuery(filters?: TicketListFilters) {
-  const searchTerm = filters?.q?.trim().toLowerCase()
+  const searchTerm = foldSearchText(filters?.q).trim()
   const searchPattern = searchTerm ? `%${searchTerm}%` : null
   const referenceTerm = dossierReferenceTerm(searchTerm)
   const referenceColumn = dossierReferenceSearch(sql`${tickets.ticketNumber}`)
@@ -599,13 +601,13 @@ function ticketSearchQuery(filters?: TicketListFilters) {
   const relevanceOrder = searchTerm
     ? sql<number>`case
         when ${referenceColumn} = ${referenceTerm} then 0
-        when lower(coalesce(${tickets.imei}, '')) = ${searchTerm} then 0
-        when lower(coalesce(${tickets.serialNumber}, '')) = ${searchTerm} then 0
-        when lower(${customers.phone}) = ${searchTerm} then 0
-        when lower(${customerNameValue}) = ${searchTerm} then 0
+        when ${searchEquals(sql`coalesce(${tickets.imei}, '')`, searchTerm)} then 0
+        when ${searchEquals(sql`coalesce(${tickets.serialNumber}, '')`, searchTerm)} then 0
+        when ${searchEquals(customers.phone, searchTerm)} then 0
+        when ${searchEquals(customerNameValue, searchTerm)} then 0
         when ${referenceColumn} like ${`${referenceTerm}%`} then 1
-        when lower(coalesce(${tickets.imei}, '')) like ${`${searchTerm}%`} then 1
-        when lower(coalesce(${tickets.serialNumber}, '')) like ${`${searchTerm}%`} then 1
+        when ${searchLike(sql`coalesce(${tickets.imei}, '')`, `${searchTerm}%`)} then 1
+        when ${searchLike(sql`coalesce(${tickets.serialNumber}, '')`, `${searchTerm}%`)} then 1
         else 2
       end`
     : undefined
@@ -616,13 +618,13 @@ function ticketSearchQuery(filters?: TicketListFilters) {
     searchPattern
       ? or(
           sql`${referenceColumn} like ${`%${referenceTerm}%`}`,
-          sql`lower(${customerNameValue}) like ${searchPattern}`,
-          sql`lower(${customers.phone}) like ${searchPattern}`,
-          sql`lower(coalesce(${tickets.brand}, '')) like ${searchPattern}`,
-          sql`lower(coalesce(${tickets.model}, '')) like ${searchPattern}`,
-          sql`lower(coalesce(${tickets.imei}, '')) like ${searchPattern}`,
-          sql`lower(coalesce(${tickets.serialNumber}, '')) like ${searchPattern}`,
-          sql`lower(${tickets.issueDescription}) like ${searchPattern}`
+          searchLike(customerNameValue, searchPattern),
+          searchLike(customers.phone, searchPattern),
+          searchLike(sql`coalesce(${tickets.brand}, '')`, searchPattern),
+          searchLike(sql`coalesce(${tickets.model}, '')`, searchPattern),
+          searchLike(sql`coalesce(${tickets.imei}, '')`, searchPattern),
+          searchLike(sql`coalesce(${tickets.serialNumber}, '')`, searchPattern),
+          searchLike(tickets.issueDescription, searchPattern)
         )
       : undefined
   )

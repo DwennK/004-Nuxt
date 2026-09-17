@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { foldSearchText } from '~~/shared/utils/search'
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { Row } from '@tanstack/table-core'
 import { format, isValid, parseISO } from 'date-fns'
@@ -40,7 +41,7 @@ const { data, status, pagination, sorting, rowSelection, selectedIds: selectedSm
   endpoint: '/api/smartphone-stocks/list',
   filters,
   matches: item => (filters.value.sold === 'all' || item.sold === (filters.value.sold === 'sold'))
-    && item.model.toLowerCase().includes(search.value.toLowerCase())
+    && foldSearchText(item.model).includes(foldSearchText(search.value))
 })
 
 function formatSwissDate(value: string) {

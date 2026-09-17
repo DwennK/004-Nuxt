@@ -1,5 +1,7 @@
 import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { and, asc, desc, eq, gte, lte, or, sql } from 'drizzle-orm'
+import { searchLike } from './search'
+import { foldSearchText } from '~~/shared/utils/search'
 import { customers, documents, payments } from '~~/server/db/schema'
 import {
   canChangePaymentStatus,
@@ -57,7 +59,7 @@ export async function listPayments(filters?: {
   const db = useDb()
   const dateFrom = filters?.dateFrom ? normalizePaymentDateFrom(filters.dateFrom) : undefined
   const dateTo = filters?.dateTo ? normalizePaymentDateTo(filters.dateTo) : undefined
-  const normalizedSearch = filters?.search?.trim().toLowerCase()
+  const normalizedSearch = foldSearchText(filters?.search).trim()
   const searchPattern = normalizedSearch ? `%${normalizedSearch}%` : undefined
   const page = Math.max(filters?.page || 1, 1)
   const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
@@ -71,9 +73,9 @@ export async function listPayments(filters?: {
     dateTo ? lte(payments.paidAt, dateTo) : undefined,
     searchPattern
       ? or(
-          sql`lower(coalesce(${customers.companyName}, '')) like ${searchPattern}`,
-          sql`lower(trim(${customers.firstName} || ' ' || ${customers.lastName})) like ${searchPattern}`,
-          sql`lower(${documents.documentNumber}) like ${searchPattern}`
+          searchLike(sql`coalesce(${customers.companyName}, '')`, searchPattern),
+          searchLike(sql`trim(${customers.firstName} || ' ' || ${customers.lastName})`, searchPattern),
+          searchLike(documents.documentNumber, searchPattern)
         )
       : undefined
   )

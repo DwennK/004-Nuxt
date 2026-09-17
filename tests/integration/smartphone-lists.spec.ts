@@ -109,7 +109,7 @@ describe('smartphone lists use server pages without changing table results', () 
   it('keeps reservation statuses, date order, stable ties and sorted pages identical', async () => {
     const all = await listSmartphoneReservations()
     for (const status of ['pending', 'contacted', 'sold', 'all'] as const) {
-      for (const search of ['', 'iPhone', 'é', '%_', 'Item']) {
+      for (const search of ['', 'iPhone', '%_', 'Item']) {
         for (const sort of ['default', 'asc', 'desc'] as const) {
           const query = reservationQuery({ status, search, sort, pageSize: 3 })
           const expected = previousTableResult(all, 'name', 'status', status === 'all' ? undefined : status, query)
@@ -118,6 +118,21 @@ describe('smartphone lists use server pages without changing table results', () 
         }
       }
     }
+  })
+
+  it.each(['Elodie', 'ÉLODIE', 'élodie', 'E\u0301lodie'])('matches accented labels in both smartphone lists for %s', async (search) => {
+    const stocks = await listSmartphoneStocksPage(stockQuery({ search, pageSize: 100 }))
+    const reservations = await listSmartphoneReservationsPage(reservationQuery({ search, status: 'all', pageSize: 100 }))
+    expect(stocks.total).toBe(12)
+    expect(reservations.total).toBe(12)
+    expect(stocks.items.map(item => item.id).sort()).toEqual(reservations.items.map(item => item.id).sort())
+  })
+
+  it('finds an unaccented reservation when the query contains accents', async () => {
+    await client.execute('UPDATE smartphone_reservation_requests SET name = ? WHERE id = 1', ['Theodore'])
+    const result = await listSmartphoneReservationsPage(reservationQuery({ search: 'Théodore', status: 'all' }))
+    expect(result.items.map(item => item.id)).toEqual([1])
+    expect(result.total).toBe(1)
   })
 
   it('fetches only the next page and skips recounting unchanged filters', async () => {

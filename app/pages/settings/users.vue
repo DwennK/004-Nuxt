@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { foldSearchText } from '~~/shared/utils/search'
 import * as z from 'zod'
 import { formatDate as formatPosDate } from '~~/shared/utils/pos'
 import type { DropdownMenuItem, FormSubmitEvent } from '@nuxt/ui'
@@ -20,11 +21,11 @@ const { data: users, refresh, pending } = await useFetch<UserRecord[]>(
 const q = ref('')
 
 const filteredUsers = computed(() => {
-  const needle = q.value.trim().toLowerCase()
+  const needle = foldSearchText(q.value).trim()
   if (!needle) return users.value
   return users.value.filter(u =>
-    u.email.toLowerCase().includes(needle)
-    || u.name.toLowerCase().includes(needle)
+    foldSearchText(u.email).includes(needle)
+    || foldSearchText(u.name).includes(needle)
   )
 })
 
