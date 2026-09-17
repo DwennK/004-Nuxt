@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { arcadeGames } from '#shared/constants/arcade'
+import { bestTicMove, mergeTileLine } from '#shared/utils/arcade'
+
+definePageMeta({ layout: 'arcade', key: route => String(route.params.id) })
 type GameTab = 'wordle' | 'higher' | 'tic' | 'aim' | 'reflex' | 'snake' | 'tiles' | 'connect' | 'mines' | 'memory'
 type CellStatus = 'empty' | 'pending' | 'correct' | 'present' | 'absent'
 type Cell = { letter: string, status: CellStatus }
@@ -8,135 +12,14 @@ type HigherHint = 'plus' | 'moins' | 'trouve'
 type TicMark = 'X' | 'O'
 type AimStatus = 'idle' | 'playing' | 'done'
 type ReflexStatus = 'idle' | 'waiting' | 'ready' | 'too-soon' | 'done'
-type SnakeStatus = 'idle' | 'playing' | 'won' | 'lost'
+type SnakeStatus = 'idle' | 'playing' | 'paused' | 'won' | 'lost'
 type Direction = 'up' | 'right' | 'down' | 'left'
 type TileDirection = 'up' | 'right' | 'down' | 'left'
 type ConnectDisc = 'player' | 'ai'
 type MineCell = { mine: boolean, revealed: boolean, flagged: boolean, adjacent: number }
 type MemoryCard = { id: number, value: string, label: string, icon: string, revealed: boolean, matched: boolean }
 
-const games = [
-  {
-    value: 'wordle',
-    label: 'Mot mystere',
-    short: 'WORD',
-    icon: 'i-lucide-spell-check',
-    accent: 'from-success to-primary',
-    color: 'success',
-    category: 'Mots',
-    rhythm: '2-4 min',
-    description: 'Six essais pour lire les couleurs, eliminer les lettres et trouver le mot.'
-  },
-  {
-    value: 'higher',
-    label: 'Plus ou moins',
-    short: '100',
-    icon: 'i-lucide-binary',
-    accent: 'from-info to-primary',
-    color: 'info',
-    category: 'Puzzle',
-    rhythm: '1 min',
-    description: 'Resserre la plage de 1 a 100 en huit tentatives maximum.'
-  },
-  {
-    value: 'tic',
-    label: 'Morpion',
-    short: 'X/O',
-    icon: 'i-lucide-grid-3x3',
-    accent: 'from-warning to-primary',
-    color: 'warning',
-    category: 'Strategie',
-    rhythm: '1 min',
-    description: 'Force une ligne de trois avant que l IA ne bloque ou ne gagne.'
-  },
-  {
-    value: 'aim',
-    label: 'Precision',
-    short: 'AIM',
-    icon: 'i-lucide-crosshair',
-    accent: 'from-error to-primary',
-    color: 'error',
-    category: 'Reflexes',
-    rhythm: '30 s',
-    description: 'Clique quinze cibles, limite les rates et baisse ton temps moyen.'
-  },
-  {
-    value: 'reflex',
-    label: 'Reflexe',
-    short: 'MS',
-    icon: 'i-lucide-timer-reset',
-    accent: 'from-primary to-info',
-    color: 'primary',
-    category: 'Reflexes',
-    rhythm: '10 s',
-    description: 'Attends le signal vert, puis clique sans anticiper.'
-  },
-  {
-    value: 'snake',
-    label: 'Snake',
-    short: 'RUN',
-    icon: 'i-lucide-route',
-    accent: 'from-success to-info',
-    color: 'success',
-    category: 'Arcade',
-    rhythm: '3 min',
-    description: 'Mange, grandis, evite les murs et garde la trajectoire propre.'
-  },
-  {
-    value: 'tiles',
-    label: '2048',
-    short: '2K',
-    icon: 'i-lucide-layout-grid',
-    accent: 'from-warning to-success',
-    color: 'warning',
-    category: 'Puzzle',
-    rhythm: '5 min',
-    description: 'Fusionne les tuiles, garde un coin fort et vise 2048.'
-  },
-  {
-    value: 'connect',
-    label: 'Puissance 4',
-    short: '4',
-    icon: 'i-lucide-circle-dot',
-    accent: 'from-error to-warning',
-    color: 'error',
-    category: 'Strategie',
-    rhythm: '2 min',
-    description: 'Depose les disques et aligne quatre cases avant l IA.'
-  },
-  {
-    value: 'mines',
-    label: 'Demineur',
-    short: 'MINE',
-    icon: 'i-lucide-bomb',
-    accent: 'from-muted to-primary',
-    color: 'neutral',
-    category: 'Puzzle',
-    rhythm: '4 min',
-    description: 'Premier clic protege, drapeaux au clic droit, mines a eviter.'
-  },
-  {
-    value: 'memory',
-    label: 'Memoire',
-    short: 'MEM',
-    icon: 'i-lucide-brain',
-    accent: 'from-info to-success',
-    color: 'info',
-    category: 'Memoire',
-    rhythm: '2 min',
-    description: 'Retrouve les paires tech avec le moins de coups possible.'
-  }
-] satisfies {
-  value: GameTab
-  label: string
-  short: string
-  icon: string
-  accent: string
-  color: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
-  category: string
-  rhythm: string
-  description: string
-}[]
+const games = arcadeGames
 
 function isGameTab(value: unknown): value is GameTab {
   return typeof value === 'string' && games.some(game => game.value === value)
@@ -155,39 +38,107 @@ if (!isGameTab(routeGameId.value)) {
   })
 }
 
-const selectedGame = computed<GameTab>(() => isGameTab(routeGameId.value) ? routeGameId.value : 'wordle')
+const selectedGame = computed<GameTab>(() => (isGameTab(routeGameId.value) ? routeGameId.value : 'wordle'))
 const selectedGameMeta = computed(() => games.find(game => game.value === selectedGame.value) || games[0]!)
+useSeoMeta({ title: () => `${selectedGameMeta.value.label} · Microwest Arcade` })
 const clockNow = ref(0)
+const expertTic = ref(false)
+const flagMode = ref(false)
+const helpOpen = ref(false)
+const stage = useTemplateRef<HTMLElement>('stage')
+const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(stage)
+const records = useLocalStorage<Record<string, number>>('microwest.arcade.records.v2', {}, { initOnMounted: true })
 let clockTimer: number | undefined
 
 const MAX_GUESSES = 6
 
 const WORDS: Record<WordLength, string[]> = {
   5: [
-    'MONDE', 'TABLE', 'JOUER', 'FORET', 'PLAGE', 'CHIEN', 'PORTE', 'VERTE',
-    'CHAUD', 'FROID', 'BOITE', 'LIVRE', 'FLEUR', 'PIANO', 'GLACE', 'HERBE',
-    'RADIO', 'FERME', 'NUAGE', 'PLUIE', 'AVOIR', 'DANSE', 'VERRE', 'VERBE',
-    'LIBRE', 'BANDE', 'CARTE', 'POCHE', 'SABLE', 'ROUGE', 'JAUNE', 'MERCI'
+    'MONDE',
+    'TABLE',
+    'JOUER',
+    'FORET',
+    'PLAGE',
+    'CHIEN',
+    'PORTE',
+    'VERTE',
+    'CHAUD',
+    'FROID',
+    'BOITE',
+    'LIVRE',
+    'FLEUR',
+    'PIANO',
+    'GLACE',
+    'HERBE',
+    'RADIO',
+    'FERME',
+    'NUAGE',
+    'PLUIE',
+    'AVOIR',
+    'DANSE',
+    'VERRE',
+    'VERBE',
+    'LIBRE',
+    'BANDE',
+    'CARTE',
+    'POCHE',
+    'SABLE',
+    'ROUGE',
+    'JAUNE',
+    'MERCI'
   ],
   6: [
-    'MAISON', 'JARDIN', 'SOLEIL', 'VOYAGE', 'BATEAU', 'VOLANT', 'ORANGE',
-    'CARNET', 'PARLER', 'MANGER', 'DANSER', 'SALADE', 'ECOLES', 'VOILES',
-    'LAMPES', 'NUAGES', 'PLUIES', 'PLAGES', 'LIVRES', 'TABLES', 'ROUGES',
-    'POULET', 'HIVERS'
+    'MAISON',
+    'JARDIN',
+    'SOLEIL',
+    'VOYAGE',
+    'BATEAU',
+    'VOLANT',
+    'ORANGE',
+    'CARNET',
+    'PARLER',
+    'MANGER',
+    'DANSER',
+    'SALADE',
+    'ECOLES',
+    'VOILES',
+    'LAMPES',
+    'NUAGES',
+    'PLUIES',
+    'PLAGES',
+    'LIVRES',
+    'TABLES',
+    'ROUGES',
+    'POULET',
+    'HIVERS'
   ],
   7: [
-    'BONJOUR', 'FAMILLE', 'CHATEAU', 'FROMAGE', 'CUISINE', 'FENETRE',
-    'JARDINS', 'MAISONS', 'VOYAGES', 'JOURNAL', 'GATEAUX', 'BOUGIES',
-    'CERISES', 'CHAPEAU', 'VIOLETS', 'GARCONS', 'FUSEAUX', 'CHANSON',
-    'PLANTES', 'FLEURIR', 'BLEUETS', 'CHANTER', 'MUSIQUE', 'RECETTE'
+    'BONJOUR',
+    'FAMILLE',
+    'CHATEAU',
+    'FROMAGE',
+    'CUISINE',
+    'FENETRE',
+    'JARDINS',
+    'MAISONS',
+    'VOYAGES',
+    'JOURNAL',
+    'GATEAUX',
+    'BOUGIES',
+    'CERISES',
+    'CHAPEAU',
+    'VIOLETS',
+    'GARCONS',
+    'FUSEAUX',
+    'CHANSON',
+    'PLANTES',
+    'FLEURIR',
+    'BLEUETS',
+    'CHANTER',
+    'MUSIQUE',
+    'RECETTE'
   ]
 }
-
-const LENGTH_OPTIONS = [
-  { label: '5 lettres', value: 5 },
-  { label: '6 lettres', value: 6 },
-  { label: '7 lettres', value: 7 }
-]
 
 const KEYBOARD_ROWS = [
   ['Q', 'W', 'E', 'R', 'T', 'Z', 'U', 'I', 'O', 'P'],
@@ -205,7 +156,10 @@ const flashInvalid = ref(false)
 const wordleStats = ref({ played: 0, wins: 0, streak: 0, best: 0 })
 
 function normalize(input: string) {
-  return input.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+  return input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
 }
 
 function pickWord() {
@@ -315,24 +269,28 @@ function submitGuess() {
   if (wordleStatus.value !== 'playing') return
 
   if (currentGuess.value.length !== wordLength.value) {
-    triggerInvalid(`Complete les ${wordLength.value} lettres.`)
+    triggerInvalid(`Complète les ${wordLength.value} lettres.`)
     return
   }
 
   const guess = currentGuess.value
+  if (guesses.value.includes(guess)) {
+    triggerInvalid('Ce mot a déjà été essayé. Tente une autre combinaison.')
+    return
+  }
   guesses.value.push(guess)
   currentGuess.value = ''
   wordleMessage.value = null
 
   if (guess === targetWord.value) {
     finishWordle('won')
-    wordleMessage.value = `Bravo. Trouve en ${guesses.value.length} coup${guesses.value.length > 1 ? 's' : ''}.`
+    wordleMessage.value = `Bravo ! Trouvé en ${guesses.value.length} coup${guesses.value.length > 1 ? 's' : ''}.`
     return
   }
 
   if (guesses.value.length >= MAX_GUESSES) {
     finishWordle('lost')
-    wordleMessage.value = `Perdu. Le mot etait ${targetWord.value}.`
+    wordleMessage.value = `Le mot était ${targetWord.value}.`
   }
 }
 
@@ -354,21 +312,6 @@ function pressKey(key: string) {
   currentGuess.value += key
 }
 
-function cellClass(status: CellStatus) {
-  if (status === 'correct') return 'bg-success text-inverted border-success shadow-sm'
-  if (status === 'present') return 'bg-warning text-inverted border-warning shadow-sm'
-  if (status === 'absent') return 'bg-muted text-muted border-muted'
-  if (status === 'pending') return 'bg-default border-primary/40 text-highlighted shadow-sm'
-  return 'bg-elevated/50 border-default/70 text-muted'
-}
-
-function keyClass(status: CellStatus | undefined) {
-  if (status === 'correct') return 'bg-success text-inverted hover:bg-success/90'
-  if (status === 'present') return 'bg-warning text-inverted hover:bg-warning/90'
-  if (status === 'absent') return 'bg-muted text-muted hover:bg-muted/90'
-  return 'bg-elevated text-default hover:bg-accented'
-}
-
 const wordleWinRate = computed(() => {
   if (!wordleStats.value.played) return 0
   return Math.round((wordleStats.value.wins / wordleStats.value.played) * 100)
@@ -378,7 +321,7 @@ const higherTarget = ref(0)
 const higherInput = ref('')
 const higherHistory = ref<{ value: number, hint: HigherHint }[]>([])
 const higherStatus = ref<GameStatus>('playing')
-const higherMessage = ref('Trouve le nombre cache entre 1 et 100 en 8 essais maximum.')
+const higherMessage = ref('Trouve le nombre caché entre 1 et 100 en 8 essais maximum.')
 const higherWins = ref(0)
 const HIGHER_MAX_ATTEMPTS = 8
 
@@ -387,7 +330,7 @@ function newHigherGame() {
   higherInput.value = ''
   higherHistory.value = []
   higherStatus.value = 'playing'
-  higherMessage.value = 'Trouve le nombre cache entre 1 et 100 en 8 essais maximum.'
+  higherMessage.value = 'Trouve le nombre caché entre 1 et 100 en 8 essais maximum.'
 }
 
 const higherRemaining = computed(() => HIGHER_MAX_ATTEMPTS - higherHistory.value.length)
@@ -403,15 +346,15 @@ const higherHigh = computed(() => {
 function submitHigherGuess() {
   if (higherStatus.value !== 'playing') return
 
-  const value = Number.parseInt(higherInput.value, 10)
+  const value = Number(higherInput.value)
 
   if (!Number.isInteger(value) || value < 1 || value > 100) {
     higherMessage.value = 'Entre un nombre entier entre 1 et 100.'
     return
   }
 
-  if (higherHistory.value.some(entry => entry.value === value)) {
-    higherMessage.value = 'Ce nombre a deja ete tente.'
+  if (value < higherLow.value || value > higherHigh.value) {
+    higherMessage.value = `Ce nombre est déjà éliminé. Essaie entre ${higherLow.value} et ${higherHigh.value}.`
     return
   }
 
@@ -419,7 +362,7 @@ function submitHigherGuess() {
     higherHistory.value.unshift({ value, hint: 'trouve' })
     higherStatus.value = 'won'
     higherWins.value += 1
-    higherMessage.value = `Bien joue. ${value} etait le bon nombre.`
+    higherMessage.value = `Bien joué. ${value} était le bon nombre.`
     higherInput.value = ''
     return
   }
@@ -439,7 +382,7 @@ function submitHigherGuess() {
 
 const ticBoard = ref<(TicMark | null)[]>(Array(9).fill(null))
 const ticCurrent = ref<TicMark>('X')
-const ticMessage = ref('Tu joues X. Aligne 3 symboles avant l IA.')
+const ticMessage = ref('Tu joues X. Aligne trois symboles avant l’IA.')
 const ticStatus = ref<GameStatus>('playing')
 const ticScores = ref({ player: 0, ai: 0, draw: 0 })
 const ticWinningLine = ref<number[]>([])
@@ -456,13 +399,13 @@ const ticWinningLines: [number, number, number][] = [
   [2, 4, 6]
 ]
 
-function getTicWinner(board: (TicMark | null)[]) {
+function getTicWinner(board: (TicMark | null)[], highlight = false) {
   for (const line of ticWinningLines) {
     const [a, b, c] = line
     const first = board[a]
 
     if (first && first === board[b] && first === board[c]) {
-      ticWinningLine.value = line
+      if (highlight) ticWinningLine.value = line
       return first
     }
   }
@@ -475,25 +418,25 @@ function newTicGame() {
   ticBoard.value = Array(9).fill(null)
   ticCurrent.value = 'X'
   ticStatus.value = 'playing'
-  ticMessage.value = 'Tu joues X. Aligne 3 symboles avant l IA.'
+  ticMessage.value = 'Tu joues X. Aligne trois symboles avant l’IA.'
   ticWinningLine.value = []
 }
 
 function maybeEndTicRound(board: (TicMark | null)[]) {
   ticWinningLine.value = []
-  const winner = getTicWinner(board)
+  const winner = getTicWinner(board, true)
 
   if (winner === 'X') {
     ticStatus.value = 'won'
     ticScores.value.player += 1
-    ticMessage.value = 'Bien joue, tu as gagne.'
+    ticMessage.value = 'Bien joué, tu as gagné.'
     return true
   }
 
   if (winner === 'O') {
     ticStatus.value = 'lost'
     ticScores.value.ai += 1
-    ticMessage.value = 'L IA a gagne cette manche.'
+    ticMessage.value = 'L’IA a gagné cette manche.'
     return true
   }
 
@@ -508,21 +451,20 @@ function maybeEndTicRound(board: (TicMark | null)[]) {
 }
 
 function chooseTicMove(board: (TicMark | null)[]) {
+  if (expertTic.value) return bestTicMove(board)
   const openIndexes = board
-    .map((cell, index) => cell ? null : index)
+    .map((cell, index) => (cell ? null : index))
     .filter((value): value is number => value !== null)
 
   for (const index of openIndexes) {
     const next = [...board]
     next[index] = 'O'
-    ticWinningLine.value = []
     if (getTicWinner(next) === 'O') return index
   }
 
   for (const index of openIndexes) {
     const next = [...board]
     next[index] = 'X'
-    ticWinningLine.value = []
     if (getTicWinner(next) === 'X') return index
   }
 
@@ -535,7 +477,7 @@ function chooseTicMove(board: (TicMark | null)[]) {
 }
 
 function playTic(index: number) {
-  if (ticStatus.value !== 'playing') return
+  if (ticStatus.value !== 'playing' || ticCurrent.value !== 'X') return
   if (ticBoard.value[index]) return
 
   const nextBoard = [...ticBoard.value]
@@ -545,7 +487,7 @@ function playTic(index: number) {
   if (maybeEndTicRound(nextBoard)) return
 
   ticCurrent.value = 'O'
-  ticMessage.value = 'L IA reflechit...'
+  ticMessage.value = 'L’IA réfléchit…'
 
   ticTimer = window.setTimeout(() => {
     if (ticStatus.value !== 'playing') return
@@ -558,7 +500,7 @@ function playTic(index: number) {
     if (maybeEndTicRound(aiBoard)) return
 
     ticCurrent.value = 'X'
-    ticMessage.value = 'A toi.'
+    ticMessage.value = 'À toi.'
   }, 220)
 }
 
@@ -566,7 +508,7 @@ const AIM_TOTAL_TARGETS = 15
 const aimStatus = ref<AimStatus>('idle')
 const aimHits = ref(0)
 const aimMisses = ref(0)
-const aimMessage = ref('Clique 15 cibles le plus vite possible.')
+const aimMessage = ref('Touche quinze cibles le plus vite possible.')
 const aimStartedAt = ref<number | null>(null)
 const aimFinishedAt = ref<number | null>(null)
 const aimTarget = ref({ x: 24, y: 28, size: 56 })
@@ -575,9 +517,9 @@ const aimHistory = ref<number[]>([])
 
 function placeAimTarget() {
   aimTarget.value = {
-    x: 8 + Math.random() * 84,
-    y: 12 + Math.random() * 70,
-    size: 38 + Math.round(Math.random() * 24)
+    x: 14 + Math.random() * 72,
+    y: 16 + Math.random() * 68,
+    size: Math.max(40, 64 - aimHits.value)
   }
 }
 
@@ -587,7 +529,7 @@ function newAimGame() {
   aimMisses.value = 0
   aimStartedAt.value = null
   aimFinishedAt.value = null
-  aimMessage.value = 'Clique 15 cibles le plus vite possible.'
+  aimMessage.value = 'Touche quinze cibles le plus vite possible.'
   placeAimTarget()
 }
 
@@ -597,24 +539,20 @@ function startAimGame() {
   aimMisses.value = 0
   aimStartedAt.value = performance.now()
   aimFinishedAt.value = null
-  aimMessage.value = 'Vise juste et enchaine.'
+  aimMessage.value = 'Vise juste et enchaîne.'
   placeAimTarget()
 }
 
 function missAimTarget() {
-  if (aimStatus.value === 'idle') {
-    startAimGame()
-    return
-  }
-
   if (aimStatus.value !== 'playing') return
   aimMisses.value += 1
-  aimMessage.value = 'Rate. Continue.'
+  aimMessage.value = 'Raté. Continue.'
 }
 
 function hitAimTarget() {
   if (aimStatus.value === 'idle') {
     startAimGame()
+    return
   }
 
   if (aimStatus.value !== 'playing') return
@@ -626,11 +564,11 @@ function hitAimTarget() {
     const finishedAt = performance.now()
     aimFinishedAt.value = finishedAt
     aimStatus.value = 'done'
-    const duration = Math.round(finishedAt - (aimStartedAt.value || finishedAt))
+    const duration = Math.round(finishedAt - (aimStartedAt.value ?? finishedAt))
     aimHistory.value.unshift(duration)
     aimHistory.value = aimHistory.value.slice(0, 5)
     aimBest.value = aimBest.value === null ? duration : Math.min(aimBest.value, duration)
-    aimMessage.value = `Termine en ${duration} ms.`
+    aimMessage.value = `Terminé en ${duration} ms.`
     return
   }
 
@@ -640,7 +578,7 @@ function hitAimTarget() {
 const aimDuration = computed(() => {
   if (aimStartedAt.value === null) return null
   const end = aimFinishedAt.value ?? clockNow.value
-  return Math.round(end - aimStartedAt.value)
+  return Math.max(0, Math.round(end - aimStartedAt.value))
 })
 
 const aimAccuracy = computed(() => {
@@ -652,11 +590,11 @@ const aimAccuracy = computed(() => {
 const aimAveragePerTarget = computed(() => {
   if (!aimHits.value || aimStartedAt.value === null) return null
   const elapsed = (aimFinishedAt.value ?? clockNow.value) - aimStartedAt.value
-  return Math.round(elapsed / aimHits.value)
+  return Math.max(0, Math.round(elapsed / aimHits.value))
 })
 
 const reflexStatus = ref<ReflexStatus>('idle')
-const reflexMessage = ref('Attends le vert puis clique le plus vite possible.')
+const reflexMessage = ref('Attends le vert, puis appuie le plus vite possible.')
 const reflexResult = ref<number | null>(null)
 const reflexBest = ref<number | null>(null)
 const reflexHistory = ref<number[]>([])
@@ -673,7 +611,7 @@ function clearReflexTimer() {
 function newReflexGame() {
   clearReflexTimer()
   reflexStatus.value = 'idle'
-  reflexMessage.value = 'Attends le vert puis clique le plus vite possible.'
+  reflexMessage.value = 'Attends le vert, puis appuie le plus vite possible.'
   reflexResult.value = null
 }
 
@@ -681,13 +619,16 @@ function startReflexRound() {
   clearReflexTimer()
   reflexStatus.value = 'waiting'
   reflexResult.value = null
-  reflexMessage.value = 'Prepare-toi... ne clique pas trop tot.'
+  reflexMessage.value = 'Prépare-toi… attends le vert.'
 
-  reflexTimer = window.setTimeout(() => {
-    reflexStatus.value = 'ready'
-    reflexStartedAt = performance.now()
-    reflexMessage.value = 'Maintenant.'
-  }, 1200 + Math.random() * 2200)
+  reflexTimer = window.setTimeout(
+    () => {
+      reflexStatus.value = 'ready'
+      reflexStartedAt = performance.now()
+      reflexMessage.value = 'Maintenant.'
+    },
+    1200 + Math.random() * 2200
+  )
 }
 
 function handleReflexPress() {
@@ -699,7 +640,7 @@ function handleReflexPress() {
   if (reflexStatus.value === 'waiting') {
     clearReflexTimer()
     reflexStatus.value = 'too-soon'
-    reflexMessage.value = 'Trop tot. Relance la manche.'
+    reflexMessage.value = 'Trop tôt ! Appuie pour réessayer.'
     reflexResult.value = null
     return
   }
@@ -719,7 +660,11 @@ const averageReflex = computed(() => {
 })
 
 const SNAKE_SIZE = 12
-const snake = ref([{ x: 5, y: 6 }, { x: 4, y: 6 }, { x: 3, y: 6 }])
+const snake = ref([
+  { x: 5, y: 6 },
+  { x: 4, y: 6 },
+  { x: 3, y: 6 }
+])
 const snakeFood = ref({ x: 9, y: 6 })
 const snakeDirection = ref<Direction>('right')
 const snakeNextDirection = ref<Direction>('right')
@@ -727,6 +672,9 @@ const snakeStatus = ref<SnakeStatus>('idle')
 const snakeScore = ref(0)
 const snakeBest = ref(0)
 let snakeTimer: number | undefined
+let snakeTurns: Direction[] = []
+const snakeLevel = computed(() => 1 + Math.floor(snakeScore.value / 30))
+const snakeDelay = computed(() => Math.max(75, 190 - (snakeLevel.value - 1) * 15))
 
 function snakeIndex(x: number, y: number) {
   return y * SNAKE_SIZE + x
@@ -758,7 +706,9 @@ function stopSnakeTimer() {
 
 function placeSnakeFood() {
   const occupied = new Set(snake.value.map(part => snakeIndex(part.x, part.y)))
-  const open = Array.from({ length: SNAKE_SIZE * SNAKE_SIZE }, (_, index) => index).filter(index => !occupied.has(index))
+  const open = Array.from({ length: SNAKE_SIZE * SNAKE_SIZE }, (_, index) => index).filter(
+    index => !occupied.has(index)
+  )
 
   if (!open.length) {
     snakeStatus.value = 'won'
@@ -772,9 +722,14 @@ function placeSnakeFood() {
 
 function newSnakeGame() {
   stopSnakeTimer()
-  snake.value = [{ x: 5, y: 6 }, { x: 4, y: 6 }, { x: 3, y: 6 }]
+  snake.value = [
+    { x: 5, y: 6 },
+    { x: 4, y: 6 },
+    { x: 3, y: 6 }
+  ]
   snakeDirection.value = 'right'
   snakeNextDirection.value = 'right'
+  snakeTurns = []
   snakeStatus.value = 'idle'
   snakeScore.value = 0
   snakeFood.value = { x: 9, y: 6 }
@@ -784,19 +739,34 @@ function startSnakeGame() {
   if (snakeStatus.value === 'playing') return
   if (snakeStatus.value === 'lost' || snakeStatus.value === 'won') newSnakeGame()
   snakeStatus.value = 'playing'
-  snakeTimer = window.setInterval(stepSnake, 150)
+  snakeTimer = window.setInterval(stepSnake, snakeDelay.value)
 }
 
 function setSnakeDirection(direction: Direction) {
+  if (snakeStatus.value === 'lost' || snakeStatus.value === 'won' || snakeStatus.value === 'paused') return
   const opposite: Record<Direction, Direction> = { up: 'down', down: 'up', left: 'right', right: 'left' }
-  if (opposite[snakeDirection.value] === direction) return
-  snakeNextDirection.value = direction
+  const last = snakeTurns.at(-1) ?? snakeDirection.value
+  if (opposite[last] === direction || snakeTurns.length >= 2) return
+  if (last !== direction) snakeTurns.push(direction)
   if (snakeStatus.value === 'idle') startSnakeGame()
+}
+
+function toggleSnakePause() {
+  if (snakeStatus.value === 'playing') {
+    snakeStatus.value = 'paused'
+    stopSnakeTimer()
+  } else startSnakeGame()
+}
+
+function pauseHiddenGame() {
+  if (snakeStatus.value === 'playing') toggleSnakePause()
+  if (reflexStatus.value === 'waiting' || reflexStatus.value === 'ready') newReflexGame()
 }
 
 function stepSnake() {
   if (snakeStatus.value !== 'playing') return
 
+  snakeNextDirection.value = snakeTurns.shift() ?? snakeDirection.value
   snakeDirection.value = snakeNextDirection.value
   const head = snake.value[0]!
   const delta: Record<Direction, { x: number, y: number }> = {
@@ -828,6 +798,10 @@ function stepSnake() {
     snakeScore.value += 10
     snakeBest.value = Math.max(snakeBest.value, snakeScore.value)
     placeSnakeFood()
+    if (snakeStatus.value === 'playing') {
+      stopSnakeTimer()
+      snakeTimer = window.setInterval(stepSnake, snakeDelay.value)
+    }
   }
 }
 
@@ -836,9 +810,11 @@ const tileScore = ref(0)
 const tileBest = ref(0)
 const tileStatus = ref<GameStatus>('playing')
 const tileWonOnce = ref(false)
+const tileUndo = ref<{ board: number[], score: number, won: boolean } | null>(null)
+const tileMoveCount = ref(0)
 
 function emptyTileIndexes(board = tileBoard.value) {
-  return board.map((value, index) => value ? null : index).filter((value): value is number => value !== null)
+  return board.map((value, index) => (value ? null : index)).filter((value): value is number => value !== null)
 }
 
 function spawnTile(board = tileBoard.value) {
@@ -851,30 +827,22 @@ function spawnTile(board = tileBoard.value) {
 }
 
 function newTileGame() {
+  tileUndo.value = null
+  tileMoveCount.value = 0
   tileBoard.value = spawnTile(spawnTile(Array(16).fill(0)))
   tileScore.value = 0
   tileStatus.value = 'playing'
   tileWonOnce.value = false
 }
 
-function mergeLine(line: number[]) {
-  const compact = line.filter(Boolean)
-  const merged: number[] = []
-  let gained = 0
-
-  for (let i = 0; i < compact.length; i++) {
-    if (compact[i] === compact[i + 1]) {
-      const value = compact[i]! * 2
-      merged.push(value)
-      gained += value
-      i += 1
-    } else {
-      merged.push(compact[i]!)
-    }
-  }
-
-  while (merged.length < 4) merged.push(0)
-  return { line: merged, gained }
+function undoTiles() {
+  if (!tileUndo.value) return
+  tileBoard.value = tileUndo.value.board
+  tileScore.value = tileUndo.value.score
+  tileWonOnce.value = tileUndo.value.won
+  tileStatus.value = 'playing'
+  tileUndo.value = null
+  tileMoveCount.value++
 }
 
 function moveTiles(direction: TileDirection) {
@@ -885,11 +853,12 @@ function moveTiles(direction: TileDirection) {
   let gained = 0
 
   for (let i = 0; i < 4; i++) {
-    const line = direction === 'left' || direction === 'right'
-      ? [0, 1, 2, 3].map(x => tileBoard.value[i * 4 + x]!)
-      : [0, 1, 2, 3].map(y => tileBoard.value[y * 4 + i]!)
+    const line
+      = direction === 'left' || direction === 'right'
+        ? [0, 1, 2, 3].map(x => tileBoard.value[i * 4 + x]!)
+        : [0, 1, 2, 3].map(y => tileBoard.value[y * 4 + i]!)
     const oriented = direction === 'right' || direction === 'down' ? [...line].reverse() : line
-    const merged = mergeLine(oriented)
+    const merged = mergeTileLine(oriented)
     const finalLine = direction === 'right' || direction === 'down' ? [...merged.line].reverse() : merged.line
     gained += merged.gained
 
@@ -904,6 +873,8 @@ function moveTiles(direction: TileDirection) {
 
   if (next.every((value, index) => value === before[index])) return
 
+  tileUndo.value = { board: before, score: tileScore.value, won: tileWonOnce.value }
+  tileMoveCount.value++
   tileBoard.value = spawnTile(next)
   tileScore.value += gained
   tileBest.value = Math.max(tileBest.value, tileScore.value)
@@ -934,33 +905,25 @@ function canMoveTiles(board = tileBoard.value) {
 }
 
 function continueTileGame() {
-  if (tileStatus.value === 'won') tileStatus.value = 'playing'
-}
-
-function tileClass(value: number) {
-  if (!value) return 'bg-white/45 dark:bg-white/5 text-transparent'
-  if (value <= 4) return 'bg-elevated text-highlighted'
-  if (value <= 16) return 'bg-warning/25 text-highlighted'
-  if (value <= 64) return 'bg-warning text-inverted'
-  if (value <= 256) return 'bg-primary/35 text-highlighted'
-  if (value <= 1024) return 'bg-success text-inverted'
-  return 'bg-info text-inverted'
+  if (tileStatus.value === 'won') tileStatus.value = canMoveTiles() ? 'playing' : 'lost'
 }
 
 const CONNECT_ROWS = 6
 const CONNECT_COLS = 7
 const connectBoard = ref<(ConnectDisc | null)[]>(Array(CONNECT_ROWS * CONNECT_COLS).fill(null))
 const connectStatus = ref<GameStatus>('playing')
-const connectMessage = ref('Depose un disque. Aligne 4 avant l IA.')
+const connectMessage = ref('Dépose un disque. Aligne quatre avant l’IA.')
 const connectScores = ref({ player: 0, ai: 0, draw: 0 })
 const connectWinningLine = ref<number[]>([])
+const connectThinking = ref(false)
 let connectTimer: number | undefined
 
 function newConnectGame() {
+  connectThinking.value = false
   if (connectTimer) window.clearTimeout(connectTimer)
   connectBoard.value = Array(CONNECT_ROWS * CONNECT_COLS).fill(null)
   connectStatus.value = 'playing'
-  connectMessage.value = 'Depose un disque. Aligne 4 avant l IA.'
+  connectMessage.value = 'Dépose un disque. Aligne quatre avant l’IA.'
   connectWinningLine.value = []
 }
 
@@ -975,7 +938,7 @@ function availableRow(board: (ConnectDisc | null)[], col: number) {
   return -1
 }
 
-function findConnectWinner(board: (ConnectDisc | null)[]) {
+function findConnectWinner(board: (ConnectDisc | null)[], highlight = false) {
   const directions = [
     { r: 0, c: 1 },
     { r: 1, c: 0 },
@@ -1001,7 +964,7 @@ function findConnectWinner(board: (ConnectDisc | null)[]) {
         }
 
         if (line.length === 4) {
-          connectWinningLine.value = line
+          if (highlight) connectWinningLine.value = line
           return start
         }
       }
@@ -1013,7 +976,7 @@ function findConnectWinner(board: (ConnectDisc | null)[]) {
 
 function maybeEndConnect(board: (ConnectDisc | null)[]) {
   connectWinningLine.value = []
-  const winner = findConnectWinner(board)
+  const winner = findConnectWinner(board, true)
 
   if (winner === 'player') {
     connectStatus.value = 'won'
@@ -1025,14 +988,14 @@ function maybeEndConnect(board: (ConnectDisc | null)[]) {
   if (winner === 'ai') {
     connectStatus.value = 'lost'
     connectScores.value.ai += 1
-    connectMessage.value = 'L IA aligne 4 disques.'
+    connectMessage.value = 'L’IA aligne 4 disques.'
     return true
   }
 
   if (board.every(Boolean)) {
     connectStatus.value = 'draw'
     connectScores.value.draw += 1
-    connectMessage.value = 'Grille pleine. Egalite.'
+    connectMessage.value = 'Grille pleine. Égalité.'
     return true
   }
 
@@ -1047,13 +1010,24 @@ function chooseConnectColumn(board: (ConnectDisc | null)[]) {
       const row = availableRow(board, col)
       const next = [...board]
       next[connectIndex(row, col)] = disc
-      connectWinningLine.value = []
       if (findConnectWinner(next) === disc) return col
     }
   }
 
-  const preferred = [3, 2, 4, 1, 5, 0, 6].filter(col => open.includes(col))
-  return preferred[Math.floor(Math.random() * preferred.length)]!
+  // Avoid moves that give the player an immediate winning reply.
+  const safe = open.filter((col) => {
+    const next = [...board]
+    next[connectIndex(availableRow(next, col), col)] = 'ai'
+    return !open.some((reply) => {
+      const row = availableRow(next, reply)
+      if (row < 0) return false
+      const response = [...next]
+      response[connectIndex(row, reply)] = 'player'
+      return findConnectWinner(response) === 'player'
+    })
+  })
+  const candidates = safe.length ? safe : open
+  return [3, 2, 4, 1, 5, 0, 6].find(col => candidates.includes(col))!
 }
 
 function dropConnect(col: number, disc: ConnectDisc) {
@@ -1066,16 +1040,18 @@ function dropConnect(col: number, disc: ConnectDisc) {
 }
 
 function playConnect(col: number) {
-  if (connectStatus.value !== 'playing') return
+  if (connectStatus.value !== 'playing' || connectThinking.value) return
   if (!dropConnect(col, 'player')) return
   if (maybeEndConnect(connectBoard.value)) return
 
-  connectMessage.value = 'L IA joue...'
+  connectThinking.value = true
+  connectMessage.value = 'L’IA réfléchit…'
   connectTimer = window.setTimeout(() => {
     if (connectStatus.value !== 'playing') return
     dropConnect(chooseConnectColumn(connectBoard.value), 'ai')
+    connectThinking.value = false
     if (maybeEndConnect(connectBoard.value)) return
-    connectMessage.value = 'A toi.'
+    connectMessage.value = 'À toi.'
   }, 260)
 }
 
@@ -1084,7 +1060,7 @@ const MINE_COUNT = 10
 const minesBoard = ref<MineCell[]>([])
 const minesStatus = ref<GameStatus>('playing')
 const minesReady = ref(false)
-const minesMessage = ref('Premier clic garanti. Evite les mines, marque les cases suspectes.')
+const minesMessage = ref('Premier clic protégé. Ouvre une case ou pose un drapeau.')
 const minesStartedAt = ref<number | null>(null)
 const minesFinishedAt = ref<number | null>(null)
 const minesWins = ref(0)
@@ -1099,10 +1075,11 @@ function emptyMineBoard() {
 }
 
 function newMinesGame() {
+  flagMode.value = false
   minesBoard.value = emptyMineBoard()
   minesStatus.value = 'playing'
   minesReady.value = false
-  minesMessage.value = 'Premier clic garanti. Evite les mines, marque les cases suspectes.'
+  minesMessage.value = 'Premier clic protégé. Ouvre une case ou pose un drapeau.'
   minesStartedAt.value = null
   minesFinishedAt.value = null
 }
@@ -1126,7 +1103,7 @@ function mineNeighbors(index: number) {
 }
 
 function prepareMines(firstIndex: number) {
-  const board = emptyMineBoard()
+  const board = emptyMineBoard().map((cell, index) => ({ ...cell, flagged: minesBoard.value[index]?.flagged ?? false }))
   const blocked = new Set([firstIndex, ...mineNeighbors(firstIndex)])
   const candidates = board.map((_, index) => index).filter(index => !blocked.has(index))
 
@@ -1171,17 +1148,27 @@ function checkMinesWin() {
   minesStatus.value = 'won'
   minesFinishedAt.value = performance.now()
   minesWins.value += 1
-  minesMessage.value = 'Terrain nettoye.'
+  minesMessage.value = 'Terrain nettoyé !'
 }
 
 function revealMine(index: number) {
   if (minesStatus.value !== 'playing') return
+  if (minesBoard.value[index]?.flagged) return
   if (!minesReady.value) prepareMines(index)
   const cell = minesBoard.value[index]!
-  if (cell.flagged || cell.revealed) return
+  if (cell.flagged) return
+  if (cell.revealed) {
+    const neighbors = mineNeighbors(index)
+    if (!cell.adjacent || neighbors.filter(next => minesBoard.value[next]!.flagged).length !== cell.adjacent) return
+    for (const next of neighbors) {
+      if (!minesBoard.value[next]!.revealed && !minesBoard.value[next]!.flagged) revealMine(next)
+      if (minesStatus.value !== 'playing') break
+    }
+    return
+  }
 
   if (cell.mine) {
-    minesBoard.value = minesBoard.value.map(mineCell => mineCell.mine ? { ...mineCell, revealed: true } : mineCell)
+    minesBoard.value = minesBoard.value.map(mineCell => (mineCell.mine ? { ...mineCell, revealed: true } : mineCell))
     minesStatus.value = 'lost'
     minesFinishedAt.value = performance.now()
     minesMessage.value = 'Boom. Nouvelle grille ?'
@@ -1197,7 +1184,7 @@ function toggleMineFlag(index: number) {
   const cell = minesBoard.value[index]!
   if (cell.revealed) return
   if (!cell.flagged && minesFlagsLeft.value <= 0) {
-    minesMessage.value = 'Tous les drapeaux sont deja poses.'
+    minesMessage.value = 'Tous les drapeaux sont déjà posés.'
     return
   }
   const next = [...minesBoard.value]
@@ -1208,7 +1195,7 @@ function toggleMineFlag(index: number) {
 const minesFlagsLeft = computed(() => MINE_COUNT - minesBoard.value.filter(cell => cell.flagged).length)
 const minesElapsed = computed(() => {
   if (minesStartedAt.value === null) return 0
-  return Math.round(((minesFinishedAt.value ?? clockNow.value) - minesStartedAt.value) / 1000)
+  return Math.max(0, Math.floor(((minesFinishedAt.value ?? clockNow.value) - minesStartedAt.value) / 1000))
 })
 
 const MEMORY_VALUES = [
@@ -1226,7 +1213,15 @@ const memoryOpen = ref<number[]>([])
 const memoryMoves = ref(0)
 const memoryStatus = ref<GameStatus>('playing')
 const memoryBest = ref<number | null>(null)
-const memoryMessage = ref('Retourne deux cartes et retrouve toutes les paires.')
+const memoryMessage = ref('Retourne deux cartes et retrouve les huit paires.')
+const memoryStartedAt = ref<number | null>(null)
+const memoryFinishedAt = ref<number | null>(null)
+const memoryCombo = ref(0)
+const memoryElapsed = computed(() =>
+  memoryStartedAt.value === null
+    ? 0
+    : Math.max(0, Math.floor(((memoryFinishedAt.value ?? clockNow.value) - memoryStartedAt.value) / 1000))
+)
 let memoryTimer: number | undefined
 
 function shuffle<T>(items: T[]) {
@@ -1239,6 +1234,9 @@ function shuffle<T>(items: T[]) {
 }
 
 function newMemoryGame() {
+  memoryStartedAt.value = null
+  memoryFinishedAt.value = null
+  memoryCombo.value = 0
   if (memoryTimer) window.clearTimeout(memoryTimer)
   memoryCards.value = shuffle([...MEMORY_VALUES, ...MEMORY_VALUES]).map((item, index) => ({
     id: index,
@@ -1251,7 +1249,7 @@ function newMemoryGame() {
   memoryOpen.value = []
   memoryMoves.value = 0
   memoryStatus.value = 'playing'
-  memoryMessage.value = 'Retourne deux cartes et retrouve toutes les paires.'
+  memoryMessage.value = 'Retourne deux cartes et retrouve les huit paires.'
 }
 
 function flipMemoryCard(index: number) {
@@ -1260,6 +1258,7 @@ function flipMemoryCard(index: number) {
   const card = memoryCards.value[index]!
   if (card.revealed || card.matched) return
 
+  if (memoryStartedAt.value === null) memoryStartedAt.value = performance.now()
   const next = [...memoryCards.value]
   next[index] = { ...card, revealed: true }
   memoryCards.value = next
@@ -1273,58 +1272,41 @@ function flipMemoryCard(index: number) {
   const second = memoryCards.value[secondIndex!]!
 
   if (first.value === second.value) {
+    memoryCombo.value++
     memoryCards.value = memoryCards.value.map((item, itemIndex) => {
       if (itemIndex === firstIndex || itemIndex === secondIndex) return { ...item, matched: true }
       return item
     })
     memoryOpen.value = []
-    memoryMessage.value = 'Paire trouvee.'
+    memoryMessage.value = 'Paire trouvée !'
 
     if (memoryCards.value.every(item => item.matched)) {
       memoryStatus.value = 'won'
+      memoryFinishedAt.value = performance.now()
       memoryBest.value = memoryBest.value === null ? memoryMoves.value : Math.min(memoryBest.value, memoryMoves.value)
-      memoryMessage.value = `Grille terminee en ${memoryMoves.value} coups.`
+      memoryMessage.value = `Grille terminée en ${memoryMoves.value} coups.`
     }
     return
   }
 
-  memoryMessage.value = 'Pas la bonne paire.'
+  memoryCombo.value = 0
+  memoryMessage.value = 'Observe bien… puis réessaie.'
   memoryTimer = window.setTimeout(() => {
     memoryCards.value = memoryCards.value.map((item, itemIndex) => {
       if (itemIndex === firstIndex || itemIndex === secondIndex) return { ...item, revealed: false }
       return item
     })
     memoryOpen.value = []
-  }, 650)
+  }, 850)
 }
-
-const higherTone = computed(() => {
-  if (higherStatus.value === 'won') return 'success'
-  if (higherStatus.value === 'lost') return 'error'
-  return 'neutral'
-})
-
-const gameProgress = computed(() => {
-  if (selectedGame.value === 'wordle') return Math.round((guesses.value.length / MAX_GUESSES) * 100)
-  if (selectedGame.value === 'higher') return Math.round((higherHistory.value.length / HIGHER_MAX_ATTEMPTS) * 100)
-  if (selectedGame.value === 'aim') return Math.round((aimHits.value / AIM_TOTAL_TARGETS) * 100)
-  if (selectedGame.value === 'snake') return Math.min(100, Math.round((snake.value.length / (SNAKE_SIZE * SNAKE_SIZE)) * 100))
-  if (selectedGame.value === 'tiles') return Math.min(100, Math.round((Math.log2(Math.max(...tileBoard.value, 2)) / 11) * 100))
-  if (selectedGame.value === 'connect') return Math.round((connectBoard.value.filter(Boolean).length / connectBoard.value.length) * 100)
-  if (selectedGame.value === 'mines') {
-    const safe = MINE_SIZE * MINE_SIZE - MINE_COUNT
-    return Math.round((minesBoard.value.filter(cell => !cell.mine && cell.revealed).length / safe) * 100)
-  }
-  if (selectedGame.value === 'memory') return Math.round((memoryCards.value.filter(card => card.matched).length / memoryCards.value.length) * 100)
-  return 0
-})
 
 const gameStatus = computed(() => {
   if (selectedGame.value === 'wordle') return wordleStatus.value
   if (selectedGame.value === 'higher') return higherStatus.value
   if (selectedGame.value === 'tic') return ticStatus.value
   if (selectedGame.value === 'aim') return aimStatus.value === 'done' ? 'won' : 'playing'
-  if (selectedGame.value === 'reflex') return reflexStatus.value === 'done' ? 'won' : reflexStatus.value === 'too-soon' ? 'lost' : 'playing'
+  if (selectedGame.value === 'reflex')
+    return reflexStatus.value === 'done' ? 'won' : reflexStatus.value === 'too-soon' ? 'lost' : 'playing'
   if (selectedGame.value === 'snake') return snakeStatus.value === 'idle' ? 'playing' : snakeStatus.value
   if (selectedGame.value === 'tiles') return tileStatus.value
   if (selectedGame.value === 'connect') return connectStatus.value
@@ -1332,25 +1314,21 @@ const gameStatus = computed(() => {
   return memoryStatus.value
 })
 
-const gameStatusColor = computed(() => {
-  if (gameStatus.value === 'won') return 'success'
-  if (gameStatus.value === 'lost') return 'error'
-  if (gameStatus.value === 'draw') return 'warning'
-  return selectedGameMeta.value.color
-})
-
 const gameStatusLabel = computed(() => {
-  if (gameStatus.value === 'won') return selectedGame.value === 'aim' || selectedGame.value === 'reflex' ? 'Run termine' : 'Victoire'
-  if (gameStatus.value === 'lost') return 'A retenter'
-  if (gameStatus.value === 'draw') return 'Egalite'
-  if (selectedGame.value === 'snake' && snakeStatus.value === 'idle') return 'Pret'
-  if (selectedGame.value === 'aim' && aimStatus.value === 'idle') return 'Pret'
-  if (selectedGame.value === 'reflex' && reflexStatus.value === 'idle') return 'Pret'
+  if (gameStatus.value === 'paused') return 'En pause'
+  if (gameStatus.value === 'won')
+    return selectedGame.value === 'aim' || selectedGame.value === 'reflex' ? 'Terminé' : 'Victoire'
+  if (gameStatus.value === 'lost') return 'À retenter'
+  if (gameStatus.value === 'draw') return 'Égalité'
+  if (selectedGame.value === 'snake' && snakeStatus.value === 'idle') return 'Prêt'
+  if (selectedGame.value === 'aim' && aimStatus.value === 'idle') return 'Prêt'
+  if (selectedGame.value === 'reflex' && reflexStatus.value === 'idle') return 'Prêt'
   return 'En cours'
 })
 
 const gameMessage = computed(() => {
-  if (selectedGame.value === 'wordle') return wordleMessage.value || 'Trouve le mot en six essais. Les couleurs te donnent la position des lettres.'
+  if (selectedGame.value === 'wordle')
+    return wordleMessage.value || 'Trouve le mot en six essais. Les couleurs te guident.'
   if (selectedGame.value === 'higher') return higherMessage.value
   if (selectedGame.value === 'tic') return ticMessage.value
   if (selectedGame.value === 'aim') return aimMessage.value
@@ -1358,9 +1336,15 @@ const gameMessage = computed(() => {
   if (selectedGame.value === 'snake') {
     if (snakeStatus.value === 'lost') return 'Collision. Relance pour battre ton score.'
     if (snakeStatus.value === 'won') return 'Plateau complet.'
-    return 'Fleches ou ZQSD. Le premier mouvement lance la partie.'
+    if (snakeStatus.value === 'paused') return 'Souffle un peu. Reprends quand tu veux.'
+    return 'Un fruit, dix points. Garde une sortie.'
   }
-  if (selectedGame.value === 'tiles') return tileStatus.value === 'won' ? '2048 atteint. Tu peux continuer.' : tileStatus.value === 'lost' ? 'Plus aucun mouvement disponible.' : 'Fusionne les tuiles avec les fleches ou ZQSD.'
+  if (selectedGame.value === 'tiles')
+    return tileStatus.value === 'won'
+      ? '2048 atteint ! Tu peux continuer.'
+      : tileStatus.value === 'lost'
+        ? 'Plus aucun mouvement disponible.'
+        : 'Fusionne les tuiles avec les flèches ou par glissement.'
   if (selectedGame.value === 'connect') return connectMessage.value
   if (selectedGame.value === 'mines') return minesMessage.value
   return memoryMessage.value
@@ -1370,9 +1354,9 @@ const gameStats = computed(() => {
   if (selectedGame.value === 'wordle') {
     return [
       { label: 'Essais', value: `${guesses.value.length}/${MAX_GUESSES}` },
-      { label: 'Winrate', value: `${wordleWinRate.value}%` },
-      { label: 'Serie', value: String(wordleStats.value.streak) },
-      { label: 'Best', value: wordleStats.value.best ? String(wordleStats.value.best) : '-' }
+      { label: 'Victoires', value: `${wordleWinRate.value}%` },
+      { label: 'Série', value: String(wordleStats.value.streak) },
+      { label: 'Record', value: wordleStats.value.best ? String(wordleStats.value.best) : '-' }
     ]
   }
 
@@ -1397,34 +1381,34 @@ const gameStats = computed(() => {
   if (selectedGame.value === 'aim') {
     return [
       { label: 'Cibles', value: `${aimHits.value}/${AIM_TOTAL_TARGETS}` },
-      { label: 'Precision', value: `${aimAccuracy.value}%` },
+      { label: 'Précision', value: `${aimAccuracy.value}%` },
       { label: 'Temps', value: aimDuration.value !== null ? `${aimDuration.value} ms` : '-' },
-      { label: 'Moyenne', value: aimAveragePerTarget.value !== null ? `${aimAveragePerTarget.value} ms` : '-' }
+      { label: 'Record', value: aimBest.value !== null ? `${(aimBest.value / 1000).toFixed(2)} s` : '-' }
     ]
   }
 
   if (selectedGame.value === 'reflex') {
     return [
       { label: 'Dernier', value: reflexResult.value !== null ? `${reflexResult.value} ms` : '-' },
-      { label: 'Best', value: reflexBest.value !== null ? `${reflexBest.value} ms` : '-' },
+      { label: 'Record', value: reflexBest.value !== null ? `${reflexBest.value} ms` : '-' },
       { label: 'Moyenne', value: averageReflex.value !== null ? `${averageReflex.value} ms` : '-' },
-      { label: 'Runs', value: String(reflexHistory.value.length) }
+      { label: 'Manches', value: String(reflexHistory.value.length) }
     ]
   }
 
   if (selectedGame.value === 'snake') {
     return [
       { label: 'Score', value: String(snakeScore.value) },
-      { label: 'Best', value: String(snakeBest.value) },
+      { label: 'Record', value: String(snakeBest.value) },
       { label: 'Longueur', value: String(snake.value.length) },
-      { label: 'Etat', value: snakeStatus.value === 'playing' ? 'Live' : snakeStatus.value === 'idle' ? 'Pret' : snakeStatus.value }
+      { label: 'Niveau', value: String(snakeLevel.value) }
     ]
   }
 
   if (selectedGame.value === 'tiles') {
     return [
       { label: 'Score', value: String(tileScore.value) },
-      { label: 'Best', value: String(tileBest.value) },
+      { label: 'Record', value: String(tileBest.value) },
       { label: 'Max', value: String(Math.max(...tileBoard.value)) },
       { label: 'Cases libres', value: String(emptyTileIndexes().length) }
     ]
@@ -1450,31 +1434,33 @@ const gameStats = computed(() => {
 
   return [
     { label: 'Coups', value: String(memoryMoves.value) },
-    { label: 'Paires', value: `${memoryCards.value.filter(card => card.matched).length / 2}/${MEMORY_VALUES.length}` },
-    { label: 'Best', value: memoryBest.value !== null ? String(memoryBest.value) : '-' },
-    { label: 'Ouvertes', value: String(memoryOpen.value.length) }
+    {
+      label: 'Paires',
+      value: `${memoryCards.value.filter(card => card.matched).length / 2}/${MEMORY_VALUES.length}`
+    },
+    { label: 'Record', value: memoryBest.value !== null ? String(memoryBest.value) : '-' },
+    { label: 'Temps', value: `${memoryElapsed.value} s` }
   ]
 })
 
-const controlHints = computed(() => {
-  if (selectedGame.value === 'wordle') return ['Clavier physique', 'Entree valide', 'Retour efface']
-  if (selectedGame.value === 'snake') return ['Fleches ou ZQSD', 'Boutons tactiles', 'Start manuel']
-  if (selectedGame.value === 'tiles') return ['Fleches ou ZQSD', 'Boutons tactiles', 'Continuer apres 2048']
-  if (selectedGame.value === 'mines') return ['Clic gauche: ouvrir', 'Clic droit: drapeau', 'Premier clic protege']
-  if (selectedGame.value === 'connect') return ['Clique une colonne', 'L IA repond', 'Centre utile']
-  if (selectedGame.value === 'aim') return ['Clique les cibles', 'Evite les rates', '15 cibles']
-  if (selectedGame.value === 'reflex') return ['Clique pour lancer', 'Attends le vert', 'Faux depart puni']
-  if (selectedGame.value === 'tic') return ['Tu joues X', 'L IA joue O', 'Aligne trois']
-  if (selectedGame.value === 'higher') return ['Entre 1-100', '8 essais', 'Observe la plage']
-  return ['Deux cartes', 'Memorise vite', 'Moins de coups']
-})
-
 function handleKeydown(event: KeyboardEvent) {
-  if (event.ctrlKey || event.metaKey || event.altKey) return
+  if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return
 
   const target = event.target as HTMLElement | null
   const tagName = target?.tagName?.toLowerCase()
-  if (tagName && ['input', 'textarea', 'select'].includes(tagName)) return
+  if (target?.isContentEditable || (tagName && ['input', 'textarea', 'select'].includes(tagName))) return
+  if (target?.closest('[role="dialog"], [role="listbox"]')) return
+  if (event.key === ' ' && selectedGame.value === 'snake' && tagName !== 'button') {
+    event.preventDefault()
+    toggleSnakePause()
+    return
+  }
+  if (event.key.toLowerCase() === 'f' && selectedGame.value !== 'wordle') {
+    event.preventDefault()
+    toggleFullscreen()
+    return
+  }
+  if ((event.key === 'Enter' || event.key === ' ') && target?.closest('button, a')) return
 
   if (selectedGame.value === 'wordle') {
     if (event.key === 'Enter') {
@@ -1502,6 +1488,8 @@ function handleKeydown(event: KeyboardEvent) {
   if (selectedGame.value === 'snake') {
     const map: Record<string, Direction | undefined> = {
       ArrowUp: 'up',
+      w: 'up',
+      W: 'up',
       z: 'up',
       Z: 'up',
       ArrowRight: 'right',
@@ -1511,6 +1499,8 @@ function handleKeydown(event: KeyboardEvent) {
       s: 'down',
       S: 'down',
       ArrowLeft: 'left',
+      a: 'left',
+      A: 'left',
       q: 'left',
       Q: 'left'
     }
@@ -1525,6 +1515,8 @@ function handleKeydown(event: KeyboardEvent) {
   if (selectedGame.value === 'tiles') {
     const map: Record<string, TileDirection | undefined> = {
       ArrowUp: 'up',
+      w: 'up',
+      W: 'up',
       z: 'up',
       Z: 'up',
       ArrowRight: 'right',
@@ -1534,6 +1526,8 @@ function handleKeydown(event: KeyboardEvent) {
       s: 'down',
       S: 'down',
       ArrowLeft: 'left',
+      a: 'left',
+      A: 'left',
       q: 'left',
       Q: 'left'
     }
@@ -1578,7 +1572,8 @@ function gameStateText() {
     reflex: {
       status: reflexStatus.value,
       result: reflexResult.value,
-      best: reflexBest.value
+      best: reflexBest.value,
+      history: reflexHistory.value
     },
     snake: {
       status: snakeStatus.value,
@@ -1595,22 +1590,31 @@ function gameStateText() {
     connect: {
       status: connectStatus.value,
       board: connectBoard.value,
+      thinking: connectThinking.value,
       winningLine: connectWinningLine.value
     },
     mines: {
       status: minesStatus.value,
       flagsLeft: minesFlagsLeft.value,
-      revealed: minesBoard.value.map((cell, index) => ({
-        index,
-        revealed: cell.revealed,
-        flagged: cell.flagged,
-        adjacent: cell.revealed ? cell.adjacent : null,
-        mine: minesStatus.value !== 'playing' && cell.mine
-      })).filter(cell => cell.revealed || cell.flagged || cell.mine)
+      revealed: minesBoard.value
+        .map((cell, index) => ({
+          index,
+          revealed: cell.revealed,
+          flagged: cell.flagged,
+          adjacent: cell.revealed ? cell.adjacent : null,
+          mine: minesStatus.value !== 'playing' && cell.mine
+        }))
+        .filter(cell => cell.revealed || cell.flagged || cell.mine)
     },
     memory: {
       status: memoryStatus.value,
       moves: memoryMoves.value,
+      elapsed: memoryElapsed.value,
+      cards: memoryCards.value.map(card => ({
+        revealed: card.revealed,
+        matched: card.matched,
+        value: card.revealed || card.matched ? card.value : null
+      })),
       open: memoryOpen.value,
       matched: memoryCards.value.filter(card => card.matched).length
     }
@@ -1618,7 +1622,7 @@ function gameStateText() {
 }
 
 function advanceTime(ms: number) {
-  const steps = Math.max(1, Math.round(ms / 150))
+  const steps = Math.max(0, Math.floor(ms / snakeDelay.value))
   for (let i = 0; i < steps; i++) {
     if (selectedGame.value === 'snake') stepSnake()
   }
@@ -1640,678 +1644,713 @@ onMounted(() => {
   newMinesGame()
   newMemoryGame()
   window.addEventListener('keydown', handleKeydown)
-  ;(window as Window & { render_game_to_text?: () => string, advanceTime?: (ms: number) => void }).render_game_to_text = gameStateText
-  ;(window as Window & { render_game_to_text?: () => string, advanceTime?: (ms: number) => void }).advanceTime = advanceTime
+  window.addEventListener('blur', pauseHiddenGame)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  ;(window as Window & { render_game_to_text?: () => string, advanceTime?: (ms: number) => void }).render_game_to_text
+    = gameStateText
+  ;(window as Window & { render_game_to_text?: () => string, advanceTime?: (ms: number) => void }).advanceTime
+    = advanceTime
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('blur', pauseHiddenGame)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   if (clockTimer) window.clearInterval(clockTimer)
   if (ticTimer) window.clearTimeout(ticTimer)
   if (connectTimer) window.clearTimeout(connectTimer)
   clearReflexTimer()
   stopSnakeTimer()
   if (memoryTimer) window.clearTimeout(memoryTimer)
+  const gameWindow = window as Window & { render_game_to_text?: () => string, advanceTime?: (ms: number) => void }
+  if (gameWindow.render_game_to_text === gameStateText) delete gameWindow.render_game_to_text
+  if (gameWindow.advanceTime === advanceTime) delete gameWindow.advanceTime
 })
 
+function onVisibilityChange() {
+  if (document.hidden) pauseHiddenGame()
+}
+
+function newGame() {
+  const resetters = {
+    wordle: newWordleGame,
+    higher: newHigherGame,
+    tic: newTicGame,
+    aim: newAimGame,
+    reflex: newReflexGame,
+    snake: newSnakeGame,
+    tiles: newTileGame,
+    connect: newConnectGame,
+    mines: newMinesGame,
+    memory: newMemoryGame
+  }
+  resetters[selectedGame.value]()
+}
+
+let swipeStart: { x: number, y: number } | null = null
+function startSwipe(event: PointerEvent) {
+  if (!event.isPrimary || event.button !== 0) return
+  swipeStart = { x: event.clientX, y: event.clientY }
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+function endSwipe(event: PointerEvent) {
+  if (!swipeStart || !event.isPrimary) return
+  const dx = event.clientX - swipeStart.x
+  const dy = event.clientY - swipeStart.y
+  swipeStart = null
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 22) return
+  const direction = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up'
+  if (selectedGame.value === 'snake') setSnakeDirection(direction)
+  else moveTiles(direction)
+}
+
+function pressAim(event: PointerEvent, target: boolean) {
+  if (!event.isPrimary || event.button !== 0) return
+  if (target) hitAimTarget()
+  else missAimTarget()
+}
+
+function saveBest(key: string, value: number | null, lower = false) {
+  if (value === null || !Number.isFinite(value) || value < 0) return
+  const previous = records.value[key]
+  if (typeof previous !== 'number' || !Number.isFinite(previous) || (lower ? value < previous : value > previous)) {
+    records.value = { ...records.value, [key]: value }
+  }
+}
+
+onMounted(() => {
+  wordleStats.value.best = records.value[`wordle-${wordLength.value}`] || 0
+  for (const [key, target] of [
+    ['reflex', reflexBest],
+    ['aim', aimBest],
+    ['snake', snakeBest],
+    ['tiles', tileBest],
+    ['memory', memoryBest]
+  ] as const) {
+    const value = records.value[key]
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) target.value = value
+  }
+})
+watch(
+  () => wordleStats.value.best,
+  (value) => {
+    if (value > 0) saveBest(`wordle-${wordLength.value}`, value, true)
+  }
+)
+watch(reflexBest, value => saveBest('reflex', value, true))
+watch(aimBest, value => saveBest('aim', value, true))
+watch(snakeBest, value => saveBest('snake', value))
+watch(tileBest, value => saveBest('tiles', value))
+watch(memoryBest, value => saveBest('memory', value, true))
+watch(expertTic, newTicGame)
+
 watch(wordLength, () => {
+  wordleStats.value.best = records.value[`wordle-${wordLength.value}`] || 0
   newWordleGame()
 })
 </script>
 
 <template>
-  <UDashboardPanel id="games-redesign">
-    <template #header>
-      <UDashboardNavbar :title="selectedGameMeta.label">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
+  <main class="arcade-game-page" :style="{ '--game-accent': selectedGameMeta.accent }">
+    <nav class="game-breadcrumb" aria-label="Navigation">
+      <NuxtLink to="/games"><UIcon name="i-lucide-arrow-left" /> Tous les jeux</NuxtLink><span>{{ selectedGameMeta.category }} <i /> {{ selectedGameMeta.rhythm }}</span>
+    </nav>
+    <header class="game-heading">
+      <div>
+        <span class="arcade-eyebrow">MICROWEST / {{ selectedGameMeta.short }}</span>
+        <h1>{{ selectedGameMeta.label }}<span>.</span></h1>
+        <p>{{ selectedGameMeta.description }}</p>
+      </div>
+      <div class="game-heading-actions">
+        <UButton
+          icon="i-lucide-book-open"
+          label="Comment jouer"
+          variant="ghost"
+          color="neutral"
+          :aria-expanded="helpOpen"
+          @click="helpOpen = !helpOpen"
+        /><UButton
+          icon="i-lucide-rotate-ccw"
+          label="Nouvelle partie"
+          class="arcade-secondary"
+          @click="newGame"
+        />
+      </div>
+    </header>
+    <div v-if="helpOpen" class="arcade-help">
+      <UIcon :name="selectedGameMeta.icon" />
+      <p>{{ selectedGameMeta.rules }}</p>
+      <button type="button" aria-label="Fermer les règles" @click="helpOpen = false">
+        <UIcon name="i-lucide-x" />
+      </button>
+    </div>
 
-        <template #right>
-          <UButton
-            to="/games"
-            icon="i-lucide-layout-grid"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            label="Arcade"
-          />
-          <UBadge :color="gameStatusColor" variant="subtle">
-            {{ gameStatusLabel }}
-          </UBadge>
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div class="h-full overflow-auto bg-muted/30">
-        <div class="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4 md:p-6">
-          <section class="overflow-hidden rounded-lg border border-default bg-default shadow-sm">
-            <div class="grid lg:grid-cols-[minmax(0,1fr)_22rem]">
-              <div class="bg-gradient-to-br from-primary/15 via-default to-info/10 p-4 sm:p-5">
-                <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                  <div class="flex min-w-0 items-start gap-4">
-                    <div class="flex size-14 shrink-0 items-center justify-center rounded-lg bg-primary text-inverted shadow-sm">
-                      <UIcon :name="selectedGameMeta.icon" class="size-7" />
-                    </div>
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <UBadge :color="selectedGameMeta.color" variant="subtle">
-                          {{ selectedGameMeta.category }}
-                        </UBadge>
-                        <UBadge color="neutral" variant="outline">
-                          {{ selectedGameMeta.rhythm }}
-                        </UBadge>
-                      </div>
-                      <h1 class="mt-2 text-3xl font-black tracking-tight text-highlighted sm:text-4xl">
-                        {{ selectedGameMeta.label }}
-                      </h1>
-                      <p class="mt-2 max-w-2xl text-sm leading-6 text-toned">
-                        {{ selectedGameMeta.description }}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="grid min-w-64 grid-cols-2 gap-2">
-                    <div
-                      v-for="stat in gameStats.slice(0, 2)"
-                      :key="stat.label"
-                      class="rounded-lg border border-default/70 bg-default/75 p-3"
-                    >
-                      <p class="text-xs font-semibold uppercase text-toned">
-                        {{ stat.label }}
-                      </p>
-                      <p class="mt-1 text-xl font-black text-highlighted">
-                        {{ stat.value }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="border-t border-default bg-elevated p-4 lg:border-l lg:border-t-0">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-xs font-semibold uppercase text-toned">
-                      Progression
-                    </p>
-                    <p class="mt-1 text-2xl font-black text-highlighted">
-                      {{ gameProgress }}%
-                    </p>
-                  </div>
-                  <div class="flex size-12 items-center justify-center rounded-lg border border-default bg-default text-primary">
-                    <UIcon name="i-lucide-activity" class="size-6" />
-                  </div>
-                </div>
-                <div class="mt-4 h-3 overflow-hidden rounded-full bg-muted">
-                  <div
-                    class="h-full rounded-full bg-primary transition-all"
-                    :style="{ width: `${gameProgress}%` }"
-                  />
-                </div>
-                <p class="mt-4 text-sm leading-6 text-toned">
-                  {{ gameMessage }}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <nav class="flex gap-2 overflow-x-auto rounded-lg border border-default bg-default p-2 shadow-sm">
-            <UButton
-              v-for="game in games"
-              :key="game.value"
-              :to="`/games/${game.value}`"
-              :icon="game.icon"
-              :label="game.label"
-              :color="selectedGame === game.value ? game.color : 'neutral'"
-              :variant="selectedGame === game.value ? 'solid' : 'ghost'"
-              size="sm"
-              class="shrink-0"
-            />
-          </nav>
-
-          <div class="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
-            <main class="overflow-hidden rounded-lg border border-default bg-default shadow-sm">
-              <div class="border-b border-default px-4 py-3">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div class="flex min-w-0 items-center gap-3">
-                    <div class="flex size-10 items-center justify-center rounded-lg bg-elevated text-primary">
-                      <UIcon :name="selectedGameMeta.icon" class="size-5" />
-                    </div>
-                    <div class="min-w-0">
-                      <p class="truncate text-sm font-bold text-highlighted">
-                        Zone de jeu
-                      </p>
-                      <p class="truncate text-xs text-toned">
-                        {{ gameMessage }}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="flex flex-wrap gap-2">
-                    <UButton
-                      v-if="selectedGame === 'wordle'"
-                      icon="i-lucide-rotate-ccw"
-                      color="neutral"
-                      variant="outline"
-                      size="sm"
-                      label="Nouveau"
-                      @click="newWordleGame"
-                    />
-                    <UButton
-                      v-else-if="selectedGame === 'higher'"
-                      icon="i-lucide-rotate-ccw"
-                      color="neutral"
-                      variant="outline"
-                      size="sm"
-                      label="Relancer"
-                      @click="newHigherGame"
-                    />
-                    <UButton
-                      v-else-if="selectedGame === 'tic'"
-                      icon="i-lucide-rotate-ccw"
-                      color="neutral"
-                      variant="outline"
-                      size="sm"
-                      label="Manche"
-                      @click="newTicGame"
-                    />
-                    <template v-else-if="selectedGame === 'aim'">
-                      <UButton
-                        icon="i-lucide-play"
-                        color="primary"
-                        size="sm"
-                        label="Lancer"
-                        @click="startAimGame"
-                      />
-                      <UButton
-                        icon="i-lucide-rotate-ccw"
-                        color="neutral"
-                        variant="outline"
-                        size="sm"
-                        label="Reset"
-                        @click="newAimGame"
-                      />
-                    </template>
-                    <template v-else-if="selectedGame === 'reflex'">
-                      <UButton
-                        icon="i-lucide-play"
-                        color="primary"
-                        size="sm"
-                        label="Manche"
-                        @click="startReflexRound"
-                      />
-                      <UButton
-                        icon="i-lucide-rotate-ccw"
-                        color="neutral"
-                        variant="outline"
-                        size="sm"
-                        label="Reset"
-                        @click="newReflexGame"
-                      />
-                    </template>
-                    <template v-else-if="selectedGame === 'snake'">
-                      <UButton
-                        icon="i-lucide-play"
-                        color="primary"
-                        size="sm"
-                        label="Start"
-                        @click="startSnakeGame"
-                      />
-                      <UButton
-                        icon="i-lucide-rotate-ccw"
-                        color="neutral"
-                        variant="outline"
-                        size="sm"
-                        label="Reset"
-                        @click="newSnakeGame"
-                      />
-                    </template>
-                    <UButton
-                      v-else-if="selectedGame === 'tiles'"
-                      icon="i-lucide-rotate-ccw"
-                      color="neutral"
-                      variant="outline"
-                      size="sm"
-                      label="Nouvelle grille"
-                      @click="newTileGame"
-                    />
-                    <UButton
-                      v-else-if="selectedGame === 'connect'"
-                      icon="i-lucide-rotate-ccw"
-                      color="neutral"
-                      variant="outline"
-                      size="sm"
-                      label="Manche"
-                      @click="newConnectGame"
-                    />
-                    <UButton
-                      v-else-if="selectedGame === 'mines'"
-                      icon="i-lucide-rotate-ccw"
-                      color="neutral"
-                      variant="outline"
-                      size="sm"
-                      label="Nouvelle grille"
-                      @click="newMinesGame"
-                    />
-                    <UButton
-                      v-else
-                      icon="i-lucide-shuffle"
-                      color="neutral"
-                      variant="outline"
-                      size="sm"
-                      label="Melanger"
-                      @click="newMemoryGame"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div class="p-4 sm:p-5">
-                <section v-if="selectedGame === 'wordle'" class="mx-auto flex min-h-[34rem] max-w-4xl flex-col items-center justify-center gap-5">
-                  <div class="flex flex-wrap items-center justify-center gap-2">
-                    <USelect
-                      v-model="wordLength"
-                      :items="LENGTH_OPTIONS"
-                      size="sm"
-                      class="min-w-32"
-                    />
-                    <UBadge :color="gameStatusColor" variant="subtle">
-                      {{ wordleStatus === 'playing' ? `${MAX_GUESSES - guesses.length} essais restants` : gameStatusLabel }}
-                    </UBadge>
-                  </div>
-
-                  <div class="rounded-lg border border-default bg-elevated/50 p-3 shadow-inner" :class="flashInvalid ? 'animate-pulse' : ''">
-                    <div class="flex flex-col gap-1.5">
-                      <div v-for="(row, rowIndex) in board" :key="rowIndex" class="flex justify-center gap-1.5">
-                        <div
-                          v-for="(cell, cellIndex) in row"
-                          :key="cellIndex"
-                          :class="['flex size-11 items-center justify-center rounded-lg border-2 text-xl font-black uppercase transition sm:size-14 sm:text-2xl', cellClass(cell.status)]"
-                        >
-                          {{ cell.letter }}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="w-full max-w-2xl rounded-lg border border-default bg-default p-3">
-                    <div v-for="(row, rowIndex) in KEYBOARD_ROWS" :key="rowIndex" class="mb-1.5 flex justify-center gap-1 last:mb-0">
-                      <button
-                        v-for="key in row"
-                        :key="key"
-                        type="button"
-                        :class="['flex h-10 items-center justify-center rounded-md text-sm font-bold uppercase transition active:scale-95 sm:h-11', key === 'ENTER' || key === 'BACK' ? 'px-3 text-xs' : 'w-8 sm:w-10', keyClass(keyStatuses[key])]"
-                        @click="pressKey(key)"
-                      >
-                        <UIcon v-if="key === 'BACK'" name="i-lucide-delete" class="size-4" />
-                        <span v-else-if="key === 'ENTER'">OK</span>
-                        <span v-else>{{ key }}</span>
-                      </button>
-                    </div>
-                  </div>
-                </section>
-
-                <section v-else-if="selectedGame === 'higher'" class="grid min-h-[34rem] place-items-center">
-                  <div class="w-full max-w-3xl space-y-5">
-                    <div class="rounded-lg border border-default bg-elevated/50 p-5">
-                      <div class="mb-4 flex flex-wrap items-center gap-2">
-                        <UBadge :color="higherTone" variant="subtle">
-                          {{ higherStatus === 'playing' ? `${higherRemaining} essais restants` : gameStatusLabel }}
-                        </UBadge>
-                        <UBadge color="neutral" variant="outline">
-                          Plage {{ higherLow }} - {{ higherHigh }}
-                        </UBadge>
-                      </div>
-                      <div class="relative mb-6 h-5 overflow-hidden rounded-full bg-muted">
-                        <div class="absolute inset-y-0 rounded-full bg-primary transition-all" :style="{ left: `${higherLow - 1}%`, right: `${100 - higherHigh}%` }" />
-                      </div>
-                      <div class="flex flex-col gap-3 sm:flex-row">
-                        <UInput
-                          v-bind="posInputAttrs"
-                          v-model="higherInput"
-                          type="number"
-                          min="1"
-                          max="100"
-                          size="xl"
-                          class="sm:max-w-48"
-                          placeholder="Ex. 42"
-                          @keyup.enter="submitHigherGuess"
-                        />
-                        <UButton
-                          label="Tester"
-                          size="xl"
-                          icon="i-lucide-arrow-right"
-                          @click="submitHigherGuess"
-                        />
-                      </div>
-                    </div>
-
-                    <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      <div
-                        v-for="entry in higherHistory"
-                        :key="entry.value"
-                        class="rounded-lg border border-default bg-default p-3"
-                      >
-                        <p class="text-2xl font-black text-highlighted">
-                          {{ entry.value }}
-                        </p>
-                        <p class="text-sm font-semibold text-toned">
-                          {{ entry.hint === 'plus' ? 'Plus haut' : entry.hint === 'moins' ? 'Plus bas' : 'Trouve' }}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section v-else-if="selectedGame === 'tic'" class="flex min-h-[34rem] flex-col items-center justify-center gap-5">
-                  <div class="grid w-full max-w-md grid-cols-3 gap-2 rounded-lg border border-default bg-elevated/60 p-3">
-                    <button
-                      v-for="(cell, index) in ticBoard"
-                      :key="index"
-                      type="button"
-                      class="flex aspect-square items-center justify-center rounded-lg border text-5xl font-black transition hover:-translate-y-0.5 hover:bg-elevated sm:text-6xl"
-                      :class="ticWinningLine.includes(index) ? 'border-primary bg-primary/15 shadow-sm' : 'border-default bg-default'"
-                      @click="playTic(index)"
-                    >
-                      <span :class="cell === 'X' ? 'text-primary' : cell === 'O' ? 'text-warning' : 'text-muted/30'">{{ cell || '' }}</span>
-                    </button>
-                  </div>
-                </section>
-
-                <section v-else-if="selectedGame === 'aim'" class="space-y-4">
-                  <div class="relative h-[34rem] overflow-hidden rounded-lg border border-default bg-elevated" @click="missAimTarget">
-                    <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:32px_32px]" />
-                    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_38%)]" />
-                    <button
-                      type="button"
-                      class="absolute flex items-center justify-center rounded-full border-4 border-default bg-error text-inverted shadow-lg transition hover:scale-110 active:scale-95"
-                      :style="{ left: `${aimTarget.x}%`, top: `${aimTarget.y}%`, width: `${aimTarget.size}px`, height: `${aimTarget.size}px`, transform: 'translate(-50%, -50%)' }"
-                      @click.stop="hitAimTarget"
-                    >
-                      <span class="flex size-5 rounded-full border-2 border-inverted/80 bg-inverted/20" />
-                    </button>
-                    <div class="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-default/80 px-4 py-3 text-xs font-semibold uppercase text-toned backdrop-blur">
-                      <span>{{ aimHits }}/{{ AIM_TOTAL_TARGETS }} cibles</span>
-                      <span>{{ aimDuration !== null ? `${aimDuration} ms` : 'Pret' }}</span>
-                    </div>
-                  </div>
-                </section>
-
-                <section v-else-if="selectedGame === 'reflex'" class="grid min-h-[34rem] place-items-center">
-                  <button
-                    type="button"
-                    class="group flex min-h-[28rem] w-full max-w-3xl items-center justify-center rounded-lg border text-center transition active:scale-[0.99]"
-                    :class="[
-                      reflexStatus === 'ready' ? 'border-success bg-success/20 shadow-sm' : '',
-                      reflexStatus === 'waiting' ? 'border-warning bg-warning/15' : '',
-                      reflexStatus === 'too-soon' ? 'border-error bg-error/15' : '',
-                      reflexStatus === 'done' ? 'border-info bg-info/15' : '',
-                      reflexStatus === 'idle' ? 'border-default bg-elevated/60 hover:bg-elevated' : ''
-                    ]"
-                    @pointerdown.left="$event.isPrimary && handleReflexPress()"
-                    @keydown.enter.prevent="!$event.repeat && handleReflexPress()"
-                    @keydown.space.prevent="!$event.repeat && handleReflexPress()"
-                    @keyup.space.prevent
-                    @click="$event.detail === 0 && handleReflexPress()"
-                  >
-                    <div class="space-y-4 px-6">
-                      <p class="text-sm font-bold uppercase text-toned">
-                        Zone de clic
-                      </p>
-                      <p class="text-5xl font-black text-highlighted sm:text-7xl">
-                        {{ reflexStatus === 'ready' ? 'CLIQUE' : reflexStatus === 'waiting' ? '...' : reflexStatus === 'too-soon' ? 'TROP TOT' : reflexResult !== null ? `${reflexResult} ms` : 'START' }}
-                      </p>
-                      <p class="text-sm text-toned">
-                        {{ reflexMessage }}
-                      </p>
-                    </div>
-                  </button>
-                </section>
-
-                <section v-else-if="selectedGame === 'snake'" class="flex min-h-[34rem] flex-col items-center justify-center gap-4">
-                  <div class="grid w-full max-w-[34rem] grid-cols-12 gap-1 rounded-lg border border-default bg-inverted p-3 shadow-inner">
-                    <div
-                      v-for="cell in snakeCells"
-                      :key="`${cell.x}-${cell.y}`"
-                      class="aspect-square rounded-sm transition"
-                      :class="cell.head ? 'bg-success shadow-sm' : cell.body ? 'bg-success/70' : cell.food ? 'bg-error shadow-sm' : 'bg-default/15'"
-                    />
-                  </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <span />
-                    <UButton
-                      icon="i-lucide-chevron-up"
-                      color="neutral"
-                      variant="outline"
-                      aria-label="Haut"
-                      @click="setSnakeDirection('up')"
-                    />
-                    <span />
-                    <UButton
-                      icon="i-lucide-chevron-left"
-                      color="neutral"
-                      variant="outline"
-                      aria-label="Gauche"
-                      @click="setSnakeDirection('left')"
-                    />
-                    <UButton
-                      icon="i-lucide-play"
-                      color="primary"
-                      aria-label="Start"
-                      @click="startSnakeGame"
-                    />
-                    <UButton
-                      icon="i-lucide-chevron-right"
-                      color="neutral"
-                      variant="outline"
-                      aria-label="Droite"
-                      @click="setSnakeDirection('right')"
-                    />
-                    <span />
-                    <UButton
-                      icon="i-lucide-chevron-down"
-                      color="neutral"
-                      variant="outline"
-                      aria-label="Bas"
-                      @click="setSnakeDirection('down')"
-                    />
-                    <span />
-                  </div>
-                </section>
-
-                <section v-else-if="selectedGame === 'tiles'" class="flex min-h-[34rem] flex-col items-center justify-center gap-4">
-                  <UButton
-                    v-if="tileStatus === 'won'"
-                    label="Continuer"
-                    icon="i-lucide-play"
-                    size="sm"
-                    @click="continueTileGame"
-                  />
-                  <div class="grid w-full max-w-[31rem] grid-cols-4 gap-3 rounded-lg border border-default bg-elevated/70 p-3">
-                    <div
-                      v-for="(value, index) in tileBoard"
-                      :key="index"
-                      class="flex aspect-square items-center justify-center rounded-lg text-3xl font-black shadow-sm transition sm:text-4xl"
-                      :class="tileClass(value)"
-                    >
-                      {{ value || '' }}
-                    </div>
-                  </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <span />
-                    <UButton
-                      icon="i-lucide-chevron-up"
-                      color="neutral"
-                      variant="outline"
-                      aria-label="Haut"
-                      @click="moveTiles('up')"
-                    />
-                    <span />
-                    <UButton
-                      icon="i-lucide-chevron-left"
-                      color="neutral"
-                      variant="outline"
-                      aria-label="Gauche"
-                      @click="moveTiles('left')"
-                    />
-                    <UButton
-                      icon="i-lucide-rotate-ccw"
-                      color="neutral"
-                      variant="outline"
-                      aria-label="Reset"
-                      @click="newTileGame"
-                    />
-                    <UButton
-                      icon="i-lucide-chevron-right"
-                      color="neutral"
-                      variant="outline"
-                      aria-label="Droite"
-                      @click="moveTiles('right')"
-                    />
-                    <span />
-                    <UButton
-                      icon="i-lucide-chevron-down"
-                      color="neutral"
-                      variant="outline"
-                      aria-label="Bas"
-                      @click="moveTiles('down')"
-                    />
-                    <span />
-                  </div>
-                </section>
-
-                <section v-else-if="selectedGame === 'connect'" class="flex min-h-[34rem] flex-col items-center justify-center gap-4">
-                  <div class="grid w-full max-w-2xl grid-cols-7 gap-2 rounded-lg border border-default bg-info p-3 shadow-sm">
-                    <button
-                      v-for="col in CONNECT_COLS"
-                      :key="`drop-${col}`"
-                      type="button"
-                      class="mb-1 rounded-md bg-inverted/15 py-2 text-inverted transition hover:bg-inverted/25"
-                      @click="playConnect(col - 1)"
-                    >
-                      <UIcon name="i-lucide-chevron-down" class="mx-auto size-4" />
-                    </button>
-                    <div
-                      v-for="(disc, index) in connectBoard"
-                      :key="index"
-                      class="aspect-square rounded-full border-4 border-inverted/25 transition"
-                      :class="[
-                        disc === 'player' ? 'bg-error shadow-inner' : disc === 'ai' ? 'bg-warning shadow-inner' : 'bg-inverted/20',
-                        connectWinningLine.includes(index) ? 'ring-4 ring-inverted' : ''
-                      ]"
-                    />
-                  </div>
-                </section>
-
-                <section v-else-if="selectedGame === 'mines'" class="flex min-h-[34rem] flex-col items-center justify-center gap-4">
-                  <div class="grid w-full max-w-[34rem] grid-cols-8 gap-1 rounded-lg border border-default bg-elevated/70 p-3">
-                    <button
-                      v-for="(cell, index) in minesBoard"
-                      :key="index"
-                      type="button"
-                      class="flex aspect-square items-center justify-center rounded-md border text-sm font-black transition sm:text-lg"
-                      :class="cell.revealed ? cell.mine ? 'border-error bg-error text-inverted' : 'border-default bg-default text-highlighted' : cell.flagged ? 'border-warning bg-warning/20 text-warning' : 'border-default bg-accented hover:-translate-y-0.5 hover:bg-elevated'"
-                      @click="revealMine(index)"
-                      @contextmenu.prevent="toggleMineFlag(index)"
-                    >
-                      <UIcon v-if="cell.revealed && cell.mine" name="i-lucide-bomb" class="size-5" />
-                      <span v-else-if="cell.revealed && cell.adjacent">{{ cell.adjacent }}</span>
-                      <UIcon v-else-if="cell.flagged" name="i-lucide-flag" class="size-5" />
-                    </button>
-                  </div>
-                </section>
-
-                <section v-else class="flex min-h-[34rem] flex-col items-center justify-center gap-4">
-                  <div class="grid w-full max-w-[34rem] grid-cols-4 gap-3">
-                    <button
-                      v-for="(card, index) in memoryCards"
-                      :key="card.id"
-                      type="button"
-                      class="flex aspect-[1/1.12] flex-col items-center justify-center gap-2 rounded-lg border text-center font-black transition"
-                      :class="card.revealed || card.matched ? 'border-primary/50 bg-primary/10 text-primary shadow-sm' : 'border-default bg-elevated text-muted hover:-translate-y-1 hover:bg-accented hover:shadow-md'"
-                      @click="flipMemoryCard(index)"
-                    >
-                      <template v-if="card.revealed || card.matched">
-                        <UIcon :name="card.icon" class="size-7" />
-                        <span class="text-sm">{{ card.label }}</span>
-                      </template>
-                      <UIcon v-else name="i-lucide-sparkles" class="size-6" />
-                    </button>
-                  </div>
-                </section>
-              </div>
-            </main>
-
-            <aside class="space-y-4">
-              <section class="rounded-lg border border-default bg-default p-4 shadow-sm">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-sm font-bold text-highlighted">
-                      Tableau de bord
-                    </p>
-                    <p class="text-xs text-toned">
-                      Stats de la session
-                    </p>
-                  </div>
-                  <UBadge :color="gameStatusColor" variant="subtle">
-                    {{ gameStatusLabel }}
-                  </UBadge>
-                </div>
-                <div class="mt-4 grid grid-cols-2 gap-2">
-                  <div
-                    v-for="stat in gameStats"
-                    :key="stat.label"
-                    class="rounded-lg border border-default/70 bg-elevated/45 p-3"
-                  >
-                    <p class="text-xs font-semibold text-toned">
-                      {{ stat.label }}
-                    </p>
-                    <p class="mt-1 text-lg font-black text-highlighted">
-                      {{ stat.value }}
-                    </p>
-                  </div>
-                </div>
-              </section>
-
-              <section class="rounded-lg border border-default bg-default p-4 shadow-sm">
-                <p class="text-sm font-bold text-highlighted">
-                  Commandes
-                </p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                  <UBadge
-                    v-for="hint in controlHints"
-                    :key="hint"
-                    color="neutral"
-                    variant="outline"
-                  >
-                    {{ hint }}
-                  </UBadge>
-                </div>
-              </section>
-
-              <section class="rounded-lg border border-default bg-default p-4 shadow-sm">
-                <p class="text-sm font-bold text-highlighted">
-                  Tous les jeux
-                </p>
-                <div class="mt-3 grid gap-2">
-                  <UButton
-                    v-for="game in games"
-                    :key="game.value"
-                    :to="`/games/${game.value}`"
-                    :icon="game.icon"
-                    :label="game.label"
-                    :color="selectedGame === game.value ? game.color : 'neutral'"
-                    :variant="selectedGame === game.value ? 'soft' : 'ghost'"
-                    block
-                    class="justify-start"
-                  />
-                </div>
-              </section>
-            </aside>
-          </div>
+    <section
+      ref="stage"
+      class="arcade-stage"
+      :class="{ 'stage-fullscreen': isFullscreen }"
+      aria-label="Espace de jeu"
+    >
+      <div class="stage-toolbar">
+        <div class="stage-status" :data-state="gameStatus">
+          <span />{{ gameStatusLabel }}
+        </div>
+        <div class="stage-options">
+          <template v-if="selectedGame === 'wordle'">
+            <button
+              v-for="length in [5, 6, 7] as const"
+              :key="length"
+              type="button"
+              :aria-pressed="wordLength === length"
+              @click="wordLength = length"
+            >
+              {{ length }} lettres
+            </button>
+          </template>
+          <template v-if="selectedGame === 'tic'">
+            <button type="button" :aria-pressed="!expertTic" @click="expertTic = false">
+              Classique
+            </button><button type="button" :aria-pressed="expertTic" @click="expertTic = true">
+              Expert
+            </button>
+          </template>
+          <template v-if="selectedGame === 'mines'">
+            <button type="button" :aria-pressed="!flagMode" @click="flagMode = false">
+              <UIcon name="i-lucide-mouse-pointer-2" /> Ouvrir
+            </button><button type="button" :aria-pressed="flagMode" @click="flagMode = true">
+              <UIcon name="i-lucide-flag" /> Drapeau
+            </button>
+          </template>
+          <button
+            v-if="selectedGame === 'tiles'"
+            type="button"
+            :disabled="!tileUndo"
+            @click="undoTiles"
+          >
+            <UIcon name="i-lucide-undo-2" /> Annuler
+          </button>
+          <button
+            v-if="selectedGame === 'snake' && (snakeStatus === 'playing' || snakeStatus === 'paused')"
+            type="button"
+            @click="toggleSnakePause"
+          >
+            <UIcon :name="snakeStatus === 'paused' ? 'i-lucide-play' : 'i-lucide-pause'" />
+            {{ snakeStatus === 'paused' ? 'Reprendre' : 'Pause' }}
+          </button>
+          <button
+            type="button"
+            :aria-label="isFullscreen ? 'Quitter le plein écran' : 'Plein écran'"
+            :title="isFullscreen ? 'Quitter le plein écran' : 'Plein écran'"
+            @click="toggleFullscreen"
+          >
+            <UIcon :name="isFullscreen ? 'i-lucide-minimize' : 'i-lucide-maximize'" />
+          </button>
         </div>
       </div>
-    </template>
-  </UDashboardPanel>
+      <div class="arcade-scorebar">
+        <div v-for="stat in gameStats" :key="stat.label">
+          <span>{{ stat.label }}</span><strong>{{ stat.value }}</strong>
+        </div>
+      </div>
+
+      <div class="game-playfield" :class="`playfield-${selectedGame}`">
+        <section v-if="selectedGame === 'wordle'" class="wordle-game">
+          <div
+            class="wordle-board"
+            :class="{ 'board-shake': flashInvalid }"
+            role="img"
+            :aria-label="`Grille de ${wordLength} lettres, ${guesses.length} essais joués`"
+          >
+            <div v-for="(row, rowIndex) in board" :key="rowIndex" class="wordle-row">
+              <div
+                v-for="(cell, cellIndex) in row"
+                :key="`${rowIndex}-${cellIndex}-${cell.status}`"
+                class="wordle-cell"
+                :data-state="cell.status"
+                :class="{ 'has-letter': cell.letter }"
+                :style="{ '--letter-index': cellIndex }"
+                :aria-label="`${cell.letter || 'Vide'} : ${cell.status === 'correct' ? 'bien placée' : cell.status === 'present' ? 'mal placée' : cell.status === 'absent' ? 'absente' : 'à valider'}`"
+              >
+                {{ cell.letter }}
+              </div>
+            </div>
+          </div>
+          <div class="wordle-legend">
+            <span><i class="legend-correct" /> Bien placée</span><span><i class="legend-present" /> Mal placée</span><span><i class="legend-absent" /> Absente</span>
+          </div>
+          <div class="wordle-keyboard">
+            <div v-for="(row, rowIndex) in KEYBOARD_ROWS" :key="rowIndex">
+              <button
+                v-for="key in row"
+                :key="key"
+                type="button"
+                :data-state="keyStatuses[key]"
+                :class="{ 'key-wide': key === 'ENTER' || key === 'BACK' }"
+                :aria-label="key === 'BACK' ? 'Effacer une lettre' : key === 'ENTER' ? 'Valider le mot' : key"
+                :disabled="wordleStatus !== 'playing'"
+                @click="pressKey(key)"
+              >
+                <UIcon v-if="key === 'BACK'" name="i-lucide-delete" /><span v-else>{{
+                  key === 'ENTER' ? 'OK' : key
+                }}</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section v-else-if="selectedGame === 'higher'" class="higher-game">
+          <span class="arcade-eyebrow">{{
+            higherStatus === 'playing' ? 'LE NOMBRE SE TROUVE ENTRE' : 'LE NOMBRE ÉTAIT'
+          }}</span>
+          <div class="higher-range">
+            <template v-if="higherStatus === 'playing'">
+              <strong>{{ higherLow }}</strong><span>—</span><strong>{{ higherHigh }}</strong>
+            </template><strong v-else>{{ higherTarget }}</strong>
+          </div>
+          <div class="higher-track">
+            <div :style="{ left: `${higherLow - 1}%`, right: `${100 - higherHigh}%` }" />
+          </div>
+          <form v-if="higherStatus === 'playing'" class="higher-form" @submit.prevent="submitHigherGuess">
+            <UInput
+              v-model="higherInput"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              size="xl"
+              placeholder="Ton estimation"
+              aria-label="Ton estimation"
+            /><UButton
+              type="submit"
+              label="Tester"
+              icon="i-lucide-arrow-right"
+              class="arcade-primary"
+              size="xl"
+            />
+          </form>
+          <div class="higher-attempts" aria-label="Essais disponibles">
+            <span v-for="n in HIGHER_MAX_ATTEMPTS" :key="n" :class="{ used: n <= higherHistory.length }" />
+          </div>
+          <div class="higher-history">
+            <span
+              v-for="entry in higherHistory"
+              :key="entry.value"
+            ><strong>{{ entry.value }}</strong><UIcon
+              :name="
+                entry.hint === 'plus'
+                  ? 'i-lucide-arrow-up'
+                  : entry.hint === 'moins'
+                    ? 'i-lucide-arrow-down'
+                    : 'i-lucide-check'
+              "
+            /><small>{{
+              entry.hint === 'plus' ? 'Plus haut' : entry.hint === 'moins' ? 'Plus bas' : 'Trouvé'
+            }}</small></span>
+          </div>
+        </section>
+
+        <section v-else-if="selectedGame === 'tic'" class="tic-game">
+          <div class="duel-players">
+            <span :class="{ active: ticCurrent === 'X' && ticStatus === 'playing' }"><b>×</b> Toi</span><small>VS</small><span :class="{ active: ticCurrent === 'O' && ticStatus === 'playing' }"><b>○</b> {{ expertTic ? 'Expert' : 'IA' }}</span>
+          </div>
+          <div class="tic-board">
+            <button
+              v-for="(cell, index) in ticBoard"
+              :key="index"
+              type="button"
+              :aria-label="`Case ${index + 1}${cell ? ` : ${cell}` : ' libre'}`"
+              :disabled="Boolean(cell) || ticCurrent !== 'X' || ticStatus !== 'playing'"
+              :class="{ 'winning-cell': ticWinningLine.includes(index) }"
+              @click="playTic(index)"
+            >
+              <span v-if="cell" :class="cell === 'X' ? 'mark-player' : 'mark-ai'">{{ cell === 'X' ? '×' : '○' }}</span><span v-else class="tic-hover">×</span>
+            </button>
+          </div>
+        </section>
+
+        <section
+          v-else-if="selectedGame === 'aim'"
+          class="aim-arena"
+          aria-label="Terrain de précision"
+          @pointerdown="pressAim($event, false)"
+        >
+          <div class="aim-grid" />
+          <div v-if="aimStatus !== 'playing'" class="arena-overlay">
+            <span class="arena-emblem"><UIcon name="i-lucide-crosshair" /></span><span class="arcade-eyebrow">{{
+              aimStatus === 'done' ? 'SÉRIE TERMINÉE' : 'FAIS LE VIDE. VISE JUSTE.'
+            }}</span>
+            <h2>{{ aimStatus === 'done' ? `${((aimDuration ?? 0) / 1000).toFixed(2)} s` : 'Chaque cible compte.' }}</h2>
+            <p>
+              {{
+                aimStatus === 'done'
+                  ? `${aimAccuracy} % de précision · ${aimAveragePerTarget} ms par cible`
+                  : '15 cibles à toucher. Le chrono part au lancement.'
+              }}
+            </p>
+            <UButton
+              :label="aimStatus === 'done' ? 'Rejouer' : 'Lancer le chrono'"
+              icon="i-lucide-play"
+              class="arcade-primary"
+              size="lg"
+              @pointerdown.stop
+              @click.stop="startAimGame"
+            />
+          </div>
+          <button
+            v-else
+            type="button"
+            class="aim-target"
+            aria-label="Cible"
+            :style="{
+              left: `${aimTarget.x}%`,
+              top: `${aimTarget.y}%`,
+              width: `${aimTarget.size}px`,
+              height: `${aimTarget.size}px`
+            }"
+            @pointerdown.stop="pressAim($event, true)"
+            @keydown.enter.prevent="!$event.repeat && hitAimTarget()"
+            @keydown.space.prevent="!$event.repeat && hitAimTarget()"
+            @keyup.space.prevent
+            @click.stop="$event.detail === 0 && hitAimTarget()"
+          >
+            <span /><i />
+          </button>
+          <div class="aim-counter">
+            <span>{{ aimHits.toString().padStart(2, '0') }} <i>/ {{ AIM_TOTAL_TARGETS }}</i></span><span>{{ aimStatus === 'playing' ? ((aimDuration ?? 0) / 1000).toFixed(1) : '0.0' }}<i> s</i></span>
+          </div>
+        </section>
+
+        <section v-else-if="selectedGame === 'reflex'" class="reflex-game">
+          <button
+            type="button"
+            class="reflex-pad"
+            :data-state="reflexStatus"
+            @pointerdown.left="$event.isPrimary && handleReflexPress()"
+            @keydown.enter.prevent="!$event.repeat && handleReflexPress()"
+            @keydown.space.prevent="!$event.repeat && handleReflexPress()"
+            @keyup.space.prevent
+            @click="$event.detail === 0 && handleReflexPress()"
+          >
+            <span class="reflex-orbit" /><span class="reflex-orbit second" />
+            <span class="reflex-symbol"><UIcon
+              :name="
+                reflexStatus === 'ready'
+                  ? 'i-lucide-zap'
+                  : reflexStatus === 'waiting'
+                    ? 'i-lucide-ellipsis'
+                    : reflexStatus === 'too-soon'
+                      ? 'i-lucide-triangle-alert'
+                      : reflexStatus === 'done'
+                        ? 'i-lucide-check'
+                        : 'i-lucide-fingerprint'
+              "
+            /></span>
+            <span class="arcade-eyebrow">{{
+              reflexStatus === 'waiting'
+                ? 'ATTENDS LE SIGNAL'
+                : reflexStatus === 'ready'
+                  ? 'MAINTENANT !'
+                  : reflexStatus === 'done'
+                    ? 'TON TEMPS DE RÉACTION'
+                    : reflexStatus === 'too-soon'
+                      ? 'FAUX DÉPART'
+                      : 'À QUELLE VITESSE RÉAGIS-TU ?'
+            }}</span>
+            <strong>{{
+              reflexStatus === 'ready'
+                ? 'APPUIE !'
+                : reflexStatus === 'waiting'
+                  ? 'Pas encore…'
+                  : reflexStatus === 'too-soon'
+                    ? 'Trop tôt.'
+                    : reflexResult !== null
+                      ? reflexResult
+                      : 'Prêt ?'
+            }}<small v-if="reflexResult !== null">ms</small></strong>
+            <span class="reflex-instruction">{{
+              reflexStatus === 'waiting'
+                ? 'Le vert peut arriver à tout instant.'
+                : reflexStatus === 'ready'
+                  ? 'Souris, toucher, Entrée ou Espace.'
+                  : reflexStatus === 'done'
+                    ? 'Appuie pour tenter de faire mieux.'
+                    : reflexStatus === 'too-soon'
+                      ? 'Appuie pour réessayer.'
+                      : 'Appuie ici pour lancer une manche.'
+            }}</span>
+          </button>
+          <div v-if="reflexHistory.length" class="reflex-history">
+            <span>DERNIÈRES MANCHES</span><span
+              v-for="(time, index) in reflexHistory"
+              :key="index"
+              :class="{ 'best-time': time === Math.min(...reflexHistory) }"
+            >{{ time }}<small> ms</small></span>
+          </div>
+        </section>
+
+        <section v-else-if="selectedGame === 'snake'" class="snake-game">
+          <div
+            class="snake-board-wrap"
+            @pointerdown="startSwipe"
+            @pointerup="endSwipe"
+            @pointercancel="swipeStart = null"
+          >
+            <div class="snake-board" role="img" :aria-label="`Snake, score ${snakeScore}, niveau ${snakeLevel}`">
+              <div
+                v-for="(cell, index) in snakeCells"
+                :key="index"
+                class="snake-cell"
+                :class="{ 'snake-head': cell.head, 'snake-body': cell.body, 'snake-food': cell.food }"
+                :data-direction="cell.head ? snakeDirection : undefined"
+              >
+                <span v-if="cell.head" class="snake-eyes" /><span v-if="cell.food" />
+              </div>
+            </div>
+            <div v-if="snakeStatus !== 'playing'" class="board-overlay">
+              <UIcon
+                :name="
+                  snakeStatus === 'paused'
+                    ? 'i-lucide-pause'
+                    : snakeStatus === 'lost'
+                      ? 'i-lucide-rotate-ccw'
+                      : 'i-lucide-route'
+                "
+              />
+              <h2>
+                {{
+                  snakeStatus === 'idle'
+                    ? 'Prends le virage.'
+                    : snakeStatus === 'paused'
+                      ? 'Petite pause.'
+                      : snakeStatus === 'won'
+                        ? 'Plateau complet !'
+                        : 'Fin de course.'
+                }}
+              </h2>
+              <p>
+                {{
+                  snakeStatus === 'idle'
+                    ? 'Flèches, glissement ou commandes ci-dessous.'
+                    : snakeStatus === 'paused'
+                      ? 'Ta trajectoire t’attend.'
+                      : `${snakeScore} points · niveau ${snakeLevel}`
+                }}
+              </p>
+              <UButton
+                :label="snakeStatus === 'paused' ? 'Reprendre' : snakeStatus === 'idle' ? 'Jouer' : 'Rejouer'"
+                icon="i-lucide-play"
+                class="arcade-primary"
+                @pointerdown.stop
+                @pointerup.stop
+                @click="startSnakeGame"
+              />
+            </div>
+          </div>
+          <div class="direction-pad" aria-label="Direction">
+            <button
+              type="button"
+              class="direction-up"
+              aria-label="Haut"
+              @pointerdown.left.prevent="setSnakeDirection('up')"
+              @click="$event.detail === 0 && setSnakeDirection('up')"
+            >
+              <UIcon name="i-lucide-arrow-up" />
+            </button><button
+              type="button"
+              aria-label="Gauche"
+              @pointerdown.left.prevent="setSnakeDirection('left')"
+              @click="$event.detail === 0 && setSnakeDirection('left')"
+            >
+              <UIcon name="i-lucide-arrow-left" />
+            </button><button
+              type="button"
+              aria-label="Bas"
+              @pointerdown.left.prevent="setSnakeDirection('down')"
+              @click="$event.detail === 0 && setSnakeDirection('down')"
+            >
+              <UIcon name="i-lucide-arrow-down" />
+            </button><button
+              type="button"
+              aria-label="Droite"
+              @pointerdown.left.prevent="setSnakeDirection('right')"
+              @click="$event.detail === 0 && setSnakeDirection('right')"
+            >
+              <UIcon name="i-lucide-arrow-right" />
+            </button>
+          </div>
+        </section>
+
+        <section v-else-if="selectedGame === 'tiles'" class="tiles-game">
+          <div
+            class="tiles-board-wrap"
+            @pointerdown="startSwipe"
+            @pointerup="endSwipe"
+            @pointercancel="swipeStart = null"
+          >
+            <div class="tiles-board">
+              <div
+                v-for="(value, index) in tileBoard"
+                :key="`${index}-${value}-${tileMoveCount}`"
+                class="number-tile"
+                :data-value="value"
+                :class="{ 'tile-large': value >= 1024 }"
+                :aria-label="value ? String(value) : 'Vide'"
+              >
+                {{ value || '' }}
+              </div>
+            </div>
+            <div v-if="tileStatus !== 'playing'" class="board-overlay">
+              <UIcon :name="tileStatus === 'won' ? 'i-lucide-trophy' : 'i-lucide-grid-2x2-x'" />
+              <h2>{{ tileStatus === 'won' ? '2048. Bien joué !' : 'Plus de place.' }}</h2>
+              <p>
+                {{ tileScore }} points.
+                {{ tileStatus === 'won' ? 'Et si tu visais 4096 ?' : 'Annule le dernier coup ou retente ta chance.' }}
+              </p>
+              <UButton
+                v-if="tileStatus === 'won'"
+                label="Continuer"
+                class="arcade-primary"
+                @pointerdown.stop
+                @pointerup.stop
+                @click="continueTileGame"
+              /><UButton
+                v-else-if="tileUndo"
+                label="Annuler le dernier coup"
+                class="arcade-primary"
+                @pointerdown.stop
+                @pointerup.stop
+                @click="undoTiles"
+              /><UButton
+                v-else
+                label="Rejouer"
+                class="arcade-primary"
+                @pointerdown.stop
+                @pointerup.stop
+                @click="newTileGame"
+              />
+            </div>
+          </div>
+          <div class="tiles-directions" aria-label="Déplacer les tuiles">
+            <button
+              v-for="direction in ['left', 'up', 'down', 'right'] as const"
+              :key="direction"
+              type="button"
+              :aria-label="{ left: 'Gauche', up: 'Haut', down: 'Bas', right: 'Droite' }[direction]"
+              :disabled="tileStatus !== 'playing'"
+              @click="moveTiles(direction)"
+            >
+              <UIcon :name="`i-lucide-arrow-${direction}`" />
+            </button>
+          </div>
+        </section>
+
+        <section v-else-if="selectedGame === 'connect'" class="connect-game">
+          <div class="duel-players">
+            <span :class="{ active: !connectThinking && connectStatus === 'playing' }"><b class="player-disc" /> Toi</span><small>VS</small><span :class="{ active: connectThinking }"><b class="ai-disc" /> IA</span>
+          </div>
+          <div class="connect-board">
+            <button
+              v-for="col in CONNECT_COLS"
+              :key="col"
+              type="button"
+              class="connect-column"
+              :aria-label="`Colonne ${col}${availableRow(connectBoard, col - 1) < 0 ? ' pleine' : ''}`"
+              :disabled="connectStatus !== 'playing' || connectThinking || availableRow(connectBoard, col - 1) < 0"
+              @click="playConnect(col - 1)"
+            >
+              <span class="connect-arrow"><UIcon name="i-lucide-chevron-down" /></span><span
+                v-for="row in CONNECT_ROWS"
+                :key="row"
+                class="connect-hole"
+                :class="{ 'winning-disc': connectWinningLine.includes(connectIndex(row - 1, col - 1)) }"
+              ><span
+                v-if="connectBoard[connectIndex(row - 1, col - 1)]"
+                :class="connectBoard[connectIndex(row - 1, col - 1)] === 'player' ? 'player-disc' : 'ai-disc'"
+              /></span>
+            </button>
+          </div>
+        </section>
+
+        <section v-else-if="selectedGame === 'mines'" class="mines-game">
+          <div class="mines-board">
+            <button
+              v-for="(cell, index) in minesBoard"
+              :key="index"
+              type="button"
+              class="mine-cell"
+              :class="{ revealed: cell.revealed, flagged: cell.flagged, exploded: cell.mine && cell.revealed }"
+              :data-number="cell.adjacent"
+              :disabled="minesStatus !== 'playing'"
+              :aria-label="`Case ${index + 1} : ${cell.revealed ? (cell.mine ? 'mine' : `${cell.adjacent} mines voisines`) : cell.flagged ? 'drapeau' : 'cachée'}`"
+              @click="flagMode ? toggleMineFlag(index) : revealMine(index)"
+              @contextmenu.prevent="toggleMineFlag(index)"
+            >
+              <UIcon v-if="cell.revealed && cell.mine" name="i-lucide-bomb" /><span
+                v-else-if="cell.revealed && cell.adjacent"
+              >{{ cell.adjacent }}</span><UIcon v-else-if="cell.flagged" name="i-lucide-flag" />
+            </button>
+          </div>
+          <p class="board-footnote">
+            <UIcon name="i-lucide-shield-check" /> Premier clic protégé, voisins compris.
+          </p>
+        </section>
+
+        <section v-else class="memory-game">
+          <div class="memory-board">
+            <button
+              v-for="(card, index) in memoryCards"
+              :key="card.id"
+              type="button"
+              class="memory-card"
+              :class="{ flipped: card.revealed || card.matched, matched: card.matched }"
+              :aria-label="
+                card.revealed || card.matched
+                  ? `${card.label}${card.matched ? ', paire trouvée' : ''}`
+                  : `Carte ${index + 1}, cachée`
+              "
+              :disabled="card.revealed || card.matched || memoryOpen.length >= 2"
+              @click="flipMemoryCard(index)"
+            >
+              <span class="memory-card-inner"><span class="memory-card-back"><span class="memory-card-pattern" /><UIcon name="i-lucide-sparkles" /></span><span class="memory-card-front"><UIcon :name="card.icon" /><span>{{ card.label }}</span><UIcon v-if="card.matched" name="i-lucide-check" class="memory-check" /></span></span>
+            </button>
+          </div>
+          <p class="board-footnote">
+            <UIcon :name="memoryCombo > 1 ? 'i-lucide-flame' : 'i-lucide-brain'" />{{
+              memoryCombo > 1 ? `${memoryCombo} paires d’affilée. Garde le rythme !` : 'Observe. Retourne. Retrouve.'
+            }}
+          </p>
+        </section>
+      </div>
+
+      <div
+        v-if="!['reflex', 'aim', 'snake', 'tiles'].includes(selectedGame)"
+        class="game-feedback"
+        :data-state="gameStatus"
+        role="status"
+      >
+        <span>{{ gameMessage }}</span><UButton
+          v-if="['won', 'lost', 'draw'].includes(gameStatus)"
+          label="Rejouer"
+          icon="i-lucide-rotate-ccw"
+          size="sm"
+          class="arcade-primary"
+          @click="newGame"
+        />
+      </div>
+      <div class="stage-footer">
+        <span v-for="hint in selectedGameMeta.controls" :key="hint"><UIcon name="i-lucide-dot" />{{ hint }}</span>
+      </div>
+    </section>
+    <div class="arcade-game-bottom">
+      <span><UIcon name="i-lucide-hard-drive" /> {{ ['wordle', 'aim', 'reflex', 'snake', 'tiles', 'memory'].includes(selectedGame) ? 'Les records sont enregistrés sur ce navigateur.' : 'Les scores sont ceux de cette session.' }}</span><NuxtLink to="/games">Changer de jeu <UIcon name="i-lucide-arrow-right" /></NuxtLink>
+    </div>
+    <nav class="game-switcher" aria-label="Autres jeux">
+      <NuxtLink
+        v-for="game in games"
+        :key="game.value"
+        :to="`/games/${game.value}`"
+        :aria-current="selectedGame === game.value ? 'page' : undefined"
+        :style="{ '--item-accent': game.accent }"
+      ><UIcon :name="game.icon" /><span>{{ game.label }}</span></NuxtLink>
+    </nav>
+  </main>
 </template>
