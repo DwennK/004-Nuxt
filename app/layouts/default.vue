@@ -9,7 +9,7 @@ const toolRoutes = ['/tools', '/stocks-smartphone', '/reservations-smartphone', 
 
 const primaryLinks = computed(() => [{
   label: 'Accueil',
-  icon: 'i-lucide-scan-line',
+  icon: 'i-lucide-house',
   to: '/',
   exact: true,
   onSelect: () => {
