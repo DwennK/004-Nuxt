@@ -4,7 +4,7 @@ import { createError, getHeader, getRequestURL, setResponseHeader } from 'h3'
 import type { BackupRun, BackupStatus } from '~~/shared/types/backups'
 import { isBackupKeyValid, decryptBackupToken } from './crypto'
 import { BackupError, dropboxToken, uploadBackup, type DropboxConfig } from './dropbox'
-import { generateSqlDump } from './dump'
+import { generateSqliteBackup, type TursoExportConfig } from './sqlite-export'
 
 export const BACKUP_CRON = '0 2 * * *'
 export const BACKUP_TIMEOUT = 10 * 60 * 1000
@@ -20,12 +20,12 @@ export function backupContext(event?: H3Event, bindings?: unknown) {
     redirectUri: value('NUXT_DROPBOX_REDIRECT_URI', config.dropboxRedirectUri),
     encryptionKey: value('NUXT_BACKUP_ENCRYPTION_KEY', config.backupEncryptionKey)
   }
-  const client = createClient({
+  const turso: TursoExportConfig = {
     url: value('TURSO_URL', env.NUXT_TURSO_URL || config.tursoUrl),
-    authToken: value('TURSO_TOKEN', env.NUXT_TURSO_TOKEN || config.tursoToken),
-    intMode: 'string'
-  })
-  return { client, dropbox }
+    authToken: value('TURSO_TOKEN', env.NUXT_TURSO_TOKEN || config.tursoToken)
+  }
+  const client = createClient({ ...turso, intMode: 'string' })
+  return { client, dropbox, turso }
 }
 
 export function backupConfigured(config: DropboxConfig) {
@@ -104,7 +104,7 @@ export async function claimBackup(client: Client, trigger: BackupRun['trigger'],
   return result[1]!.rowsAffected === 1 ? { id, startedAt: now } : null
 }
 
-export async function runBackup(client: Client, config: DropboxConfig, trigger: BackupRun['trigger'], scheduleKey: string | null = null) {
+export async function runBackup(client: Client, config: DropboxConfig, trigger: BackupRun['trigger'], turso: TursoExportConfig, scheduleKey: string | null = null) {
   requireBackupConfig(config)
   await requireBackupSchema(client)
   const claim = await claimBackup(client, trigger, scheduleKey)
@@ -123,9 +123,9 @@ export async function runBackup(client: Client, config: DropboxConfig, trigger: 
     }
     const tokens = await dropboxToken(config, { grant_type: 'refresh_token', refresh_token: refreshToken })
     const stamp = new Date(claim.startedAt).toISOString().replaceAll(':', '-')
-    const path = `/pos-${stamp}-${claim.id}.sql`
+    const path = `/pos-${stamp}-${claim.id}.db`
     const signal = AbortSignal.timeout(BACKUP_TIMEOUT)
-    const result = await uploadBackup(generateSqlDump(client, signal), tokens.access_token, path, signal)
+    const result = await uploadBackup(generateSqliteBackup(turso, signal, claim.id), tokens.access_token, path, signal)
     await client.execute({ sql: 'UPDATE backup_runs SET status=\'success\',completed_at=?,bytes=?,path=?,content_hash=? WHERE id=? AND status=\'running\'', args: [Date.now(), result.bytes, result.path, result.contentHash, claim.id] })
     return claim.id
   } catch (error) {

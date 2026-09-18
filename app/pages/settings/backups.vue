@@ -18,7 +18,10 @@ const errors: Record<string, string> = {
   integrity_mismatch: 'Le contrôle d’intégrité du transfert a échoué.',
   timeout: 'Le délai de sauvegarde a été dépassé.',
   interrupted: 'La sauvegarde a été interrompue. Relancez-la.',
-  backup_too_large: 'La base dépasse la capacité de cet export (256 Mo).',
+  backup_too_large: 'La base ou son journal dépasse la capacité de cet export.',
+  turso_export: 'Turso n’a pas fourni un export SQLite complet. Réessayez.',
+  sqlite_integrity: 'Le contrôle d’intégrité de la base SQLite a échoué.',
+  export_stale: 'L’export Turso ne contient pas encore les dernières modifications. Réessayez.',
   export_failed: 'L’export de la base a échoué. Réessayez.',
   empty_dump: 'L’export est vide.'
 }
@@ -173,7 +176,7 @@ useIntervalFn(() => {
             />
           </div>
           <p class="text-xs text-muted">
-            Fichiers SQL datés, conservés dans le dossier Dropbox de l’application.
+            Fichiers SQLite (.db) datés, conservés dans le dossier Dropbox de l’application.
           </p>
         </UCard>
 

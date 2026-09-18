@@ -34,48 +34,74 @@ Déconnecter le compte efface le jeton local et arrête les sauvegardes ; cela n
 supprime aucun fichier Dropbox. L’autorisation peut aussi être révoquée depuis
 les applications connectées dans Dropbox.
 
-## Format et garanties
+## Export natif Turso et garanties
 
-- Export SQL du schéma et des données, dans **une transaction de lecture**.
-  Les entiers 64 bits, BLOBs, textes contenant NUL, rowids, séquences
-  AUTOINCREMENT, index, vues et triggers sont conservés. Les tables virtuelles
-  ne sont pas supportées : leur présence fait échouer l’export explicitement.
-- Les triggers sont restaurés après les données. Les valeurs sont sérialisées
-  par SQLite, sans conversion numérique JavaScript.
-- Envoi progressif par sessions Dropbox, avec blocs de 4 Mio. Aucun fichier
-  n’est publié avant la fin réussie de l’export. Contrôle de la taille et du
-  `content_hash` Dropbox (SHA-256 par bloc puis SHA-256 des empreintes concaténées).
-- Un verrou persistant empêche les exécutions simultanées. Les exécutions cron
-  sont dédupliquées par date UTC ; un échec peut être relancé manuellement.
-  Un verrou abandonné expire après 15 minutes et devient un échec visible.
-- Budget d’export : 10 minutes / 256 Mio SQL. Une erreur réseau, un timeout de
-  transaction Turso ou un dépassement n’est jamais marqué comme un succès.
-  Pour une base dépassant ces limites, prévoir un job dédié/Workflow.
-- Les copies ne sont jamais écrasées ni supprimées automatiquement. Surveiller
-  l’espace Dropbox. Le POS affiche les 20 derniers essais et le dernier succès.
-- Un succès certifie le transfert et son intégrité, pas une restauration réelle.
-  Les erreurs sont visibles dans le POS et les échecs cron dans Cloudflare ;
-  cette version n’envoie pas de notification externe.
+Les nouvelles sauvegardes sont des fichiers SQLite binaires **`.db`**. Les anciens
+exports `.sql` restent conservés dans Dropbox et visibles dans l’historique.
+Aucune migration ni nouvelle variable secrète n’est nécessaire pour ce changement.
 
-L’export comprend toutes les données et les comptes du POS, ainsi que les jetons
-Dropbox **chiffrés**. Les secrets Cloudflare et les fichiers externes à Turso ne
-sont pas inclus. Le fichier SQL lui-même n’est pas chiffré par l’application.
+Le Worker utilise la méthode de `turso db export` : `GET /info`, puis
+`GET /export/{generation}` et `GET /sync/{generation}/{start}/{end}` avec le jeton
+de la base. La référence est le [client officiel Turso, révision
+b538e422](https://github.com/tursodatabase/turso-cli/blob/b538e422cf012043c49468d55b73aec09ea598be/internal/turso/tursoServer.go).
+La [documentation CLI](https://docs.turso.tech/cli/db/export) prévient qu’un
+snapshot seul peut être ancien : le journal WAL doit également être récupéré.
+
+- L’export conserve les pages SQLite natives, les métadonnées, les index et les
+  données. Il ne reconstruit pas les tables depuis du SQL.
+- Les pages du WAL sont fusionnées selon les transactions **commitées** et la
+  taille finale de la base. Une transaction incomplète est ignorée. Le résultat
+  est autonome : aucun fichier `.db-wal` ou `.db-shm` n’est requis.
+- Le protocole natif pris en charge est libSQL/SQLite à pages de 4096 octets,
+  celui de cette base. Un autre moteur ou format est refusé explicitement.
+- Une erreur HTTP, une page manquante ou un journal tronqué ne sont jamais
+  assimilés à un export terminé. Un changement de génération est retenté.
+- **Avant tout envoi**, SQLite (WASM, empaqueté dans le Worker) exécute
+  `PRAGMA integrity_check` et `PRAGMA foreign_key_check`. La présence du nouvel
+  identifiant de sauvegarde dans `backup_runs` prouve que l’export contient une
+  transaction créée au démarrage du job. Un snapshot ancien est retenté au plus
+  trois fois, puis déclaré en échec.
+- Les tentatives manuelles et le cron suivent exactement ce même parcours.
+- Transfert Dropbox par blocs de 4 Mio ; publication seulement après la fin
+  complète, avec vérification de taille et de `content_hash`.
+- Un verrou persistant empêche les exécutions simultanées ; déduplication du cron
+  par date UTC et expiration des verrous abandonnés après 15 minutes.
+- Budget : 10 minutes, fichier SQLite de **16 Mio** maximum et journal téléchargé
+  de 256 Mio maximum. Cette limite mémoire laisse la place à la validation SQLite
+  dans le Worker de 128 Mio. La base actuelle fait environ 9,6 Mio. Au-delà,
+  prévoir un job avec stockage temporaire et davantage de mémoire ; l’export
+  échoue explicitement, sans publier un fichier partiel.
+- Aucune suppression automatique. Le POS affiche les 20 derniers essais et le
+  dernier succès. Les erreurs restent visibles dans le POS et dans Cloudflare
+  pour le cron ; aucune notification externe n’est envoyée.
+
+Le fichier comprend toutes les données et comptes du POS, ainsi que le jeton
+Dropbox **chiffré**. Il peut également contenir les espaces libres du fichier
+SQLite natif. Les secrets Cloudflare et les fichiers externes à Turso ne sont
+pas inclus. Le fichier `.db` n’est pas lui-même chiffré par l’application.
 
 ## Restauration isolée
 
-Télécharger le `.sql`, puis utiliser un fichier SQLite **neuf** :
+Télécharger le `.db` dans un dossier isolé puis le vérifier directement :
+
+```sh
+sqlite3 sauvegarde.db 'PRAGMA integrity_check; PRAGMA foreign_key_check;'
+```
+
+Aucune importation SQL n’est nécessaire. Travailler sur une copie du fichier
+pour toute restauration de production. Contrôler les nombres de lignes et les
+données métier avant un remplacement. Dans une copie de développement,
+désactiver `backup_settings.daily_enabled` et effacer `refresh_token_encrypted`
+pour éviter qu’elle réutilise le Dropbox de production. Aucune restauration
+destructive n’est exposée dans le POS.
+
+Pour les anciens `.sql`, créer d’abord une base SQLite **neuve** :
 
 ```sh
 sqlite3 restauration.db < sauvegarde.sql
-sqlite3 restauration.db 'PRAGMA integrity_check; PRAGMA foreign_key_check;'
 ```
 
-Contrôler les nombres de lignes et les données métier avant tout remplacement
-de production. Désactiver `backup_settings.daily_enabled` et effacer
-`refresh_token_encrypted` dans une copie de développement pour éviter qu’une
-copie restaurée réutilise le compte Dropbox de production. Aucune restauration
-destructive n’est exposée dans le POS.
-
-Références : [OAuth Dropbox](https://developers.dropbox.com/oauth-guide),
+Références : [format SQLite et checkpoint WAL](https://sqlite.org/fileformat.html#wal_format),
+[OAuth Dropbox](https://developers.dropbox.com/oauth-guide),
 [content hash Dropbox](https://www.dropbox.com/developers/reference/content-hash),
 [cron Cloudflare](https://developers.cloudflare.com/workers/configuration/cron-triggers/).

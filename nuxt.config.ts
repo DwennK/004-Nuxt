@@ -64,8 +64,12 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'cloudflare_module',
     sourceMap: false,
+    experimental: { wasm: true },
 
     replace: {
+      // Emscripten probes self.location even with a supplied WASM instance.
+      // Workers have no browser location; our bundled module needs no script URL.
+      'self.location.href': (id: string) => /[/\\]sql\.js[/\\]dist[/\\]sql-wasm-browser\.js/.test(id) ? '\'\'' : 'self.location.href',
       // Nitro #3071: preserve Papa Parse's double-quoted worker source string.
       'typeof window': (id: string) => /[/\\]papaparse[/\\]/.test(id) ? '\'undefined\'' : '"undefined"'
     },

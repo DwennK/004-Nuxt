@@ -1,4 +1,4 @@
-import { dumpChunks } from './dump'
+import { binaryChunks } from './binary'
 
 export class BackupError extends Error {
   constructor(public code: string) {
@@ -56,11 +56,11 @@ async function uploadCall(endpoint: string, token: string, args: object, body: U
   return response
 }
 
-export async function uploadBackup(source: AsyncIterable<string>, token: string, path: string, signal: AbortSignal) {
+export async function uploadBackup(source: AsyncIterable<Uint8Array>, token: string, path: string, signal: AbortSignal) {
   let sessionId: string | undefined
   let bytes = 0
   const hashes: Uint8Array[] = []
-  for await (const chunk of dumpChunks(source)) {
+  for await (const chunk of binaryChunks(source)) {
     signal.throwIfAborted()
     bytes += chunk.length
     if (bytes > 256 * 1024 * 1024) throw new BackupError('backup_too_large')
@@ -77,8 +77,7 @@ export async function uploadBackup(source: AsyncIterable<string>, token: string,
   const combined = new Uint8Array(hashes.length * 32)
   hashes.forEach((hash, index) => combined.set(hash, index * 32))
   const contentHash = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', combined)))
-  // Only publish the file after the generator has successfully committed its
-  // read transaction. A failed/truncated export remains an uncommitted session.
+  // Only publish after the complete, validated SQLite file has been transferred.
   const response = await uploadCall('finish', token, {
     cursor: { session_id: sessionId, offset: bytes },
     commit: { path, mode: 'add', autorename: false, mute: true, strict_conflict: true }
