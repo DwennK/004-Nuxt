@@ -450,8 +450,8 @@ defineShortcuts({
               </div>
             </dl>
 
-            <div class="mt-6 grid auto-cols-fr grid-flow-col gap-2">
-              <UButton
+            <div class="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <PosPrintButton
                 v-if="supportsDocumentPrintProfile(lastCreatedDocument.type, 'thermal')"
                 label="Thermique"
                 aria-label="Imprimer thermique"
@@ -459,18 +459,22 @@ defineShortcuts({
                 variant="outline"
                 icon="i-lucide-printer"
                 size="lg"
-                class="justify-center gap-1.5 px-2 sm:gap-2 sm:px-3"
-                @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}/print?profile=thermal`)"
+                :preview-url="`/documents/${lastCreatedDocument.id}/print?profile=thermal`"
+                :document-id="lastCreatedDocument.id"
+                :document-number="lastCreatedDocument.documentNumber"
+                block
               />
-              <UButton
+              <PosPrintButton
                 label="Format A4"
                 aria-label="Imprimer A4"
                 color="neutral"
                 variant="outline"
                 icon="i-lucide-file-text"
                 size="lg"
-                class="justify-center gap-1.5 px-2 sm:gap-2 sm:px-3"
-                @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}/print?profile=a4`)"
+                :preview-url="`/documents/${lastCreatedDocument.id}/print?profile=a4`"
+                :document-id="lastCreatedDocument.id"
+                :document-number="lastCreatedDocument.documentNumber"
+                block
               />
             </div>
           </template>

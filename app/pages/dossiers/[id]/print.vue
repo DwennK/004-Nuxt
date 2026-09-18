@@ -10,6 +10,11 @@ definePageMeta({
   layout: false
 })
 
+const printReady = ref(false)
+onNuxtReady(() => {
+  printReady.value = true
+})
+
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
 const profile = computed<PrintProfile>(() => {
@@ -131,6 +136,7 @@ function printTicket() {
     <main class="mx-auto flex max-w-5xl justify-center px-3 py-4 sm:px-6 sm:py-6 print:max-w-none print:px-0 print:py-0">
       <article
         v-if="ticket && company && canRenderSelectedProfile"
+        :data-print-ready="printReady"
         class="thermal-sheet bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:shadow-none print:ring-0"
         :class="{ 'ticket-sheet--a4': profile === 'a4' }"
       >
