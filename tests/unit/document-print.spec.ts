@@ -1,8 +1,30 @@
 import { describe, expect, it } from 'vitest'
+import { documentTypes } from '../../shared/constants/pos'
 import { buildDocumentA4PrintModel } from '../../shared/utils/document-print'
 import { printCompany, printDocument, printPayment } from '../fixtures/document-print'
 
 describe('printed customer identity', () => {
+  it.each(documentTypes)('prints the customer phone after the postal address on %s documents', (type) => {
+    const document = printDocument({ type })
+    document.customer.phone = '+41 79 123 45 67'
+
+    const model = buildDocumentA4PrintModel(document, printCompany())
+
+    expect(model.windowLines).toEqual(['Camille Exemple', 'Rue du Test 8', '2000 Neuchâtel', '+41 79 123 45 67'])
+  })
+
+  it('keeps phone and email as fallback without duplicating the phone when the postal address is missing', () => {
+    const document = printDocument()
+    Object.assign(document.customer, {
+      addressLine1: null, addressLine2: null, postalCode: null, city: null,
+      phone: '+41 79 123 45 67', email: 'camille@example.test'
+    })
+
+    const model = buildDocumentA4PrintModel(document, printCompany())
+
+    expect(model.windowLines).toEqual(['Camille Exemple', '+41 79 123 45 67', 'camille@example.test'])
+  })
+
   it('prints the company and its contact before the postal address', () => {
     const document = printDocument()
     Object.assign(document.customer, {

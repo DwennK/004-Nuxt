@@ -157,9 +157,9 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
     windowLines: [
       document.customer.displayName,
       ...(customerContactName ? [customerContactName] : []),
-      ...(customerAddress.length
-        ? customerAddress
-        : [document.customer.phone, document.customer.email].filter(Boolean) as string[])
+      ...customerAddress,
+      ...[document.customer.phone].filter(Boolean) as string[],
+      ...(!customerAddress.length ? [document.customer.email].filter(Boolean) as string[] : [])
     ],
     referenceLines: document.type === 'sav'
       ? [document.ticket ? `Dossier ${document.ticket.ticketNumber}` : null, document.relatedDocuments?.find(row => row.id === document.sav?.sourceDocumentId)?.documentNumber].filter(Boolean) as string[]
