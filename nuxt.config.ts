@@ -21,6 +21,10 @@ export default defineNuxtConfig({
   runtimeConfig: {
     tursoUrl: process.env.TURSO_URL,
     tursoToken: process.env.TURSO_TOKEN,
+    dropboxAppKey: '',
+    dropboxAppSecret: '',
+    dropboxRedirectUri: '',
+    backupEncryptionKey: '',
     posAllowRuntimeSchemaBootstrap: process.env.POS_ALLOW_RUNTIME_SCHEMA_BOOTSTRAP === 'true',
     posAllowRuntimeDemoSeed: process.env.POS_ALLOW_RUNTIME_DEMO_SEED === 'true',
     // MiniMax credentials are resolved per request, including legacy Worker bindings.
@@ -68,7 +72,10 @@ export default defineNuxtConfig({
 
     cloudflare: {
       deployConfig: true,
-      nodeCompat: true
+      nodeCompat: true,
+      wrangler: {
+        triggers: { crons: ['0 2 * * *'] }
+      }
     }
   },
 

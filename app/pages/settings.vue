@@ -2,9 +2,18 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
+const settingsNavigation = useTemplateRef<HTMLDivElement>('settingsNavigation')
+const { can } = useCapabilities()
 const isInterfacePage = computed(() => route.path === '/settings/interface')
+const isWidePage = computed(() => isInterfacePage.value || route.path === '/settings/backups')
 
-const links = [[{
+function revealActiveTab() {
+  settingsNavigation.value?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
+onMounted(revealActiveTab)
+watch(() => route.path, revealActiveTab, { flush: 'post' })
+
+const links = computed(() => [[{
   label: 'Société',
   icon: 'i-lucide-building-2',
   to: '/settings/company'
@@ -20,11 +29,17 @@ const links = [[{
   label: 'Utilisateurs',
   icon: 'i-lucide-users',
   to: '/settings/users'
-}]] satisfies NavigationMenuItem[][]
+}, ...(can('administration:manage')
+  ? [{
+      label: 'Sauvegardes',
+      icon: 'i-lucide-database-backup',
+      to: '/settings/backups'
+    }]
+  : [])]] satisfies NavigationMenuItem[][])
 </script>
 
 <template>
-  <UDashboardPanel id="settings" :ui="{ body: isInterfacePage ? 'lg:py-6' : 'lg:py-12' }">
+  <UDashboardPanel id="settings" :ui="{ body: isWidePage ? 'lg:py-6' : 'lg:py-12' }">
     <template #header>
       <UDashboardNavbar title="Paramètres">
         <template #leading>
@@ -34,12 +49,14 @@ const links = [[{
 
       <UDashboardToolbar>
         <!-- NOTE: The `-mx-1` class is used to align with the `DashboardSidebarCollapse` button here. -->
-        <UNavigationMenu :items="links" highlight class="-mx-1 flex-1" />
+        <div ref="settingsNavigation" class="-mx-1 min-w-0 flex-1 overflow-x-auto">
+          <UNavigationMenu :items="links" highlight :ui="{ list: 'min-w-max', item: 'shrink-0' }" />
+        </div>
       </UDashboardToolbar>
     </template>
 
     <template #body>
-      <div class="flex flex-col gap-4 sm:gap-6 lg:gap-12 w-full mx-auto" :class="isInterfacePage ? 'lg:max-w-5xl' : 'lg:max-w-2xl'">
+      <div class="flex flex-col gap-4 sm:gap-6 lg:gap-12 w-full mx-auto" :class="isWidePage ? 'lg:max-w-5xl' : 'lg:max-w-2xl'">
         <NuxtPage />
       </div>
     </template>

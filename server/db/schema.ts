@@ -4,6 +4,30 @@ import { type AnySQLiteColumn, index, integer, real, sqliteTable, text, uniqueIn
 import { sentMailStatuses } from '../../shared/constants/email'
 import { lineCategoryHints } from '../../shared/constants/pos'
 
+export const backupSettings = sqliteTable('backup_settings', {
+  id: integer('id').primaryKey(),
+  refreshTokenEncrypted: text('refresh_token_encrypted'),
+  accountEmail: text('account_email'),
+  dailyEnabled: integer('daily_enabled', { mode: 'boolean' }).notNull().default(false)
+})
+
+export const backupRuns = sqliteTable('backup_runs', {
+  id: text('id').primaryKey(),
+  trigger: text('trigger', { enum: ['manual', 'scheduled'] }).notNull(),
+  status: text('status', { enum: ['running', 'success', 'failed'] }).notNull(),
+  startedAt: integer('started_at').notNull(),
+  completedAt: integer('completed_at'),
+  bytes: integer('bytes'),
+  path: text('path'),
+  contentHash: text('content_hash'),
+  errorCode: text('error_code'),
+  scheduleKey: text('schedule_key')
+}, table => ({
+  startedIdx: index('backup_runs_started_idx').on(table.startedAt),
+  runningIdx: uniqueIndex('backup_runs_running_idx').on(table.status).where(sql`${table.status} = 'running'`),
+  scheduleIdx: uniqueIndex('backup_runs_schedule_idx').on(table.scheduleKey)
+}))
+
 // Scope rows retain their monotonically increasing revision after lease expiry.
 export const dossierScopes = sqliteTable('dossier_scopes', {
   key: text('key').primaryKey(),
