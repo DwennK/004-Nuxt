@@ -450,28 +450,16 @@ defineShortcuts({
               </div>
             </dl>
 
-            <div class="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div class="mt-6">
               <PosPrintButton
-                v-if="supportsDocumentPrintProfile(lastCreatedDocument.type, 'thermal')"
-                label="Thermique"
-                aria-label="Imprimer thermique"
+                label="Imprimer"
+                aria-label="Imprimer"
                 color="neutral"
                 variant="outline"
                 icon="i-lucide-printer"
                 size="lg"
-                :preview-url="`/documents/${lastCreatedDocument.id}/print?profile=thermal`"
-                :document-id="lastCreatedDocument.id"
-                :document-number="lastCreatedDocument.documentNumber"
-                block
-              />
-              <PosPrintButton
-                label="Format A4"
-                aria-label="Imprimer A4"
-                color="neutral"
-                variant="outline"
-                icon="i-lucide-file-text"
-                size="lg"
                 :preview-url="`/documents/${lastCreatedDocument.id}/print?profile=a4`"
+                :thermal-preview-url="supportsDocumentPrintProfile(lastCreatedDocument.type, 'thermal') ? `/documents/${lastCreatedDocument.id}/print?profile=thermal` : undefined"
                 :document-id="lastCreatedDocument.id"
                 :document-number="lastCreatedDocument.documentNumber"
                 block

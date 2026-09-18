@@ -60,7 +60,8 @@ async function saveTicket(payload: {
             <span id="ticket-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />
             <PosPrintButton
               v-if="ticket"
-              :preview-url="`/dossiers/${id}/print`"
+              :preview-url="`/dossiers/${id}/print?profile=a4`"
+              :thermal-preview-url="`/dossiers/${id}/print?profile=thermal`"
               compact
               :disabled="dirty || isSaving"
               label="Imprimer"

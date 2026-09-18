@@ -333,25 +333,15 @@ function startNewEmailAttempt() {
           <PosPrintButton
             v-if="supportsA4Print"
             :preview-url="`/documents/${id}/print?profile=a4`"
-            :document-id="id"
-            :document-number="document?.documentNumber"
-            compact
-            icon="i-lucide-file-text"
-            label="Imprimer A4"
-            aria-label="Imprimer A4"
-            color="neutral"
-            variant="subtle"
-            :disabled="documentActionsDisabled"
-          />
-          <PosPrintButton
-            v-if="supportsThermalPrint"
-            :preview-url="`/documents/${id}/print?profile=thermal`"
+            :thermal-preview-url="supportsThermalPrint ? `/documents/${id}/print?profile=thermal` : undefined"
             :document-id="id"
             :document-number="document?.documentNumber"
             compact
             icon="i-lucide-printer"
-            label="Imprimer thermique"
-            aria-label="Imprimer thermique"
+            label="Imprimer"
+            aria-label="Imprimer"
+            color="neutral"
+            variant="subtle"
             :disabled="documentActionsDisabled"
           />
           <span v-if="activeTab === 'lines' && canEditDocument" id="document-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />

@@ -1169,8 +1169,9 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 </p>
                 <PosPrintButton
                   v-if="supportsThermalPrint"
-                  :preview-url="`/dossiers/${id}/print`"
-                  label="Imprimer le dossier"
+                  :preview-url="`/dossiers/${id}/print?profile=a4`"
+                  :thermal-preview-url="`/dossiers/${id}/print?profile=thermal`"
+                  label="Imprimer"
                   icon="i-lucide-printer"
                   color="neutral"
                   variant="outline"
@@ -1317,22 +1318,11 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           <PosPrintButton
             v-if="createdDocumentSupportsA4Print"
             :preview-url="`/documents/${createdCommercialDocument.id}/print?profile=a4`"
+            :thermal-preview-url="createdDocumentSupportsThermalPrint ? `/documents/${createdCommercialDocument.id}/print?profile=thermal` : undefined"
             :document-id="createdCommercialDocument.id"
             :document-number="createdCommercialDocument.documentNumber"
             :disabled="dossier.blocked.value"
-            label="Imprimer A4"
-            icon="i-lucide-file-text"
-            color="neutral"
-            variant="soft"
-            block
-          />
-          <PosPrintButton
-            v-if="createdDocumentSupportsThermalPrint"
-            :preview-url="`/documents/${createdCommercialDocument.id}/print?profile=thermal`"
-            :document-id="createdCommercialDocument.id"
-            :document-number="createdCommercialDocument.documentNumber"
-            :disabled="dossier.blocked.value"
-            label="Imprimer thermique"
+            label="Imprimer"
             icon="i-lucide-printer"
             color="neutral"
             variant="soft"

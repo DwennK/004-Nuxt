@@ -149,23 +149,14 @@ async function saveTicket(payload: {
         <div class="grid gap-2">
           <PosPrintButton
             v-if="createdTicket"
-            label="Imprimer A4"
-            icon="i-lucide-file-text"
-            color="neutral"
-            variant="outline"
-            size="lg"
-            block
-            :preview-url="`/dossiers/${createdTicket.id}/print?profile=a4`"
-          />
-          <PosPrintButton
-            v-if="createdTicket"
-            label="Imprimer thermique"
+            label="Imprimer"
             icon="i-lucide-printer"
             color="neutral"
             variant="outline"
             size="lg"
             block
-            :preview-url="`/dossiers/${createdTicket.id}/print?profile=thermal`"
+            :preview-url="`/dossiers/${createdTicket.id}/print?profile=a4`"
+            :thermal-preview-url="`/dossiers/${createdTicket.id}/print?profile=thermal`"
           />
         </div>
       </div>

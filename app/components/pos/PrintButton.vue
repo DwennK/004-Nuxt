@@ -4,6 +4,7 @@ import { getDocumentPdfFilename } from '~~/shared/utils/document-email'
 
 const props = withDefaults(defineProps<{
   previewUrl: string
+  thermalPreviewUrl?: string
   label: string
   ariaLabel?: string
   documentId?: number
@@ -44,8 +45,8 @@ function printError() {
 
 onBeforeUnmount(cleanup)
 
-async function print() {
-  if (printing.value || props.disabled) return
+async function print(previewUrl = props.previewUrl) {
+  if (printing.value || downloading.value || props.disabled) return
   cleanup()
   printing.value = true
   trigger = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
@@ -55,7 +56,7 @@ async function print() {
   printFrame.tabIndex = -1
   printFrame.setAttribute('aria-hidden', 'true')
   printFrame.style.cssText = 'position:fixed;left:-10000px;top:0;width:1200px;height:900px;border:0;'
-  printFrame.src = props.previewUrl
+  printFrame.src = previewUrl
   document.body.append(printFrame)
   cleanupTimer = setTimeout(printError, 30000)
 
@@ -107,10 +108,22 @@ async function download() {
   }
 }
 
-const items = computed<DropdownMenuItem[]>(() => [
-  { label: 'Voir l’aperçu', icon: 'i-lucide-eye', to: props.previewUrl },
-  ...(props.documentId ? [{ label: 'Télécharger le PDF (A4)', icon: 'i-lucide-download', onSelect: download }] : [])
-])
+const items = computed<DropdownMenuItem[]>(() => {
+  const actions: DropdownMenuItem[] = [
+    { label: 'Voir l’aperçu', icon: 'i-lucide-eye', to: props.previewUrl }
+  ]
+  if (props.documentId) {
+    actions.push({ label: 'Télécharger le PDF (A4)', icon: 'i-lucide-download', onSelect: download })
+  }
+  const thermalPreviewUrl = props.thermalPreviewUrl
+  if (thermalPreviewUrl) {
+    actions.push(
+      { type: 'separator' },
+      { label: 'Imprimer ticket thermique', icon: 'i-lucide-printer', onSelect: () => print(thermalPreviewUrl) }
+    )
+  }
+  return actions
+})
 </script>
 
 <template>
@@ -125,7 +138,7 @@ const items = computed<DropdownMenuItem[]>(() => [
       :loading="printing"
       :class="block ? 'min-w-0 flex-1 justify-center' : undefined"
       :ui="{ label: compact ? 'hidden sm:inline' : undefined }"
-      @click="print"
+      @click="print()"
     />
     <UDropdownMenu :items="items" :content="{ align: 'end' }">
       <UButton
