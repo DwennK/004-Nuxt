@@ -107,13 +107,13 @@ function paymentTime(value: string) {
               Client
             </th>
             <th scope="col">
-              Dernier paiement
+              Heure
             </th>
             <th scope="col" class="amount">
-              Total TTC<br>CHF
+              TTC CHF
             </th>
             <th scope="col" class="amount">
-              Encaissé ce jour<br>CHF
+              Ce jour CHF
             </th>
           </tr>
         </thead>
@@ -210,13 +210,13 @@ function paymentTime(value: string) {
                 Client
               </th>
               <th scope="col" class="amount">
-                Total TTC<br>CHF
+                TTC CHF
               </th>
               <th scope="col" class="amount">
-                Déjà réglé<br>CHF
+                Réglé CHF
               </th>
               <th scope="col" class="amount">
-                Solde dû<br>CHF
+                Dû CHF
               </th>
             </tr>
           </thead>
@@ -266,13 +266,13 @@ function paymentTime(value: string) {
     background: #fff;
     font-family: 'Public Sans', sans-serif;
     font-size: 10.5pt;
-    line-height: 1.4;
+    line-height: 1.2;
     font-variant-numeric: tabular-nums;
     color-scheme: light;
   }
 
   .print-heading {
-    padding-bottom: 5mm;
+    padding-bottom: 3mm;
     border-bottom: 0.5pt solid #000;
     break-inside: avoid;
   }
@@ -284,26 +284,30 @@ function paymentTime(value: string) {
   }
 
   .print-date {
-    margin-top: 2mm;
+    margin-top: 1mm;
   }
 
   .print-total {
-    margin-top: 6mm;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 2mm;
+    margin-top: 3mm;
   }
 
   .print-total-value {
-    margin-top: 1mm;
+    margin-top: 0;
     font-size: 26pt;
     font-weight: 700;
     line-height: 1.15;
   }
 
   section {
-    margin-top: 6mm;
+    margin-top: 3mm;
   }
 
   h2 {
-    margin-bottom: 2mm;
+    margin-bottom: 1mm;
     font-size: 12pt;
     font-weight: 700;
     line-height: 1.3;
@@ -311,7 +315,7 @@ function paymentTime(value: string) {
   }
 
   .section-note {
-    margin-bottom: 2mm;
+    margin-bottom: 1mm;
     break-after: avoid;
   }
 
@@ -319,19 +323,19 @@ function paymentTime(value: string) {
     width: 100%;
     border-collapse: collapse;
     font-size: inherit;
-    line-height: 1.35;
+    line-height: 1.2;
   }
 
   .documents-table {
     table-layout: fixed;
   }
 
-  .number-column { width: 14%; }
+  .number-column { width: 16%; }
   .customer-column { width: 32%; }
-  .time-column { width: 15%; }
+  .time-column { width: 12%; }
   .total-column { width: 18%; }
-  .paid-column { width: 21%; }
-  .balance-column { width: 18%; }
+  .paid-column { width: 22%; }
+  .balance-column { width: calc(52% / 3); }
 
   thead {
     display: table-header-group;
@@ -344,7 +348,7 @@ function paymentTime(value: string) {
 
   th,
   td {
-    padding: 2mm 1.5mm;
+    padding: 1mm;
     border-bottom: 0.35pt solid #ccc;
     text-align: left;
     vertical-align: top;
@@ -365,6 +369,12 @@ function paymentTime(value: string) {
     font-size: 9pt;
     font-weight: 600;
     vertical-align: bottom;
+    white-space: nowrap;
+  }
+
+  .documents-table tbody th:not([colspan]) {
+    white-space: nowrap;
+    overflow-wrap: normal;
   }
 
   .amount {
@@ -390,7 +400,7 @@ function paymentTime(value: string) {
   }
 
   .unpaid-section {
-    padding-top: 4mm;
+    padding-top: 2mm;
     border-top: 0.5pt solid #000;
   }
 
