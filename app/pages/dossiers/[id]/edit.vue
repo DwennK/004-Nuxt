@@ -58,15 +58,16 @@ async function saveTicket(payload: {
         <template #right>
           <div class="flex items-center gap-2">
             <span id="ticket-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />
-            <UButton
+            <PosPrintButton
               v-if="ticket"
-              :to="`/dossiers/${id}/print`"
+              :preview-url="`/dossiers/${id}/print`"
+              compact
+              :disabled="dirty || isSaving"
               label="Imprimer"
               aria-label="Imprimer"
               icon="i-lucide-printer"
               color="neutral"
               variant="subtle"
-              :ui="{ label: 'hidden sm:inline' }"
             />
             <UButton
               :to="`/dossiers/${id}`"

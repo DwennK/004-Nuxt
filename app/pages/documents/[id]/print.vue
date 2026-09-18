@@ -14,6 +14,11 @@ definePageMeta({
   layout: false
 })
 
+const printReady = ref(false)
+onNuxtReady(() => {
+  printReady.value = true
+})
+
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
 
@@ -170,6 +175,7 @@ useHead(() => ({
     <main class="mx-auto flex max-w-6xl justify-center px-3 py-4 sm:px-6 sm:py-6 print:max-w-none print:px-0 print:py-0">
       <article
         v-if="document && company && canRenderSelectedProfile && profile === 'a4'"
+        :data-print-ready="printReady"
         class="sheet sheet--a4 w-full max-w-[210mm] bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:max-w-none print:shadow-none print:ring-0"
         :class="{ 'sheet--with-qr': !!qrBill }"
         :style="{
@@ -473,6 +479,7 @@ useHead(() => ({
 
       <article
         v-else-if="document && company && canRenderSelectedProfile && profile === 'thermal'"
+        :data-print-ready="printReady"
         class="sheet thermal-sheet bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:shadow-none print:ring-0"
       >
         <header class="thermal-header">

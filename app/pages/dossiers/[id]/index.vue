@@ -1167,9 +1167,9 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 <p v-if="!canSendSms" class="text-xs text-toned">
                   {{ smsButtonHelp }}
                 </p>
-                <UButton
+                <PosPrintButton
                   v-if="supportsThermalPrint"
-                  :to="`/dossiers/${id}/print`"
+                  :preview-url="`/dossiers/${id}/print`"
                   label="Imprimer le dossier"
                   icon="i-lucide-printer"
                   color="neutral"
@@ -1314,25 +1314,29 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             block
             @click="navigateToCreatedDocument(`/documents/${createdCommercialDocument.id}?email=1`)"
           />
-          <UButton
+          <PosPrintButton
             v-if="createdDocumentSupportsA4Print"
+            :preview-url="`/documents/${createdCommercialDocument.id}/print?profile=a4`"
+            :document-id="createdCommercialDocument.id"
+            :document-number="createdCommercialDocument.documentNumber"
             :disabled="dossier.blocked.value"
             label="Imprimer A4"
             icon="i-lucide-file-text"
             color="neutral"
             variant="soft"
             block
-            @click="navigateToCreatedDocument(`/documents/${createdCommercialDocument.id}/print?profile=a4`)"
           />
-          <UButton
+          <PosPrintButton
             v-if="createdDocumentSupportsThermalPrint"
+            :preview-url="`/documents/${createdCommercialDocument.id}/print?profile=thermal`"
+            :document-id="createdCommercialDocument.id"
+            :document-number="createdCommercialDocument.documentNumber"
             :disabled="dossier.blocked.value"
             label="Imprimer thermique"
             icon="i-lucide-printer"
             color="neutral"
             variant="soft"
             block
-            @click="navigateToCreatedDocument(`/documents/${createdCommercialDocument.id}/print?profile=thermal`)"
           />
           <UButton
             v-if="createdCommercialDocument.type !== 'invoice' && canCreateInvoice"

@@ -4,20 +4,21 @@ const PRODUCTION_CSP = [
   `default-src 'self'`,
   `base-uri 'self'`,
   `object-src 'none'`,
-  `frame-ancestors 'none'`,
   `form-action 'self'`,
   `img-src 'self' data: blob: https://www.mobilesentrix.eu https://static.mobilesentrix.eu https://www.mobilesentrix.com https://static.mobilesentrix.com`,
   `media-src 'self' blob:`,
   `font-src 'self' data:`,
   `style-src 'self' 'unsafe-inline'`,
   `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com`,
-  `frame-src https://challenges.cloudflare.com`,
+  `frame-src 'self' https://challenges.cloudflare.com`,
   `connect-src 'self'`
 ].join('; ')
 
 export default defineEventHandler((event) => {
+  // Only printable pages may be embedded, and only by this application's origin.
+  const isPrintPage = /^\/(documents|dossiers)\/[1-9]\d*\/print\/?$/.test(getRequestURL(event).pathname)
   setResponseHeaders(event, {
-    'X-Frame-Options': 'DENY',
+    'X-Frame-Options': isPrintPage ? 'SAMEORIGIN' : 'DENY',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()'
@@ -26,7 +27,7 @@ export default defineEventHandler((event) => {
   if (!import.meta.dev) {
     setResponseHeaders(event, {
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-      'Content-Security-Policy': PRODUCTION_CSP
+      'Content-Security-Policy': `${PRODUCTION_CSP}; frame-ancestors '${isPrintPage ? 'self' : 'none'}'`
     })
   }
 })
