@@ -2,6 +2,7 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
+const { hasAlert: backupAlert } = useBackupStatus()
 const settingsNavigation = useTemplateRef<HTMLDivElement>('settingsNavigation')
 const { can } = useCapabilities()
 const isInterfacePage = computed(() => route.path === '/settings/interface')
@@ -31,9 +32,11 @@ const links = computed(() => [[{
   to: '/settings/users'
 }, ...(can('administration:manage')
   ? [{
-      label: 'Sauvegardes',
-      icon: 'i-lucide-database-backup',
-      to: '/settings/backups'
+      'label': 'Sauvegardes',
+      'icon': 'i-lucide-database-backup',
+      'to': '/settings/backups',
+      'chip': backupAlert.value ? { color: 'error' as const, size: 'lg' as const } : false,
+      'aria-label': backupAlert.value ? 'Sauvegardes — problème à vérifier' : 'Sauvegardes'
     }]
   : [])]] satisfies NavigationMenuItem[][])
 </script>

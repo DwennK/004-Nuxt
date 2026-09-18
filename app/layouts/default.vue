@@ -4,6 +4,27 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 const open = ref(false)
 const dashboardSearchOpen = ref(false)
 const route = useRoute()
+const { user } = useUserSession()
+const { can } = useCapabilities()
+const { refresh: refreshBackups, reset: resetBackups, hasAlert: backupAlert } = useBackupStatus()
+const canCheckBackups = computed(() => can('administration:manage'))
+const visibility = useDocumentVisibility()
+onMounted(() => {
+  void refreshBackups()
+})
+watch(() => user.value?.id, () => {
+  resetBackups()
+  void refreshBackups()
+})
+watch(visibility, (value) => {
+  if (value === 'visible') void refreshBackups()
+})
+useEventListener('focus', () => {
+  void refreshBackups()
+})
+useIntervalFn(() => {
+  if (canCheckBackups.value && visibility.value === 'visible') void refreshBackups()
+}, 60_000)
 const { currentDashboardTheme } = useDashboardTheme()
 const toolRoutes = ['/tools', '/stocks-smartphone', '/reservations-smartphone', '/vacances', '/inbox', '/assistant']
 
@@ -152,14 +173,17 @@ const secondaryLinks = [{
   }]
 }] satisfies NavigationMenuItem[]
 
-const footerLinks = [{
-  label: 'Paramètres',
-  icon: 'i-lucide-settings',
-  to: '/settings/users',
-  onSelect: () => {
+const footerLinks = computed(() => [{
+  'label': 'Paramètres',
+  'icon': 'i-lucide-settings',
+  'to': '/settings/users',
+  'active': route.path.startsWith('/settings'),
+  'chip': backupAlert.value ? { color: 'error', size: 'lg' } : false,
+  'aria-label': backupAlert.value ? 'Paramètres — sauvegardes à vérifier' : 'Paramètres',
+  'onSelect': () => {
     open.value = false
   }
-}] satisfies NavigationMenuItem[]
+}] satisfies NavigationMenuItem[])
 
 const dashboardSearchTerm = ref('')
 const handleRecordScan = useRecordScan(dashboardSearchTerm, () => {
@@ -228,7 +252,7 @@ const groups = computed(() => {
         ...flattenNavigationItems(primaryLinks.value),
         ...flattenNavigationItems(reportLinks),
         ...flattenNavigationItems(secondaryLinks),
-        ...flattenNavigationItems(footerLinks)
+        ...flattenNavigationItems(footerLinks.value)
       ]
     }, {
       id: 'create',

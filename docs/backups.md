@@ -80,6 +80,25 @@ Dropbox **chiffré**. Il peut également contenir les espaces libres du fichier
 SQLite natif. Les secrets Cloudflare et les fichiers externes à Turso ne sont
 pas inclus. Le fichier `.db` n’est pas lui-même chiffré par l’application.
 
+## Alerte persistante dans le POS
+
+Pour les administrateurs, un échec non suivi d’une sauvegarde réussie affiche une
+pastille rouge sur **Paramètres** et sur l’onglet **Sauvegardes**. La page affiche
+la date, la cause connue et une indication de résolution. Lire la page ou
+recharger le navigateur ne masque pas l’alerte ; une nouvelle tentative en cours
+ne la masque pas non plus. Un succès ultérieur la retire des deux menus.
+
+L’état est partagé entre ces surfaces et vérifié toutes les 60 secondes lorsque
+le POS est visible, au retour sur la fenêtre, et toutes les 10 secondes sur la
+page des sauvegardes lorsque le suivi est actif. Une requête de statut en échec
+signale que l’état ne peut pas être confirmé, sans effacer le dernier échec connu.
+Les tâches interrompues depuis plus de 15 minutes sont signalées via l’état
+`interrupted` existant. Aucun acquittement, nouvelle table ou secret n’est ajouté.
+
+Cette alerte concerne les échecs et interruptions enregistrés ainsi que
+l’impossibilité de lire leur état. Elle n’est pas une notification système ou un
+email et ne détecte pas un cron qui ne se serait jamais déclenché.
+
 ## Restauration isolée
 
 Télécharger le `.db` dans un dossier isolé puis le vérifier directement :

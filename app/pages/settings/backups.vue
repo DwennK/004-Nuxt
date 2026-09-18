@@ -1,30 +1,17 @@
 <script setup lang="ts">
-import type { BackupRun, BackupStatus } from '~~/shared/types/backups'
+import type { BackupRun } from '~~/shared/types/backups'
+import { backupErrors } from '~~/shared/utils/backup-status'
 
 const { can } = useCapabilities()
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 const allowed = computed(() => can('administration:manage'))
-const { data, error, refresh, pending } = await useFetch<BackupStatus>('/api/settings/backups', { immediate: allowed.value })
+const { data, error, refresh, pending, failure } = useBackupStatus()
 const busy = ref<'backup' | 'connect' | 'disconnect' | 'schedule' | null>(null)
 const disconnectOpen = ref(false)
 const ready = computed(() => data.value?.configured && data.value?.schemaReady)
 const running = computed(() => busy.value === 'backup' || data.value?.running)
-const errors: Record<string, string> = {
-  dropbox_auth: 'Connexion Dropbox expirée ou refusée. Reconnectez le compte.',
-  dropbox_upload: 'Dropbox a refusé le transfert. Vérifiez l’espace disponible et réessayez.',
-  encryption_key: 'La clé de connexion a changé. Reconnectez Dropbox.',
-  integrity_mismatch: 'Le contrôle d’intégrité du transfert a échoué.',
-  timeout: 'Le délai de sauvegarde a été dépassé.',
-  interrupted: 'La sauvegarde a été interrompue. Relancez-la.',
-  backup_too_large: 'La base ou son journal dépasse la capacité de cet export.',
-  turso_export: 'Turso n’a pas fourni un export SQLite complet. Réessayez.',
-  sqlite_integrity: 'Le contrôle d’intégrité de la base SQLite a échoué.',
-  export_stale: 'L’export Turso ne contient pas encore les dernières modifications. Réessayez.',
-  export_failed: 'L’export de la base a échoué. Réessayez.',
-  empty_dump: 'L’export est vide.'
-}
 
 function date(value: number) {
   return new Intl.DateTimeFormat('fr-CH', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Zurich' }).format(value)
@@ -80,6 +67,7 @@ function disconnect() {
 }
 
 onMounted(async () => {
+  void refresh()
   if (route.query.dropbox) {
     const connected = route.query.dropbox === 'connected'
     toast.add({ title: connected ? 'Dropbox connecté' : 'Connexion Dropbox non terminée', description: connected ? 'Vous pouvez lancer une sauvegarde ou activer la sauvegarde quotidienne.' : 'Relancez la connexion depuis cette page.', color: connected ? 'success' : 'warning' })
@@ -123,7 +111,7 @@ useIntervalFn(() => {
       <UAlert
         v-if="error"
         title="Impossible de charger les sauvegardes"
-        description="Réessayez dans quelques instants."
+        description="Le serveur est injoignable ou a renvoyé une erreur. Le dernier état ne peut pas être confirmé. Réessayez."
         color="error"
         variant="subtle"
         :actions="[{ label: 'Réessayer', onClick: () => refresh() }]"
@@ -135,6 +123,15 @@ useIntervalFn(() => {
         icon="i-lucide-settings-2"
         color="warning"
         variant="subtle"
+      />
+      <UAlert
+        v-if="failure"
+        title="La sauvegarde n’a pas abouti"
+        :description="`${date(failure.startedAt)} · ${backupErrors[failure.errorCode || ''] || 'La sauvegarde a échoué. Réessayez ou vérifiez la configuration.'} L’alerte restera visible jusqu’à une sauvegarde réussie.`"
+        icon="i-lucide-triangle-alert"
+        color="error"
+        variant="subtle"
+        role="alert"
       />
       <UAlert
         v-if="running"
@@ -246,7 +243,7 @@ useIntervalFn(() => {
               {{ run.path.slice(1) }}
             </p>
             <p v-if="run.errorCode" class="text-xs text-error">
-              {{ errors[run.errorCode] || 'La sauvegarde n’a pas abouti.' }}
+              {{ backupErrors[run.errorCode] || 'La sauvegarde n’a pas abouti.' }}
             </p>
           </li>
         </ul>
