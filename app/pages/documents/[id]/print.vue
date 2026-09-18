@@ -853,7 +853,8 @@ body {
 }
 
 .invoice-table td {
-  font-size: 11.5px;
+  font-size: 11px;
+  font-weight: 400;
   overflow-wrap: anywhere;
 }
 
@@ -900,7 +901,6 @@ body {
 }
 
 .invoice-desc {
-  font-weight: 600;
   color: #0f172a;
   white-space: pre-line;
   overflow-wrap: anywhere;

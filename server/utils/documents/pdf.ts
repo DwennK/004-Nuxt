@@ -32,6 +32,7 @@ const BOTTOM_LIMIT = OUTER_MARGIN
 const SWISS_REFERENCE_LEFT = 20 * MM
 
 const FONT_BODY = 8
+const FONT_LINE = 7.7
 const FONT_SMALL = 7
 const FONT_LABEL = 6.2
 const FONT_KICKER = 6
@@ -510,7 +511,7 @@ function drawDocumentLines(context: PdfContext, document: DocumentDetail) {
 
   for (const line of document.lines) {
     const descriptionWidth = columns.description.width - (4 * MM)
-    const descriptionHeight = measureTextBlock(context.boldFont, line.label, FONT_BODY, descriptionWidth, 10)
+    const descriptionHeight = measureTextBlock(context.regularFont, line.label, FONT_LINE, descriptionWidth, 10)
     const rowHeight = Math.max((5.4 * MM), descriptionHeight + (3.4 * MM))
 
     if (context.cursorY - rowHeight < BOTTOM_LIMIT) {
@@ -520,33 +521,31 @@ function drawDocumentLines(context: PdfContext, document: DocumentDetail) {
 
     const rowTop = context.cursorY
     const textTop = rowTop - (1.7 * MM)
-    const numberBaseline = textTop - FONT_BODY
+    const numberBaseline = textTop - FONT_LINE
 
     drawTextBlock(context, line.label, columns.description.left + (2 * MM), textTop, descriptionWidth, {
-      font: context.boldFont,
-      size: FONT_BODY,
+      size: FONT_LINE,
       color: COLORS.strong,
       lineHeight: 10
     })
     drawRightAlignedText(context, String(line.quantity), columns.quantity.right - (2 * MM), numberBaseline, {
-      size: FONT_BODY,
+      size: FONT_LINE,
       color: COLORS.text
     })
     drawRightAlignedText(context, formatCurrency(line.unitPrice), columns.unitPrice.right - (2 * MM), numberBaseline, {
-      size: FONT_BODY,
+      size: FONT_LINE,
       color: COLORS.text
     })
     drawRightAlignedText(context, `${line.vatRate}%`, columns.vat.right - (2 * MM), numberBaseline, {
-      size: FONT_BODY,
+      size: FONT_LINE,
       color: COLORS.text
     })
     drawRightAlignedText(context, formatCurrency(calculateIncludedVatAmount(line.lineTotal, line.vatRate)), columns.vatAmount.right - (2 * MM), numberBaseline, {
-      size: FONT_BODY,
+      size: FONT_LINE,
       color: COLORS.text
     })
     drawRightAlignedText(context, formatCurrency(line.lineTotal), columns.total.right - (2 * MM), numberBaseline, {
-      font: context.boldFont,
-      size: FONT_BODY,
+      size: FONT_LINE,
       color: COLORS.strong
     })
 
