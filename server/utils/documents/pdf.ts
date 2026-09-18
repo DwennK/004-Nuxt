@@ -402,7 +402,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     lineHeight: 8.8
   })
 
-  const lookupSize = 25 * MM
+  const lookupSize = 32.5 * MM
   const lookupY = referencesBottom - (2 * MM) - lookupSize
   drawQrCode(context.page, lookupUrl, SWISS_REFERENCE_LEFT, lookupY, lookupSize, 4)
   const lookupBottom = drawTextBlock(context, 'Ouvrir le document', SWISS_REFERENCE_LEFT, lookupY - 2, referencesWidth, {

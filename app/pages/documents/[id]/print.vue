@@ -689,7 +689,7 @@ body {
 .invoice-head {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 25mm 40mm;
+  grid-template-columns: minmax(0, 1fr) 32.5mm 40mm;
   gap: 6mm;
   align-items: start;
 }

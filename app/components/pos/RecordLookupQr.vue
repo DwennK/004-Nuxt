@@ -29,8 +29,8 @@ const { data: qr } = await useAsyncData(
 }
 .record-lookup-qr {
   display: block;
-  width: 25mm;
-  height: 25mm;
+  width: 32.5mm;
+  height: 32.5mm;
 }
 .record-lookup--compact {
   display: flex;
