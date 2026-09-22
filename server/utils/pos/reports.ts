@@ -1,5 +1,5 @@
 import { settlementCtes } from './document-settlement'
-import { and, eq, gte, lte, sql, sum, type SQL } from 'drizzle-orm'
+import { and, desc, eq, gte, lte, sql, sum, type SQL } from 'drizzle-orm'
 import { catalogItems, customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
 import type { DailySummary, ReportsLeaders, ReportsOverview } from '~~/shared/types/pos'
@@ -305,16 +305,21 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
   const { start, end } = buildDayRange(date)
   const customerNameValue = sql<string>`coalesce(nullif(trim(${customers.companyName}), ''), nullif(trim(${customers.firstName} || ' ' || ${customers.lastName}), ''), 'Unknown customer')`
 
-  const [totalsByMethodRows, paidDocumentRows, unpaidDocumentRows, openTicketRows, openedTodayRows, closedTodayRows] = await Promise.all([
+  const [paymentRows, paidDocumentRows, unpaidDocumentRows, openTicketRows, openedTodayRows, closedTodayRows] = await Promise.all([
     db.select({
+      id: payments.id,
+      documentId: payments.documentId,
+      documentNumber: documents.documentNumber,
+      customerName: customerNameValue,
       method: payments.method,
-      total: sum(payments.amount),
-      transactionCount: sql<number>`count(*)`
+      amount: payments.amount,
+      paidAt: payments.paidAt
     })
       .from(payments)
+      .leftJoin(documents, eq(payments.documentId, documents.id))
+      .leftJoin(customers, eq(documents.customerId, customers.id))
       .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end)))
-      .groupBy(payments.method)
-      .orderBy(payments.method),
+      .orderBy(desc(payments.paidAt), desc(payments.id)),
     db.all<DailySummary['paidDocuments'][number]>(sql`
       WITH ${paidReportCtes(start, end)}
       SELECT d.id, d.document_number AS "documentNumber", d.type, d.settlement_status AS status,
@@ -361,16 +366,16 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
     transactionCount: 0
   }]))
 
-  for (const row of totalsByMethodRows) {
-    totalsByMethod.set(row.method, {
-      total: Number(row.total || 0),
-      transactionCount: Number(row.transactionCount || 0)
-    })
+  for (const row of paymentRows) {
+    const totals = totalsByMethod.get(row.method)!
+    totals.total += row.amount
+    totals.transactionCount += 1
   }
 
   return {
     date,
-    totalPaid: totalsByMethodRows.reduce((total, row) => total + Number(row.total || 0), 0),
+    totalPaid: paymentRows.reduce((total, row) => total + row.amount, 0),
+    payments: paymentRows,
     paidDocuments: paidDocumentRows.map(row => ({
       id: row.id,
       documentNumber: row.documentNumber,
@@ -402,7 +407,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
         total: totalsByMethod.get(method)?.total || 0,
         transactionCount: totalsByMethod.get(method)?.transactionCount || 0
       }))
-      .filter(item => item.total > 0),
+      .filter(item => item.transactionCount > 0),
     ticketStats: {
       openCount: Number(openTicketRows[0]?.count || 0),
       openedToday: Number(openedTodayRows[0]?.count || 0),

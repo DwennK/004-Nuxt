@@ -410,6 +410,15 @@ export interface EmployeeVacationSummary {
 export interface DailySummary {
   date: string
   totalPaid: number
+  payments: Array<{
+    id: number
+    documentId: number
+    documentNumber: string | null
+    customerName: string
+    method: PaymentMethod
+    amount: number
+    paidAt: string
+  }>
   paidDocuments: Array<{
     id: number
     documentNumber: string

@@ -7,8 +7,7 @@ const props = defineProps<{ summary: DailySummary }>()
 
 const reportDate = computed(() => formatDate(props.summary.date))
 
-const paymentCount = computed(() => props.summary.totalsByMethod.reduce((sum, item) => sum + item.transactionCount, 0))
-const paidSubtotal = computed(() => props.summary.paidDocuments.reduce((sum, document) => sum + document.paidAmountToday, 0))
+const paymentCount = computed(() => props.summary.payments.length)
 const categories = computed(() => [...props.summary.turnoverByCategory].sort((a, b) => b.total - a.total || a.category.localeCompare(b.category)))
 const categoryTotal = computed(() => categories.value.reduce((sum, item) => sum + item.total, 0))
 const unpaidDocuments = computed(() => [...props.summary.unpaidDocuments].sort((a, b) => b.balanceDue - a.balanceDue || a.documentNumber.localeCompare(b.documentNumber, 'fr-CH', { numeric: true })))
@@ -89,19 +88,19 @@ function paymentTime(value: string) {
     </section>
 
     <section>
-      <h2>Factures réglées avec encaissement ce jour</h2>
-      <table v-if="summary.paidDocuments.length" class="documents-table">
+      <h2>Paiements de la journée</h2>
+      <table v-if="summary.payments.length" class="documents-table payments-table">
         <colgroup>
           <col class="number-column">
           <col class="customer-column">
           <col class="time-column">
-          <col class="total-column">
+          <col class="method-column">
           <col class="paid-column">
         </colgroup>
         <thead>
           <tr>
             <th scope="col">
-              Facture
+              Document
             </th>
             <th scope="col">
               Client
@@ -109,47 +108,47 @@ function paymentTime(value: string) {
             <th scope="col">
               Heure
             </th>
-            <th scope="col" class="amount">
-              TTC CHF
+            <th scope="col">
+              Moyen
             </th>
             <th scope="col" class="amount">
-              Ce jour CHF
+              CHF
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="document in summary.paidDocuments" :key="document.id">
+          <tr v-for="payment in summary.payments" :key="payment.id">
             <th scope="row">
-              {{ document.documentNumber }}
+              {{ payment.documentNumber || '—' }}
             </th>
-            <td>{{ document.customerName }}</td>
-            <td>{{ paymentTime(document.paidAt) }}</td>
-            <td class="amount">
-              {{ amount(document.total) }}
+            <td>{{ payment.customerName }}</td>
+            <td>{{ paymentTime(payment.paidAt) }}</td>
+            <td>
+              {{ getPaymentMethodLabel(payment.method) }}
             </td>
             <td class="amount emphasis">
-              {{ amount(document.paidAmountToday) }}
+              {{ amount(payment.amount) }}
             </td>
           </tr>
           <tr class="subtotal">
             <th scope="row" colspan="4">
-              Sous-total encaissé sur ces factures
+              Total encaissé
             </th>
             <td class="amount">
-              {{ amount(paidSubtotal) }}
+              {{ amount(summary.totalPaid) }}
             </td>
           </tr>
         </tbody>
       </table>
       <p v-else class="empty">
-        Aucune facture entièrement réglée avec encaissement ce jour.
+        Aucun paiement encaissé ce jour.
       </p>
     </section>
 
     <section>
       <h2>Répartition par catégorie</h2>
       <p class="section-note">
-        Lignes catégorisées des factures ci-dessus
+        Lignes des factures entièrement réglées avec encaissement ce jour
       </p>
       <table v-if="categories.length">
         <thead>
@@ -333,7 +332,9 @@ function paymentTime(value: string) {
   .number-column { width: 16%; }
   .customer-column { width: 32%; }
   .time-column { width: 12%; }
-  .total-column { width: 18%; }
+  .method-column { width: 26%; }
+  .payments-table .customer-column { width: 28%; }
+  .payments-table .paid-column { width: 18%; }
   .paid-column { width: 22%; }
   .balance-column { width: calc(52% / 3); }
 

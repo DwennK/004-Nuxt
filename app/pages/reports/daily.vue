@@ -10,8 +10,7 @@ const { data: summary, status, error, refresh } = await useFetch<DailySummary>('
 })
 
 const reportReady = computed(() => !!summary.value && status.value === 'success')
-const paymentCount = computed(() => summary.value?.totalsByMethod.reduce((sum, item) => sum + item.transactionCount, 0) || 0)
-const paidSubtotal = computed(() => summary.value?.paidDocuments.reduce((sum, document) => sum + document.paidAmountToday, 0) || 0)
+const paymentCount = computed(() => summary.value?.payments.length || 0)
 const categories = computed(() => [...(summary.value?.turnoverByCategory || [])].sort((a, b) => b.total - a.total || a.category.localeCompare(b.category)))
 const categoryTotal = computed(() => categories.value.reduce((sum, item) => sum + item.total, 0))
 const unpaidDocuments = computed(() => [...(summary.value?.unpaidDocuments || [])].sort((a, b) => b.balanceDue - a.balanceDue || a.documentNumber.localeCompare(b.documentNumber, 'fr-CH', { numeric: true })))
@@ -133,69 +132,70 @@ function printReport() {
           <section class="report-section" aria-labelledby="paid-title">
             <div class="report-section-heading">
               <h2 id="paid-title">
-                Factures réglées avec encaissement ce jour
+                Paiements de la journée
               </h2>
               <UBadge
-                :label="String(summary.paidDocuments.length)"
+                :label="String(summary.payments.length)"
                 color="neutral"
                 variant="soft"
                 size="sm"
               />
             </div>
             <div
-              v-if="summary.paidDocuments.length"
+              v-if="summary.payments.length"
               class="report-table-wrap"
               role="region"
-              aria-label="Factures réglées"
+              aria-label="Paiements de la journée"
               tabindex="0"
             >
               <table class="report-table documents-table">
                 <thead>
                   <tr>
                     <th scope="col">
-                      Facture
+                      Document
                     </th>
                     <th scope="col" class="customer-cell">
                       Client
                     </th>
                     <th scope="col">
-                      Dernier paiement
+                      Heure
+                    </th>
+                    <th scope="col">
+                      Moyen de paiement
                     </th>
                     <th scope="col" class="amount">
-                      Total TTC CHF
-                    </th>
-                    <th scope="col" class="amount">
-                      Encaissé ce jour CHF
+                      Montant CHF
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="document in summary.paidDocuments" :key="document.id">
+                  <tr v-for="payment in summary.payments" :key="payment.id">
                     <th scope="row">
-                      <NuxtLink :to="`/documents/${document.id}`">{{ document.documentNumber }}</NuxtLink>
+                      <NuxtLink v-if="payment.documentNumber" :to="`/documents/${payment.documentId}`">{{ payment.documentNumber }}</NuxtLink>
+                      <span v-else>—</span>
                     </th>
                     <td class="customer-cell">
-                      {{ document.customerName }}
+                      {{ payment.customerName }}
                     </td>
-                    <td class="text-toned" :title="formatDateTime(document.paidAt)">
-                      {{ paymentTime(document.paidAt) }}
+                    <td class="text-toned" :title="formatDateTime(payment.paidAt)">
+                      {{ paymentTime(payment.paidAt) }}
                     </td>
-                    <td class="amount">
-                      {{ amount(document.total) }}
+                    <td>
+                      {{ getPaymentMethodLabel(payment.method) }}
                     </td>
                     <td class="amount strong">
-                      {{ amount(document.paidAmountToday) }}
+                      {{ amount(payment.amount) }}
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div v-if="summary.paidDocuments.length" class="report-subtotal">
-              <span>Sous-total encaissé sur ces factures</span>
-              <strong>{{ formatCurrency(paidSubtotal) }}</strong>
+            <div v-if="summary.payments.length" class="report-subtotal">
+              <span>Total encaissé</span>
+              <strong>{{ formatCurrency(summary.totalPaid) }}</strong>
             </div>
             <p v-else class="report-empty">
-              Aucune facture entièrement réglée avec encaissement ce jour.
+              Aucun paiement encaissé ce jour.
             </p>
           </section>
 
@@ -206,7 +206,7 @@ function printReport() {
               </h2>
             </div>
             <p class="report-note">
-              Lignes catégorisées des factures ci-dessus
+              Lignes des factures entièrement réglées avec encaissement ce jour
             </p>
             <table v-if="categories.length" class="report-table">
               <thead>

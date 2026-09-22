@@ -174,6 +174,35 @@ describe('financial query equivalence and bounded query plans', () => {
     expect(full.paymentPeriods.find(period => period.key === 'years')?.buckets.reduce((sum, row) => sum + row.total, 0)).toBe(1660)
   })
 
+  it('lists every daily receipt once, including deposits and split payments within the Zurich day', async () => {
+    await insertPays([
+      { id: 20, document: 1, amount: 50, status: 'paid', paidAt: '2026-09-10T22:00:00.000Z' },
+      { id: 21, document: 5, amount: 75, status: 'paid', paidAt: '2026-09-11T21:59:59.999Z' },
+      { id: 22, document: 5, amount: 25, status: 'paid', paidAt: '2026-09-11T21:59:59.999Z' },
+      { id: 23, document: 5, amount: 999, status: 'paid', paidAt: '2026-09-11T22:00:00.000Z' },
+      { id: 24, document: 1, amount: 999, status: 'paid', paidAt: '2026-09-10T21:59:59.999Z' },
+      { id: 25, document: 5, amount: 999, status: 'refunded' }
+    ])
+    await client.execute('UPDATE payments SET method = \'card_twint\' WHERE id = 22')
+    const daily = await getEndOfDaySummary('2026-09-11')
+    expect(daily.payments.map(payment => payment.id)).toEqual([22, 21, 7, 6, 4, 2, 1, 20])
+    expect(daily.payments[0]).toEqual({
+      id: 22, documentId: 5, documentNumber: 'DOC-5', customerName: 'Bob Beta',
+      method: 'card_twint', amount: 25, paidAt: '2026-09-11T21:59:59.999Z'
+    })
+    expect(daily.payments.at(-1)).toEqual(expect.objectContaining({ documentId: 1, amount: 50 }))
+    expect(daily.totalPaid).toBe(1750)
+    expect(daily.payments.reduce((total, payment) => total + payment.amount, 0)).toBe(daily.totalPaid)
+    expect(daily.totalsByMethod).toEqual([
+      { method: 'cash', total: 1725, transactionCount: 7 },
+      { method: 'card_twint', total: 25, transactionCount: 1 }
+    ])
+    const empty = await getEndOfDaySummary('2026-09-13')
+    expect(empty.payments).toEqual([])
+    expect(empty.totalPaid).toBe(0)
+    expect(empty.totalsByMethod).toEqual([])
+  })
+
   it.each([100, 2000])('materializes payments once and uses indexed receipt lookups with %s additional operations', async (size) => {
     const addedDocs: Doc[] = []
     const addedPays: Pay[] = []
