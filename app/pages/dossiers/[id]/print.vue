@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import '~/assets/css/thermal-print.css'
+import '~/assets/css/document-print.css'
+import { A4_POSTAL_LAYOUT } from '~~/shared/utils/document-print'
 import { ticketStatusLabels, ticketTypeLabels } from '~~/shared/constants/pos'
 import type { PrintProfile, TicketDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
@@ -33,7 +35,7 @@ useHead(() => ({
   style: [
     {
       key: 'ticket-print-page-rule',
-      textContent: profile.value === 'a4' ? '@page { size: A4; margin: 12mm; }' : '@page { margin: 0; }'
+      textContent: profile.value === 'a4' ? '@page { size: A4; margin: 7mm; }' : '@page { margin: 0; }'
     }
   ]
 }))
@@ -46,7 +48,26 @@ const companyAddress = computed(() => {
   return [
     company.value.address,
     [company.value.postalCode, company.value.city].filter(Boolean).join(' ').trim() || null
-  ].filter(Boolean)
+  ].filter((line): line is string => Boolean(line))
+})
+
+const customerWindowLines = computed(() => {
+  const customer = ticket.value?.customer
+  if (!customer) return []
+
+  const personName = [customer.firstName, customer.lastName].map(part => part.trim()).filter(Boolean).join(' ')
+  const contactName = customer.companyName?.trim()
+    && personName.toLocaleLowerCase('fr-CH') !== customer.displayName.trim().toLocaleLowerCase('fr-CH')
+    ? personName
+    : null
+
+  return [
+    customer.displayName,
+    contactName,
+    customer.addressLine1,
+    customer.addressLine2,
+    [customer.postalCode, customer.city].filter(Boolean).join(' ')
+  ].filter((line): line is string => Boolean(line))
 })
 
 const deviceLabel = computed(() => {
@@ -97,7 +118,7 @@ function printTicket() {
 <template>
   <div class="ticket-print-preview print-preview min-h-screen bg-muted/20 text-default" :class="`print-preview--${profile}`">
     <div class="print-toolbar border-b border-default bg-default/95 backdrop-blur print:hidden">
-      <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div>
           <p class="text-xs uppercase tracking-[0.24em] text-toned">
             Dossier client · {{ printProfileLabels[profile] }}
@@ -133,14 +154,89 @@ function printTicket() {
       </div>
     </div>
 
-    <main class="mx-auto flex max-w-5xl justify-center px-3 py-4 sm:px-6 sm:py-6 print:max-w-none print:px-0 print:py-0">
+    <main class="mx-auto flex max-w-6xl justify-center px-3 py-4 sm:px-6 sm:py-6 print:max-w-none print:px-0 print:py-0">
       <article
         v-if="ticket && company && canRenderSelectedProfile"
         :data-print-ready="printReady"
-        class="thermal-sheet bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:shadow-none print:ring-0"
-        :class="{ 'ticket-sheet--a4': profile === 'a4' }"
+        class="bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:shadow-none print:ring-0"
+        :class="profile === 'a4' ? 'sheet sheet--a4 ticket-sheet--a4 w-full max-w-[210mm] print:max-w-none' : 'thermal-sheet'"
+        :style="profile === 'a4' ? {
+          '--a4-address-left': `${A4_POSTAL_LAYOUT.addressLeftMm}mm`,
+          '--a4-address-top': `${A4_POSTAL_LAYOUT.addressTopMm}mm`,
+          '--a4-address-width': `${A4_POSTAL_LAYOUT.addressWidthMm}mm`,
+          '--a4-body-top': `${A4_POSTAL_LAYOUT.bodyTopMm}mm`
+        } : undefined"
       >
-        <header class="thermal-header">
+        <header v-if="profile === 'a4'" class="invoice-header">
+          <div class="invoice-head">
+            <div class="invoice-brand">
+              <div v-if="company.logoDataUrl" class="invoice-logo">
+                <img :src="company.logoDataUrl" :alt="company.name" class="max-h-full max-w-full object-contain">
+              </div>
+              <div>
+                <p class="invoice-kicker">
+                  Réception atelier
+                </p>
+                <h2 class="invoice-company">
+                  {{ company.name }}
+                </h2>
+                <div class="invoice-company-meta">
+                  <p v-for="line in companyAddress" :key="line">
+                    {{ line }}
+                  </p>
+                  <p v-if="company.phone">
+                    {{ company.phone }}
+                  </p>
+                  <p v-if="company.email">
+                    {{ company.email }}
+                  </p>
+                  <p v-if="company.website">
+                    {{ company.website }}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <PosRecordLookupQr :id="id" type="tickets" class="invoice-lookup" />
+            <div class="invoice-meta">
+              <p class="invoice-type">
+                Dossier client
+              </p>
+              <p class="invoice-number">
+                {{ ticket.ticketNumber }}
+              </p>
+              <p>Ouvert le {{ formatDateTime(ticket.openedAt) }}</p>
+              <p>Statut {{ ticketStatusLabels[ticket.status] }}</p>
+            </div>
+          </div>
+          <div class="invoice-party-row">
+            <section class="invoice-party invoice-party--compact">
+              <p class="invoice-label">
+                Références
+              </p>
+              <p>{{ ticketTypeLabels[ticket.type] }}</p>
+              <p v-if="ticket.customer.phone">
+                {{ ticket.customer.phone }}
+              </p>
+              <p v-if="ticket.customer.email">
+                {{ ticket.customer.email }}
+              </p>
+            </section>
+            <section class="invoice-window-wrap">
+              <p class="invoice-label invoice-window-label">
+                Adresse destinataire
+              </p>
+              <div class="invoice-window">
+                <p class="invoice-strong">
+                  {{ customerWindowLines[0] }}
+                </p>
+                <p v-for="(line, index) in customerWindowLines.slice(1)" :key="index">
+                  {{ line }}
+                </p>
+              </div>
+            </section>
+          </div>
+        </header>
+        <header v-else class="thermal-header">
           <div class="thermal-brand-row">
             <div v-if="company.logoDataUrl" class="thermal-logo">
               <img :src="company.logoDataUrl" :alt="company.name" class="max-h-full max-w-full object-contain">
@@ -182,9 +278,14 @@ function printTicket() {
           </div>
         </header>
 
-        <PosRecordLookupQr :id="id" type="tickets" :compact="profile === 'thermal'" />
+        <PosRecordLookupQr
+          v-if="profile === 'thermal'"
+          :id="id"
+          type="tickets"
+          compact
+        />
 
-        <section class="thermal-block">
+        <section v-if="profile === 'thermal'" class="thermal-block">
           <p class="thermal-kicker">
             Client
           </p>
@@ -199,8 +300,8 @@ function printTicket() {
           </p>
         </section>
 
-        <section class="thermal-block">
-          <p class="thermal-kicker">
+        <section :class="profile === 'a4' ? 'ticket-a4-section' : 'thermal-block'">
+          <p :class="profile === 'a4' ? 'invoice-label' : 'thermal-kicker'">
             Appareil
           </p>
           <p class="thermal-strong">
@@ -211,13 +312,13 @@ function printTicket() {
           </p>
         </section>
 
-        <section v-if="hasCodesSection" class="thermal-block">
-          <p class="thermal-kicker">
+        <section v-if="hasCodesSection" :class="profile === 'a4' ? 'ticket-a4-section' : 'thermal-block'">
+          <p :class="profile === 'a4' ? 'invoice-label' : 'thermal-kicker'">
             Codes
           </p>
 
           <div v-if="ticket.accessCode" class="ticket-code-row">
-            <p class="thermal-kicker">
+            <p :class="profile === 'a4' ? 'invoice-label' : 'thermal-kicker'">
               Déverrouillage
             </p>
             <div v-if="isAccessPattern" class="ticket-pattern">
@@ -261,7 +362,7 @@ function printTicket() {
           </div>
 
           <div v-if="ticket.simCode" class="ticket-code-row">
-            <p class="thermal-kicker">
+            <p :class="profile === 'a4' ? 'invoice-label' : 'thermal-kicker'">
               SIM (PIN/PUK)
             </p>
             <p class="ticket-code-value">
@@ -270,8 +371,8 @@ function printTicket() {
           </div>
         </section>
 
-        <section class="thermal-block">
-          <p class="thermal-kicker">
+        <section :class="profile === 'a4' ? 'ticket-a4-section' : 'thermal-block'">
+          <p :class="profile === 'a4' ? 'invoice-label' : 'thermal-kicker'">
             Suivi
           </p>
           <p>
@@ -282,7 +383,7 @@ function printTicket() {
           </p>
         </section>
 
-        <footer class="thermal-footer">
+        <footer :class="profile === 'a4' ? 'invoice-footer' : 'thermal-footer'">
           <p>
             Présentez cette fiche lors du retrait ou du suivi en magasin.
           </p>
@@ -303,81 +404,33 @@ function printTicket() {
 </template>
 
 <style>
-.ticket-sheet--a4 {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-content: start;
-  column-gap: 8mm;
-  width: 100%;
-  max-width: 210mm;
-  padding: 12mm;
-  font-size: 11pt;
-  line-height: 1.5;
+.ticket-a4-section {
+  padding: 3mm 5.8mm;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
-.ticket-sheet--a4 > section,
-.ticket-sheet--a4 > footer {
-  grid-column: 1 / -1;
+.ticket-a4-section + .ticket-a4-section {
+  border-top: 0.2mm solid #dbe4f0;
 }
 
-.ticket-sheet--a4 .thermal-header {
-  border-bottom: 0;
+.ticket-a4-section > p:not(.invoice-label) {
+  margin: 0 0 1mm;
+  white-space: pre-line;
 }
 
-.ticket-sheet--a4 .thermal-company {
-  font-size: 19pt;
+.ticket-a4-section > .invoice-label {
+  break-after: avoid;
 }
 
-.ticket-sheet--a4 .thermal-reference {
-  font-size: 16pt;
+.ticket-sheet--a4 .ticket-code-value,
+.ticket-sheet--a4 .ticket-pattern-sequence {
+  font-size: 11px;
 }
 
-.ticket-sheet--a4 .thermal-block {
-  padding-block: 5mm;
-}
-
-.ticket-sheet--a4 .thermal-footer {
-  padding-top: 5mm;
-}
-
-@media screen and (max-width: 640px) {
-  .ticket-sheet--a4 {
-    column-gap: 3mm;
-    padding: 5mm;
-  }
-
-  .ticket-sheet--a4 .thermal-meta {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .ticket-sheet--a4 .thermal-meta-right {
-    text-align: left;
-  }
-}
-
-@media print {
-  .ticket-print-preview.print-preview--a4 {
-    min-height: 0 !important;
-    background: #fff !important;
-  }
-
-  .ticket-sheet--a4 {
-    display: block;
-    position: relative;
-    max-width: none;
-    padding: 0;
-  }
-
-  .ticket-sheet--a4 .thermal-header {
-    margin-right: 33mm;
-  }
-
-  .ticket-sheet--a4 > .record-lookup {
-    position: absolute;
-    top: 0;
-    right: 0;
-    margin: 0;
-  }
+.ticket-sheet--a4 .ticket-code-row + .ticket-code-row {
+  border-top-color: #dbe4f0;
 }
 
 .ticket-code-row {
