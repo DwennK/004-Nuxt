@@ -81,7 +81,11 @@ const [{ data: ticket, refresh: refreshTicket }, { data: customerSmsSettings }] 
   useFetch<CustomerSmsSettingsRecord>('/api/settings/customer-sms')
 ])
 
-const dossier = useDossier(() => ({ kind: 'ticket', id: id.value }), { record: ticket })
+const activeTab = ref('lines')
+const dossier = useDossier(() => ({ kind: 'ticket', id: id.value }), {
+  record: ticket,
+  edit: () => activeTab.value === 'lines' && !!ticket.value && !['closed', 'cancelled'].includes(ticket.value.status)
+})
 provide('pos-dossier-state', dossier.current)
 const lineEditor = useCommercialLinesDraft({
   initialLines: computed(() => ticket.value?.lines),
@@ -108,7 +112,6 @@ watch(() => dossier.current.value?.epoch, () => {
   noteModalOpen.value = false
 })
 
-const activeTab = ref('overview')
 watch(activeTab, async (tab) => {
   if (tab === 'lines' && isTicketMutable.value && dossier.current.value) {
     try {
@@ -119,13 +122,13 @@ watch(activeTab, async (tab) => {
 const showAllHistory = ref(false)
 
 watch(id, () => {
-  activeTab.value = 'overview'
+  activeTab.value = 'lines'
   showAllHistory.value = false
 })
 
 const tabItems = computed(() => [
-  { label: ticket.value?.type === 'repair' ? 'Réparation' : 'Vue d’ensemble', icon: 'i-lucide-wrench', value: 'overview' },
   { label: 'Lignes', icon: 'i-lucide-list', value: 'lines', badge: lineEditor.state.lines.length },
+  { label: ticket.value?.type === 'repair' ? 'Réparation' : 'Vue d’ensemble', icon: 'i-lucide-wrench', value: 'overview' },
   { label: 'Paiements', icon: 'i-lucide-wallet', value: 'payments', badge: ticket.value?.payments.length || 0 },
   { label: 'SMS', icon: 'i-lucide-message-square-share', value: 'sms', badge: smsTimelineItems.value.length || 0 },
   { label: 'Client & Appareil', icon: 'i-lucide-user', value: 'client' }
@@ -739,6 +742,17 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <PosPrintButton
+            v-if="ticket"
+            :preview-url="`/dossiers/${id}/print?profile=a4`"
+            :thermal-preview-url="supportsThermalPrint ? `/dossiers/${id}/print?profile=thermal` : undefined"
+            compact
+            label="Imprimer"
+            aria-label="Imprimer"
+            color="neutral"
+            variant="subtle"
+            :disabled="dossier.blocked.value"
+          />
           <span id="ticket-lines-unsaved-status" class="inline-flex h-8 w-8 shrink-0 sm:w-36" />
           <UButton
             label="Modifier le dossier"
@@ -789,6 +803,34 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             <span v-if="ticket.customer.phone">{{ ticket.customer.phone }}</span>
             <span class="text-xs">Ouvert le {{ formatDateTime(ticket.openedAt) }}</span>
           </div>
+        </div>
+
+        <div v-if="createDocumentItems.length" class="space-y-2">
+          <div
+            class="flex flex-col gap-3 sm:flex-row sm:flex-wrap"
+            role="group"
+            aria-label="Créer un document à partir du dossier"
+          >
+            <div v-for="(action, index) in createDocumentItems" :key="action.label" class="space-y-1 sm:flex-1">
+              <UButton
+                :label="action.label"
+                :icon="action.icon"
+                size="xl"
+                block
+                class="min-h-12 text-base font-semibold"
+                :loading="creatingDocument"
+                :disabled="dossier.blocked.value || commercialBusy"
+                :aria-describedby="commonDocumentSource ? 'ticket-document-source' : `ticket-document-source-${index}`"
+                @click="createDocument(action.onSelect)"
+              />
+              <p v-if="!commonDocumentSource" :id="`ticket-document-source-${index}`" class="text-xs text-toned">
+                {{ action.source }}
+              </p>
+            </div>
+          </div>
+          <p v-if="commonDocumentSource" id="ticket-document-source" class="text-xs text-toned">
+            {{ commonDocumentSource }}
+          </p>
         </div>
 
         <div class="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
@@ -930,31 +972,6 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                       Les documents liés conservent leurs propres lignes.
                     </p>
                   </div>
-                  <div
-                    v-if="createDocumentItems.length"
-                    class="flex flex-wrap items-start gap-x-3 gap-y-3"
-                    role="group"
-                    aria-label="Créer un document à partir du dossier"
-                  >
-                    <div v-for="(action, index) in createDocumentItems" :key="action.label" class="space-y-1">
-                      <UButton
-                        :label="action.label"
-                        :icon="action.icon"
-                        variant="soft"
-                        size="sm"
-                        :loading="creatingDocument"
-                        :disabled="dossier.blocked.value || commercialBusy"
-                        :aria-describedby="commonDocumentSource ? 'ticket-document-source' : `ticket-document-source-${index}`"
-                        @click="createDocument(action.onSelect)"
-                      />
-                      <p v-if="!commonDocumentSource" :id="`ticket-document-source-${index}`" class="text-xs text-toned">
-                        {{ action.source }}
-                      </p>
-                    </div>
-                  </div>
-                  <p v-if="commonDocumentSource" id="ticket-document-source" class="text-xs text-toned">
-                    {{ commonDocumentSource }}
-                  </p>
                 </div>
                 <form class="space-y-3 p-3 sm:p-4" :aria-busy="commercialBusy" @submit.prevent="saveTicketLines">
                   <PosFormFeedback :saving="linesSaving" :error="linesError" />
@@ -1167,18 +1184,6 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 <p v-if="!canSendSms" class="text-xs text-toned">
                   {{ smsButtonHelp }}
                 </p>
-                <PosPrintButton
-                  v-if="supportsThermalPrint"
-                  :preview-url="`/dossiers/${id}/print?profile=a4`"
-                  :thermal-preview-url="`/dossiers/${id}/print?profile=thermal`"
-                  label="Imprimer"
-                  icon="i-lucide-printer"
-                  color="neutral"
-                  variant="outline"
-                  block
-                  class="justify-start"
-                  :disabled="dossier.blocked.value"
-                />
               </div>
             </section>
           </aside>
