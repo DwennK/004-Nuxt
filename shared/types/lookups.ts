@@ -32,3 +32,14 @@ export interface GlobalLookupResponse {
   documents: SuggestionsResponse<DocumentLookupItem>
   catalogItems: CatalogSuggestionsResponse
 }
+
+export interface AddressSuggestion {
+  label: string
+  addressLine1?: string
+  postalCode: string
+  city: string
+}
+
+export interface AddressSuggestionsResponse {
+  items: AddressSuggestion[]
+}

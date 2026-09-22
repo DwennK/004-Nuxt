@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import type { CustomerFormValue, CustomerUpsertInput } from '~~/shared/types/pos'
-import type { PostalCodeLookupResult } from '~~/shared/types/lookups'
+import type { AddressSuggestion, PostalCodeLookupResult } from '~~/shared/types/lookups'
 
 const props = withDefaults(defineProps<{
   initialValue?: Partial<CustomerUpsertInput>
@@ -85,13 +85,8 @@ const state = reactive<CustomerFormValue>({
   notes: ''
 })
 
-const postalCodeSuggestions = ref<string[]>([])
-const isPostalCodeLookupPending = ref(false)
 const lastAutoFilledCity = ref<string | null>(null)
 const normalizedPostalCode = computed(() => state.postalCode.replace(/\D+/g, '').slice(0, 4))
-const shouldShowPostalCodeSuggestions = computed(() => postalCodeSuggestions.value.length > 1)
-
-let postalCodeLookupRequestId = 0
 
 watchEffect(() => {
   const displayName = props.initialValue.displayName
@@ -125,69 +120,46 @@ watch(() => state.city, (value) => {
   }
 })
 
-const lookupPostalCode = useDebounceFn(async (postalCode: string) => {
-  const requestId = ++postalCodeLookupRequestId
-
-  isPostalCodeLookupPending.value = true
-
-  try {
-    const result = await $fetch<PostalCodeLookupResult>('/api/lookups/postal-codes', {
-      query: { postalCode }
-    })
-
-    if (requestId !== postalCodeLookupRequestId) {
-      return
-    }
-
-    postalCodeSuggestions.value = result.localities
-
-    const currentCity = state.city.trim()
-    const canAutoFillCity = !currentCity || currentCity === lastAutoFilledCity.value
-
-    if (result.localities.length === 1 && canAutoFillCity) {
-      state.city = result.localities[0]!
-      lastAutoFilledCity.value = result.localities[0]!
-      return
-    }
-
-    if (currentCity && lastAutoFilledCity.value === currentCity && !result.localities.includes(currentCity)) {
-      state.city = ''
-      lastAutoFilledCity.value = null
-    }
-  } catch {
-    if (requestId !== postalCodeLookupRequestId) {
-      return
-    }
-
-    postalCodeSuggestions.value = []
-  } finally {
-    if (requestId === postalCodeLookupRequestId) {
-      isPostalCodeLookupPending.value = false
-    }
-  }
-}, 200)
-
-watch(normalizedPostalCode, (postalCode) => {
-  postalCodeLookupRequestId += 1
-
+watch(normalizedPostalCode, (postalCode, _previous, onCleanup) => {
   if (postalCode.length !== 4) {
-    postalCodeSuggestions.value = []
-    isPostalCodeLookupPending.value = false
-
     if (lastAutoFilledCity.value && state.city === lastAutoFilledCity.value) {
       state.city = ''
       lastAutoFilledCity.value = null
     }
-
     return
   }
 
-  lookupPostalCode(postalCode)
+  const controller = new AbortController()
+  const timer = setTimeout(async () => {
+    try {
+      const result = await $fetch<PostalCodeLookupResult>('/api/lookups/postal-codes', {
+        query: { postalCode },
+        signal: controller.signal
+      })
+      if (controller.signal.aborted) return
+      const currentCity = state.city.trim()
+      if (result.localities.length === 1 && (!currentCity || currentCity === lastAutoFilledCity.value)) {
+        state.city = result.localities[0]!
+        lastAutoFilledCity.value = state.city
+      } else if (currentCity && currentCity === lastAutoFilledCity.value && !result.localities.includes(currentCity)) {
+        state.city = ''
+        lastAutoFilledCity.value = null
+      }
+    } catch {
+      // Postal lookup is optional; keep all manually entered values on failure.
+    }
+  }, 200)
+  onCleanup(() => {
+    clearTimeout(timer)
+    controller.abort()
+  })
 }, { immediate: true })
 
-function applySuggestedCity(city: string) {
-  state.city = city
-  lastAutoFilledCity.value = city
+function applyAddressSuggestion(suggestion: AddressSuggestion) {
+  lastAutoFilledCity.value = null
+  if (suggestion.addressLine1) state.addressLine1 = suggestion.addressLine1
+  state.postalCode = suggestion.postalCode
+  state.city = suggestion.city
 }
 
 function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
@@ -279,6 +251,43 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
             placeholder="Nom de la société"
           />
         </UFormField>
+
+        <UFormField label="Adresse" name="addressLine1" hint="Optionnel">
+          <PosAddressLookupInput
+            v-model="state.addressLine1"
+            field="address"
+            :postal-code="state.postalCode"
+            :city="state.city"
+            :disabled="props.saving"
+            class="w-full"
+            placeholder="Rue et numéro"
+            @select="applyAddressSuggestion"
+          />
+        </UFormField>
+
+        <div class="grid grid-cols-[6rem_minmax(0,1fr)] gap-4">
+          <UFormField label="NPA" name="postalCode">
+            <PosAddressLookupInput
+              v-model="state.postalCode"
+              field="postalCode"
+              :disabled="props.saving"
+              class="w-full"
+              inputmode="numeric"
+              maxlength="4"
+              placeholder="1003"
+              @select="applyAddressSuggestion"
+            />
+          </UFormField>
+
+          <UFormField label="Localité" name="city">
+            <PosAddressLookupInput
+              v-model="state.city"
+              field="city"
+              :disabled="props.saving"
+              @select="applyAddressSuggestion"
+            />
+          </UFormField>
+        </div>
       </div>
     </template>
 
@@ -361,7 +370,15 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           orientation="horizontal"
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
-          <UInput v-bind="posInputAttrs" v-model="state.addressLine1" class="w-full lg:max-w-sm" />
+          <PosAddressLookupInput
+            v-model="state.addressLine1"
+            field="address"
+            :postal-code="state.postalCode"
+            :city="state.city"
+            :disabled="props.saving"
+            class="w-full lg:max-w-sm"
+            @select="applyAddressSuggestion"
+          />
         </UFormField>
         <USeparator />
         <UFormField
@@ -376,38 +393,26 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
         </UFormField>
         <USeparator />
         <div class="grid gap-4 md:grid-cols-2">
-          <UFormField label="Code postal" name="postalCode" hint="Optionnel">
-            <UInput
-              v-bind="posInputAttrs"
+          <UFormField label="NPA" name="postalCode" hint="Optionnel">
+            <PosAddressLookupInput
               v-model="state.postalCode"
+              field="postalCode"
+              :disabled="props.saving"
               class="w-full"
               inputmode="numeric"
               maxlength="4"
               placeholder="1003"
+              @select="applyAddressSuggestion"
             />
           </UFormField>
 
-          <UFormField label="Ville" name="city" hint="Optionnel">
-            <div class="space-y-2">
-              <UInput v-bind="posInputAttrs" v-model="state.city" class="w-full" />
-
-              <div v-if="isPostalCodeLookupPending" class="text-xs text-toned">
-                Recherche des localités du NPA…
-              </div>
-
-              <div v-else-if="shouldShowPostalCodeSuggestions" class="flex flex-wrap gap-2">
-                <UButton
-                  v-for="city in postalCodeSuggestions"
-                  :key="city"
-                  type="button"
-                  color="neutral"
-                  variant="soft"
-                  size="xs"
-                  :label="city"
-                  @click="applySuggestedCity(city)"
-                />
-              </div>
-            </div>
+          <UFormField label="Localité" name="city" hint="Optionnel">
+            <PosAddressLookupInput
+              v-model="state.city"
+              field="city"
+              :disabled="props.saving"
+              @select="applyAddressSuggestion"
+            />
           </UFormField>
         </div>
       </UPageCard>
@@ -464,7 +469,15 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
       </div>
 
       <UFormField label="Adresse ligne 1" name="addressLine1" hint="Optionnel">
-        <UInput v-bind="posInputAttrs" v-model="state.addressLine1" class="w-full" />
+        <PosAddressLookupInput
+          v-model="state.addressLine1"
+          field="address"
+          :postal-code="state.postalCode"
+          :city="state.city"
+          :disabled="props.saving"
+          class="w-full"
+          @select="applyAddressSuggestion"
+        />
       </UFormField>
 
       <UFormField label="Adresse ligne 2" name="addressLine2" hint="Optionnel">
@@ -472,38 +485,26 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
       </UFormField>
 
       <div class="grid gap-4 md:grid-cols-2">
-        <UFormField label="Code postal" name="postalCode" hint="Optionnel">
-          <UInput
-            v-bind="posInputAttrs"
+        <UFormField label="NPA" name="postalCode" hint="Optionnel">
+          <PosAddressLookupInput
             v-model="state.postalCode"
+            field="postalCode"
+            :disabled="props.saving"
             class="w-full"
             inputmode="numeric"
             maxlength="4"
             placeholder="1003"
+            @select="applyAddressSuggestion"
           />
         </UFormField>
 
-        <UFormField label="Ville" name="city" hint="Optionnel">
-          <div class="space-y-2">
-            <UInput v-bind="posInputAttrs" v-model="state.city" class="w-full" />
-
-            <div v-if="isPostalCodeLookupPending" class="text-xs text-toned">
-              Recherche des localités du NPA…
-            </div>
-
-            <div v-else-if="shouldShowPostalCodeSuggestions" class="flex flex-wrap gap-2">
-              <UButton
-                v-for="city in postalCodeSuggestions"
-                :key="city"
-                type="button"
-                color="neutral"
-                variant="soft"
-                size="xs"
-                :label="city"
-                @click="applySuggestedCity(city)"
-              />
-            </div>
-          </div>
+        <UFormField label="Localité" name="city" hint="Optionnel">
+          <PosAddressLookupInput
+            v-model="state.city"
+            field="city"
+            :disabled="props.saving"
+            @select="applyAddressSuggestion"
+          />
         </UFormField>
       </div>
 
