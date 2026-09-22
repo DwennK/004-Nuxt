@@ -266,10 +266,12 @@ function handleImeiScan(value: string) {
                   </UBadge>
                 </div>
 
-                <UFormField label="Client" name="customerId" required>
+                <UFormField :label="state.customerId ? undefined : 'Client'" name="customerId" required>
                   <PosCustomerSelectField
                     :model-value="state.customerId || null"
                     :customers="props.customers"
+                    show-summary
+                    :disabled="props.saving || props.disabled"
                     placeholder="Rechercher ou créer un client"
                     @update:model-value="setCustomer"
                     @created="handleCustomerCreated"

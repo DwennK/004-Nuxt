@@ -12,9 +12,11 @@ const props = withDefaults(defineProps<{
   modelValue?: number | null
   disabled?: boolean
   placeholder?: string
+  showSummary?: boolean
 }>(), {
   modelValue: null,
   disabled: false,
+  showSummary: false,
   placeholder: 'Choisir un client'
 })
 
@@ -27,6 +29,10 @@ const toast = useToast()
 const formId = `customer-inline-${useId()}`
 const menuOpen = ref(false)
 const createOpen = ref(false)
+const editOpen = ref(false)
+const editingCustomer = ref<CustomerRecord | null>(null)
+const updatedCustomers = ref<CustomerRecord[]>([])
+const { isSaving: isEditing, saveError: editError, save: saveEdit, clearSaveError: clearEditError } = useFormAction()
 const customerSelect = useTemplateRef<{ inputRef?: HTMLInputElement }>('customerSelect')
 const focusReturn = usePosFocusReturn(createOpen, () => customerSelect.value?.inputRef)
 const isSaving = ref(false)
@@ -51,6 +57,10 @@ const customersList = computed(() => {
   }
 
   for (const customer of createdCustomers.value) {
+    merged.set(customer.id, customer)
+  }
+
+  for (const customer of updatedCustomers.value) {
     merged.set(customer.id, customer)
   }
 
@@ -109,6 +119,51 @@ watch([debouncedSearch, trimmedSearch], async ([term, currentTerm], _previous, o
     if (!controller.signal.aborted) remoteSearchPending.value = false
   }
 })
+
+const editInitialValue = computed(() => {
+  const customer = editingCustomer.value
+  if (!customer) return undefined
+
+  return {
+    ...customer,
+    companyName: customer.companyName || '',
+    addressLine1: customer.addressLine1 || '',
+    addressLine2: customer.addressLine2 || '',
+    postalCode: customer.postalCode || '',
+    city: customer.city || '',
+    notes: customer.notes || ''
+  }
+})
+
+function openEdit() {
+  if (props.disabled || !selectedCustomer.value) return
+  editingCustomer.value = selectedCustomer.value
+  clearEditError()
+  editOpen.value = true
+}
+
+async function saveCustomer(payload: CustomerFormValue) {
+  const customerId = editingCustomer.value?.id
+  if (!customerId || props.disabled) return
+
+  const result = await saveEdit(() => $fetch<CustomerRecord>(`/api/customers/${customerId}`, {
+    method: 'PATCH',
+    body: payload
+  }), { success: 'Client mis à jour' })
+  if (!result?.ok) return
+
+  updatedCustomers.value = [...updatedCustomers.value.filter(customer => customer.id !== customerId), result.data]
+  editOpen.value = false
+}
+
+async function changeCustomer() {
+  if (props.disabled) return
+  emit('update:modelValue', null)
+  searchTerm.value = ''
+  await nextTick()
+  customerSelect.value?.inputRef?.focus()
+  menuOpen.value = true
+}
 
 const createActionLabel = computed(() => {
   return trimmedSearch.value ? `Créer "${trimmedSearch.value}"` : 'Créer un client'
@@ -224,7 +279,28 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-2">
+    <PosCustomerInfo
+      v-if="showSummary && selectedCustomer"
+      :customer="selectedCustomer"
+      :disabled="disabled"
+      @edit="openEdit"
+    >
+      <template #actions>
+        <UButton
+          type="button"
+          label="Changer de client"
+          color="neutral"
+          variant="link"
+          size="xs"
+          class="ml-auto shrink-0"
+          :disabled="disabled"
+          @click="changeCustomer"
+        />
+      </template>
+    </PosCustomerInfo>
+
     <UInputMenu
+      v-else
       v-bind="posInputAttrs"
       :key="createdCustomers.length"
       ref="customerSelect"
@@ -302,6 +378,18 @@ onBeforeUnmount(() => {
         </div>
       </template>
     </UInputMenu>
+
+    <PosCustomerSlideover
+      v-if="showSummary && editingCustomer"
+      v-model:open="editOpen"
+      title="Modifier la fiche client"
+      description="Les modifications sont enregistrées dans la fiche client."
+      submit-label="Enregistrer le client"
+      :initial-value="editInitialValue"
+      :saving="isEditing"
+      :save-error="editError"
+      @save="saveCustomer"
+    />
 
     <USlideover
       v-model:open="createOpen"
