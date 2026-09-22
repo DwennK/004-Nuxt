@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import type { FormSubmitEvent, TabsItem } from '@nuxt/ui'
+import type { Form, FormSubmitEvent, TabsItem } from '@nuxt/ui'
 import { ticketStatusLabels, ticketStatuses, ticketTypeLabels, ticketTypes } from '~~/shared/constants/pos'
 import { ticketStatusTransitions } from '~~/shared/domain/tickets/workflow'
 import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
@@ -81,6 +81,7 @@ const schema = z.object({
 })
 
 type Schema = z.output<typeof schema>
+const form = useTemplateRef<Form<typeof schema>>('form')
 
 function toDateTimeLocal(value?: string | null) {
   const date = value ? new Date(value) : new Date()
@@ -217,8 +218,11 @@ function setCustomer(value: number | null) {
   state.customerId = value || 0
 }
 
-function handleCustomerCreated(customer: CustomerRecord) {
+async function handleCustomerCreated(customer: CustomerRecord) {
   state.customerId = customer.id
+  // Inline creation updates the selection without an InputMenu change event.
+  await nextTick()
+  await form.value?.validate({ name: 'customerId', silent: true })
 }
 
 function handleImeiInput(value: string | number) {
@@ -233,6 +237,7 @@ function handleImeiScan(value: string) {
 <template>
   <UForm
     :id="formId"
+    ref="form"
     :schema="schema"
     :disabled="props.saving || props.disabled"
     :aria-busy="props.saving"
