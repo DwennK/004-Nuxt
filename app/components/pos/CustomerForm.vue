@@ -207,48 +207,17 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           />
         </UFormField>
 
-        <div class="grid gap-4">
-          <UFormField
-            label="Téléphone"
-            name="phone"
-            hint="Optionnel"
-            description="Si le client accepte de le donner."
-          >
-            <UInput
-              v-bind="posInputAttrs"
-              v-model="state.phone"
-              class="w-full"
-              placeholder="+41 ..."
-            />
-          </UFormField>
-
-          <UFormField
-            label="E-mail"
-            name="email"
-            hint="Optionnel"
-            description="Pratique pour les devis et factures."
-          >
-            <UInput
-              v-bind="posInputAttrs"
-              v-model="state.email"
-              type="email"
-              class="w-full"
-              placeholder="client@example.ch"
-            />
-          </UFormField>
-        </div>
-
         <UFormField
-          label="Société"
-          name="companyName"
+          label="Téléphone"
+          name="phone"
           hint="Optionnel"
-          description="Utile si vous facturez une entreprise ou un indépendant."
+          description="Si le client accepte de le donner."
         >
           <UInput
             v-bind="posInputAttrs"
-            v-model="state.companyName"
+            v-model="state.phone"
             class="w-full"
-            placeholder="Nom de la société"
+            placeholder="+41 ..."
           />
         </UFormField>
 
@@ -288,6 +257,37 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
             />
           </UFormField>
         </div>
+
+        <USeparator />
+
+        <UFormField
+          label="E-mail"
+          name="email"
+          hint="Optionnel"
+          description="Pratique pour les devis et factures."
+        >
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.email"
+            type="email"
+            class="w-full"
+            placeholder="client@example.ch"
+          />
+        </UFormField>
+
+        <UFormField
+          label="Société"
+          name="companyName"
+          hint="Optionnel"
+          description="Utile si vous facturez une entreprise ou un indépendant."
+        >
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="state.companyName"
+            class="w-full"
+            placeholder="Nom de la société"
+          />
+        </UFormField>
       </div>
     </template>
 

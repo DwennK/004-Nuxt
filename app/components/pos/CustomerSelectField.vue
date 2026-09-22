@@ -395,7 +395,6 @@ onBeforeUnmount(() => {
       v-model:open="createOpen"
       :content="focusReturn"
       title="Créer un client"
-      description="Ajoutez une fiche légère puis continuez immédiatement votre dossier ou votre document."
       side="right"
       :dismissible="!isSaving"
       :close="!isSaving"
@@ -406,15 +405,6 @@ onBeforeUnmount(() => {
       }"
     >
       <template #body>
-        <div class="rounded-2xl border border-default bg-elevated/50 px-4 py-3">
-          <p class="text-xs uppercase tracking-[0.14em] text-toned">
-            Saisie rapide
-          </p>
-          <p class="mt-1 text-sm text-default">
-            Le nom suffit. Ajoutez le téléphone ou l’e-mail seulement si le client accepte de les partager.
-          </p>
-        </div>
-
         <PosCustomerForm
           :form-id="formId"
           :saving="isSaving"
