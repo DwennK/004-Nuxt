@@ -37,6 +37,15 @@ const primaryLinks = computed(() => [{
     open.value = false
   }
 }, {
+  label: 'Dossiers clients',
+  icon: 'i-lucide-wrench',
+  to: '/dossiers',
+  onSelect: () => {
+    open.value = false
+  }
+}] satisfies NavigationMenuItem[])
+
+const documentLinks = computed(() => [{
   label: 'Documents',
   icon: 'i-lucide-files',
   to: '/documents',
@@ -67,13 +76,6 @@ const primaryLinks = computed(() => [{
     active: route.path === '/documents' && route.query.type === 'sav',
     onSelect: () => { open.value = false }
   }],
-  onSelect: () => {
-    open.value = false
-  }
-}, {
-  label: 'Dossiers clients',
-  icon: 'i-lucide-wrench',
-  to: '/dossiers',
   onSelect: () => {
     open.value = false
   }
@@ -250,6 +252,7 @@ const groups = computed(() => {
       label: 'Navigation',
       items: [
         ...flattenNavigationItems(primaryLinks.value),
+        ...flattenNavigationItems(documentLinks.value),
         ...flattenNavigationItems(reportLinks),
         ...flattenNavigationItems(secondaryLinks),
         ...flattenNavigationItems(footerLinks.value)
@@ -356,6 +359,16 @@ const groups = computed(() => {
           orientation="vertical"
           tooltip
           class="mt-3"
+          popover
+        />
+
+        <USeparator class="my-3" />
+
+        <UNavigationMenu
+          :collapsed="collapsed"
+          :items="documentLinks"
+          orientation="vertical"
+          tooltip
           popover
         />
 
