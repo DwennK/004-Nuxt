@@ -324,18 +324,7 @@ useHead(() => ({
           </table>
         </section>
 
-        <section class="invoice-summary" :style="document.type === 'sav' ? { gridTemplateColumns: '1fr' } : undefined">
-          <div class="invoice-notes">
-            <div v-for="block in a4PrintModel?.noteBlocks || []" :key="block.label" class="invoice-note-block">
-              <p class="invoice-label">
-                {{ block.label }}
-              </p>
-              <p class="whitespace-pre-line">
-                {{ block.content }}
-              </p>
-            </div>
-          </div>
-
+        <section class="invoice-summary">
           <div v-if="document.type !== 'sav'" class="invoice-totals">
             <div class="invoice-total-row">
               <span>Total HT</span>
@@ -356,6 +345,17 @@ useHead(() => ({
             <div v-if="isPayableDocument" class="invoice-total-row invoice-total-row--grand">
               <span>Reste à payer</span>
               <strong>{{ formatCurrency(balanceDue) }}</strong>
+            </div>
+          </div>
+
+          <div v-if="a4PrintModel?.noteBlocks.length" class="invoice-notes">
+            <div v-for="block in a4PrintModel.noteBlocks" :key="block.label" class="invoice-note-block">
+              <p class="invoice-label">
+                {{ block.label }}
+              </p>
+              <p class="whitespace-pre-line">
+                {{ block.content }}
+              </p>
             </div>
           </div>
         </section>

@@ -38,7 +38,6 @@ const FONT_LABEL = 6.2
 const FONT_KICKER = 6
 const FONT_COMPANY = 14
 const FONT_NUMBER = 11.5
-const FONT_TOTAL = 10
 
 const COLORS = {
   text: hexToRgb('#334155'),
@@ -601,46 +600,17 @@ function drawPayments(context: PdfContext, document: DocumentDetail, company: Co
 }
 
 function measureSummaryHeight(context: PdfContext, model: ReturnType<typeof buildDocumentA4PrintModel>) {
-  const notesWidth = SECTION_WIDTH - (4 * MM) - (54 * MM)
   const noteHeight = model.noteBlocks.reduce((total, block, index) => {
-    const labelHeight = measureTextBlock(context.boldFont, block.label, FONT_LABEL, notesWidth, 7.5)
-    const contentHeight = measureTextBlock(context.regularFont, block.content, FONT_SMALL, notesWidth, 9.5)
-    return total + labelHeight + contentHeight + (index ? (2.2 * MM) : 0) + (1.2 * MM)
+    const contentHeight = measureTextBlock(context.regularFont, block.content, FONT_SMALL, SECTION_WIDTH, 9.5)
+    return total + 9 + contentHeight + (index ? (2.2 * MM) : 0)
   }, 0)
-  const totalRows = 3 + (model.isPayableDocument ? 2 : 0)
-  const totalsHeight = (2.2 * MM) + (totalRows * 11) + 16
 
-  return Math.max(noteHeight, totalsHeight) + (3 * MM)
+  return (13 * MM) + (model.noteBlocks.length ? (3 * MM) + noteHeight : 0) + (3 * MM)
 }
 
 function drawSummary(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord) {
   const model = buildDocumentA4PrintModel(document, company)
-  const totalsWidth = 54 * MM
-  const gap = 4 * MM
-  const notesWidth = SECTION_WIDTH - gap - totalsWidth
-  const requiredHeight = measureSummaryHeight(context, model)
-
-  ensureSpace(context, requiredHeight)
-  const topY = context.cursorY
-
-  let notesBottom = topY
-
-  if (model.noteBlocks.length) {
-    for (const [index, block] of model.noteBlocks.entries()) {
-      const blockTop = index === 0 ? topY : notesBottom - (2.2 * MM)
-      drawTextBlock(context, block.label, SECTION_LEFT, blockTop, notesWidth, {
-        font: context.boldFont,
-        size: FONT_LABEL,
-        color: COLORS.muted,
-        lineHeight: 7.5
-      })
-      notesBottom = drawTextBlock(context, block.content, SECTION_LEFT, blockTop - 9, notesWidth, {
-        size: FONT_SMALL,
-        color: COLORS.text,
-        lineHeight: 9.5
-      })
-    }
-  }
+  ensureSpace(context, measureSummaryHeight(context, model))
 
   const totalRows = [
     { label: 'Total HT', value: formatCurrency(document.subtotal), emphasized: false },
@@ -655,48 +625,69 @@ function drawSummary(context: PdfContext, document: DocumentDetail, company: Com
     )
   }
 
-  const boxX = SECTION_RIGHT - totalsWidth
-  const boxY = topY - requiredHeight + (3 * MM)
-  const boxHeight = requiredHeight - (3 * MM)
+  const topY = context.cursorY
+  const bandHeight = 13 * MM
+  const columnWidth = SECTION_WIDTH / totalRows.length
+  const padding = 2.6 * MM
 
   context.page.drawRectangle({
-    x: boxX,
-    y: boxY,
-    width: totalsWidth,
-    height: boxHeight,
-    borderColor: COLORS.dark,
-    borderWidth: 0.6,
+    x: SECTION_LEFT,
+    y: topY - bandHeight,
+    width: SECTION_WIDTH,
+    height: bandHeight,
     color: COLORS.totalsBg
   })
-
-  let rowY = topY - (2.8 * MM)
+  for (const y of [topY, topY - bandHeight]) {
+    context.page.drawLine({
+      start: { x: SECTION_LEFT, y },
+      end: { x: SECTION_RIGHT, y },
+      thickness: 0.5,
+      color: COLORS.border
+    })
+  }
 
   totalRows.forEach((row, index) => {
-    if (row.emphasized) {
+    const left = SECTION_LEFT + (index * columnWidth)
+    const right = left + columnWidth - padding
+    if (index) {
       context.page.drawLine({
-        start: { x: boxX + (2.6 * MM), y: rowY + 3 },
-        end: { x: boxX + totalsWidth - (2.6 * MM), y: rowY + 3 },
+        start: { x: left, y: topY - (2.2 * MM) },
+        end: { x: left, y: topY - bandHeight + (2.2 * MM) },
         thickness: 0.5,
         color: COLORS.border
       })
-      rowY -= 4
     }
-
-    drawTextBlock(context, row.label, boxX + (2.6 * MM), rowY, totalsWidth / 2, {
+    drawRightAlignedText(context, row.label, right, topY - (2.2 * MM) - FONT_SMALL, {
+      font: row.emphasized ? context.boldFont : context.regularFont,
       size: FONT_SMALL,
       color: COLORS.strong
     })
-    drawRightAlignedText(context, row.value, boxX + totalsWidth - (2.6 * MM), rowY - FONT_SMALL, {
-      font: row.emphasized ? context.boldFont : context.regularFont,
-      size: row.emphasized ? FONT_TOTAL : FONT_BODY,
+    drawRightAlignedText(context, row.value, right, topY - (7 * MM) - FONT_BODY, {
+      font: context.boldFont,
+      size: FONT_BODY,
       color: COLORS.strong
     })
-
-    rowY -= index === totalRows.length - 1 ? 10 : 12
   })
 
-  const summaryBottom = Math.min(notesBottom || topY, boxY)
-  context.cursorY = summaryBottom - (3 * MM)
+  context.cursorY = topY - bandHeight
+  if (model.noteBlocks.length) {
+    context.cursorY -= 3 * MM
+    for (const [index, block] of model.noteBlocks.entries()) {
+      if (index) context.cursorY -= 2.2 * MM
+      drawTextBlock(context, block.label, SECTION_LEFT, context.cursorY, SECTION_WIDTH, {
+        font: context.boldFont,
+        size: FONT_LABEL,
+        color: COLORS.muted,
+        lineHeight: 7.5
+      })
+      context.cursorY = drawTextBlock(context, block.content, SECTION_LEFT, context.cursorY - 9, SECTION_WIDTH, {
+        size: FONT_SMALL,
+        color: COLORS.text,
+        lineHeight: 9.5
+      })
+    }
+  }
+  context.cursorY -= 3 * MM
 }
 
 async function drawQrSection(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord) {

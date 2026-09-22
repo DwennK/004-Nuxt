@@ -303,8 +303,8 @@ body {
 
 .invoice-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 54mm;
-  gap: 4mm;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3mm;
   padding-top: 0;
   padding-bottom: 3mm;
   align-items: start;
@@ -319,24 +319,30 @@ body {
 }
 
 .invoice-totals {
-  padding: 2.2mm 2.6mm;
-  border: 0.2mm solid #111827;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  padding-block: 2.2mm;
+  border-block: 0.2mm solid #cbd5e1;
   background: #f8fafc;
   color: #0f172a;
-  border-radius: 1.6mm;
 }
 
 .invoice-total-row {
   display: flex;
-  justify-content: space-between;
-  gap: 4mm;
-  padding-block: 0.65mm;
+  flex-direction: column;
+  gap: 1mm;
+  padding-inline: 2.6mm;
+  text-align: right;
+  white-space: nowrap;
 }
 
-.invoice-total-row--grand {
-  margin-top: 0.6mm;
-  padding-top: 1.4mm;
-  border-top: 0.2mm solid #cbd5e1;
+.invoice-total-row + .invoice-total-row {
+  border-left: 0.2mm solid #cbd5e1;
+}
+
+.invoice-total-row--grand > span {
+  font-weight: 700;
 }
 
 .qr-bill {
