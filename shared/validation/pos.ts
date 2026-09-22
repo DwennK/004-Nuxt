@@ -111,7 +111,7 @@ export const catalogItemInputSchema = z.object({
       path: ['serviceKind'],
       message: value.type === 'repair'
         ? 'Le type d’intervention est obligatoire pour une réparation'
-        : 'La nature du service est obligatoire'
+        : 'Le libellé est obligatoire'
     })
   }
 })

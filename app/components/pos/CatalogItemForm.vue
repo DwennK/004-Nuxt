@@ -68,7 +68,7 @@ const schema = z.object({
       path: ['serviceKind'],
       message: value.type === 'repair'
         ? 'Le type d’intervention est obligatoire pour une réparation'
-        : 'La nature du service est obligatoire'
+        : 'Le libellé est obligatoire'
     })
   }
 })
@@ -312,12 +312,23 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             </UFormField>
           </div>
 
-          <UFormField :label="isRepair ? 'Type d’intervention' : 'Nature du service'" name="serviceKind" required>
+          <UFormField :label="isRepair ? 'Type d’intervention' : 'Libellé'" name="serviceKind" required>
             <UInput
+              v-if="isRepair"
               v-bind="posInputAttrs"
               v-model="state.serviceKind"
               class="w-full"
-              :placeholder="isRepair ? 'Remplacement écran' : 'Diagnostic, configuration, support...'"
+              placeholder="Remplacement écran"
+            />
+            <UTextarea
+              v-else
+              v-bind="posInputAttrs"
+              v-model="state.serviceKind"
+              class="w-full"
+              :rows="3"
+              :maxrows="8"
+              autoresize
+              placeholder="Diagnostic, configuration, support..."
             />
           </UFormField>
 
@@ -475,12 +486,23 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           </UFormField>
         </div>
 
-        <UFormField :label="isRepair ? 'Type d’intervention' : 'Nature du service'" name="serviceKind" required>
+        <UFormField :label="isRepair ? 'Type d’intervention' : 'Libellé'" name="serviceKind" required>
           <UInput
+            v-if="isRepair"
             v-bind="posInputAttrs"
             v-model="state.serviceKind"
             class="w-full"
-            :placeholder="isRepair ? 'Remplacement écran' : 'Diagnostic, configuration, support...'"
+            placeholder="Remplacement écran"
+          />
+          <UTextarea
+            v-else
+            v-bind="posInputAttrs"
+            v-model="state.serviceKind"
+            class="w-full"
+            :rows="3"
+            :maxrows="8"
+            autoresize
+            placeholder="Diagnostic, configuration, support..."
           />
         </UFormField>
 
