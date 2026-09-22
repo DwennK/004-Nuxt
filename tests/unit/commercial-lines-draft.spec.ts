@@ -11,11 +11,11 @@ const item: CatalogItemRecord = {
 }
 
 const scopes: ReturnType<typeof effectScope>[] = []
-function editor(allowEmpty = false) {
+function editor(allowEmpty = false, catalogItems = [item]) {
   const scope = effectScope()
   scopes.push(scope)
   return scope.run(() => useCommercialLinesDraft({
-    initialLines: ref(undefined), catalogItems: ref([item]),
+    initialLines: ref(undefined), catalogItems: ref(catalogItems),
     allowEmpty, reuseEmptyLine: !allowEmpty
   }))!
 }
@@ -23,6 +23,41 @@ function editor(allowEmpty = false) {
 afterEach(() => scopes.splice(0).forEach(scope => scope.stop()))
 
 describe('shared commercial line drafts', () => {
+  it('includes the multiline service label when adding, merging or selecting a service', () => {
+    const service = { ...item, type: 'service' as const, name: 'Installation', serviceKind: 'Configuration\n\nTransfert des données' }
+    const expectedLabel = 'Installation\nConfiguration\n\nTransfert des données'
+
+    for (const allowEmpty of [false, true]) {
+      const draft = editor(allowEmpty, [service])
+      draft.addCatalogItem(service)
+      draft.addCatalogItem(service)
+      expect(draft.serializeLines()).toHaveLength(1)
+      expect(draft.serializeLines()[0]).toMatchObject({ label: expectedLabel, quantity: 2 })
+
+      draft.updateLineLabel(0, 'Texte personnalisé\nÀ conserver')
+      draft.addCatalogItem(service)
+      expect(draft.serializeLines()).toHaveLength(2)
+      expect(draft.serializeLines()[0]?.label).toBe('Texte personnalisé\nÀ conserver')
+      expect(draft.serializeLines()[1]?.label).toBe(expectedLabel)
+
+      draft.updateLineCatalogItem(0, service.id)
+      expect(draft.serializeLines()[0]?.label).toBe(expectedLabel)
+    }
+  })
+
+  it('keeps the name alone for repairs, products and services without a label', () => {
+    for (const catalogItem of [
+      item,
+      { ...item, type: 'product' as const },
+      { ...item, type: 'service' as const, serviceKind: null },
+      { ...item, type: 'service' as const, serviceKind: ' \n ' }
+    ]) {
+      const draft = editor()
+      draft.addCatalogItem(catalogItem)
+      expect(draft.serializeLines()[0]?.label).toBe(catalogItem.name)
+    }
+  })
+
   it('keeps integer cents through input, totals and serialization for sales and documents', () => {
     for (const allowEmpty of [false, true]) {
       const draft = editor(allowEmpty)

@@ -651,13 +651,16 @@ defineShortcuts({
                   class="grid gap-2 rounded-2xl border border-default bg-default px-3 py-3 md:grid-cols-[minmax(0,1fr)_4.25rem_auto_9rem_auto] md:items-center"
                 >
                   <div class="min-w-0">
-                    <UInput
+                    <UTextarea
                       v-bind="posInputAttrs"
                       :id="`sale-line-label-${line.id}`"
                       :model-value="line.label"
+                      :rows="1"
+                      autoresize
                       size="sm"
                       class="w-full"
                       placeholder="Libellé de la ligne"
+                      :ui="{ base: 'resize-none field-sizing-content' }"
                       @update:model-value="updateLineLabel(index, String($event || ''))"
                     />
                   </div>

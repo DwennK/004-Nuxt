@@ -67,6 +67,11 @@ function getLineCategoryFromItem(item: CatalogItemRecord): LineCategoryHint {
   return item.type === 'repair' ? 'repair' : 'service'
 }
 
+function getLineLabelFromItem(item: CatalogItemRecord): string {
+  const serviceLabel = item.type === 'service' ? item.serviceKind?.trim() : ''
+  return serviceLabel ? `${item.name}\n${serviceLabel}` : item.name
+}
+
 export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions): CommercialLinesDraftController {
   let nextLineId = 0
 
@@ -140,9 +145,10 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
   }
 
   function addCatalogItem(item: CatalogItemRecord) {
+    const label = getLineLabelFromItem(item)
     const existing = state.lines.find((line) => {
       return line.catalogItemId === item.id
-        && line.label === item.name
+        && line.label === label
         && line.unitPriceCents === item.defaultPrice
         && line.vatRate === item.vatRate
     })
@@ -158,7 +164,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
 
     if (emptyLine) {
       emptyLine.catalogItemId = item.id
-      emptyLine.label = item.name
+      emptyLine.label = label
       emptyLine.quantity = 1
       emptyLine.unitPriceCents = item.defaultPrice
       emptyLine.vatRate = item.vatRate
@@ -168,7 +174,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
 
     state.lines.push(createLine({
       catalogItemId: item.id,
-      label: item.name,
+      label,
       quantity: 1,
       unitPriceCents: item.defaultPrice,
       vatRate: item.vatRate,
@@ -261,7 +267,7 @@ export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions)
       return
     }
 
-    line.label = item.name
+    line.label = getLineLabelFromItem(item)
     line.unitPriceCents = item.defaultPrice
     line.vatRate = item.vatRate
     line.categoryHint = getLineCategoryFromItem(item)
