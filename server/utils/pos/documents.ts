@@ -34,7 +34,7 @@ import { runIdempotentDocumentOperation } from '../idempotency'
 import { calculateCommercialTotals as calculateDocumentTotals } from '~~/shared/domain/commercial/money'
 import { createTicketEvent } from '~~/server/utils/pos/ticket-events'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
-import { generateDocumentNumber } from '~~/server/utils/pos/numbers'
+import { generateDocumentNumber, generateTicketNumber } from '~~/server/utils/pos/numbers'
 import { mapCustomer } from '~~/server/modules/customers/mapper'
 import { normalizeOptionalText } from '~~/shared/lib/text'
 import { getPayablePaymentDocument, recordDocumentPayment } from './payment-writes'
@@ -529,6 +529,82 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
       activeDocument: settlement.activeDocument ? { id: settlement.activeDocument.id, documentNumber: settlement.activeDocument.documentNumber, type: settlement.activeDocument.type } : null
     }
   }
+}
+
+/** Continue a commercial operation atomically, including promotion of a standalone document. */
+export async function convertDocumentRecord(
+  id: number,
+  type: 'customer_order' | 'invoice',
+  key: string,
+  dossier?: DossierWriteContext
+) {
+  await ensurePosSchema()
+  const result = await runIdempotentDocumentOperation({
+    source: 'api_document_create',
+    key: `convert:${key}`,
+    payload: { id, type },
+    async execute(tx) {
+      const [source] = await tx.select().from(documents).where(eq(documents.id, id)).limit(1)
+      if (!source) throw createError({ statusCode: 404, statusMessage: 'Document introuvable' })
+      if (source.status === 'cancelled' || !(source.type === 'quote' || (source.type === 'customer_order' && type === 'invoice'))) {
+        throw createError({ statusCode: 409, statusMessage: 'Ce document ne peut pas être converti.', data: { code: 'DOCUMENT_CONVERSION_NOT_ALLOWED' } })
+      }
+      const settlement = await getDocumentSettlement(tx, source)
+      if (source.ticketId) {
+        const [existing] = await tx.select().from(documents).where(and(
+          eq(documents.ticketId, source.ticketId), eq(documents.customerId, source.customerId),
+          sql`${documents.savId} IS ${source.savId ?? null}`, eq(documents.type, type)
+        )).limit(1)
+        // Reopening the existing stage is safe, even after a response was lost.
+        if (existing && existing.status !== 'cancelled') {
+          return { value: existing.id, documentId: existing.id, resourceId: existing.id }
+        }
+      }
+      if (settlement.activeDocument?.id !== id) {
+        throw createError({ statusCode: 409, statusMessage: 'Continuez depuis le document courant.', data: { code: 'DOCUMENT_SUPERSEDED', documentId: settlement.activeDocument?.id } })
+      }
+      await guardDossierWrite(tx, [{ kind: 'document', id }], dossier)
+      const now = new Date().toISOString()
+      let ticketId = source.ticketId
+      if (!ticketId) {
+        const [ticket] = await tx.insert(tickets).values({
+          ticketNumber: await generateTicketNumber(tx), customerId: source.customerId,
+          type: 'sale', status: 'approved', issueDescription: `Vente issue de ${source.documentNumber}`,
+          openedAt: now, createdAt: now, updatedAt: now
+        }).returning()
+        if (!ticket) throw createError({ statusCode: 500, statusMessage: 'Impossible de créer le dossier de vente' })
+        ticketId = ticket.id
+        await tx.update(documents).set({ ticketId, updatedAt: now }).where(eq(documents.id, id))
+        await createTicketEvent({
+          ticketId, kind: 'ticket_created', label: 'Dossier de vente ouvert',
+          metadata: { sourceDocumentId: id, ticketNumber: ticket.ticketNumber, status: ticket.status }, occurredAt: now
+        }, tx)
+        await createTicketEvent({
+          ticketId, kind: 'document_created', label: 'Document d’origine rattaché',
+          metadata: { documentId: id, documentNumber: source.documentNumber, documentType: source.type }, occurredAt: now
+        }, tx)
+      }
+      await assertTicketDocumentCreationAllowed(tx, { ticketId, customerId: source.customerId, documentType: type, savId: source.savId })
+      const lines = await tx.select().from(documentLines).where(eq(documentLines.documentId, id)).orderBy(asc(documentLines.id))
+      const created = await insertDocumentWithLines(tx, {
+        type, status: 'issued', customerId: source.customerId, ticketId, savId: source.savId,
+        issuedAt: now, notes: source.notes, lines
+      }, await generateDocumentNumber(type, tx))
+      const nextSettlement = await getDocumentSettlement(tx, created)
+      if (nextSettlement.paidAmount > created.total) {
+        throw createError({ statusCode: 409, statusMessage: 'Le total ne peut pas être inférieur aux acomptes déjà encaissés.', data: { code: 'DOCUMENT_TOTAL_BELOW_PAID' } })
+      }
+      await syncDocumentStatus(created.id, tx)
+      await createDocumentCreatedEvent(tx, created)
+      return { value: created.id, documentId: created.id, resourceId: created.id }
+    },
+    async replay(tx, receipt) {
+      const [existing] = await tx.select({ id: documents.id }).from(documents).where(eq(documents.id, receipt.documentId)).limit(1)
+      if (!existing) throw createError({ statusCode: 409, statusMessage: 'Le document créé n’existe plus.', data: { code: 'IDEMPOTENCY_RESOURCE_MISSING' } })
+      return existing.id
+    }
+  })
+  return getDocumentById(result.value)
 }
 
 export async function createDocumentRecord(input: DocumentWriteInput, idempotency: {

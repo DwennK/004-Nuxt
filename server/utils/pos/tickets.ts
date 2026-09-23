@@ -10,7 +10,7 @@ import {
   ticketStatusLabels,
   ticketWorkflowStepLabels
 } from '~~/shared/constants/pos'
-import { canTransitionTicketStatus } from '~~/shared/domain/tickets/workflow'
+import { canTransitionTicketStatus, getTicketStatusTransitions } from '~~/shared/domain/tickets/workflow'
 import type {
   DocumentRecord,
   LineCategoryHint,
@@ -23,6 +23,7 @@ import type {
   TicketListResponse,
   TicketRecord,
   TicketStatus,
+  TicketType,
   TicketWorkflowAction,
   TicketWorkflowSummary
 } from '~~/shared/types/pos'
@@ -75,8 +76,8 @@ function mapTicketLine(row: typeof ticketLines.$inferSelect): TicketLineRecord {
   }
 }
 
-function assertTicketStatusTransition(from: TicketStatus, to: TicketStatus) {
-  if (canTransitionTicketStatus(from, to)) {
+function assertTicketStatusTransition(from: TicketStatus, to: TicketStatus, type: TicketType) {
+  if (canTransitionTicketStatus(from, to, type)) {
     return
   }
 
@@ -451,6 +452,27 @@ function getTicketCommercialSummary(documentRows: DocumentRecord[], paymentRows:
 
 function getTicketWorkflowSummary(ticket: TicketRecord, commercialSummary: TicketCommercialSummary): TicketWorkflowSummary {
   const step = getTicketWorkflowStep(ticket.status)
+  if (ticket.type === 'sale') {
+    const labels: Partial<Record<TicketStatus, string>> = {
+      approved: 'Confirmer la vente', in_progress: 'Préparer la commande',
+      ready_for_pickup: 'Prêt pour retrait', delivered: 'Remettre au client',
+      closed: 'Clôturer le dossier', cancelled: 'Annuler le dossier'
+    }
+    const actions: TicketWorkflowAction[] = getTicketStatusTransitions(ticket.status, ticket.type).map(status => ({
+      id: `sale-${status}`, kind: status === 'closed' ? 'close' : 'status',
+      label: labels[status] || ticketStatusLabels[status],
+      description: 'Mettre à jour le suivi de la vente.',
+      icon: status === 'cancelled' ? 'i-lucide-circle-x' : 'i-lucide-package-check',
+      color: status === 'cancelled' ? 'error' : 'success', targetStatus: status
+    }))
+    return {
+      step, stepLabel: step === 'workshop' ? 'Préparation' : step === 'reception' ? 'Vente' : ticketWorkflowStepLabels[step],
+      currentStatusLabel: ticketStatusLabels[ticket.status],
+      nextActionLabel: actions.find(action => action.targetStatus !== 'cancelled')?.label || 'Dossier terminé',
+      blockerLabel: ticket.status === 'ready_for_pickup' && commercialSummary.balanceDue > 0 ? 'Encaissement restant avant remise' : null,
+      actions
+    }
+  }
 
   const blockerLabel = (() => {
     switch (ticket.status) {
@@ -879,6 +901,7 @@ export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 
     await guardDossierWrite(tx, [{ kind: 'ticket', id }], dossier)
     const [existing] = await tx.select({
       status: tickets.status,
+      type: tickets.type,
       customerId: tickets.customerId
     }).from(tickets).where(eq(tickets.id, id)).limit(1)
 
@@ -895,7 +918,10 @@ export async function updateTicket(id: number, input: Omit<TicketRecord, 'id' | 
         throw createError({ statusCode: 409, statusMessage: 'Un dossier avec des documents commerciaux doit conserver son client.', data: { code: 'DOCUMENT_OPERATION_IMMUTABLE' } })
       }
     }
-    assertTicketStatusTransition(existing.status, input.status)
+    if (existing.type !== input.type && (existing.type === 'sale' || input.type === 'sale')) {
+      throw createError({ statusCode: 409, statusMessage: 'Un dossier de vente conserve son type.', data: { code: 'TICKET_TYPE_IMMUTABLE' } })
+    }
+    assertTicketStatusTransition(existing.status, input.status, existing.type)
 
     const rows = await tx.update(tickets)
       .set({
@@ -967,14 +993,14 @@ function buildFallbackLines(ticket: TicketRecord): Array<{
   quantity: number
   unitPrice: number
   vatRate: number
-  categoryHint: 'repair' | 'service'
+  categoryHint: 'repair' | 'service' | 'accessory'
 }> {
   return [{
-    label: `${ticket.type === 'repair' ? 'Repair' : 'Support'} - ${[ticket.brand, ticket.model].filter(Boolean).join(' ') || ticket.ticketNumber}`,
+    label: `${ticket.type === 'sale' ? 'Vente' : ticket.type === 'repair' ? 'Repair' : 'Support'} - ${[ticket.brand, ticket.model].filter(Boolean).join(' ') || ticket.ticketNumber}`,
     quantity: 1,
     unitPrice: 0,
     vatRate: 8.1,
-    categoryHint: ticket.type === 'repair' ? 'repair' : 'service'
+    categoryHint: ticket.type === 'sale' ? 'accessory' : ticket.type === 'repair' ? 'repair' : 'service'
   }]
 }
 

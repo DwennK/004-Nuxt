@@ -175,7 +175,7 @@ function printTicket() {
               </div>
               <div>
                 <p class="invoice-kicker">
-                  Réception atelier
+                  {{ ticket.type === 'sale' ? 'Dossier de vente' : 'Réception atelier' }}
                 </p>
                 <h2 class="invoice-company">
                   {{ company.name }}
@@ -244,7 +244,7 @@ function printTicket() {
 
             <div class="thermal-brand-copy">
               <p class="thermal-kicker">
-                Réception atelier
+                {{ ticket.type === 'sale' ? 'Dossier de vente' : 'Réception atelier' }}
               </p>
               <h2 class="thermal-company">
                 {{ company.name }}
@@ -302,9 +302,9 @@ function printTicket() {
 
         <section :class="profile === 'a4' ? 'ticket-a4-section' : 'thermal-block'">
           <p :class="profile === 'a4' ? 'invoice-label' : 'thermal-kicker'">
-            Appareil
+            {{ ticket.type === 'sale' ? 'Vente' : 'Appareil' }}
           </p>
-          <p class="thermal-strong">
+          <p v-if="ticket.type !== 'sale'" class="thermal-strong">
             {{ deviceLabel }}
           </p>
           <p v-if="ticket.issueDescription">

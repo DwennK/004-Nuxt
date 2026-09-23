@@ -62,7 +62,16 @@ A quote is optional: an order can be created directly, and a direct invoice rema
 The current invoice takes over from the order for collection; their totals are never added together.
 Invoice lines inherit the order, then the quote, then the dossier lines, in that order.
 Order deposits retain their original payment IDs, dates and document links and are deducted from the invoice.
-This also applies to existing linked documents without a data migration; standalone documents remain independent.
+This also applies to existing linked documents without a data migration; standalone documents remain independent until explicitly converted.
+From a quote, create an order or invoice; from an order, create an invoice.
+`POST /api/documents/:id/convert` creates a `sale` dossier only when the source has
+none, attaching the source and successor in the same transaction. Existing
+repair, support and SAV scopes are retained. Lines and customer notes are copied;
+quote expiry is not reused as invoice due date. Original numbers and receipts stay
+unchanged. Retries reopen the existing stage, and the same customer alone never
+links independent documents. Sale dossiers use preparation / handover / closure
+instead of the workshop diagnostic workflow. This adds an application-level text
+enum value only; no SQL migration or historical backfill is required.
 The previous stage stays readable and printable. New collections and commercial edits use the current stage.
 Cancelling an unpaid invoice restores the order balance; cancellation or a lower total is rejected while it conflicts with collected deposits.
 

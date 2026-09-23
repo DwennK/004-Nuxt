@@ -136,7 +136,7 @@ export const tickets = sqliteTable('tickets', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   ticketNumber: text('ticket_number').notNull(),
   customerId: integer('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' }),
-  type: text('type', { enum: ['repair', 'support'] }).notNull(),
+  type: text('type', { enum: ['repair', 'support', 'sale'] }).notNull(),
   status: text('status', {
     enum: [
       'new',

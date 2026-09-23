@@ -38,7 +38,7 @@ const { data: customer } = await useAsyncData('new-ticket-customer', () => {
 
 async function saveTicket(payload: {
   customerId: number
-  type: 'repair' | 'support'
+  type: TicketRecord['type']
   status: 'new' | 'diagnosis' | 'awaiting_customer_approval' | 'approved' | 'in_progress' | 'waiting_parts' | 'ready_for_pickup' | 'delivered' | 'closed' | 'cancelled'
   brand: string
   model: string

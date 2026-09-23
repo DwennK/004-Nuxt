@@ -30,6 +30,7 @@ const emailFeedback = ref<string | null>(null)
 const emailFailed = ref(false)
 const { isSaving: isSavingDocument, saveError, save } = useFormAction()
 const isContextOpen = ref(false)
+const isConverting = ref(false)
 const isCustomerOpen = ref(false)
 const { isSaving: isSavingCustomer, saveError: customerSaveError, save: saveCustomerAction, clearSaveError: clearCustomerSaveError } = useFormAction()
 const hasUnsavedDocumentChanges = ref(false)
@@ -80,7 +81,7 @@ const documentLockDescription = 'Les opérateurs peuvent consulter, envoyer, imp
 const balanceDue = computed(() => document.value?.settlement?.balanceDue ?? (isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0))
 const supportsA4Print = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'a4') : false)
 const supportsThermalPrint = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'thermal') : false)
-const documentActionsDisabled = computed(() => hasUnsavedDocumentChanges.value || isSavingDocument.value)
+const documentActionsDisabled = computed(() => hasUnsavedDocumentChanges.value || isSavingDocument.value || isConverting.value)
 const saveButtonLabel = computed(() => isSavingDocument.value ? 'Enregistrement…' : hasUnsavedDocumentChanges.value ? 'Enregistrer les modifications' : 'Enregistrer')
 
 const savCommercialTypes = computed(() => {
@@ -369,7 +370,7 @@ function startNewEmailAttempt() {
             :aria-label="saveButtonLabel"
             :ui="{ label: 'hidden sm:inline' }"
             :loading="isSavingDocument"
-            :disabled="dossier.blocked.value"
+            :disabled="dossier.blocked.value || isConverting"
           />
         </template>
       </UDashboardNavbar>
@@ -395,6 +396,12 @@ function startNewEmailAttempt() {
           :editable="canEditDocument && !dossier.blocked.value"
           @edit-context="openContextEditor"
           @edit-customer="openCustomerEditor"
+        />
+
+        <PosDocumentConversionActions
+          :document="document"
+          :disabled="documentActionsDisabled || dossier.blocked.value || dossier.current.value?.dirty"
+          @busy="isConverting = $event"
         />
 
         <PosSavEditor
@@ -438,7 +445,7 @@ function startNewEmailAttempt() {
             :key="dossier.current.value?.epoch"
             v-model:context-open="isContextOpen"
             v-model:dirty="hasUnsavedDocumentChanges"
-            :disabled="dossier.blocked.value"
+            :disabled="dossier.blocked.value || isConverting"
             :form-id="documentFormId"
             :show-submit-button="false"
             unsaved-target="#document-unsaved-status"
@@ -507,7 +514,7 @@ function startNewEmailAttempt() {
           </div>
           <PosDocumentPaymentsEditor
             :key="dossier.current.value?.epoch"
-            :disabled="dossier.blocked.value"
+            :disabled="dossier.blocked.value || isConverting"
             :document-id="document.id"
             :payments="document.payments"
             :document-total="document.total"

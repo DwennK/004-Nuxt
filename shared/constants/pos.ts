@@ -40,7 +40,7 @@ export const catalogServiceKindSuggestions = [
   'Configuration',
   'Nettoyage'
 ] as const
-export const ticketTypes = ['repair', 'support'] as const
+export const ticketTypes = ['repair', 'support', 'sale'] as const
 export const ticketStatuses = [
   'new',
   'diagnosis',
@@ -75,12 +75,14 @@ export const catalogItemTypeColors: Record<(typeof catalogItemTypes)[number], 'i
 
 export const ticketTypeLabels: Record<(typeof ticketTypes)[number], string> = {
   repair: 'Réparation',
-  support: 'Support'
+  support: 'Support',
+  sale: 'Vente'
 }
 
 export const ticketTypeColors: Record<(typeof ticketTypes)[number], 'warning' | 'info'> = {
   repair: 'warning',
-  support: 'info'
+  support: 'info',
+  sale: 'info'
 }
 
 export const ticketStatusLabels: Record<(typeof ticketStatuses)[number], string> = {

@@ -30,6 +30,16 @@ describe('ticket workflow policy', () => {
     expect(canTransitionTicketStatus('closed', 'new')).toBe(false)
   })
 
+  it('lets sales go from preparation to handover without workshop states', () => {
+    expect(canTransitionTicketStatus('new', 'approved', 'sale')).toBe(true)
+    expect(canTransitionTicketStatus('approved', 'delivered', 'sale')).toBe(true)
+    expect(canTransitionTicketStatus('in_progress', 'ready_for_pickup', 'sale')).toBe(true)
+    expect(canTransitionTicketStatus('new', 'diagnosis', 'sale')).toBe(false)
+    expect(canTransitionTicketStatus('approved', 'waiting_parts', 'sale')).toBe(false)
+    expect(canTransitionTicketStatus('closed', 'new', 'sale')).toBe(false)
+    expect(canTransitionTicketStatus('approved', 'delivered', 'repair')).toBe(false)
+  })
+
   it('keeps terminal statuses terminal', () => {
     expect(ticketStatusTransitions.closed).toEqual([])
     expect(ticketStatusTransitions.cancelled).toEqual([])

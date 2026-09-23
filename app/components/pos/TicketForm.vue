@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import type { Form, FormSubmitEvent, TabsItem } from '@nuxt/ui'
 import { ticketStatusLabels, ticketStatuses, ticketTypeLabels, ticketTypes } from '~~/shared/constants/pos'
-import { ticketStatusTransitions } from '~~/shared/domain/tickets/workflow'
+import { getTicketStatusTransitions } from '~~/shared/domain/tickets/workflow'
 import type { CatalogItemRecord, CustomerRecord } from '~~/shared/types/pos'
 import { formatImei, getImeiWarning, normalizeImei } from '~~/shared/utils/pos'
 import { useCommercialLinesDraft, type EditableCommercialLinePayload } from '~~/app/composables/useCommercialLinesDraft'
@@ -99,15 +99,15 @@ function toDateTimeLocal(value?: string | null) {
   ].join('-') + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-const ticketTypeItems = ticketTypes.map(type => ({
+const ticketTypeItems = computed(() => ticketTypes.filter(type => !props.initialValue.id || (props.initialValue.type === 'sale' ? type === 'sale' : type !== 'sale')).map(type => ({
   label: ticketTypeLabels[type],
   value: type
-}))
+})))
 
 const statusItems = computed(() => {
   const initialStatus = props.initialValue.status
   const allowedStatuses: Array<(typeof ticketStatuses)[number]> = initialStatus
-    ? [initialStatus, ...ticketStatusTransitions[initialStatus]]
+    ? [initialStatus, ...getTicketStatusTransitions(initialStatus, props.initialValue.type)]
     : ['new']
 
   return allowedStatuses.map(status => ({
@@ -248,7 +248,7 @@ function handleImeiScan(value: string) {
     <fieldset :disabled="props.saving || props.disabled" class="min-w-0 space-y-4">
       <template v-if="props.layout === 'intake'">
         <div class="space-y-3">
-          <div class="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(24rem,0.9fr)]">
+          <div :class="state.type === 'sale' ? 'grid gap-3' : 'grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(24rem,0.9fr)]'">
             <UCard
               variant="soft"
               :ui="{
@@ -262,7 +262,7 @@ function handleImeiScan(value: string) {
                     Prise en charge
                   </h2>
                   <UBadge color="primary" variant="soft" size="sm">
-                    Atelier
+                    {{ state.type === 'sale' ? 'Vente' : 'Atelier' }}
                   </UBadge>
                 </div>
 
@@ -278,7 +278,7 @@ function handleImeiScan(value: string) {
                   />
                 </UFormField>
 
-                <UFormField label="Problème signalé" name="issueDescription" hint="Facultatif">
+                <UFormField :label="state.type === 'sale' ? 'Objet de la vente' : 'Problème signalé'" name="issueDescription" hint="Facultatif">
                   <UTextarea
                     v-bind="posInputAttrs"
                     v-model="state.issueDescription"
@@ -286,13 +286,14 @@ function handleImeiScan(value: string) {
                     :rows="2"
                     :maxrows="4"
                     autoresize
-                    placeholder="Ex. écran cassé après une chute, tactile encore fonctionnel."
+                    :placeholder="state.type === 'sale' ? 'Ex. commande de matériel.' : 'Ex. écran cassé après une chute, tactile encore fonctionnel.'"
                   />
                 </UFormField>
               </div>
             </UCard>
 
             <UCard
+              v-if="state.type !== 'sale'"
               variant="soft"
               :ui="{
                 root: 'rounded-md border border-default bg-elevated shadow-none',
@@ -375,7 +376,7 @@ function handleImeiScan(value: string) {
               </div>
             </template>
 
-            <div class="grid gap-3 md:grid-cols-2">
+            <div v-if="state.type !== 'sale'" class="grid gap-3 md:grid-cols-2">
               <UFormField label="Marque" name="brand">
                 <UInput
                   v-bind="posInputAttrs"
@@ -495,7 +496,7 @@ function handleImeiScan(value: string) {
             <UFormField
               label="Type de dossier"
               name="type"
-              description="Détermine le flux atelier ou support."
+              description="Détermine le suivi de réparation, de support ou de vente."
               required
             >
               <USelect
@@ -537,6 +538,7 @@ function handleImeiScan(value: string) {
         </UPageCard>
 
         <UPageCard
+          v-if="state.type !== 'sale'"
           title="Appareil"
           description="Ajoutez les infos nécessaires pour identifier précisément le matériel concerné."
           variant="subtle"
@@ -614,12 +616,11 @@ function handleImeiScan(value: string) {
         </UPageCard>
 
         <UPageCard
-          title="Intervention"
-          description="Documentez le problème constaté et les informations internes utiles au traitement."
+          :title="state.type === 'sale' ? 'Vente' : 'Intervention'"
           variant="subtle"
         >
           <UFormField
-            label="Description du problème"
+            :label="state.type === 'sale' ? 'Objet de la vente' : 'Description du problème'"
             name="issueDescription"
             description="Visible dans le suivi opérateur, si renseignée."
           >
@@ -634,7 +635,7 @@ function handleImeiScan(value: string) {
           <UFormField
             label="Notes internes"
             name="internalNotes"
-            description="Réservé à l’équipe: diagnostic, remarques atelier, pièces attendues."
+            description="Informations réservées à l’équipe."
             hint="Optionnel"
           >
             <UTextarea

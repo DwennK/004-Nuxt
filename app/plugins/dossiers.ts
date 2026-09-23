@@ -14,7 +14,7 @@ export default defineNuxtPlugin(() => {
         if (method === 'GET' || method === 'HEAD' || !path.startsWith('/api/'))
           return
         const match = path.match(
-          /^\/api\/(tickets|documents|payments)\/(\d+)(?:\/(status|close|notes|lines|quote|order|invoice|mark-paid|sav))?$/
+          /^\/api\/(tickets|documents|payments)\/(\d+)(?:\/(status|close|notes|lines|quote|order|invoice|mark-paid|sav|convert))?$/
         )
         const body
           = options.body && typeof options.body === 'object'

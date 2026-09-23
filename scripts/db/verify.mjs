@@ -145,11 +145,18 @@ export const checks = [
     tables: ['documents', 'payments'],
     sql: `SELECT COUNT(*) AS violations
       FROM documents d
-      LEFT JOIN (
-        SELECT document_id, SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS paid_amount
-        FROM payments GROUP BY document_id
-      ) p ON p.document_id = d.id
-      WHERE d.status = 'paid' AND COALESCE(p.paid_amount, 0) < d.total`
+      WHERE d.status = 'paid' AND COALESCE((
+        SELECT SUM(p.amount) FROM payments p
+        JOIN documents receipt ON receipt.id = p.document_id
+        WHERE p.status = 'paid' AND (
+          receipt.id = d.id OR (
+            d.ticket_id IS NOT NULL AND receipt.ticket_id = d.ticket_id
+            AND receipt.customer_id = d.customer_id AND receipt.sav_id IS d.sav_id
+            AND ((d.type IN ('customer_order', 'invoice') AND receipt.type = 'quote')
+              OR (d.type = 'invoice' AND receipt.type = 'customer_order'))
+          )
+        )
+      ), 0) < d.total`
   },
   {
     name: 'invalid_document_enums',
@@ -162,7 +169,7 @@ export const checks = [
     name: 'invalid_ticket_enums',
     tables: ['tickets'],
     sql: `SELECT COUNT(*) AS violations FROM tickets
-      WHERE type NOT IN ('repair', 'support')
+      WHERE type NOT IN ('repair', 'support', 'sale')
         OR status NOT IN (
           'new', 'diagnosis', 'awaiting_customer_approval', 'approved', 'in_progress',
           'waiting_parts', 'ready_for_pickup', 'delivered', 'closed', 'cancelled'

@@ -30,7 +30,7 @@ import {
   normalizeSmsPhoneNumber,
   resolveSmsTemplateBody
 } from '~~/shared/utils/customer-sms'
-import { ticketStatusTransitions } from '~~/shared/domain/tickets/workflow'
+import { getTicketStatusTransitions } from '~~/shared/domain/tickets/workflow'
 import { canCreateTicketDocument } from '~~/shared/domain/tickets/document-policy'
 import { useCommercialLinesDraft } from '~~/app/composables/useCommercialLinesDraft'
 import { ticketLinesInputSchema } from '~~/shared/validation/pos'
@@ -81,7 +81,7 @@ const [{ data: ticket, refresh: refreshTicket }, { data: customerSmsSettings }] 
   useFetch<CustomerSmsSettingsRecord>('/api/settings/customer-sms')
 ])
 
-const activeTab = ref('lines')
+const activeTab = ref(ticket.value?.type === 'sale' ? 'overview' : 'lines')
 const dossier = useDossier(() => ({ kind: 'ticket', id: id.value }), {
   record: ticket,
   edit: () => activeTab.value === 'lines' && !!ticket.value && !['closed', 'cancelled'].includes(ticket.value.status)
@@ -121,8 +121,8 @@ watch(activeTab, async (tab) => {
 })
 const showAllHistory = ref(false)
 
-watch(id, () => {
-  activeTab.value = 'lines'
+watch(() => ticket.value?.id, () => {
+  activeTab.value = ticket.value?.type === 'sale' ? 'overview' : 'lines'
   showAllHistory.value = false
 })
 
@@ -131,16 +131,19 @@ const tabItems = computed(() => [
   { label: ticket.value?.type === 'repair' ? 'Réparation' : 'Vue d’ensemble', icon: 'i-lucide-wrench', value: 'overview' },
   { label: 'Paiements', icon: 'i-lucide-wallet', value: 'payments', badge: ticket.value?.payments.length || 0 },
   { label: 'SMS', icon: 'i-lucide-message-square-share', value: 'sms', badge: smsTimelineItems.value.length || 0 },
-  { label: 'Client & Appareil', icon: 'i-lucide-user', value: 'client' },
+  { label: ticket.value?.type === 'sale' ? 'Client' : 'Client & Appareil', icon: 'i-lucide-user', value: 'client' },
   { label: ticket.value?.type === 'repair' ? 'État de la réparation' : 'État du dossier', icon: 'i-lucide-list-checks', value: 'status' }
 ])
+
+const visibleWorkflowSteps = computed<readonly TicketDetail['workflow']['step'][]>(() => ticket.value?.type === 'sale' ? ticketWorkflowSteps.filter(step => step !== 'diagnostic') : ticketWorkflowSteps)
+const workflowStepLabels = computed(() => ticket.value?.type === 'sale' ? { ...ticketWorkflowStepLabels, reception: 'Vente', workshop: 'Préparation' } : ticketWorkflowStepLabels)
 
 const workflowStepIndex = computed(() => {
   if (!ticket.value) {
     return 0
   }
 
-  return ticketWorkflowSteps.indexOf(ticket.value.workflow.step)
+  return visibleWorkflowSteps.value.indexOf(ticket.value.workflow.step)
 })
 
 // Use the existing permitted workflow actions; only their visual priority changes.
@@ -226,7 +229,7 @@ const statusMenuItems = computed(() => {
     return []
   }
 
-  const allowedStatuses = ticketStatusTransitions[ticket.value.status] as readonly TicketStatus[]
+  const allowedStatuses = getTicketStatusTransitions(ticket.value.status, ticket.value.type)
   const statusItems = allowedStatuses
     .filter(status => status !== 'cancelled' && status !== 'closed')
     .map(status => ({
@@ -783,7 +786,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
         <div class="space-y-1">
           <div class="flex flex-wrap items-center gap-2">
             <h1 class="text-xl font-semibold text-highlighted">
-              {{ ticket.brand || 'Appareil' }} {{ ticket.model || '' }}
+              {{ ticket.type === 'sale' ? 'Vente' : ticket.brand || 'Appareil' }} {{ ticket.model || '' }}
             </h1>
             <UBadge :color="ticketTypeColors[ticket.type]" variant="subtle" size="sm">
               {{ ticketTypeLabels[ticket.type] }}
@@ -1029,7 +1032,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                     </p>
                   </div>
 
-                  <div class="rounded-xl border border-default p-4">
+                  <div v-if="ticket.type !== 'sale'" class="rounded-xl border border-default p-4">
                     <p class="text-xs uppercase tracking-[0.14em] text-toned">
                       Appareil
                     </p>
@@ -1096,7 +1099,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
 
                 <ol v-if="ticket.status !== 'cancelled'" aria-label="Progression du dossier" class="mt-4 flex border-t border-default pt-3">
                   <li
-                    v-for="(step, index) in ticketWorkflowSteps"
+                    v-for="(step, index) in visibleWorkflowSteps"
                     :key="step"
                     :aria-current="index === workflowStepIndex ? 'step' : undefined"
                     class="flex min-w-0 flex-1 items-center gap-1 text-xs last:flex-none"
@@ -1104,9 +1107,9 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                   >
                     <div class="flex flex-col items-center gap-1 sm:flex-row sm:gap-1.5" :class="index === workflowStepIndex ? 'font-semibold' : ''">
                       <UIcon :name="index < workflowStepIndex ? 'i-lucide-circle-check' : index === workflowStepIndex ? 'i-lucide-circle-dot' : 'i-lucide-circle'" class="size-4 shrink-0" />
-                      <span>{{ ticketWorkflowStepLabels[step] }}</span>
+                      <span>{{ workflowStepLabels[step] }}</span>
                     </div>
-                    <span v-if="index < ticketWorkflowSteps.length - 1" aria-hidden="true" class="mx-1 h-px flex-1 bg-current opacity-20 sm:mx-2" />
+                    <span v-if="index < visibleWorkflowSteps.length - 1" aria-hidden="true" class="mx-1 h-px flex-1 bg-current opacity-20 sm:mx-2" />
                   </li>
                 </ol>
               </section>

@@ -31,7 +31,7 @@ export async function updateTicketStatusRecord(ticketId: number, status: TicketS
       })
     }
 
-    if (!canTransitionTicketStatus(existing.status, status)) {
+    if (!canTransitionTicketStatus(existing.status, status, existing.type)) {
       throw createError({
         statusCode: 409,
         statusMessage: `Transition impossible du dossier : ${ticketStatusLabels[existing.status]} vers ${ticketStatusLabels[status]}`,

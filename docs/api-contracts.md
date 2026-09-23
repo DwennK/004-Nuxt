@@ -66,3 +66,16 @@ on Worker rollback. Never create it implicitly in a production request.
 Supported page sizes are 1 through 250. The first-party payment list and
 customer detail consumers use this contract. External consumers that expected
 the former bare array must migrate before deploying this branch.
+
+## Conversion commerciale
+
+`POST /api/documents/:id/convert`, avec `{ "type": "customer_order" | "invoice" }`,
+exige `financial:record`, `Idempotency-Key` et la réservation du document source.
+Un devis peut produire une commande ou une facture ; une commande peut produire
+une facture. Le document courant fournit les lignes et le client. Si le document
+est autonome, un dossier `sale` est créé et les deux documents y sont rattachés
+atomiquement. Les numéros, dates et paiements du document d’origine sont conservés.
+Les acomptes sont repris par le calcul du solde existant, sans nouveau paiement.
+Le périmètre SAV reste inchangé. Une nouvelle tentative rouvre l’étape existante ;
+un document annulé, une étape dépassée ou un dossier finalisé ne peut pas produire
+une nouvelle étape (hors opération SAV autorisée sur un dossier clôturé).

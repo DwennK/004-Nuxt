@@ -16,7 +16,7 @@ provide('pos-dossier-state', dossier.current)
 
 async function saveTicket(payload: {
   customerId: number
-  type: 'repair' | 'support'
+  type: TicketDetail['type']
   status: TicketDetail['status']
   brand: string
   model: string

@@ -292,3 +292,7 @@ export const vacationEntryInputSchema = z.object({
   data => data.type === 'full_day' || data.startDate === data.endDate,
   { message: 'Les demi-journées doivent avoir la même date de début et de fin', path: ['type'] }
 )
+
+export const documentConversionSchema = z.object({
+  type: z.enum(['customer_order', 'invoice'])
+})

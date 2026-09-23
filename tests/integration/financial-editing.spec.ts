@@ -826,4 +826,129 @@ describe('editing recorded financial data', () => {
     expect(model.noteBlocks.some(block => block.label === 'Conditions de paiement')).toBe(false)
     expect((await client.execute('SELECT status FROM tickets WHERE id = 1')).rows[0]?.status).toBe('closed')
   })
+
+  async function convert(id: number, type: 'customer_order' | 'invoice', key = crypto.randomUUID()) {
+    const { convertDocumentRecord } = await import('../../server/utils/pos/documents')
+    return convertDocumentRecord(id, type, key, await testDossierContext(useDb(), { kind: 'document', id }))
+  }
+
+  it.each(['quote', 'customer_order'] as const)('promotes a standalone %s and keeps its original receipts and references', async (type) => {
+    const { createDocumentRecord, getDocumentById, listDocuments } = await import('../../server/utils/pos/documents')
+    const { getTicketById, updateTicketStatus } = await import('../../server/utils/pos/tickets')
+    const source = await createDocumentRecord({
+      ...anonymousSale, customerId: 1, type, notes: 'Livraison en magasin',
+      dueDate: '2026-10-01',
+      lines: [{ label: 'Article', quantity: 2, unitPrice: 10000, vatRate: 8.1 }, { label: 'Remise', quantity: 1, unitPrice: -1000, vatRate: 8.1 }]
+    }, { key: 'conversion-source' })
+    expect(source.ticketId).toBeNull()
+    const paid = await markDocumentAsPaid(source.id, { ...paymentInput, amount: 5000 }, 'conversion-deposit')
+    const receipts = paid.payments
+    const next = await convert(source.id, type === 'quote' ? 'customer_order' : 'invoice')
+    expect(next).toMatchObject({ total: 19000, notes: source.notes, dueDate: null, ticket: { type: 'sale', status: 'approved' }, settlement: { paidAmount: 5000, balanceDue: 14000 } })
+    expect(next.payments).toEqual(receipts)
+    expect(next.documentNumber).not.toBe(source.documentNumber)
+    expect(next.lines.map(({ id: _id, documentId: _documentId, ...line }) => line)).toEqual(source.lines.map(({ id: _id, documentId: _documentId, ...line }) => line))
+    const old = await getDocumentById(source.id)
+    expect(old).toMatchObject({ documentNumber: source.documentNumber, ticketId: next.ticketId, settlement: { isPayable: false, balanceDue: 0 } })
+    const invoice = next.type === 'invoice' ? next : await convert(next.id, 'invoice')
+    expect(invoice.ticketId).toBe(next.ticketId)
+    expect(invoice.payments).toEqual(receipts)
+    expect((await listDocuments({ ticketId: invoice.ticketId! })).summary.totalBalanceDue).toBe(14000)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM tickets')).rows[0]?.n).toBe(1)
+    // A new invoice for the same customer remains an independent sale.
+    const independent = await createDocumentRecord({ ...anonymousSale, customerId: 1 }, { key: 'conversion-independent' })
+    expect(independent).toMatchObject({ ticketId: null, payments: [], settlement: { balanceDue: 1000 } })
+    const ticket = await getTicketById(invoice.ticketId!)
+    expect(ticket.workflow.actions.map(action => action.targetStatus)).not.toContain('diagnosis')
+    await updateTicketStatus(ticket.id, 'delivered', null, await testDossierContext(useDb(), { kind: 'ticket', id: ticket.id }))
+    await updateTicketStatus(ticket.id, 'closed', null, await testDossierContext(useDb(), { kind: 'ticket', id: ticket.id }))
+  })
+
+  it('converts a fully paid quote directly to a paid invoice and reopens it on both kinds of retry', async () => {
+    const { convertDocumentRecord } = await import('../../server/utils/pos/documents')
+    await client.execute('UPDATE documents SET type = \'quote\', document_number = \'DE-1\' WHERE id = 1')
+    const proof = await testDossierContext(useDb(), { kind: 'document', id: 1 })
+    const invoice = await convertDocumentRecord(1, 'invoice', 'conversion-replay', proof)
+    expect(invoice).toMatchObject({ status: 'paid', settlement: { balanceDue: 0, paidAmount: 12500 } })
+    const { checks, runCountChecks } = await import('../../scripts/db/verify.mjs')
+    const invariants = checks.filter(check => ['paid_status_without_full_payment', 'invalid_ticket_enums'].includes(check.name))
+    expect(await runCountChecks(client, new Set(['documents', 'payments', 'tickets']), invariants, 'violations'))
+      .toEqual(invariants.map(check => ({ name: check.name, skipped: false, violations: 0 })))
+    await client.execute('UPDATE payments SET amount = 12000 WHERE id = 1')
+    expect((await runCountChecks(client, new Set(['documents', 'payments']), [invariants[0]!], 'violations'))[0]?.violations).toBe(2)
+    await client.execute('UPDATE payments SET amount = 12500 WHERE id = 1')
+    expect((await convertDocumentRecord(1, 'invoice', 'conversion-replay', proof)).id).toBe(invoice.id)
+    expect((await convert(1, 'invoice', 'conversion-new-key')).id).toBe(invoice.id)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM tickets')).rows[0]?.n).toBe(1)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM documents')).rows[0]?.n).toBe(2)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM payments')).rows[0]?.n).toBe(1)
+    await expect(convertDocumentRecord(1, 'customer_order', 'conversion-replay', proof)).rejects.toMatchObject({ data: { code: 'IDEMPOTENCY_PAYLOAD_MISMATCH' } })
+  })
+
+  it('creates one successor and one dossier when two conversion requests overlap', async () => {
+    const { convertDocumentRecord } = await import('../../server/utils/pos/documents')
+    await client.execute(`UPDATE documents SET type = 'customer_order' WHERE id = 1`)
+    const proof = await testDossierContext(useDb(), { kind: 'document', id: 1 })
+    const results = await Promise.all([
+      convertDocumentRecord(1, 'invoice', 'conversion-parallel-a', proof),
+      convertDocumentRecord(1, 'invoice', 'conversion-parallel-b', proof)
+    ])
+    expect(results[0].id).toBe(results[1].id)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM tickets')).rows[0]?.n).toBe(1)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM documents')).rows[0]?.n).toBe(2)
+  })
+
+  it('requires a fresh reservation and rolls back the new dossier if creating the successor fails', async () => {
+    const { convertDocumentRecord } = await import('../../server/utils/pos/documents')
+    await client.execute('UPDATE documents SET type = \'quote\' WHERE id = 1')
+    await expect(convertDocumentRecord(1, 'invoice', 'conversion-no-proof')).rejects.toMatchObject({ statusCode: 428 })
+    const stale = await testDossierContext(useDb(), { kind: 'document', id: 1 })
+    await testDossierContext(useDb(), { kind: 'document', id: 1 })
+    await expect(convertDocumentRecord(1, 'invoice', 'conversion-stale', stale)).rejects.toMatchObject({ statusCode: 409 })
+    await client.execute('CREATE TRIGGER fail_conversion BEFORE INSERT ON document_lines BEGIN SELECT RAISE(ABORT, \'test failure\'); END')
+    try {
+      await expect(convert(1, 'invoice')).rejects.toThrow()
+      expect((await client.execute('SELECT COUNT(*) AS n FROM tickets')).rows[0]?.n).toBe(0)
+      expect((await client.execute('SELECT COUNT(*) AS n FROM document_imports')).rows[0]?.n).toBe(0)
+      expect((await client.execute('SELECT COUNT(*) AS n FROM ticket_events')).rows[0]?.n).toBe(0)
+      expect((await client.execute('SELECT ticket_id FROM documents WHERE id = 1')).rows[0]?.ticket_id).toBeNull()
+    } finally {
+      await client.execute('DROP TRIGGER fail_conversion')
+    }
+  })
+
+  it.each(['closed', 'cancelled'])('does not convert an order belonging to a %s dossier', async (status) => {
+    const order = await prepareOrder()
+    await client.execute({ sql: 'UPDATE tickets SET status = ? WHERE id = 1', args: [status] })
+    await expect(convert(order.id, 'invoice')).rejects.toMatchObject({ data: { code: 'TICKET_FINALIZED' } })
+    expect((await client.execute('SELECT COUNT(*) AS n FROM documents')).rows[0]?.n).toBe(1)
+  })
+
+  it('reuses an existing repair dossier and rejects conversion from a superseded quote', async () => {
+    const order = await prepareOrder(10000, true)
+    const { getTicketById } = await import('../../server/utils/pos/tickets')
+    const quote = (await getTicketById(1)).commercialSummary.quote!
+    await expect(convert(quote.id, 'invoice')).rejects.toMatchObject({ data: { code: 'DOCUMENT_SUPERSEDED' } })
+    const invoice = await convert(order.id, 'invoice')
+    expect(invoice).toMatchObject({ ticketId: 1, ticket: { type: 'repair' }, settlement: { paidAmount: 10000, balanceDue: 29300 } })
+  })
+
+  it('keeps the SAV operation separate while converting on a closed repair dossier', async () => {
+    const sav = await prepareSav('billable')
+    const { createDocumentRecord } = await import('../../server/utils/pos/documents')
+    const quote = await createDocumentRecord({ ...anonymousSale, type: 'quote', customerId: 1, ticketId: 1, savId: sav.id }, { key: 'conversion-sav-quote', dossier: await testDossierContext(useDb(), { kind: 'ticket', id: 1 }) })
+    await markDocumentAsPaid(quote.id, { ...paymentInput, amount: 300 }, 'conversion-sav-deposit')
+    const invoice = await convert(quote.id, 'invoice')
+    expect(invoice).toMatchObject({ ticketId: 1, savId: sav.id, settlement: { paidAmount: 300, balanceDue: 700 } })
+    expect(invoice.payments).toHaveLength(1)
+    expect(invoice.payments[0]?.documentId).toBe(quote.id)
+  })
+
+  it('rejects cancelled documents, invoices and reversing an order into another order', async () => {
+    await expect(convert(1, 'invoice')).rejects.toMatchObject({ data: { code: 'DOCUMENT_CONVERSION_NOT_ALLOWED' } })
+    await client.execute('UPDATE documents SET type = \'customer_order\' WHERE id = 1')
+    await expect(convert(1, 'customer_order')).rejects.toMatchObject({ data: { code: 'DOCUMENT_CONVERSION_NOT_ALLOWED' } })
+    await client.execute('UPDATE documents SET type = \'quote\', status = \'cancelled\' WHERE id = 1')
+    await expect(convert(1, 'invoice')).rejects.toMatchObject({ data: { code: 'DOCUMENT_CONVERSION_NOT_ALLOWED' } })
+  })
 })
