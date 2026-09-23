@@ -137,6 +137,17 @@ describe('POS suggestions preserve search results without financial aggregation'
     expect(await suggestCatalogItems(filters)).toEqual({ items: (await listCatalogItems(filters)).items })
   })
 
+  it('finds full customer names in either order in lists and suggestions', async () => {
+    await db.insert(schema.customers).values({ id: 50, firstName: 'Élodie', lastName: 'Müller', phone: '', email: '' })
+    for (const search of ['Ada Lovelace', 'Lovelace Ada', 'elodie muller', 'MÜLLER ÉLODIE']) {
+      const expectedId = search.includes('Ada') ? 1 : 50
+      expect((await suggestCustomers({ search })).items.map(row => row.id)).toEqual([expectedId])
+      const list = await listCustomers({ search, pageSize: 1 })
+      expect(list.total).toBe(1)
+      expect(list.items.map(row => row.id)).toEqual([expectedId])
+    }
+  })
+
   it('preserves category/type filters and puts descriptive SE matches before SERV references', async () => {
     const result = await suggestCatalogItems({ search: 'SE écran iPhone', activeOnly: true, type: 'repair', category: 'Écrans', pageSize: 2 })
     expect(result.items.map(item => item.id)).toEqual([2, 11])

@@ -12,19 +12,21 @@ import { ensurePosSchema } from '~~/server/utils/pos/schema'
 function customerSearchQuery(search?: string) {
   const normalizedSearch = foldSearchText(search).trim()
   const searchPattern = normalizedSearch ? `%${normalizedSearch}%` : null
+  const customerNameValue = sql<string>`trim(${customers.firstName} || ' ' || ${customers.lastName})`
 
   const whereClause = and(
     searchPattern
       ? or(
           searchLike(customers.firstName, searchPattern),
           searchLike(customers.lastName, searchPattern),
+          searchLike(customerNameValue, searchPattern),
+          searchLike(sql`trim(${customers.lastName} || ' ' || ${customers.firstName})`, searchPattern),
           searchLike(sql`coalesce(${customers.companyName}, '')`, searchPattern),
           searchLike(customers.phone, searchPattern),
           searchLike(customers.email, searchPattern)
         )
       : undefined
   )
-  const customerNameValue = sql<string>`trim(${customers.firstName} || ' ' || ${customers.lastName})`
   const relevanceOrder = normalizedSearch
     ? sql<number>`case
         when ${searchEquals(sql`trim(coalesce(${customers.companyName}, ''))`, normalizedSearch)} then 0
