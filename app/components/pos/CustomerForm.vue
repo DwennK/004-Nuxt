@@ -196,7 +196,6 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
         <UFormField
           label="Nom du client"
           name="displayName"
-          description="Nom du client ou de la société si vous allez au plus vite."
         >
           <UInput
             v-bind="posInputAttrs"
@@ -211,7 +210,6 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           label="Téléphone"
           name="phone"
           hint="Optionnel"
-          description="Si le client accepte de le donner."
         >
           <UInput
             v-bind="posInputAttrs"
@@ -264,7 +262,6 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           label="E-mail"
           name="email"
           hint="Optionnel"
-          description="Pratique pour les devis et factures."
         >
           <UInput
             v-bind="posInputAttrs"
@@ -279,7 +276,6 @@ function onSubmit(_event: FormSubmitEvent<CustomerFormValue>) {
           label="Société"
           name="companyName"
           hint="Optionnel"
-          description="Utile si vous facturez une entreprise ou un indépendant."
         >
           <UInput
             v-bind="posInputAttrs"
