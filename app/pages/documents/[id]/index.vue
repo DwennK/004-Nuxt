@@ -4,6 +4,7 @@ import type { z } from 'zod'
 import { nextTick } from 'vue'
 
 import type { DocumentSavePayload } from '~~/app/composables/useDocumentDraft'
+import type { SavDetails } from '~~/shared/types/sav'
 import type { CustomerFormValue, CustomerRecord, DocumentDetail, TicketDetail, DocumentEmailInput, SentMailSendResult } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { documentEmailSchema } from '~~/shared/validation/pos'
@@ -34,6 +35,7 @@ const { isSaving: isSavingCustomer, saveError: customerSaveError, save: saveCust
 const hasUnsavedDocumentChanges = ref(false)
 const hasOpenedInitialEmailModal = ref(false)
 const documentFormId = 'document-detail-form'
+const savEditor = useTemplateRef<{ acceptSaved: (saved: DocumentDetail, submitted: SavDetails) => void }>('savEditor')
 const documentEditor = useTemplateRef<{
   acceptSaved: (saved: DocumentDetail, submitted: DocumentSavePayload) => void
   cancelChanges: () => void
@@ -86,12 +88,12 @@ const savCommercialTypes = computed(() => {
   const stage = { quote: 0, customer_order: 1, invoice: 2, sav: -1 }
   return (['quote', 'customer_order', 'invoice'] as const).filter(type => !related.some(row => row.type === type) && !related.some(row => row.status !== 'cancelled' && stage[row.type] > stage[type]))
 })
-async function saveSav(sav: import('~~/shared/types/sav').SavDetails) {
-  const result = await save(() => $fetch<DocumentDetail>(`/api/documents/${id.value}/sav`, { method: 'PATCH', body: sav }), { success: 'SAV enregistré' })
-  if (result?.ok) {
-    document.value = result.data
-    hasUnsavedDocumentChanges.value = false
-  }
+async function saveSav(sav: SavDetails) {
+  const documentId = id.value
+  const result = await save(() => $fetch<DocumentDetail>(`/api/documents/${documentId}/sav`, { method: 'PATCH', body: sav }), { success: 'SAV enregistré' })
+  if (!result?.ok || id.value !== documentId) return
+  savEditor.value?.acceptSaved(result.data, sav)
+  document.value = result.data
 }
 
 async function saveDocument(payload: DocumentSavePayload) {
@@ -398,6 +400,7 @@ function startNewEmailAttempt() {
         <PosSavEditor
           v-if="isSav"
           :key="dossier.current.value?.epoch"
+          ref="savEditor"
           v-model:dirty="hasUnsavedDocumentChanges"
           :ticket="savTicket || null"
           :document="document"

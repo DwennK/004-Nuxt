@@ -13,20 +13,12 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ save: [value: SavDetails] }>()
 const dirty = defineModel<boolean>('dirty', { default: false })
-const state = reactive<SavDetails>({
-  sourceDocumentId: null, repair: '', reason: '', coverage: 'pending', status: 'received',
-  diagnosis: '', work: '', receivedAt: new Date().toISOString(), deliveredAt: null
-})
-let baseline = ''
-function reset() {
-  if (props.document?.sav) Object.assign(state, props.document.sav)
-  baseline = JSON.stringify(state)
-  dirty.value = false
-}
-watch(() => props.document, reset, { immediate: true })
-watch(state, () => {
-  dirty.value = JSON.stringify(state) !== baseline
-})
+const draft = useSavDraft(computed(() => props.document))
+const { state, reset } = draft
+watch(draft.isDirty, (value) => {
+  dirty.value = value
+}, { immediate: true })
+defineExpose({ acceptSaved: draft.acceptSaved })
 const sources = computed(() => [
   { label: 'Réparation du dossier', value: 0 },
   ...(props.ticket?.documents || []).filter(document => document.type !== 'sav').map(document => ({ label: document.documentNumber, value: document.id }))
