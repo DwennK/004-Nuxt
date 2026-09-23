@@ -131,7 +131,8 @@ const tabItems = computed(() => [
   { label: ticket.value?.type === 'repair' ? 'Réparation' : 'Vue d’ensemble', icon: 'i-lucide-wrench', value: 'overview' },
   { label: 'Paiements', icon: 'i-lucide-wallet', value: 'payments', badge: ticket.value?.payments.length || 0 },
   { label: 'SMS', icon: 'i-lucide-message-square-share', value: 'sms', badge: smsTimelineItems.value.length || 0 },
-  { label: 'Client & Appareil', icon: 'i-lucide-user', value: 'client' }
+  { label: 'Client & Appareil', icon: 'i-lucide-user', value: 'client' },
+  { label: ticket.value?.type === 'repair' ? 'État de la réparation' : 'État du dossier', icon: 'i-lucide-list-checks', value: 'status' }
 ])
 
 const workflowStepIndex = computed(() => {
@@ -834,67 +835,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
         </div>
 
         <div class="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
-          <section aria-labelledby="ticket-status-heading" class="min-w-0 rounded-xl border border-default bg-default p-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="space-y-2">
-                <h2 id="ticket-status-heading" class="text-xs font-semibold text-toned">
-                  {{ ticket.type === 'repair' ? 'État de la réparation' : 'État du dossier' }}
-                </h2>
-                <div class="flex flex-wrap items-center gap-2">
-                  <UBadge :color="ticketStatusColors[ticket.status]" variant="subtle" size="lg">
-                    {{ ticket.workflow.currentStatusLabel }}
-                  </UBadge>
-                  <span v-if="statusChangedAt" class="text-xs text-toned">
-                    Depuis le {{ formatDateTime(statusChangedAt) }}
-                  </span>
-                </div>
-                <p v-if="workshopBlocker" class="flex items-center gap-1.5 text-sm font-medium text-warning">
-                  <UIcon name="i-lucide-circle-pause" class="size-4 shrink-0" />
-                  {{ workshopBlocker }}
-                </p>
-              </div>
-              <div v-if="isTicketMutable" class="flex flex-wrap gap-2">
-                <UButton
-                  v-if="primaryWorkflowAction"
-                  :label="primaryWorkflowAction.label"
-                  :icon="primaryWorkflowAction.icon"
-                  :disabled="dossier.blocked.value || actionSaving"
-                  @click="openWorkflowAction(primaryWorkflowAction)"
-                />
-                <UDropdownMenu
-                  :items="statusMenuItems"
-                  :content="{ align: 'end', side: 'bottom' }"
-                  :ui="{ content: 'min-w-64' }"
-                >
-                  <UButton
-                    label="Changer le statut"
-                    trailing-icon="i-lucide-chevron-down"
-                    color="neutral"
-                    variant="outline"
-                    :disabled="dossier.blocked.value || actionSaving"
-                  />
-                </UDropdownMenu>
-              </div>
-            </div>
-
-            <ol v-if="ticket.status !== 'cancelled'" aria-label="Progression du dossier" class="mt-4 flex border-t border-default pt-3">
-              <li
-                v-for="(step, index) in ticketWorkflowSteps"
-                :key="step"
-                :aria-current="index === workflowStepIndex ? 'step' : undefined"
-                class="flex min-w-0 flex-1 items-center gap-1 text-xs last:flex-none"
-                :class="index <= workflowStepIndex ? 'text-primary' : 'text-toned'"
-              >
-                <div class="flex flex-col items-center gap-1 sm:flex-row sm:gap-1.5" :class="index === workflowStepIndex ? 'font-semibold' : ''">
-                  <UIcon :name="index < workflowStepIndex ? 'i-lucide-circle-check' : index === workflowStepIndex ? 'i-lucide-circle-dot' : 'i-lucide-circle'" class="size-4 shrink-0" />
-                  <span>{{ ticketWorkflowStepLabels[step] }}</span>
-                </div>
-                <span v-if="index < ticketWorkflowSteps.length - 1" aria-hidden="true" class="mx-1 h-px flex-1 bg-current opacity-20 sm:mx-2" />
-              </li>
-            </ol>
-          </section>
-
-          <div class="min-w-0 lg:col-start-1 lg:row-start-2">
+          <div class="min-w-0 lg:col-start-1 lg:row-start-1">
             <UTabs
               v-model="activeTab"
               :items="tabItems"
@@ -1109,10 +1050,70 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                   <span>MAJ {{ formatDateTime(ticket.updatedAt) }}</span>
                 </div>
               </div>
+
+              <section v-else-if="activeTab === 'status'" aria-labelledby="ticket-status-heading" class="min-w-0 rounded-xl border border-default bg-default p-4">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div class="space-y-2">
+                    <h2 id="ticket-status-heading" class="text-xs font-semibold text-toned">
+                      {{ ticket.type === 'repair' ? 'État de la réparation' : 'État du dossier' }}
+                    </h2>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <UBadge :color="ticketStatusColors[ticket.status]" variant="subtle" size="lg">
+                        {{ ticket.workflow.currentStatusLabel }}
+                      </UBadge>
+                      <span v-if="statusChangedAt" class="text-xs text-toned">
+                        Depuis le {{ formatDateTime(statusChangedAt) }}
+                      </span>
+                    </div>
+                    <p v-if="workshopBlocker" class="flex items-center gap-1.5 text-sm font-medium text-warning">
+                      <UIcon name="i-lucide-circle-pause" class="size-4 shrink-0" />
+                      {{ workshopBlocker }}
+                    </p>
+                  </div>
+                  <div v-if="isTicketMutable" class="flex flex-wrap gap-2">
+                    <UButton
+                      v-if="primaryWorkflowAction"
+                      :label="primaryWorkflowAction.label"
+                      :icon="primaryWorkflowAction.icon"
+                      :disabled="dossier.blocked.value || actionSaving"
+                      @click="openWorkflowAction(primaryWorkflowAction)"
+                    />
+                    <UDropdownMenu
+                      :items="statusMenuItems"
+                      :content="{ align: 'end', side: 'bottom' }"
+                      :ui="{ content: 'min-w-64' }"
+                    >
+                      <UButton
+                        label="Changer le statut"
+                        trailing-icon="i-lucide-chevron-down"
+                        color="neutral"
+                        variant="outline"
+                        :disabled="dossier.blocked.value || actionSaving"
+                      />
+                    </UDropdownMenu>
+                  </div>
+                </div>
+
+                <ol v-if="ticket.status !== 'cancelled'" aria-label="Progression du dossier" class="mt-4 flex border-t border-default pt-3">
+                  <li
+                    v-for="(step, index) in ticketWorkflowSteps"
+                    :key="step"
+                    :aria-current="index === workflowStepIndex ? 'step' : undefined"
+                    class="flex min-w-0 flex-1 items-center gap-1 text-xs last:flex-none"
+                    :class="index <= workflowStepIndex ? 'text-primary' : 'text-toned'"
+                  >
+                    <div class="flex flex-col items-center gap-1 sm:flex-row sm:gap-1.5" :class="index === workflowStepIndex ? 'font-semibold' : ''">
+                      <UIcon :name="index < workflowStepIndex ? 'i-lucide-circle-check' : index === workflowStepIndex ? 'i-lucide-circle-dot' : 'i-lucide-circle'" class="size-4 shrink-0" />
+                      <span>{{ ticketWorkflowStepLabels[step] }}</span>
+                    </div>
+                    <span v-if="index < ticketWorkflowSteps.length - 1" aria-hidden="true" class="mx-1 h-px flex-1 bg-current opacity-20 sm:mx-2" />
+                  </li>
+                </ol>
+              </section>
             </div>
           </div>
 
-          <aside aria-label="Actions du comptoir" class="space-y-4 lg:sticky lg:top-0 lg:col-start-2 lg:row-span-3 lg:row-start-1">
+          <aside aria-label="Actions du comptoir" class="space-y-4 lg:sticky lg:top-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
             <section aria-labelledby="ticket-payment-heading" class="rounded-xl border border-default bg-default p-4">
               <h2 id="ticket-payment-heading" class="text-sm font-semibold text-highlighted">
                 Règlement
@@ -1188,7 +1189,7 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
             </section>
           </aside>
 
-          <div v-if="activeTab === 'overview'" class="min-w-0 space-y-4 lg:col-start-1 lg:row-start-3">
+          <div v-if="activeTab === 'overview'" class="min-w-0 space-y-4 lg:col-start-1 lg:row-start-2">
             <section v-if="ticket.internalNotes" aria-labelledby="ticket-notes-heading" class="rounded-xl border border-default bg-muted/30 p-4">
               <h2 id="ticket-notes-heading" class="mb-2 flex items-center gap-2 text-sm font-semibold text-highlighted">
                 <UIcon name="i-lucide-notebook-pen" class="size-4" /> Notes atelier
