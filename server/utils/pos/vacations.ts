@@ -1,4 +1,5 @@
-import { asc, eq, and, gte, lte } from 'drizzle-orm'
+import { createError } from 'h3'
+import { asc, eq, and, gte, lte, ne } from 'drizzle-orm'
 import { employees, vacationEntries } from '~~/server/db/schema'
 import { employeeColorPalette } from '~~/shared/constants/pos'
 import type {
@@ -10,7 +11,8 @@ import type {
   VacationEntryType
 } from '~~/shared/types/pos'
 import type { VacationYearData } from '~~/shared/types/vacations'
-import { countBusinessDays, countBusinessDaysInYear } from '~~/shared/utils/pos'
+import { getSwissHolidaySet, isWorkingDay } from '~~/shared/utils/pos'
+import type { PosDatabaseExecutor } from '../turso'
 import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
 import { normalizeOptionalText } from '~~/shared/lib/text'
@@ -189,6 +191,42 @@ export async function listVacationEntries(filters?: { year?: number, employeeId?
   })
 }
 
+type VacationDates = Pick<VacationEntryRecord, 'startDate' | 'endDate' | 'type'>
+
+function vacationSlots(entry: VacationDates, year?: number) {
+  const start = year ? [entry.startDate, `${year}-01-01`].sort()[1]! : entry.startDate
+  const end = year ? [entry.endDate, `${year}-12-31`].sort()[0]! : entry.endDate
+  const slots = new Set<string>()
+  const holidays = new Map<number, Set<string>>()
+  for (const current = new Date(`${start}T12:00:00`); current <= new Date(`${end}T12:00:00`); current.setDate(current.getDate() + 1)) {
+    const currentYear = current.getFullYear()
+    if (!holidays.has(currentYear)) holidays.set(currentYear, getSwissHolidaySet(currentYear))
+    if (!isWorkingDay(current, holidays.get(currentYear))) continue
+    const day = `${currentYear}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`
+    if (entry.type !== 'half_day_pm') slots.add(`${day}:am`)
+    if (entry.type !== 'half_day_am') slots.add(`${day}:pm`)
+  }
+  return slots
+}
+
+async function assertVacationAvailable(db: PosDatabaseExecutor, entry: VacationDates & {
+  employeeId: number
+  status: VacationEntryStatus
+}, excludeId?: number) {
+  if (entry.status === 'rejected') return
+  const candidates = await db.select().from(vacationEntries).where(and(
+    eq(vacationEntries.employeeId, entry.employeeId),
+    ne(vacationEntries.status, 'rejected'),
+    lte(vacationEntries.startDate, entry.endDate),
+    gte(vacationEntries.endDate, entry.startDate),
+    excludeId === undefined ? undefined : ne(vacationEntries.id, excludeId)
+  ))
+  const requested = vacationSlots(entry)
+  if (candidates.some(candidate => [...vacationSlots(candidate)].some(slot => requested.has(slot)))) {
+    throw createError({ statusCode: 409, statusMessage: 'Une absence existe déjà pour cet employé sur cette période.' })
+  }
+}
+
 export async function createVacationEntry(input: {
   employeeId: number
   startDate: string
@@ -198,28 +236,19 @@ export async function createVacationEntry(input: {
   notes?: string | null
 }) {
   await ensurePosSchema()
-  const db = useDb()
-  const now = new Date().toISOString()
-
-  const entryType: VacationEntryType = input.type || 'full_day'
-  const entryStatus: VacationEntryStatus = input.status || 'pending'
-  const businessDays = entryType === 'full_day'
-    ? countBusinessDays(input.startDate, input.endDate)
-    : 0.5
-
-  const rows = await db.insert(vacationEntries).values({
-    employeeId: input.employeeId,
-    startDate: input.startDate,
-    endDate: input.endDate,
-    type: entryType,
-    status: entryStatus,
-    businessDays,
-    notes: normalizeOptionalText(input.notes),
-    createdAt: now,
-    updatedAt: now
-  }).returning()
-
-  return mapVacationEntry(rows[0]!)
+  return useDb().transaction(async (tx) => {
+    const now = new Date().toISOString()
+    const entry = { ...input, type: input.type || 'full_day', status: input.status || 'pending' } as const
+    await assertVacationAvailable(tx, entry)
+    const rows = await tx.insert(vacationEntries).values({
+      ...entry,
+      businessDays: vacationSlots(entry).size / 2,
+      notes: normalizeOptionalText(input.notes),
+      createdAt: now,
+      updatedAt: now
+    }).returning()
+    return mapVacationEntry(rows[0]!)
+  })
 }
 
 export async function updateVacationEntry(id: number, input: {
@@ -231,36 +260,25 @@ export async function updateVacationEntry(id: number, input: {
   notes?: string | null
 }) {
   await ensurePosSchema()
-  const db = useDb()
-
-  const existing = await db.select().from(vacationEntries).where(eq(vacationEntries.id, id)).limit(1)
-  if (!existing[0]) {
-    throw createError({ statusCode: 404, statusMessage: 'Vacation entry not found' })
-  }
-
-  const startDate = input.startDate ?? existing[0].startDate
-  const endDate = input.endDate ?? existing[0].endDate
-  const entryType: VacationEntryType = input.type ?? existing[0].type
-
-  const businessDays = entryType === 'full_day'
-    ? countBusinessDays(startDate, endDate)
-    : 0.5
-
-  const rows = await db.update(vacationEntries)
-    .set({
-      employeeId: input.employeeId ?? existing[0].employeeId,
-      startDate,
-      endDate,
-      type: entryType,
-      status: input.status ?? existing[0].status,
-      businessDays,
-      notes: input.notes !== undefined ? normalizeOptionalText(input.notes) : existing[0].notes,
+  return useDb().transaction(async (tx) => {
+    const [existing] = await tx.select().from(vacationEntries).where(eq(vacationEntries.id, id)).limit(1)
+    if (!existing) throw createError({ statusCode: 404, statusMessage: 'Vacation entry not found' })
+    const entry = {
+      employeeId: input.employeeId ?? existing.employeeId,
+      startDate: input.startDate ?? existing.startDate,
+      endDate: input.endDate ?? existing.endDate,
+      type: input.type ?? existing.type,
+      status: input.status ?? existing.status
+    }
+    await assertVacationAvailable(tx, entry, id)
+    const rows = await tx.update(vacationEntries).set({
+      ...entry,
+      businessDays: vacationSlots(entry).size / 2,
+      notes: input.notes !== undefined ? normalizeOptionalText(input.notes) : existing.notes,
       updatedAt: new Date().toISOString()
-    })
-    .where(eq(vacationEntries.id, id))
-    .returning()
-
-  return mapVacationEntry(rows[0]!)
+    }).where(eq(vacationEntries.id, id)).returning()
+    return mapVacationEntry(rows[0]!)
+  })
 }
 
 export async function deleteVacationEntry(id: number) {
@@ -307,21 +325,16 @@ function summarizeVacationEntries(
     const employeeEntries = entriesByEmployeeId.get(emp.id) ?? []
     const employee = mapEmployee(emp)
 
-    let usedDays = 0
-    let pendingDays = 0
-
+    // Count each working half-day once, including overlapping legacy entries.
+    const approved = new Set<string>()
+    const pending = new Set<string>()
     for (const entry of employeeEntries) {
-      const type = entry.type as VacationEntryRecord['type']
-      const daysInYear = type === 'full_day'
-        ? countBusinessDaysInYear(entry.startDate, entry.endDate, year)
-        : 0.5
-
-      if (entry.status === 'approved') {
-        usedDays += daysInYear
-      } else if (entry.status === 'pending') {
-        pendingDays += daysInYear
-      }
+      if (entry.status === 'rejected') continue
+      const target = entry.status === 'approved' ? approved : pending
+      for (const slot of vacationSlots(entry, year)) target.add(slot)
     }
+    const usedDays = approved.size / 2
+    const pendingDays = [...pending].filter(slot => !approved.has(slot)).length / 2
 
     return {
       employee,

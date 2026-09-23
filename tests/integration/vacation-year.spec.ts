@@ -1,4 +1,7 @@
 import { createClient } from '@libsql/client'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { defineRelations } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -20,9 +23,11 @@ vi.mock('../../server/utils/pos/schema', () => ({ ensurePosSchema: async () => {
 
 describe('shared annual vacation data', () => {
   let client: ReturnType<typeof createClient>
+  let directory: string
 
   beforeEach(async () => {
-    client = createClient({ url: 'file::memory:' })
+    directory = mkdtempSync(join(tmpdir(), 'pos-vacations-'))
+    client = createClient({ url: `file:${join(directory, 'test.sqlite')}` })
     context.db = drizzle({ client, relations: defineRelations(schema) })
     await client.batch([
       `CREATE TABLE employees (
@@ -44,6 +49,7 @@ describe('shared annual vacation data', () => {
 
   afterEach(() => {
     client.close()
+    rmSync(directory, { recursive: true, force: true })
   })
 
   async function seedYear() {
@@ -61,6 +67,40 @@ describe('shared annual vacation data', () => {
 
     return { inactive, active, withoutAbsences, spanningYear, halfDay }
   }
+
+  it('rejects duplicate or overlapping absences but permits complementary half days and other employees', async () => {
+    const employee = await createEmployee({ firstName: 'Ada', lastName: 'Test', color: '#008000' })
+    const other = await createEmployee({ firstName: 'Bob', lastName: 'Test', color: '#008000' })
+    const entry = { employeeId: employee.id, startDate: '2026-09-21', endDate: '2026-09-21', status: 'approved' as const }
+    const original = await createVacationEntry(entry)
+    await expect(createVacationEntry(entry)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(createVacationEntry({ ...entry, startDate: '2026-09-19', endDate: '2026-09-22' })).rejects.toMatchObject({ statusCode: 409 })
+    await createVacationEntry({ ...entry, employeeId: other.id })
+    await updateVacationEntry(original.id, { notes: 'Same entry remains editable' })
+    const rejected = await createVacationEntry({ ...entry, status: 'rejected' })
+    await expect(updateVacationEntry(rejected.id, { status: 'approved' })).rejects.toMatchObject({ statusCode: 409 })
+    const nextDay = { ...entry, startDate: '2026-09-22', endDate: '2026-09-22' }
+    const morning = await createVacationEntry({ ...nextDay, type: 'half_day_am' })
+    await createVacationEntry({ ...nextDay, type: 'half_day_pm' })
+    await expect(createVacationEntry({ ...nextDay, type: 'half_day_am', status: 'pending' })).rejects.toMatchObject({ statusCode: 409 })
+    await expect(updateVacationEntry(morning.id, { type: 'full_day' })).rejects.toMatchObject({ statusCode: 409 })
+    await expect(updateVacationEntry(morning.id, { startDate: entry.startDate, endDate: entry.endDate })).rejects.toMatchObject({ statusCode: 409 })
+    expect((await getVacationSummariesByYear(2026))[0]).toMatchObject({ usedDays: 2, remainingDays: 23 })
+  })
+
+  it('deduplicates historical overlaps without modifying entries or counting rejected and nonworking days', async () => {
+    const employee = await createEmployee({ firstName: 'Ada', lastName: 'Test', color: '#008000' })
+    const entry = { employeeId: employee.id, startDate: '2026-09-21', endDate: '2026-09-22', status: 'approved' as const }
+    await createVacationEntry(entry)
+    // Simulate entries saved before overlap validation existed.
+    await client.execute(`INSERT INTO vacation_entries (employee_id,start_date,end_date,type,status,business_days,created_at,updated_at)
+      VALUES (${employee.id},'2026-09-21','2026-09-21','full_day','approved',1,'2026-01-01','2026-01-01'),
+      (${employee.id},'2026-09-22','2026-09-23','full_day','pending',2,'2026-01-01','2026-01-01')`)
+    await createVacationEntry({ ...entry, startDate: '2026-09-20', endDate: '2026-09-20', type: 'half_day_am' })
+    const data = await getVacationYearData(2026)
+    expect(data.entries).toHaveLength(4)
+    expect(data.summaries[0]).toMatchObject({ usedDays: 2, pendingDays: 1, remainingDays: 23 })
+  })
 
   it('returns the existing three projections using one two-statement batch without employee joins', async () => {
     await seedYear()
