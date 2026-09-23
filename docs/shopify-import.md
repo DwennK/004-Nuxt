@@ -1,9 +1,9 @@
 # Import Shopify
 
 L’outil `/tools/shopify-import` est réservé aux administrateurs. Shopify reste
-en lecture seule : aucune capture de paiement, modification de commande ou
-mutation de stock n’est envoyée à Shopify. Le bouton d’import enregistre les
-données dans le POS uniquement. L’ancienne page WooCommerce redirige ici.
+en lecture seule pour l’import et la synchronisation des paiements. Ces actions
+enregistrent les données dans le POS uniquement. La case « Appareil récupéré /
+livré » permet séparément de créer ou d’annuler les traitements Shopify. L’ancienne page WooCommerce redirige ici.
 
 ## Connexion
 
@@ -136,3 +136,44 @@ reste distincte des tests locaux. Les anciens secrets WooCommerce peuvent ensuit
 - [Transactions](https://shopify.dev/docs/api/admin-graphql/latest/objects/OrderTransaction)
 - [Articles et remises](https://shopify.dev/docs/api/admin-graphql/latest/objects/LineItem)
 - [Données clients protégées](https://shopify.dev/docs/apps/launch/protected-customer-data)
+
+## Récupération / livraison
+
+Une case « Appareil récupéré / livré » figure sous la barre supérieure des
+documents et dossiers. Les documents liés au même dossier partagent son état.
+Sans commande Shopify importée dans ce périmètre, la case reste un suivi local.
+Avec une commande liée, Shopify est la source de vérité, relue à l’ouverture,
+à l’actualisation et après chaque mutation. Plusieurs commandes liées au même
+dossier sont refusées pour éviter une action ambiguë.
+
+Cocher traite tous les articles restants, regroupés par emplacement, avec
+[`fulfillmentCreate`](https://shopify.dev/docs/api/admin-graphql/2026-07/mutations/fulfillmentCreate).
+Décocher demande confirmation puis annule les traitements actifs de la commande
+avec [`fulfillmentCancel`](https://shopify.dev/docs/api/admin-graphql/2026-07/mutations/fulfillmentCancel),
+y compris ceux créés directement dans Shopify. Aucune notification client
+n’est demandée. Les paiements et le statut métier du dossier restent indépendants.
+Les droits Shopify doivent inclure `write_merchant_managed_fulfillment_orders`
+pour les emplacements du marchand, et les droits de lecture des commandes. Les
+services externes restent soumis aux actions que Shopify autorise.
+
+Un état partiel s’affiche avec une case intermédiaire ; on peut terminer le
+traitement ou annuler les traitements existants. Les réponses incomplètes, les
+commandes annulées, les blocages Shopify et les erreurs de mutation ne sont
+jamais présentés comme des réussites. La vérification finale exige une commande
+`FULFILLED` après cochage et aucun traitement actif après annulation. Une commande
+avec plus de 100 ordres de traitement, 250 traitements historiques ou 10 mutations
+nécessaires doit être gérée directement dans Shopify.
+
+Les opérateurs disposant de `financial:record` peuvent utiliser cette action.
+Les routes PATCH exigent aussi la réservation du dossier. La table additive
+`dossier_handovers` garde le suivi local et un verrou de synchronisation partagé
+entre instances Worker (expiration de récupération : 10 minutes). Aucune requête
+réseau ne reste dans une transaction SQLite. Si une réponse Shopify est perdue
+ou une opération multi-emplacements échoue partiellement, l’état est relu avant
+toute nouvelle tentative ; une annulation distante déjà effectuée n’est jamais
+présentée comme annulée par un rollback SQLite.
+
+Appliquer la migration `20260923152440_dossier_handover` avant le nouveau Worker,
+selon le runbook base de données. La vérification des autorisations peut rester
+en lecture seule ; les tests automatisés utilisent une boutique simulée et des
+bases SQLite jetables.

@@ -5,7 +5,7 @@ import { externalFetch } from '../external-fetch'
 import { shopifyError, shopifyOrderSchema } from './model'
 
 export const SHOPIFY_API_VERSION = '2026-07'
-type ShopifyConfig = { domain: string, clientId: string, clientSecret: string, accessToken: string }
+export type ShopifyConfig = { domain: string, clientId: string, clientSecret: string, accessToken: string }
 let tokenCache: { key: string, token: string, expiresAt: number } | undefined
 let pendingToken: { key: string, promise: Promise<string> } | undefined
 
@@ -57,14 +57,14 @@ async function accessToken(config: ShopifyConfig) {
   }
 }
 
-async function graphql<T>(config: ShopifyConfig, query: string, variables: Record<string, unknown> = {}): Promise<T> {
+export async function graphql<T>(config: ShopifyConfig, query: string, variables: Record<string, unknown> = {}): Promise<T> {
   const raw = await request(config, `/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, { query, variables }, await accessToken(config))
   const envelope = z.object({ data: z.unknown().optional(), errors: z.array(z.object({ extensions: z.object({ code: z.string().optional() }).passthrough().optional() }).passthrough()).optional() }).safeParse(raw)
   if (!envelope.success || envelope.data.errors?.length || !envelope.data.data) {
     const codes = envelope.success ? envelope.data.errors?.map(e => e.extensions?.code) : []
     if (codes?.includes('ACCESS_DENIED')) return shopifyError('Shopify refuse l’accès aux commandes ou aux coordonnées clients. Vérifiez les autorisations.', 'SHOPIFY_ACCESS_DENIED', 503)
     if (codes?.includes('THROTTLED')) return shopifyError('Shopify limite temporairement les requêtes. Réessayez.', 'SHOPIFY_THROTTLED', 503)
-    return shopifyError('Shopify a retourné une réponse incomplète. Aucun import n’a été effectué.', 'SHOPIFY_INVALID_RESPONSE', 502)
+    return shopifyError('Shopify a retourné une réponse incomplète. Actualisez l’état avant de réessayer.', 'SHOPIFY_INVALID_RESPONSE', 502)
   }
   return envelope.data.data as T
 }

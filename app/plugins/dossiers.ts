@@ -14,7 +14,7 @@ export default defineNuxtPlugin(() => {
         if (method === 'GET' || method === 'HEAD' || !path.startsWith('/api/'))
           return
         const match = path.match(
-          /^\/api\/(tickets|documents|payments)\/(\d+)(?:\/(status|close|notes|lines|quote|order|invoice|mark-paid|sav|convert))?$/
+          /^\/api\/(tickets|documents|payments)\/(\d+)(?:\/(status|close|notes|lines|quote|order|invoice|mark-paid|sav|convert|handover))?$/
         )
         const body
           = options.body && typeof options.body === 'object'
@@ -87,6 +87,12 @@ export default defineNuxtPlugin(() => {
       },
       onResponse({ request, options, response }) {
         if (!response.ok) {
+          // Handover commits its reservation before calling Shopify. Even a
+          // provider failure must advance the local proof for a safe retry.
+          if (/\/handover$/.test(String(request).split('?')[0] || '')) {
+            const revisions = response.headers.get('x-dossier-revisions')
+            if (revisions) dossiers.acceptRevisions(JSON.parse(revisions))
+          }
           const id = `${String(request).split('?')[0]}:${options.headers.get('idempotency-key')}`
           const retry = dossiers.retries[id]
           if (retry && response.status >= 500) retry.failed = true

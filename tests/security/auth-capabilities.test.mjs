@@ -37,6 +37,8 @@ const routePolicies = {
     'server/api/comptoir.get.ts',
     'server/api/home.get.ts',
     'server/api/documents/index.get.ts',
+    'server/api/documents/[id]/handover.get.ts',
+    'server/api/tickets/[id]/handover.get.ts',
     'server/api/documents/[id].get.ts',
     'server/api/payments/index.get.ts',
     'server/api/payments/[id].get.ts',
@@ -46,6 +48,8 @@ const routePolicies = {
   ],
   'financial:record': [
     'server/api/documents/index.post.ts',
+    'server/api/documents/[id]/handover.patch.ts',
+    'server/api/tickets/[id]/handover.patch.ts',
     'server/api/documents/[id]/email.post.ts',
     'server/api/documents/[id]/mark-paid.post.ts',
     'server/api/payments/index.post.ts',

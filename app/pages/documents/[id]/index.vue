@@ -374,6 +374,14 @@ function startNewEmailAttempt() {
           />
         </template>
       </UDashboardNavbar>
+      <PosDeviceHandover
+        v-if="document"
+        :key="id"
+        kind="document"
+        :record-id="id"
+        :revision="dossier.current.value?.status?.revision"
+        :disabled="dossier.blocked.value"
+      />
     </template>
 
     <template #body>

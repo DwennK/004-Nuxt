@@ -55,6 +55,16 @@ export const dossierPresences = sqliteTable('dossier_presences', {
   expiryIdx: index('dossier_presences_expiry_idx').on(table.expiresAt)
 }))
 
+// One handover state shared by a dossier and its documents.
+export const dossierHandovers = sqliteTable('dossier_handovers', {
+  key: text('key').primaryKey(),
+  collected: integer('collected', { mode: 'boolean' }).notNull().default(false),
+  updatedAt: text('updated_at').notNull(),
+  updatedBy: integer('updated_by').notNull(),
+  operationId: text('operation_id'),
+  operationExpiresAt: integer('operation_expires_at').notNull().default(0)
+})
+
 export const customers = sqliteTable('customers', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   firstName: text('first_name').notNull(),
