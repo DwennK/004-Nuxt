@@ -41,21 +41,6 @@ function formatMonthTooltipLabel(year: number, month: number) {
   }).format(new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)))
 }
 
-function buildYearStart(date: string) {
-  const [year] = date.split('-').map(Number)
-  return `${year}-01-01`
-}
-
-function buildYearEnd(date: string) {
-  const [year] = date.split('-').map(Number)
-  return `${year}-12-31`
-}
-
-function buildRollingYearStart(date: string, count: number) {
-  const [year] = date.split('-').map(Number)
-  return `${year! - (count - 1)}-01-01`
-}
-
 function buildDailyPaymentBuckets(
   startDate: string,
   endDate: string,
@@ -563,15 +548,18 @@ export async function getReportsOverview(date: string, options: { includeLeaders
   const rangeDates = Array.from({ length: 7 }, (_, index) => shiftIsoDate(date, index - 6))
   const startDate = rangeDates[0]!
   const endDate = rangeDates[rangeDates.length - 1]!
-  const yearStartDate = buildYearStart(date)
-  const yearEndDate = buildYearEnd(date)
-  const rollingYearStartDate = buildRollingYearStart(date, 5)
   const { start } = buildDayRange(startDate)
   const { end } = buildDayRange(endDate)
-  const { start: selectedYearStart } = buildDayRange(yearStartDate)
-  const { end: selectedYearEnd } = buildDayRange(yearEndDate)
-  const { start: rollingYearStart } = buildDayRange(rollingYearStartDate)
-  const monthBucketSql = sql<string>`substr(${payments.paidAt}, 1, 7)`
+  const selectedYear = Number(date.slice(0, 4))
+  // UTC bounds for each Swiss calendar month, including daylight saving time.
+  // Joining ranges keeps the payment date index usable and aggregates in SQL.
+  const monthRanges = Array.from({ length: 60 }, (_, index) => {
+    const year = selectedYear - 4 + Math.floor(index / 12)
+    const month = index % 12 + 1
+    const bucket = `${year}-${String(month).padStart(2, '0')}`
+    const nextMonth = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, '0')}`
+    return sql`(${bucket}, ${buildDayRange(`${bucket}-01`).start}, ${buildDayRange(`${nextMonth}-01`).start})`
+  })
 
   const [weeklyPaymentRows, periodPaymentRows, paidDocumentRows, openTicketRows, openedRows, closedRows] = await Promise.all([
     db.select({
@@ -581,17 +569,13 @@ export async function getReportsOverview(date: string, options: { includeLeaders
     })
       .from(payments)
       .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end))),
-    db.select({
-      bucket: monthBucketSql,
-      method: payments.method,
-      total: sum(payments.amount),
-      selectedYearTotal: sql<number>`sum(CASE WHEN ${payments.paidAt} >= ${selectedYearStart} THEN ${payments.amount} ELSE 0 END)`,
-      selectedYearCount: sql<number>`sum(CASE WHEN ${payments.paidAt} >= ${selectedYearStart} THEN 1 ELSE 0 END)`
-    })
-      .from(payments)
-      .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, rollingYearStart), lte(payments.paidAt, selectedYearEnd)))
-      .groupBy(monthBucketSql, payments.method)
-      .orderBy(monthBucketSql, payments.method),
+    db.all<{ bucket: string, method: (typeof paymentMethods)[number], total: number }>(sql`
+      WITH month_ranges(bucket, start_at, end_at) AS (VALUES ${sql.join(monthRanges, sql`, `)})
+      SELECT r.bucket, p.method, sum(p.amount) AS total
+      FROM month_ranges r INNER JOIN payments p
+        ON p.paid_at >= r.start_at AND p.paid_at < r.end_at AND p.status = 'paid'
+      GROUP BY r.bucket, p.method ORDER BY r.bucket, p.method
+    `),
     getPaidReportDocumentIds(db, start, end),
     db.select({ count: sql<number>`count(*)` })
       .from(tickets)
@@ -605,8 +589,7 @@ export async function getReportsOverview(date: string, options: { includeLeaders
   ])
 
   const monthlyPaymentRows = periodPaymentRows
-    .filter(row => Number(row.selectedYearCount) > 0)
-    .map(row => ({ bucket: row.bucket, method: row.method, total: Number(row.selectedYearTotal) }))
+    .filter(row => row.bucket.startsWith(`${selectedYear}-`))
   const yearlyTotals = new Map<string, { bucket: string, method: (typeof paymentMethods)[number], total: number }>()
   for (const row of periodPaymentRows) {
     const bucket = row.bucket.slice(0, 4)

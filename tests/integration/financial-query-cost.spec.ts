@@ -159,6 +159,31 @@ describe('financial query equivalence and bounded query plans', () => {
     expect(leaders.topCustomers).toEqual([expect.objectContaining({ customerId: 1, total: 1000, documentCount: 1 })])
   })
 
+  it('assigns receipts to Swiss months and years across winter and summer boundaries', async () => {
+    await client.execute('DELETE FROM payments')
+    await insertPays([
+      { id: 30, document: 3, amount: 100, status: 'paid', paidAt: '2025-12-31T22:59:59.999Z' },
+      { id: 31, document: 3, amount: 200, status: 'paid', paidAt: '2025-12-31T23:00:00.000Z' },
+      { id: 32, document: 3, amount: 300, status: 'paid', paidAt: '2026-03-31T21:59:59.999Z' },
+      { id: 33, document: 3, amount: 400, status: 'paid', paidAt: '2026-03-31T22:00:00.000Z' },
+      { id: 34, document: 3, amount: 500, status: 'paid', paidAt: '2026-10-31T22:59:59.999Z' },
+      { id: 35, document: 3, amount: 600, status: 'paid', paidAt: '2026-10-31T23:00:00.000Z' },
+      { id: 36, document: 3, amount: 700, status: 'paid', paidAt: '2026-12-31T22:59:59.999Z' },
+      { id: 37, document: 3, amount: 800, status: 'paid', paidAt: '2026-12-31T23:00:00.000Z' },
+      { id: 38, document: 3, amount: 9999, status: 'pending', paidAt: '2026-03-31T22:00:00.000Z' }
+    ])
+    await client.execute('UPDATE payments SET method = \'card_twint\' WHERE id = 33')
+    const overview = await getReportsOverview('2026-01-01', { includeLeaders: false })
+    const months = overview.paymentPeriods.find(period => period.key === 'month')!.buckets
+    expect(months.filter(row => row.total).map(row => [row.date, row.total])).toEqual([
+      ['2026-01', 200], ['2026-03', 300], ['2026-04', 400], ['2026-10', 500], ['2026-11', 600], ['2026-12', 700]
+    ])
+    expect(months[3]).toMatchObject({ cash: 0, cardTwint: 400 })
+    expect(overview.kpis.paidToday).toBe(200)
+    expect(overview.paymentPeriods.find(period => period.key === 'years')!.buckets.filter(row => row.total).map(row => [row.date, row.total]))
+      .toEqual([['2025', 100], ['2026', 2700]])
+  })
+
   it('preserves all chart periods while optionally skipping unused leader aggregation', async () => {
     const extra: Pay[] = [
       { id: 20, document: 6, amount: 10, status: 'paid', paidAt: '2025-12-31T22:59:59.999Z' },
@@ -170,7 +195,8 @@ describe('financial query equivalence and bounded query plans', () => {
     const lean = await getReportsOverview('2026-09-11', { includeLeaders: false })
     expect(lean).toEqual({ ...full, topCustomers: [], topItems: [] })
     expect(full.topCustomers).toHaveLength(1)
-    expect(full.paymentPeriods.find(period => period.key === 'month')?.buckets.reduce((sum, row) => sum + row.total, 0)).toBe(1630)
+    // Both receipts after Swiss midnight belong to January, including 23:00 UTC.
+    expect(full.paymentPeriods.find(period => period.key === 'month')?.buckets.reduce((sum, row) => sum + row.total, 0)).toBe(1650)
     expect(full.paymentPeriods.find(period => period.key === 'years')?.buckets.reduce((sum, row) => sum + row.total, 0)).toBe(1660)
   })
 
