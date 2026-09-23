@@ -106,8 +106,17 @@ describe('assistant SQL guardrails', () => {
 
   it('preserves table, sensitive-column, and wildcard denials', () => {
     expectRejected('SELECT u.id FROM users u', 'disallowed_table')
-    expectRejected('SELECT c.email FROM customers c', 'sensitive_column')
+    expectRejected('SELECT t.access_code FROM tickets t', 'sensitive_column')
     expectRejected('SELECT * FROM payments', 'invalid_query')
+  })
+
+  it('allows operational contacts and issue descriptions without exposing credentials or unrelated personal fields', () => {
+    expect(validateAssistantSql('SELECT c.phone, c.email, c.address_line_1, c.address_line_2 FROM customers c').audit.tables).toEqual(['customers'])
+    expect(validateAssistantSql('SELECT t.issue_description FROM tickets t').audit.tables).toEqual(['tickets'])
+    expectRejected('SELECT e.email FROM employees e', 'disallowed_column')
+    expectRejected('SELECT t.sim_code FROM tickets t', 'sensitive_column')
+    expectRejected('SELECT t.internal_notes FROM tickets t', 'sensitive_column')
+    expectRejected('DELETE FROM customers', 'read_only_violation')
   })
 
   it.each([

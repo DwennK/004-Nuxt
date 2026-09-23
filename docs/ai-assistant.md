@@ -9,13 +9,17 @@
 
 Le flux est strictement serveur:
 
-1. le client envoie l’historique utile et la question courante
-2. MiniMax choisit un plan structuré : requête métier, demande de précision ou réponse de périmètre
-3. seuls les plans de requête complets et cohérents passent à la validation SQL par les garde-fous
-4. la requête validée est exécutée en lecture seule sur Turso via Drizzle
-5. les résultats sont reformulés en réponse métier concise
+1. le client envoie les 32 derniers messages utiles (100 000 caractères au total) et des extraits bornés des recherches récentes
+2. MiniMax peut répondre directement, demander une précision ou préparer une recherche
+3. chaque recherche passe par le validateur SQL puis s’exécute en lecture seule
+4. le modèle reçoit les résultats et peut compléter, vérifier ou corriger sa recherche, dans une limite de quatre étapes par question
+5. une réponse finale s’appuie sur toutes les recherches exécutées, affichées séparément sous le message
 
-Les salutations, « test », demandes vagues et questions hors périmètre ne déclenchent aucune requête SQL ni second appel de reformulation. L’assistant demande une précision ou rappelle son périmètre en français. L’historique conserve ces échanges pour interpréter la précision suivante. Un plan invalide ou contradictoire est rejeté avant tout accès à la base.
+Les explications, conseils et demandes de rédaction ne nécessitent plus de requête SQL. Les salutations sont libres. Les erreurs de requête sont renvoyées au planificateur pour correction, sans exposer les erreurs internes de la base. Une recherche répétée n’est pas exécutée à nouveau. Si les vérifications restent incomplètes, la réponse l’indique explicitement.
+
+Le contexte reçu du navigateur est non fiable et sert seulement à comprendre les suivis : les faits doivent être revérifiés en base. Les extraits contiennent au plus quatre recherches par message récent, trois lignes par recherche et des valeurs texte limitées à 300 caractères. Le fil visible n’est pas effacé quand le contexte envoyé est réduit.
+
+Les bornes du jour, de la veille, de la semaine et du mois (courants et précédents) sont calculées en `Europe/Zurich`, avec prise en compte des changements d’heure. Les prompts distinguent `rowCount` du nombre total de documents, exigent `COUNT` pour compter et séparent facturation et encaissement.
 
 Les réponses sont affichées en Markdown (gras, listes, tableaux, code) ; les messages utilisateur restent en texte brut. Le HTML brut est échappé, les URL dangereuses sont rejetées et les images distantes ne sont pas chargées. Les tableaux larges défilent horizontalement à l’intérieur du message.
 
@@ -46,14 +50,16 @@ Tables explicitement exclues:
 
 Colonnes sensibles exclues même sur tables autorisées:
 
-- coordonnées client: `phone`, `email`, `notes`
-- détails sensibles ticket/appareil: `serial_number`, `imei`, `access_code`, `sim_code`, `issue_description`, `internal_notes`
+- notes libres client: `notes`
+- détails sensibles ticket/appareil: `serial_number`, `imei`, `access_code`, `sim_code`, `internal_notes`
 - champs libres paiement: `reference`, `notes`
 - identifiants device stock: `imei`
 - coordonnées employé: `email`
 - notes vacances
 - données personnelles réservation: `name`, `phone`, `notes`
 - configuration bancaire et branding de `company_settings`
+
+Les coordonnées clients (`phone`, `email`, `address_line_1`, `address_line_2`) et la description de panne (`tickets.issue_description`) sont désormais consultables par les collaborateurs authentifiés, comme les écrans POS correspondants. Ces champs peuvent être transmis à MiniMax lors d’une recherche. Les codes appareil/SIM, notes internes, secrets, comptes et sessions restent exclus. Les coordonnées employé/réservation restent hors allowlist.
 
 ## Garde-fous SQL
 
@@ -75,7 +81,7 @@ Règles appliquées:
 Chaque tentative est loggée côté serveur avec:
 
 - `requestId`
-- SQL validée ou rejetée
+- métadonnées structurelles de la requête (jamais le SQL ni ses valeurs littérales)
 - statut accepté/rejeté
 - durée
 - nombre de lignes
@@ -112,7 +118,7 @@ Variables Turso inchangées:
 - le timeout est implémenté côté application via `Promise.race`; selon le client DB, une requête lente peut continuer côté base après retour d’erreur
 - la validation SQL est volontairement stricte et peut refuser certaines requêtes pourtant inoffensives
 - la détection de colonnes sensibles repose sur une stratégie conservatrice par motifs; elle ne remplace pas une vraie couche de permissions métier
-- aucun stockage de conversation ni contrôle d’accès dédié n’est ajouté en v1
+- aucun stockage persistant de conversation ; la session authentifiée est requise, et le SQL de debug est réservé aux administrateurs en production
 
 ## Étendre l’allowlist en sécurité
 

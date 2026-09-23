@@ -45,8 +45,8 @@ function assertBefore(source, firstNeedle, secondNeedle, label) {
   assertIncludes(source, 'Le qualifiant "${qualifier}" n’est pas une table ou un alias exposé', 'assistant SQL validator rejects unknown table qualifiers')
   assertIncludes(source, 'La colonne "${token.lower}" n’est pas exposée à l’assistant', 'assistant SQL validator rejects unqualified non-allowlisted columns')
   assertIncludes(allowlist, '\'password_hash\'', 'assistant SQL denylist blocks password hashes by token')
-  assertIncludes(allowlist, '\'address_line_1\'', 'assistant SQL denylist blocks hidden customer address line 1 by token')
-  assertIncludes(allowlist, '\'address_line_2\'', 'assistant SQL denylist blocks hidden customer address line 2 by token')
+  assertIncludes(allowlist, '\'access_code\'', 'assistant SQL denylist blocks device access codes')
+  assertIncludes(allowlist, '\'sim_code\'', 'assistant SQL denylist blocks SIM codes')
   assertNotIncludes(source, 'const fromJoinPattern', 'assistant SQL table allowlist must not rely on the old single-table FROM/JOIN regex')
 }
 

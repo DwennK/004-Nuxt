@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
+import { buildAssistantHistory } from '~~/shared/utils/assistant'
 import type {
   AssistantChatError,
   AssistantChatMessageInput,
@@ -13,6 +14,7 @@ type ChatRow = Record<string, AssistantTableCell>
 
 type AssistantUiMessage = AssistantChatMessageInput & {
   query?: AssistantQueryResult
+  queries?: AssistantQueryResult[]
   error?: AssistantChatError
   includeInRequest?: boolean
 }
@@ -55,9 +57,7 @@ function createParts(content: string) {
 }
 
 function buildRequestMessages() {
-  return messages.value
-    .filter(message => message.includeInRequest !== false)
-    .map(({ id, role, content }) => ({ id, role, content }))
+  return buildAssistantHistory(messages.value)
 }
 
 function formatCellValue(value: AssistantTableCell) {
@@ -125,6 +125,7 @@ async function submitPrompt() {
     messages.value.push({
       ...response.message,
       query: response.query,
+      queries: response.queries,
       error: response.error,
       includeInRequest: !response.error
     })
@@ -260,11 +261,12 @@ async function submitPrompt() {
                 />
 
                 <UChatTool
-                  v-if="message.query"
+                  v-for="(query, queryIndex) in message.queries || (message.query ? [message.query] : [])"
+                  :key="queryIndex"
                   variant="card"
                   icon="i-lucide-database"
                   text="Données consultées"
-                  :suffix="`${message.query.rowCount} ${message.query.rowCount === 1 ? 'résultat' : 'résultats'}`"
+                  :suffix="`${query.rowCount} ${query.rowCount === 1 ? 'résultat' : 'résultats'}`"
                   :default-open="debug"
                   :ui="{
                     root: 'rounded-lg ring-muted',
@@ -275,18 +277,18 @@ async function submitPrompt() {
                 >
                   <div class="space-y-3">
                     <p class="text-sm leading-6 text-toned">
-                      {{ message.query.summary }}
+                      {{ query.summary }}
                     </p>
-                    <UBadge v-if="message.query.truncated" color="warning" variant="subtle">
+                    <UBadge v-if="query.truncated" color="warning" variant="subtle">
                       Résultat tronqué à 50 lignes
                     </UBadge>
-                    <div v-if="message.query.sql" class="overflow-x-auto rounded-md bg-muted p-3">
-                      <pre class="text-xs leading-5 text-toned">{{ message.query.sql }}</pre>
+                    <div v-if="query.sql" class="overflow-x-auto rounded-md bg-muted p-3">
+                      <pre class="text-xs leading-5 text-toned">{{ query.sql }}</pre>
                     </div>
-                    <div v-if="message.query.table.rows.length" class="overflow-hidden rounded-md border border-muted">
+                    <div v-if="query.table.rows.length" class="overflow-hidden rounded-md border border-muted">
                       <UTable
-                        :data="message.query.table.rows"
-                        :columns="buildTableColumns(message.query.table.columns)"
+                        :data="query.table.rows"
+                        :columns="buildTableColumns(query.table.columns)"
                         :ui="{
                           base: 'border-separate border-spacing-0',
                           th: 'border-b border-muted bg-muted px-3 py-2 text-xs text-toned',
@@ -307,7 +309,7 @@ async function submitPrompt() {
           <template #indicator>
             <div role="status" class="flex items-center gap-3 pb-5 text-sm text-muted">
               <UIcon name="i-lucide-loader-circle" class="size-4 motion-safe:animate-spin" />
-              Recherche dans vos données…
+              Recherche et vérification des informations…
             </div>
           </template>
         </UChatMessages>
@@ -349,7 +351,7 @@ async function submitPrompt() {
             </template>
           </UChatPrompt>
           <p class="mt-3 text-center text-xs leading-5 text-muted">
-            Aucune donnée modifiée. Les informations sensibles restent exclues.
+            Aucune donnée modifiée. Codes d’accès et secrets exclus.
           </p>
         </div>
       </div>
