@@ -305,25 +305,6 @@ function handleImeiScan(value: string) {
                 </h2>
               </div>
 
-              <div class="grid grid-cols-2 gap-3">
-                <UFormField label="Marque" name="brand">
-                  <UInput
-                    v-bind="posInputAttrs"
-                    v-model="state.brand"
-                    class="w-full"
-                    placeholder="Apple"
-                  />
-                </UFormField>
-                <UFormField label="Modèle" name="model">
-                  <UInput
-                    v-bind="posInputAttrs"
-                    v-model="state.model"
-                    class="w-full"
-                    placeholder="iPhone 14"
-                  />
-                </UFormField>
-              </div>
-
               <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
                 <UFormField label="Code / accès appareil" name="accessCode">
                   <div class="flex items-center gap-2">
@@ -395,6 +376,24 @@ function handleImeiScan(value: string) {
             </template>
 
             <div class="grid gap-3 md:grid-cols-2">
+              <UFormField label="Marque" name="brand">
+                <UInput
+                  v-bind="posInputAttrs"
+                  v-model="state.brand"
+                  class="w-full"
+                  placeholder="Apple"
+                />
+              </UFormField>
+
+              <UFormField label="Modèle" name="model">
+                <UInput
+                  v-bind="posInputAttrs"
+                  v-model="state.model"
+                  class="w-full"
+                  placeholder="iPhone 14"
+                />
+              </UFormField>
+
               <UFormField label="Numéro de série" name="serialNumber">
                 <UInput
                   v-bind="posInputAttrs"
