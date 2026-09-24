@@ -421,7 +421,7 @@ function getTicketCommercialSummary(documentRows: DocumentRecord[], paymentRows:
   const totalPaid = paymentRows
     .filter(payment => payment.status === 'paid')
     .reduce((sum, payment) => sum + payment.amount, 0)
-  const payableTotal = payableDocument?.total || 0
+  const payableTotal = (payableDocument?.total || 0) - (payableDocument?.creditedTotal || 0)
   const balanceDue = Math.max(payableTotal - totalPaid, 0)
 
   let paymentStateLabel = 'Aucun document commercial'
@@ -429,7 +429,9 @@ function getTicketCommercialSummary(documentRows: DocumentRecord[], paymentRows:
   if (quote && !payableDocument) {
     paymentStateLabel = 'En attente de facturation'
   } else if (payableDocument) {
-    if (totalPaid <= 0) {
+    if (payableDocument.creditedTotal && balanceDue === 0) {
+      paymentStateLabel = 'Soldé après remboursement'
+    } else if (totalPaid <= 0) {
       paymentStateLabel = 'Non encaissé'
     } else if (balanceDue > 0) {
       paymentStateLabel = 'Encaissement partiel'

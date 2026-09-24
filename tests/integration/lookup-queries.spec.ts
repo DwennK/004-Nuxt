@@ -42,14 +42,14 @@ describe('POS suggestions preserve search results without financial aggregation'
         issue_description TEXT NOT NULL, internal_notes TEXT, opened_at TEXT NOT NULL, closed_at TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
       );
-      CREATE TABLE documents (
+      CREATE TABLE documents (credited_total INTEGER NOT NULL DEFAULT 0,
         sav_id INTEGER, sav_details TEXT,
         id INTEGER PRIMARY KEY, document_number TEXT NOT NULL UNIQUE, type TEXT NOT NULL, status TEXT NOT NULL,
         customer_id INTEGER NOT NULL, ticket_id INTEGER, issued_at TEXT NOT NULL, due_date TEXT, subtotal INTEGER NOT NULL,
         tax_amount INTEGER NOT NULL, total INTEGER NOT NULL, notes TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
       );
-      CREATE TABLE payments (
+      CREATE TABLE payments (kind TEXT NOT NULL DEFAULT 'receipt', original_payment_id INTEGER, recorded_by TEXT, voided_at TEXT, void_reason TEXT,
         id INTEGER PRIMARY KEY, customer_id INTEGER, document_id INTEGER NOT NULL, method TEXT NOT NULL, status TEXT NOT NULL,
         amount INTEGER NOT NULL, paid_at TEXT NOT NULL, notes TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL

@@ -54,7 +54,7 @@ describe('batched POS read models', () => {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`,
-      `CREATE TABLE documents (
+      `CREATE TABLE documents (credited_total INTEGER NOT NULL DEFAULT 0,
         sav_id INTEGER, sav_details TEXT,
         id INTEGER PRIMARY KEY,
         document_number TEXT NOT NULL,
@@ -70,7 +70,7 @@ describe('batched POS read models', () => {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`,
-      `CREATE TABLE payments (
+      `CREATE TABLE payments (kind TEXT NOT NULL DEFAULT 'receipt', original_payment_id INTEGER, recorded_by TEXT, voided_at TEXT, void_reason TEXT,
         id INTEGER PRIMARY KEY,
         customer_id INTEGER,
         document_id INTEGER NOT NULL,
@@ -119,7 +119,7 @@ describe('batched POS read models', () => {
         (1, 'FAC-1', 'invoice', 'paid', 1, 1, '2026-08-20T09:00:00.000Z', 9250, 750, 10000, NULL, '2026-08-20T09:00:00.000Z', '2026-08-20T09:00:00.000Z'),
         (2, 'CMD-2', 'customer_order', 'issued', 1, 2, '2026-08-20T08:00:00.000Z', 4625, 375, 5000, NULL, '2026-08-20T08:00:00.000Z', '2026-08-20T08:00:00.000Z'),
         (3, 'FAC-3', 'invoice', 'issued', 1, 3, '2026-08-19T08:00:00.000Z', 6475, 525, 7000, NULL, '2026-08-19T08:00:00.000Z', '2026-08-19T08:00:00.000Z')`,
-      `INSERT INTO payments VALUES
+      `INSERT INTO payments (id, customer_id, document_id, method, status, amount, paid_at, notes, created_at, updated_at) VALUES
         (1, 1, 1, 'cash', 'paid', 10000, '2026-08-20T10:00:00.000Z', NULL, '2026-08-20T10:00:00.000Z', '2026-08-20T10:00:00.000Z'),
         (2, 1, 2, 'card_twint', 'paid', 2000, '2026-08-20T10:30:00.000Z', NULL, '2026-08-20T10:30:00.000Z', '2026-08-20T10:30:00.000Z'),
         (3, 1, 3, 'cash', 'pending', 5000, '2026-08-20T11:00:00.000Z', NULL, '2026-08-20T11:00:00.000Z', '2026-08-20T11:00:00.000Z')`,

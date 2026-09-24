@@ -296,3 +296,15 @@ export const vacationEntryInputSchema = z.object({
 export const documentConversionSchema = z.object({
   type: z.enum(['customer_order', 'invoice'])
 })
+
+export const refundPaymentSchema = z.object({
+  amount: z.number().int().positive('Indiquez un montant supérieur à zéro').max(100000000),
+  method: z.enum(paymentMethods),
+  paidAt: z.iso.datetime(),
+  reason: z.string().trim().min(3, 'Précisez le motif du remboursement').max(1000),
+  effect: z.enum(['commercial', 'payment_correction'])
+})
+
+export const voidPaymentSchema = z.object({
+  reason: z.string().trim().min(3, 'Précisez le motif de l’annulation').max(1000)
+})

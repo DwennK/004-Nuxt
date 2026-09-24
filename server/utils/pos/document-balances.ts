@@ -28,7 +28,7 @@ export async function syncDocumentStatus(documentId: number, executor?: PosDatab
   const isPayable = payableDocumentTypes.includes(currentDocument.type as (typeof payableDocumentTypes)[number])
   const nextStatus: DocumentStatus = currentDocument.status === 'cancelled'
     ? 'cancelled'
-    : isPayable && paidTotal >= currentDocument.total && currentDocument.total > 0
+    : isPayable && paidTotal + (currentDocument.creditedTotal || 0) >= currentDocument.total && currentDocument.total > 0
       ? 'paid'
       : currentDocument.status === 'draft'
         ? 'draft'
@@ -56,6 +56,11 @@ export async function getTicketPayments(ticketId: number) {
   const db = useDb()
   return db.select({
     id: payments.id,
+    kind: payments.kind,
+    originalPaymentId: payments.originalPaymentId,
+    recordedBy: payments.recordedBy,
+    voidedAt: payments.voidedAt,
+    voidReason: payments.voidReason,
     customerId: payments.customerId,
     documentId: payments.documentId,
     method: payments.method,

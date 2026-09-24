@@ -61,8 +61,8 @@ export function settlementCtes(source: SQL = sql`SELECT * FROM documents`): SQL 
     ),
     settled_documents AS MATERIALIZED (
       SELECT settlement_values.*,
-        CASE WHEN is_active THEN max(total - paid_amount, 0) ELSE 0 END AS balance_due,
-        CASE WHEN is_active AND total > 0 AND paid_amount >= total THEN 'paid'
+        CASE WHEN is_active THEN max(total - coalesce(credited_total, 0) - paid_amount, 0) ELSE 0 END AS balance_due,
+        CASE WHEN is_active AND total > 0 AND paid_amount + coalesce(credited_total, 0) >= total THEN 'paid'
           WHEN is_active AND status = 'paid' THEN 'issued' ELSE status END AS settlement_status
       FROM settlement_values
     )
@@ -80,5 +80,5 @@ export async function getDocumentSettlement(executor: PosDatabaseExecutor, docum
   const paymentRows = await executor.select().from(payments).where(inArray(payments.documentId, paymentDocumentIds)).orderBy(desc(payments.paidAt), desc(payments.id))
   const paidAmount = paymentRows.filter(payment => payment.status === 'paid').reduce((total, payment) => total + payment.amount, 0)
   const isPayable = activeDocument?.id === document.id
-  return { activeDocument, paymentDocumentIds, payments: paymentRows, paidAmount, isPayable, balanceDue: isPayable ? Math.max(document.total - paidAmount, 0) : 0 }
+  return { activeDocument, paymentDocumentIds, payments: paymentRows, paidAmount, isPayable, balanceDue: isPayable ? Math.max(document.total - (document.creditedTotal || 0) - paidAmount, 0) : 0 }
 }

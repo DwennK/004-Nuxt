@@ -125,9 +125,11 @@ export const checks = [
     sql: 'SELECT COUNT(*) AS violations FROM documents WHERE total < 0'
   },
   {
-    name: 'non_positive_payments',
+    name: 'invalid_payment_signs',
     tables: ['payments'],
-    sql: 'SELECT COUNT(*) AS violations FROM payments WHERE amount <= 0'
+    sql: `SELECT COUNT(*) AS violations FROM payments WHERE NOT (
+      (kind = 'receipt' AND amount > 0 AND original_payment_id IS NULL)
+      OR (kind = 'refund' AND amount < 0 AND original_payment_id IS NOT NULL AND status = 'paid'))`
   },
   {
     name: 'overpaid_documents',
@@ -138,7 +140,7 @@ export const checks = [
         SELECT document_id, SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS paid_amount
         FROM payments GROUP BY document_id
       ) p ON p.document_id = d.id
-      WHERE p.paid_amount > d.total`
+      WHERE p.paid_amount > d.total - d.credited_total`
   },
   {
     name: 'paid_status_without_full_payment',
@@ -156,7 +158,27 @@ export const checks = [
               OR (d.type = 'invoice' AND receipt.type = 'customer_order'))
           )
         )
-      ), 0) < d.total`
+      ), 0) + d.credited_total < d.total`
+  },
+  {
+    name: 'invalid_refund_links',
+    tables: ['payments'],
+    sql: `SELECT COUNT(*) AS violations FROM payments refund LEFT JOIN payments original ON original.id = refund.original_payment_id
+      WHERE refund.kind = 'refund' AND (original.id IS NULL OR original.kind != 'receipt' OR original.status != 'paid'
+        OR original.document_id != refund.document_id OR original.customer_id IS NOT refund.customer_id
+        OR julianday(refund.paid_at) < julianday(original.paid_at))`
+  },
+  {
+    name: 'over_refunded_payments',
+    tables: ['payments'],
+    sql: `SELECT COUNT(*) AS violations FROM payments original WHERE original.amount > 0 AND original.amount <
+      coalesce((SELECT -sum(refund.amount) FROM payments refund WHERE refund.original_payment_id = original.id AND refund.status = 'paid'), 0)`
+  },
+  {
+    name: 'incorrect_document_credit_totals',
+    tables: ['documents', 'document_credits'],
+    sql: `SELECT COUNT(*) AS violations FROM documents d WHERE d.credited_total < 0 OR d.credited_total > d.total
+      OR d.credited_total != coalesce((SELECT sum(c.amount) FROM document_credits c WHERE c.document_id=d.id), 0)`
   },
   {
     name: 'invalid_document_enums',

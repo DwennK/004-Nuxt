@@ -1,6 +1,6 @@
 import { settlementCtes } from './document-settlement'
 import { and, desc, eq, gte, lte, sql, sum, type SQL } from 'drizzle-orm'
-import { catalogItems, customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
+import { customers, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
 import type { DailySummary, ReportsLeaders, ReportsOverview } from '~~/shared/types/pos'
 import { businessTimeZone, formatDate, toDateInputValue, buildZonedDayRange as buildDayRange } from '~~/shared/utils/pos'
@@ -243,6 +243,30 @@ export function projectReportsLeaders(topCustomerRows: TopCustomerRow[], topItem
   }
 }
 
+// Keep commercial values separate from cashflow. Allocate a global reduction
+// across the original lines with cumulative rounding so the cents add up exactly.
+function netCommercialLinesCte(ids: number[]) {
+  return sql`commercial_lines AS (
+    SELECT l.*, d.total AS original_total, coalesce(d.credited_total, 0) AS credited_total,
+      sum(l.line_total) OVER (PARTITION BY l.document_id ORDER BY l.id ROWS UNBOUNDED PRECEDING) AS cumulative_total
+    FROM document_lines l INNER JOIN documents d ON d.id = l.document_id
+    WHERE ${documentIdsFilter(sql`l.document_id`, ids)}
+  ), net_commercial_lines AS (
+    SELECT *, CASE WHEN credited_total = 0 OR original_total = 0 THEN line_total ELSE
+      CAST(round(cumulative_total * 1.0 * (original_total - credited_total) / original_total)
+        - round((cumulative_total - line_total) * 1.0 * (original_total - credited_total) / original_total) AS INTEGER)
+      END AS net_line_total
+    FROM commercial_lines
+  )`
+}
+
+async function getNetTurnover(db: ReturnType<typeof useDb>, ids: number[]): Promise<TurnoverRow[]> {
+  if (!ids.length) return []
+  return db.all<TurnoverRow>(sql`WITH ${netCommercialLinesCte(ids)}
+    SELECT category_hint AS category, sum(net_line_total) AS total
+    FROM net_commercial_lines WHERE category_hint IS NOT NULL GROUP BY category_hint`)
+}
+
 async function getTopLeaders(
   db: ReturnType<typeof useDb>,
   paidDocumentIds: number[]
@@ -258,26 +282,18 @@ async function getTopLeaders(
     db.select({
       customerId: customers.id,
       customerName: sql<string>`coalesce(${customers.companyName}, ${customers.firstName} || ' ' || ${customers.lastName})`,
-      total: sum(documents.total),
+      total: sql<number>`sum(${documents.total} - coalesce(${documents.creditedTotal}, 0))`,
       documentCount: sql<number>`count(${documents.id})`
     })
       .from(documents)
       .innerJoin(customers, eq(documents.customerId, customers.id))
       .where(documentIdsFilter(sql`${documents.id}`, paidDocumentIds))
       .groupBy(customers.id),
-    db.select({
-      label: sql<string>`coalesce(${catalogItems.name}, ${documentLines.label})`,
-      category: documentLines.categoryHint,
-      total: sum(documentLines.lineTotal),
-      quantity: sum(documentLines.quantity)
-    })
-      .from(documentLines)
-      .leftJoin(catalogItems, eq(documentLines.catalogItemId, catalogItems.id))
-      .where(documentIdsFilter(sql`${documentLines.documentId}`, paidDocumentIds))
-      .groupBy(
-        sql`coalesce(${catalogItems.name}, ${documentLines.label})`,
-        documentLines.categoryHint
-      )
+    db.all<TopItemRow>(sql`WITH ${netCommercialLinesCte(paidDocumentIds)}
+      SELECT coalesce(c.name, l.label) AS label, l.category_hint AS category,
+        sum(l.net_line_total) AS total, sum(l.quantity) AS quantity
+      FROM net_commercial_lines l LEFT JOIN catalog_items c ON c.id = l.catalog_item_id
+      GROUP BY coalesce(c.name, l.label), l.category_hint`)
   ])
 
   return projectReportsLeaders(topCustomerRows, topItemRows)
@@ -313,11 +329,11 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       FROM report_paid_documents d INNER JOIN customers ON customers.id = d.customer_id
       ORDER BY d.period_paid_at DESC
     `),
-    db.all<{ id: number, documentNumber: string, customerName: string, total: number, paidAmount: number }>(sql`
+    db.all<{ id: number, documentNumber: string, customerName: string, total: number, creditedTotal: number, paidAmount: number }>(sql`
       WITH ${settlementCtes(sql`SELECT * FROM documents
         WHERE type = 'invoice' AND status != 'cancelled' AND issued_at >= ${start} AND issued_at <= ${end}`)}
       SELECT d.id, d.document_number AS "documentNumber", ${customerNameValue} AS "customerName",
-        d.total, d.paid_amount AS "paidAmount"
+        d.total, d.credited_total AS "creditedTotal", d.paid_amount AS "paidAmount"
       FROM settled_documents d INNER JOIN customers ON customers.id = d.customer_id
       ORDER BY d.issued_at DESC, d.id DESC
     `),
@@ -333,18 +349,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
   ])
 
   const paidDocumentIds = paidDocumentRows.map(row => row.id)
-  const turnoverRows = paidDocumentIds.length
-    ? await db.select({
-        category: documentLines.categoryHint,
-        total: sum(documentLines.lineTotal)
-      })
-        .from(documentLines)
-        .where(and(
-          documentIdsFilter(sql`${documentLines.documentId}`, paidDocumentIds),
-          sql`${documentLines.categoryHint} is not null`
-        ))
-        .groupBy(documentLines.categoryHint)
-    : []
+  const turnoverRows = await getNetTurnover(db, paidDocumentIds)
 
   const totalsByMethod = new Map(paymentMethods.map(method => [method, {
     total: 0,
@@ -374,7 +379,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
     unpaidDocuments: unpaidDocumentRows
       .map((row) => {
         const paidAmount = Number(row.paidAmount || 0)
-        const balanceDue = Math.max(row.total - paidAmount, 0)
+        const balanceDue = Math.max(row.total - Number(row.creditedTotal || 0) - paidAmount, 0)
 
         return {
           id: row.id,
@@ -602,18 +607,7 @@ export async function getReportsOverview(date: string, options: { includeLeaders
   const paidDocumentIds = paidDocumentRows.map(row => row.documentId)
   const [{ topCustomers, topItems }, turnoverRows]: [Pick<ReportsLeaders, 'topCustomers' | 'topItems'>, TurnoverRow[]] = await Promise.all([
     options.includeLeaders === false ? Promise.resolve({ topCustomers: [], topItems: [] }) : getTopLeaders(db, paidDocumentIds),
-    paidDocumentIds.length
-      ? db.select({
-          category: documentLines.categoryHint,
-          total: sum(documentLines.lineTotal)
-        })
-          .from(documentLines)
-          .where(and(
-            documentIdsFilter(sql`${documentLines.documentId}`, paidDocumentIds),
-            sql`${documentLines.categoryHint} is not null`
-          ))
-          .groupBy(documentLines.categoryHint)
-      : Promise.resolve([])
+    getNetTurnover(db, paidDocumentIds)
   ])
 
   return projectReportsOverview({

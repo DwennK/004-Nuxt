@@ -229,7 +229,7 @@ const columns: TableColumn<DocumentListItem>[] = [
     accessorKey: 'documentNumber',
     header: 'Document',
     cell: ({ row }) => {
-      const statusBadge = row.original.sav ? { label: savStatusLabels[row.original.sav.status], color: 'warning' as const } : getDocumentStatusBadge(row.original.status)
+      const statusBadge = row.original.creditedTotal && row.original.creditedTotal === row.original.total ? { label: 'Remboursée', color: 'warning' as const } : row.original.sav ? { label: savStatusLabels[row.original.sav.status], color: 'warning' as const } : getDocumentStatusBadge(row.original.status)
 
       return h('div', { class: 'flex items-center gap-2 min-w-0' }, [
         h('p', { class: 'truncate font-medium text-highlighted' }, row.original.documentNumber),

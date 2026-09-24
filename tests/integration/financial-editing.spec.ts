@@ -64,7 +64,7 @@ describe('editing recorded financial data', () => {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`,
-      `CREATE TABLE documents (
+      `CREATE TABLE documents (credited_total INTEGER NOT NULL DEFAULT 0,
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         document_number TEXT NOT NULL UNIQUE,
         type TEXT NOT NULL,
@@ -95,7 +95,7 @@ describe('editing recorded financial data', () => {
         label TEXT NOT NULL, quantity INTEGER NOT NULL, unit_price INTEGER NOT NULL,
         vat_rate REAL NOT NULL, line_total INTEGER NOT NULL, category_hint TEXT
       )`,
-      `CREATE TABLE payments (
+      `CREATE TABLE payments (kind TEXT NOT NULL DEFAULT 'receipt', original_payment_id INTEGER, recorded_by TEXT, voided_at TEXT, void_reason TEXT,
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_id INTEGER,
         document_id INTEGER NOT NULL,
@@ -188,7 +188,7 @@ describe('editing recorded financial data', () => {
 
   const paymentInput = { method: 'cash' as const, paidAt: '2026-08-20T12:30:00.000Z', notes: ' Encaissement ' }
 
-  it.each(['pending', 'paid', 'cancelled', 'refunded'])('deletes a %s payment and recalculates the invoice and daily receipts', async (status) => {
+  it.each(['pending', 'cancelled', 'refunded'])('deletes a %s payment and recalculates the invoice and daily receipts', async (status) => {
     await client.execute({ sql: 'UPDATE payments SET status = ? WHERE id = 1', args: [status] })
     await expect(deletePayment(1)).resolves.toBe(1)
     expect((await client.execute('SELECT COUNT(*) AS n FROM payments')).rows[0]?.n).toBe(0)
@@ -210,6 +210,7 @@ describe('editing recorded financial data', () => {
   })
 
   it('rolls back deletion when updating the document status fails', async () => {
+    await client.execute('UPDATE payments SET status = \'pending\' WHERE id = 1')
     await client.execute(`CREATE TRIGGER fail_payment_deletion_status BEFORE UPDATE ON documents BEGIN SELECT RAISE(ABORT, 'status unavailable'); END`)
     try {
       await expect(deletePayment(1)).rejects.toThrow()
@@ -220,18 +221,20 @@ describe('editing recorded financial data', () => {
     }
   })
 
-  it('reopens the current invoice when deleting a deposit carried over from its order', async () => {
+  it('reopens the current invoice when voiding a deposit carried over from its order', async () => {
     await prepareOrder(10000)
     const { createInvoiceFromTicket, getTicketById } = await import('../../server/utils/pos/tickets')
     const { getDocumentById } = await import('../../server/utils/pos/documents')
     const invoice = await createInvoiceFromTicket(1, 'delete-deposit-invoice', await testDossierContext(useDb(), { kind: 'ticket', id: 1 }))
     await markDocumentAsPaid(invoice.id, paymentInput, 'delete-deposit-remainder')
-    await deletePayment(invoice.payments[0]!.id)
+    const { voidPayment } = await import('../../server/utils/pos/payment-corrections')
+    const id = invoice.payments[0]!.id
+    await voidPayment(id, { reason: 'Saisie erronée' }, 'void-deposit-test', 'Test', await testDossierContext(useDb(), { kind: 'payment', id }))
     expect(await getDocumentById(invoice.id)).toMatchObject({
       status: 'issued', settlement: { paidAmount: 29300, balanceDue: 10000 }
     })
     expect((await getTicketById(1)).commercialSummary.balanceDue).toBe(10000)
-    expect((await client.execute('SELECT COUNT(*) AS n FROM payments')).rows[0]?.n).toBe(1)
+    expect((await client.execute('SELECT COUNT(*) AS n FROM payments')).rows[0]?.n).toBe(2)
   })
 
   const anonymousSale = {
@@ -681,7 +684,9 @@ describe('editing recorded financial data', () => {
     expect(invoice.status).toBe('paid')
     expect(invoice.settlement?.balanceDue).toBe(0)
     expect(invoice.payments[0]?.documentId).toBe(order.id)
-    await updatePaymentRecord(invoice.payments[0]!.id, { ...invoice.payments[0]!, status: 'cancelled' })
+    const { voidPayment } = await import('../../server/utils/pos/payment-corrections')
+    const id = invoice.payments[0]!.id
+    await voidPayment(id, { reason: 'Saisie erronée' }, 'cancel-order-deposit', 'Test', await testDossierContext(useDb(), { kind: 'payment', id }))
     await updateDocumentRecord(invoice.id, { ...invoice, status: 'cancelled' })
     expect((await getDocumentById(order.id)).settlement).toMatchObject({ isPayable: true, balanceDue: 39300 })
   })

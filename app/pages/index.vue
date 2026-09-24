@@ -596,7 +596,7 @@ useHead({
           <section class="border-b border-default bg-default p-4">
             <div class="flex items-center justify-between gap-3">
               <h2 class="text-base font-semibold text-highlighted">
-                Encaissements du jour
+                Encaissement net du jour
               </h2>
               <UButton
                 icon="i-lucide-refresh-cw"
@@ -617,7 +617,7 @@ useHead({
                 {{ formatCurrency(dailyPayments.totalPaid) }}
               </p>
               <p class="mt-1 text-xs text-toned">
-                {{ dailyPayments.transactionCount }} paiement{{ dailyPayments.transactionCount === 1 ? '' : 's' }}
+                {{ dailyPayments.transactionCount }} mouvement{{ dailyPayments.transactionCount === 1 ? '' : 's' }}
               </p>
               <dl v-if="dailyPayments.methods.length" class="mt-3 divide-y divide-default">
                 <div v-for="row in dailyPayments.methods" :key="row.method" class="flex justify-between gap-3 py-2 text-sm">

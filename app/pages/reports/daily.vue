@@ -10,6 +10,8 @@ const { data: summary, status, error, refresh } = await useFetch<DailySummary>('
 })
 
 const reportReady = computed(() => !!summary.value && status.value === 'success')
+const receivedTotal = computed(() => (summary.value?.payments || []).reduce((sum, p) => sum + Math.max(p.amount, 0), 0))
+const refundedTotal = computed(() => (summary.value?.payments || []).reduce((sum, p) => sum - Math.min(p.amount, 0), 0))
 const paymentCount = computed(() => summary.value?.payments.length || 0)
 const categories = computed(() => [...(summary.value?.turnoverByCategory || [])].sort((a, b) => b.total - a.total || a.category.localeCompare(b.category)))
 const categoryTotal = computed(() => categories.value.reduce((sum, item) => sum + item.total, 0))
@@ -84,16 +86,28 @@ function printReport() {
           <section class="report-overview" aria-label="Encaissements de la journée">
             <div class="report-total">
               <p class="report-kicker">
-                Total encaissé
+                Encaissement net
               </p>
               <p class="report-total-value">
                 {{ formatCurrency(summary.totalPaid) }}
               </p>
               <p class="text-sm text-toned">
-                {{ paymentCount }} paiement{{ paymentCount > 1 ? 's' : '' }}
+                {{ paymentCount }} mouvement{{ paymentCount > 1 ? 's' : '' }}
               </p>
             </div>
             <div class="report-methods">
+              <div class="mb-3 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p class="text-toned">
+                    Encaissé
+                  </p><strong class="tabular-nums">{{ formatCurrency(receivedTotal) }}</strong>
+                </div>
+                <div>
+                  <p class="text-toned">
+                    Remboursé
+                  </p><strong :class="refundedTotal ? 'text-error' : 'text-highlighted'" class="tabular-nums">{{ formatCurrency(refundedTotal) }}</strong>
+                </div>
+              </div>
               <h2>Moyens de paiement</h2>
               <table v-if="summary.totalsByMethod.length" class="report-table methods-table">
                 <thead>
@@ -102,7 +116,7 @@ function printReport() {
                       Moyen
                     </th>
                     <th scope="col" class="amount">
-                      Paiements
+                      Mouvements
                     </th>
                     <th scope="col" class="amount">
                       Montant CHF
@@ -132,7 +146,7 @@ function printReport() {
           <section class="report-section" aria-labelledby="paid-title">
             <div class="report-section-heading">
               <h2 id="paid-title">
-                Paiements de la journée
+                Mouvements de la journée
               </h2>
               <UBadge
                 :label="String(summary.payments.length)"
@@ -145,7 +159,7 @@ function printReport() {
               v-if="summary.payments.length"
               class="report-table-wrap"
               role="region"
-              aria-label="Paiements de la journée"
+              aria-label="Mouvements de la journée"
               tabindex="0"
             >
               <table class="report-table documents-table">
@@ -181,9 +195,9 @@ function printReport() {
                       {{ paymentTime(payment.paidAt) }}
                     </td>
                     <td>
-                      {{ getPaymentMethodLabel(payment.method) }}
+                      {{ getPaymentMethodLabel(payment.method) }}<span v-if="payment.amount < 0" class="block text-xs text-error">Remboursement</span>
                     </td>
-                    <td class="amount strong">
+                    <td class="amount strong" :class="payment.amount < 0 ? '!text-error' : ''">
                       {{ amount(payment.amount) }}
                     </td>
                   </tr>
@@ -191,11 +205,11 @@ function printReport() {
               </table>
             </div>
             <div v-if="summary.payments.length" class="report-subtotal">
-              <span>Total encaissé</span>
+              <span>Encaissement net</span>
               <strong>{{ formatCurrency(summary.totalPaid) }}</strong>
             </div>
             <p v-else class="report-empty">
-              Aucun paiement encaissé ce jour.
+              Aucun mouvement enregistré ce jour.
             </p>
           </section>
 
@@ -206,7 +220,7 @@ function printReport() {
               </h2>
             </div>
             <p class="report-note">
-              Lignes des factures entièrement réglées avec encaissement ce jour
+              Valeur nette des factures soldées avec mouvement ce jour, après réductions commerciales
             </p>
             <table v-if="categories.length" class="report-table">
               <thead>

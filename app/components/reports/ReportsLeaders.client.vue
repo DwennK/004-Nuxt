@@ -56,7 +56,7 @@ const config = computed(() => {
   if (props.kind === 'customers') {
     return {
       title: 'Top clients',
-      description: 'Classement des clients sur la période sélectionnée.',
+      description: 'Factures soldées après réductions commerciales.',
       icon: 'i-lucide-users',
       emptyTitle: 'Aucun client à classer',
       emptyDescription: 'Les clients encaissés sur la période apparaîtront ici.'
@@ -65,7 +65,7 @@ const config = computed(() => {
 
   return {
     title: 'Top articles',
-    description: 'Classement des lignes encaissées sur la période sélectionnée.',
+    description: 'Lignes des factures soldées après réductions commerciales.',
     icon: 'i-lucide-package',
     emptyTitle: 'Aucun article à classer',
     emptyDescription: 'Les articles encaissés sur la période apparaîtront ici.'
@@ -78,14 +78,14 @@ const customerRows = computed<CustomerRow[]>(() => {
     label: item.customerName,
     total: item.total,
     documentCount: item.documentCount,
-    share: props.leaders.totalPaid > 0 ? item.total / props.leaders.totalPaid : 0
+    share: props.leaders.topCustomers.reduce((sum, row) => sum + row.total, 0) > 0 ? item.total / props.leaders.topCustomers.reduce((sum, row) => sum + row.total, 0) : 0
   }))
 })
 
 const itemRows = computed<ItemRow[]>(() => {
   return props.leaders.topItems.map(item => ({
     ...item,
-    share: props.leaders.totalPaid > 0 ? item.total / props.leaders.totalPaid : 0
+    share: props.leaders.topItems.reduce((sum, row) => sum + row.total, 0) > 0 ? item.total / props.leaders.topItems.reduce((sum, row) => sum + row.total, 0) : 0
   }))
 })
 
@@ -143,8 +143,8 @@ const chartData = computed(() => {
 const categories = computed(() => ({
   value: {
     name: props.kind === 'customers'
-      ? activeMetric.value === 'total' ? 'CA encaissé' : 'Documents'
-      : activeMetric.value === 'total' ? 'CA encaissé' : 'Quantité vendue',
+      ? activeMetric.value === 'total' ? 'Valeur nette' : 'Documents'
+      : activeMetric.value === 'total' ? 'Valeur nette' : 'Quantité vendue',
     color: toChartColor(
       activeMetric.value === 'quantity'
         ? 'success'
@@ -259,7 +259,7 @@ function itemCategory(item: CustomerRow | ItemRow) {
                   <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-toned">
                     <span>{{ metricSummary(item) }}</span>
                     <span>•</span>
-                    <span>{{ Math.round(item.share * 100) }}% du CA</span>
+                    <span>{{ Math.round(item.share * 100) }}% du classement</span>
                     <UBadge
                       v-if="itemCategory(item)"
                       :label="lineCategoryLabels[itemCategory(item)!]"

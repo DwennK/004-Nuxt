@@ -19,7 +19,8 @@ export function canEditPayment(status: PaymentStatus) {
 }
 
 export function canChangePaymentStatus(from: PaymentStatus, to: PaymentStatus) {
-  if (from === 'pending' || from === 'paid') {
+  if (from === 'paid') return to === 'paid'
+  if (from === 'pending') {
     return to === 'pending' || to === 'paid' || to === 'cancelled'
   }
 

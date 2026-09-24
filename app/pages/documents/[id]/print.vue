@@ -234,7 +234,7 @@ useHead(() => ({
                 Réf. dossier {{ document.ticket.ticketNumber }}
               </p>
               <p>
-                Statut {{ document.sav ? savStatusLabels[document.sav.status] : documentStatusLabels[document.status] }}
+                Statut {{ document.sav ? savStatusLabels[document.sav.status] : (document.creditedTotal && document.creditedTotal === document.total ? 'Remboursée' : documentStatusLabels[document.status]) }}
               </p>
             </div>
           </div>
@@ -339,7 +339,7 @@ useHead(() => ({
               <strong>{{ formatCurrency(document.total) }}</strong>
             </div>
             <div v-if="isPayableDocument" class="invoice-total-row">
-              <span>Encaissé</span>
+              <span>Encaissé net</span>
               <strong>{{ formatCurrency(paidAmount) }}</strong>
             </div>
             <div v-if="isPayableDocument" class="invoice-total-row invoice-total-row--grand">
@@ -522,7 +522,7 @@ useHead(() => ({
               <p v-if="document.ticket">
                 Réf. dossier {{ document.ticket.ticketNumber }}
               </p>
-              <p>Statut {{ document.sav ? savStatusLabels[document.sav.status] : documentStatusLabels[document.status] }}</p>
+              <p>Statut {{ document.sav ? savStatusLabels[document.sav.status] : (document.creditedTotal && document.creditedTotal === document.total ? 'Remboursée' : documentStatusLabels[document.status]) }}</p>
             </div>
           </div>
         </header>
@@ -585,7 +585,7 @@ useHead(() => ({
             <strong>{{ formatCurrency(document.total) }}</strong>
           </div>
           <div v-if="isPayableDocument" class="thermal-total-row">
-            <span>Encaissé</span>
+            <span>Encaissé net</span>
             <strong>{{ formatCurrency(paidAmount) }}</strong>
           </div>
           <div v-if="isPayableDocument" class="thermal-total-row thermal-strong">

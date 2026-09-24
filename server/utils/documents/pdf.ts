@@ -371,7 +371,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
   const metaLines = [
     `Émis le ${formatDate(document.issuedAt)}`,
     document.ticket ? `Réf. dossier ${document.ticket.ticketNumber}` : null,
-    `Statut ${document.sav ? savStatusLabels[document.sav.status] : documentStatusLabels[document.status]}`
+    `Statut ${document.sav ? savStatusLabels[document.sav.status] : (document.creditedTotal && document.creditedTotal === document.total ? 'Remboursée' : documentStatusLabels[document.status])}`
   ].filter(Boolean) as string[]
 
   let metaY = topY - 34
@@ -620,7 +620,7 @@ function drawSummary(context: PdfContext, document: DocumentDetail, company: Com
 
   if (model.isPayableDocument) {
     totalRows.push(
-      { label: 'Encaissé', value: formatCurrency(model.paidAmount), emphasized: false },
+      { label: 'Encaissé net', value: formatCurrency(model.paidAmount), emphasized: false },
       { label: 'Reste à payer', value: formatCurrency(model.balanceDue), emphasized: true }
     )
   }

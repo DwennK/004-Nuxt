@@ -44,6 +44,7 @@ export function mapDocument(row: typeof documents.$inferSelect): DocumentRecord 
   return {
     id: row.id,
     documentNumber: row.documentNumber,
+    creditedTotal: row.creditedTotal || 0,
     type: row.type,
     status: row.status,
     customerId: row.customerId,
@@ -77,6 +78,11 @@ export function mapDocumentLine(row: typeof documentLines.$inferSelect): Documen
 
 export function mapPayment(row: typeof payments.$inferSelect): PaymentRecord {
   return {
+    kind: row.kind || 'receipt',
+    originalPaymentId: row.originalPaymentId,
+    recordedBy: row.recordedBy,
+    voidedAt: row.voidedAt,
+    voidReason: row.voidReason,
     id: row.id,
     customerId: row.customerId,
     documentId: row.documentId,
@@ -121,6 +127,7 @@ function mapDocumentListItem(row: {
   updatedAt: string
   customerName: string
   ticketNumber: string | null
+  creditedTotal?: number
   paidAmount: number | null
   balanceDue: number | null
 }): DocumentListItem {
@@ -137,6 +144,7 @@ function mapDocumentListItem(row: {
     subtotal: row.subtotal,
     taxAmount: row.taxAmount,
     total: row.total,
+    creditedTotal: Number(row.creditedTotal || 0),
     notes: row.notes,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -436,7 +444,7 @@ export async function listDocuments(filters?: {
     SELECT page.id, page.document_number AS "documentNumber", page.type, page.settlement_status AS status,
       page.sav_id AS "savId", page.sav_details AS "savJson",
       page.customer_id AS "customerId", page.ticket_id AS "ticketId", page.issued_at AS "issuedAt",
-      page.subtotal, page.tax_amount AS "taxAmount", page.total, page.notes,
+      page.subtotal, page.tax_amount AS "taxAmount", page.total, page.credited_total AS "creditedTotal", page.notes,
       page.created_at AS "createdAt", page.updated_at AS "updatedAt", page.customer_name AS "customerName",
       page.ticket_number AS "ticketNumber", page.paid_amount AS "paidAmount", page.balance_due AS "balanceDue",
       summary.*
@@ -518,9 +526,12 @@ export async function getDocumentById(id: number): Promise<DocumentDetail> {
       : null,
     lines: lineRows.map(mapDocumentLine),
     shopify: await getShopifyProvenance(id, db),
-    payments: settlement.payments.map(mapPayment),
+    payments: settlement.payments.map((row) => {
+      const refundedAmount = -settlement.payments.filter(p => p.originalPaymentId === row.id && p.status === 'paid').reduce((sum, p) => sum + p.amount, 0)
+      return { ...mapPayment(row), refundedAmount, refundableAmount: row.status === 'paid' && row.amount > 0 ? Math.max(row.amount - refundedAmount, 0) : 0 }
+    }),
     status: settlement.isPayable
-      ? settlement.paidAmount >= header.document.total && header.document.total > 0 ? 'paid' : header.document.status === 'draft' ? 'draft' : 'issued'
+      ? settlement.paidAmount + (header.document.creditedTotal || 0) >= header.document.total && header.document.total > 0 ? 'paid' : header.document.status === 'draft' ? 'draft' : 'issued'
       : header.document.status,
     settlement: {
       isPayable: settlement.isPayable,
@@ -790,6 +801,10 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
         statusCode: 404,
         statusMessage: 'Document not found'
       })
+    }
+
+    if (existingDocument.creditedTotal > 0) {
+      throw createError({ statusCode: 409, statusMessage: 'Ce document comporte des remboursements commerciaux. Son montant et son contexte sont conservés.', data: { code: 'DOCUMENT_CREDITED_IMMUTABLE' } })
     }
 
     const sav = await validateSavWrite(tx, input, existingDocument)

@@ -213,6 +213,7 @@ export const documents = sqliteTable('documents', {
   subtotal: integer('subtotal').notNull(),
   taxAmount: integer('tax_amount').notNull(),
   total: integer('total').notNull(),
+  creditedTotal: integer('credited_total').notNull().default(0),
   notes: text('notes'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
@@ -261,7 +262,9 @@ export const documentImports = sqliteTable('document_imports', {
       'api_document_create',
       'api_sale_create_and_pay',
       'api_document_mark_paid',
-      'api_payment_create'
+      'api_payment_create',
+      'api_payment_refund',
+      'api_payment_void'
     ]
   }).notNull(),
   externalId: text('external_id').notNull(),
@@ -293,6 +296,11 @@ export const payments = sqliteTable('payments', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   documentId: integer('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: ['receipt', 'refund'] }).notNull().default('receipt'),
+  originalPaymentId: integer('original_payment_id').references((): AnySQLiteColumn => payments.id, { onDelete: 'restrict' }),
+  recordedBy: text('recorded_by'),
+  voidedAt: text('voided_at'),
+  voidReason: text('void_reason'),
   method: text('method', { enum: ['cash', 'card_twint', 'bank_transfer', 'stripe', 'shopify'] }).notNull(),
   status: text('status', { enum: ['pending', 'paid', 'refunded', 'cancelled'] }).notNull().default('pending'),
   amount: integer('amount').notNull(),
@@ -301,6 +309,7 @@ export const payments = sqliteTable('payments', {
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, table => ({
+  originalPaymentIdx: index('payments_original_payment_idx').on(table.originalPaymentId),
   documentIdx: index('payments_document_id_idx').on(table.documentId),
   documentSettlementIdx: index('payments_document_settlement_idx').on(table.documentId, table.status, table.amount),
   paidAtIdx: index('payments_paid_at_idx').on(table.paidAt),
@@ -309,6 +318,20 @@ export const payments = sqliteTable('payments', {
   statusIdx: index('payments_status_idx').on(table.status),
   customerIdx: index('payments_customer_id_idx').on(table.customerId),
   documentPaidAtIdIdx: index('payments_document_id_paid_at_id_idx').on(table.documentId, table.paidAt, table.id)
+}))
+
+// Commercial reductions are distinct from cash movements. The cached document
+// total is maintained atomically by migration triggers for all SQL callers.
+export const documentCredits = sqliteTable('document_credits', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  documentId: integer('document_id').notNull().references(() => documents.id, { onDelete: 'restrict' }),
+  paymentId: integer('payment_id').notNull().references(() => payments.id, { onDelete: 'restrict' }),
+  amount: integer('amount').notNull(),
+  reason: text('reason').notNull(),
+  createdAt: text('created_at').notNull()
+}, table => ({
+  documentIdx: index('document_credits_document_idx').on(table.documentId),
+  paymentIdx: uniqueIndex('document_credits_payment_idx').on(table.paymentId)
 }))
 
 export const smartphoneStocks = sqliteTable('smartphone_stocks', {

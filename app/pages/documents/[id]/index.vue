@@ -75,9 +75,9 @@ const successorDocument = computed(() => {
 })
 const isPayableDocument = computed(() => document.value?.settlement?.isPayable ?? (document.value ? isPayableDocumentType(document.value.type) && document.value.status !== 'cancelled' : false))
 const canAdjustFinancialRecords = computed(() => can('financial:adjust'))
-const canEditDocument = computed(() => !isSav.value && canAdjustFinancialRecords.value && !successorDocument.value)
-const documentLockTitle = 'Modification réservée aux administrateurs'
-const documentLockDescription = 'Les opérateurs peuvent consulter, envoyer, imprimer et encaisser ce document sans modifier son écriture commerciale.'
+const canEditDocument = computed(() => !isSav.value && canAdjustFinancialRecords.value && !successorDocument.value && !document.value?.creditedTotal)
+const documentLockTitle = computed(() => document.value?.creditedTotal ? 'Document avec réduction commerciale' : 'Modification réservée aux administrateurs')
+const documentLockDescription = computed(() => document.value?.creditedTotal ? 'Les lignes et le total initial sont conservés. Les remboursements et réductions restent consultables dans les paiements.' : 'Les opérateurs peuvent consulter, envoyer, imprimer et encaisser ce document sans modifier son écriture commerciale.')
 const balanceDue = computed(() => document.value?.settlement?.balanceDue ?? (isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0))
 const supportsA4Print = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'a4') : false)
 const supportsThermalPrint = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'thermal') : false)
@@ -100,8 +100,8 @@ async function saveSav(sav: SavDetails) {
 async function saveDocument(payload: DocumentSavePayload) {
   if (!canEditDocument.value) {
     toast.add({
-      title: documentLockTitle,
-      description: documentLockDescription,
+      title: documentLockTitle.value,
+      description: documentLockDescription.value,
       color: 'warning'
     })
     return
@@ -526,6 +526,8 @@ function startNewEmailAttempt() {
             :document-id="document.id"
             :payments="document.payments"
             :document-total="document.total"
+            :credited-total="document.creditedTotal"
+            :commercial-refund-allowed="document.type === 'invoice' && isPayableDocument"
             :balance-due="balanceDue"
             :is-payable-document="isPayableDocument"
             class="min-h-0 flex-1"

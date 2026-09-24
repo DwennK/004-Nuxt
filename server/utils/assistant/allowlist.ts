@@ -155,8 +155,8 @@ export const assistantTableAllowlist = {
       customer_id: 'Client lié si présent.',
       document_id: 'Document payé.',
       method: 'cash|card_twint|bank_transfer|stripe|shopify.',
-      status: 'Statut du paiement: pending (en attente) | paid (encaissé) | refunded (remboursé) | cancelled (annulé).',
-      amount: 'Montant en centimes.',
+      status: 'Statut du paiement: pending (en attente) | paid (mouvement effectué, positif ou négatif) | refunded (ancien statut de remboursement) | cancelled (annulé).',
+      amount: 'Montant signé en centimes : positif pour un encaissement, négatif pour un remboursement. SUM(amount) avec status=paid donne le net.',
       paid_at: 'Date du paiement.',
       created_at: 'Création.',
       updated_at: 'Mise à jour.'

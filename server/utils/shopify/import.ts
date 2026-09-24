@@ -148,7 +148,7 @@ export async function persistShopifyPaymentSync(domain: string, order: ShopifyOr
   return db.transaction(async (tx) => {
     const [imported] = await tx.select().from(documentImports).where(and(eq(documentImports.documentId, documentId), eq(documentImports.source, 'shopify_order'), eq(documentImports.externalId, externalId(domain, order.id)))).limit(1)
     const [document] = await tx.select().from(documents).where(eq(documents.id, documentId)).limit(1)
-    if (!imported || !document || document.status === 'cancelled' || document.type !== 'invoice') return shopifyError('Cette facture ne peut pas être actualisée depuis Shopify.', 'SHOPIFY_IMPORT_CONFLICT', 409)
+    if (!imported || !document || document.creditedTotal > 0 || document.status === 'cancelled' || document.type !== 'invoice') return shopifyError('Cette facture ne peut pas être actualisée depuis Shopify.', 'SHOPIFY_IMPORT_CONFLICT', 409)
     const original = receipt(imported.externalNumber, orderReceiptSchema)
     const lines = await tx.select().from(documentLines).where(eq(documentLines.documentId, documentId)).orderBy(asc(documentLines.id))
     if (document.subtotal !== document.total - document.taxAmount || lines.some(line => line.lineTotal !== line.quantity * line.unitPrice)) {

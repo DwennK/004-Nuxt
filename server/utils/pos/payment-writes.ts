@@ -53,10 +53,10 @@ export async function assertPaymentFitsDocument(
   const paidTotal = settlement.payments
     .filter(payment => payment.status === 'paid' && payment.id !== excludedPaymentId)
     .reduce((total, payment) => total + payment.amount, 0)
-  const amount = requestedAmount ?? Math.max(document.total - paidTotal, 0)
+  const amount = requestedAmount ?? Math.max(document.total - (current.creditedTotal || 0) - paidTotal, 0)
   const result = evaluateDocumentPayment({
     documentStatus: document.status,
-    documentTotal: document.total,
+    documentTotal: document.total - (current.creditedTotal || 0),
     paidTotal,
     amount
   })

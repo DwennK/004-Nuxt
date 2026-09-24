@@ -75,12 +75,12 @@ const stats = computed(() => {
   }
 
   return [{
-    title: 'Encaissé sur 7 jours',
+    title: 'Encaissé net sur 7 jours',
     value: formatCurrency(overview.value.kpis.totalPaid),
     description: `Période du ${formatRangeDate(overview.value.range.startDate)} au ${formatRangeDate(overview.value.range.endDate)}`,
     icon: 'i-lucide-wallet-cards'
   }, {
-    title: 'Encaissé aujourd’hui',
+    title: 'Encaissé net aujourd’hui',
     value: formatCurrency(overview.value.kpis.paidToday),
     description: `Ancré sur la date du ${formatRangeDate(date.value)}`,
     icon: 'i-lucide-badge-swiss-franc'

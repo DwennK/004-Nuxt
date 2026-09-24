@@ -8,7 +8,7 @@ import {
 } from '~~/shared/constants/pos'
 import { canEditPayment } from '~~/shared/domain/payments/rules'
 import type { PaymentMethod, PaymentRecord, PaymentStatus } from '~~/shared/types/pos'
-import { formatCurrency } from '~~/shared/utils/pos'
+import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
 const $fetch = useDossierFetch()
 
@@ -17,6 +17,8 @@ const props = defineProps<{
   documentId: number
   payments: PaymentRecord[]
   documentTotal: number
+  creditedTotal?: number
+  commercialRefundAllowed?: boolean
   balanceDue: number
   isPayableDocument: boolean
 }>()
@@ -31,6 +33,19 @@ const { can } = useCapabilities()
 const paymentMutation = useIdempotentMutation()
 const paymentOpen = ref(false)
 const quickPaymentMethod = ref<PaymentMethod>('cash')
+const correctionOpen = ref(false)
+const correctionPayment = ref<PaymentRecord | null>(null)
+const correctionAction = ref<'refund' | 'void'>('refund')
+const editingId = ref<number | null>(null)
+function openCorrection(payment: PaymentRecord, action: 'refund' | 'void') {
+  correctionPayment.value = payment
+  correctionAction.value = action
+  correctionOpen.value = true
+}
+function refundable(payment: PaymentRecord) {
+  return payment.refundableAmount ?? Math.max(payment.amount - (payment.refundedAmount || 0), 0)
+}
+const totalRefunded = computed(() => -props.payments.filter(p => p.status === 'paid' && p.amount < 0).reduce((sum, p) => sum + p.amount, 0))
 
 const methodItems = paymentMethods.map(method => ({
   label: paymentMethodLabels[method],
@@ -68,7 +83,7 @@ const canAdjustPayments = computed(() => !props.disabled && can('financial:adjus
 const canDeletePayments = computed(() => canAdjustPayments.value && can('records:delete'))
 
 function isPaymentEditable(payment: PaymentRecord) {
-  return canAdjustPayments.value && canEditPayment(payment.status)
+  return canAdjustPayments.value && payment.amount > 0 && !payment.refundedAmount && canEditPayment(payment.status)
 }
 
 function isPaymentStatusEditable(payment: PaymentRecord) {
@@ -216,6 +231,16 @@ async function removePayment(payment: PaymentRecord) {
 
 <template>
   <div class="min-w-0">
+    <PosPaymentCorrectionModal
+      v-if="correctionPayment"
+      v-model:open="correctionOpen"
+      :payment="correctionPayment"
+      :action="correctionAction"
+      :commercial-allowed="!!commercialRefundAllowed"
+      :balance-due="balanceDue"
+      :disabled="disabled"
+      @saved="emit('refresh')"
+    />
     <div class="grid gap-4 xl:h-[calc(100vh-24rem)] xl:grid-cols-[minmax(0,1fr)_20rem]">
       <UCard
         :ui="{
@@ -234,7 +259,7 @@ async function removePayment(payment: PaymentRecord) {
             </div>
             <PosUnsavedChanges :dirty="dirty" :snapshot="JSON.stringify(paymentDrafts, null, 2)" :saving="mutationPending" />
             <span class="text-xs text-toned">
-              {{ payments.length }} paiement(s)
+              {{ payments.length }} mouvement(s)
             </span>
           </div>
         </template>
@@ -260,7 +285,89 @@ async function removePayment(payment: PaymentRecord) {
             >
               Acompte repris du document précédent
             </NuxtLink>
-            <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <UIcon :name="payment.amount < 0 ? 'i-lucide-undo-2' : 'i-lucide-arrow-down-left'" :class="payment.amount < 0 ? 'text-error' : 'text-success'" class="size-4" />
+                  <span class="font-medium text-highlighted">{{ payment.amount < 0 ? 'Remboursement' : 'Encaissement' }}</span>
+                  <UBadge
+                    v-if="payment.status !== 'paid'"
+                    :color="paymentStatusColors[payment.status]"
+                    variant="subtle"
+                    size="sm"
+                  >
+                    {{ paymentStatusLabels[payment.status] }}
+                  </UBadge>
+                  <UBadge
+                    v-else-if="payment.refundedAmount"
+                    color="warning"
+                    variant="subtle"
+                    size="sm"
+                  >
+                    {{ refundable(payment) === 0 ? 'Remboursé intégralement' : 'Remboursé en partie' }}
+                  </UBadge>
+                </div>
+                <p class="text-xs text-toned">
+                  {{ paymentMethodLabels[payment.method] }} · {{ formatDateTime(payment.paidAt) }} · #{{ payment.id }}
+                </p>
+                <p v-if="payment.originalPaymentId" class="text-xs text-toned">
+                  Lié à l’encaissement #{{ payment.originalPaymentId }}
+                </p>
+                <p v-if="payment.notes" class="whitespace-pre-line text-sm text-toned">
+                  {{ payment.notes }}
+                </p>
+                <p v-if="payment.voidReason" class="text-sm text-error">
+                  {{ payment.voidReason }} · {{ formatDateTime(payment.voidedAt!) }}
+                </p>
+              </div>
+              <div class="text-right">
+                <p class="whitespace-nowrap text-lg font-semibold tabular-nums" :class="payment.status === 'cancelled' ? 'text-muted line-through' : payment.amount < 0 ? 'text-error' : 'text-highlighted'">
+                  {{ payment.amount > 0 ? '+' : '' }}{{ formatCurrency(payment.amount) }}
+                </p>
+                <p v-if="payment.refundedAmount && refundable(payment) > 0" class="text-xs text-toned">
+                  {{ formatCurrency(refundable(payment)) }} remboursables
+                </p>
+              </div>
+            </div>
+            <div v-if="isPayableDocument && canAdjustPayments && payment.status === 'paid' && payment.amount > 0" class="mt-3 flex flex-wrap items-center gap-2">
+              <UButton
+                v-if="refundable(payment) > 0"
+                label="Rembourser"
+                icon="i-lucide-undo-2"
+                color="neutral"
+                variant="outline"
+                size="sm"
+                :disabled="mutationPending"
+                @click="openCorrection(payment, 'refund')"
+              />
+              <UButton
+                v-if="!payment.refundedAmount"
+                label="Annuler une saisie"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :disabled="mutationPending"
+                @click="openCorrection(payment, 'void')"
+              />
+              <UButton
+                v-if="isPaymentEditable(payment)"
+                :label="editingId === payment.id ? 'Fermer' : 'Modifier la saisie'"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                class="ml-auto"
+                @click="editingId = editingId === payment.id ? null : payment.id"
+              />
+            </div>
+            <UButton
+              v-if="payment.status === 'pending' && isPaymentEditable(payment)"
+              label="Modifier"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              @click="editingId = editingId === payment.id ? null : payment.id"
+            />
+            <div v-if="editingId === payment.id" class="mt-3 grid gap-3 border-t border-default pt-3">
               <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[9rem_8rem_9rem_minmax(0,1fr)]">
                 <UFormField label="Mode">
                   <USelect
@@ -276,7 +383,7 @@ async function removePayment(payment: PaymentRecord) {
                 <UFormField label="Statut">
                   <USelect
                     v-model="paymentDrafts[payment.id]!.status"
-                    :items="statusItems"
+                    :items="payment.status === 'paid' ? statusItems.filter(item => item.value === 'paid') : statusItems"
                     value-key="value"
                     size="sm"
                     class="w-full"
@@ -319,7 +426,7 @@ async function removePayment(payment: PaymentRecord) {
               </div>
             </div>
 
-            <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+            <div v-if="editingId === payment.id" class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
               <UFormField label="Notes">
                 <UTextarea
                   v-bind="posInputAttrs"
@@ -346,7 +453,7 @@ async function removePayment(payment: PaymentRecord) {
                   @click="resetDraft(payment)"
                 />
                 <UButton
-                  v-if="canDeletePayments"
+                  v-if="canDeletePayments && payment.status === 'pending'"
                   type="button"
                   icon="i-lucide-trash-2"
                   color="error"
@@ -406,8 +513,14 @@ async function removePayment(payment: PaymentRecord) {
               <span class="font-medium text-highlighted">{{ formatCurrency(documentTotal) }}</span>
             </div>
             <div class="flex items-center justify-between gap-3 text-sm">
-              <span class="text-toned">Déjà encaissé</span>
+              <span class="text-toned">Encaissé net</span>
               <span class="font-medium text-highlighted">{{ formatCurrency(paidTotal) }}</span>
+            </div>
+            <div v-if="totalRefunded" class="flex items-center justify-between gap-3 text-sm">
+              <span class="text-toned">Remboursé</span><span class="text-error">{{ formatCurrency(totalRefunded) }}</span>
+            </div>
+            <div v-if="creditedTotal" class="flex items-center justify-between gap-3 text-sm">
+              <span class="text-toned">Réduction commerciale</span><span>{{ formatCurrency(-creditedTotal) }}</span>
             </div>
             <div class="flex items-center justify-between gap-3 border-t border-default pt-3">
               <span class="text-sm font-medium text-highlighted">
@@ -419,7 +532,7 @@ async function removePayment(payment: PaymentRecord) {
             </div>
           </div>
 
-          <template v-if="isPayableDocument">
+          <template v-if="isPayableDocument && balanceDue > 0">
             <div class="space-y-2">
               <UFormField label="Mode de paiement">
                 <USelect
@@ -456,7 +569,7 @@ async function removePayment(payment: PaymentRecord) {
             />
           </template>
 
-          <template v-else>
+          <template v-else-if="!isPayableDocument">
             <UAlert
               icon="i-lucide-info"
               color="neutral"

@@ -24,7 +24,7 @@ describe('idempotent financial mutation ledger', () => {
     temporaryDirectory = await mkdtemp(join(tmpdir(), 'pos-idempotency-'))
     client = createClient({ url: `file:${join(temporaryDirectory, 'ledger.db')}` })
     await client.batch([
-      `CREATE TABLE documents (
+      `CREATE TABLE documents (credited_total INTEGER NOT NULL DEFAULT 0,
         sav_id INTEGER, sav_details TEXT,
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         document_number TEXT NOT NULL UNIQUE,
@@ -45,7 +45,7 @@ describe('idempotent financial mutation ledger', () => {
         status TEXT NOT NULL,
         customer_id INTEGER NOT NULL
       )`,
-      `CREATE TABLE payments (
+      `CREATE TABLE payments (kind TEXT NOT NULL DEFAULT 'receipt', original_payment_id INTEGER, recorded_by TEXT, voided_at TEXT, void_reason TEXT,
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_id INTEGER,
         document_id INTEGER NOT NULL,

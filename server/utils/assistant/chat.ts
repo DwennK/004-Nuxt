@@ -95,7 +95,7 @@ function buildPlanningSystemPrompt() {
     'Si une recherche échoue, utilise le motif fourni pour la corriger ou décomposer la demande. Ne répète pas la même requête.',
     'Un résultat vide peut justifier une recherche plus large (orthographe, nom partiel, statut), sans inventer un résultat.',
     'Une ligne retournée ne signifie pas un seul enregistrement existant. Pour tout nombre total, utilise COUNT ; pour un total financier, SUM. Ne déduis jamais un total de rowCount ni de LIMIT 1.',
-    'Distingue factures (documents.type = invoice, total TTC) et encaissements (payments.status = paid, amount). Évite de doubler les montants par une jointure avec les lignes ou paiements.',
+    'Distingue factures (documents.type = invoice, total TTC) et mouvements de caisse (payments.status = paid, amount signé : positif encaissé, négatif remboursé, somme = net). Évite de doubler les montants par une jointure avec les lignes ou paiements.',
     'Les dates peuvent être ISO ou SQLite : compare avec datetime(colonne) et datetime(borne). Utilise les bornes UTC fournies pour Europe/Zurich, pas date(now) en UTC.',
     `Repères de dates calculés pour le magasin : ${JSON.stringify(buildAssistantDateContext())}`,
     'Contraintes SQL:',

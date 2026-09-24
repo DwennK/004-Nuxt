@@ -94,6 +94,7 @@ export async function listPayments(filters?: {
       .where(whereClause),
     db.select({
       payment: payments,
+      refundedAmount: sql<number>`-coalesce((SELECT sum(refund.amount) FROM payments refund WHERE refund.original_payment_id = ${payments.id} AND refund.status = 'paid'), 0)`,
       customer: customers,
       documentNumber: documents.documentNumber,
       documentType: documents.type
@@ -110,6 +111,8 @@ export async function listPayments(filters?: {
   return {
     items: rows.map((row): PaymentListItem => ({
       ...mapPayment(row.payment),
+      refundedAmount: Number(row.refundedAmount || 0),
+      refundableAmount: row.payment.status === 'paid' && row.payment.amount > 0 ? Math.max(row.payment.amount - Number(row.refundedAmount || 0), 0) : 0,
       customerName: row.customer ? (row.customer.companyName || `${row.customer.firstName} ${row.customer.lastName}`) : null,
       documentNumber: row.documentNumber,
       documentType: row.documentType
@@ -220,7 +223,8 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
       id: payments.id,
       documentId: payments.documentId,
       status: payments.status,
-      amount: payments.amount
+      amount: payments.amount,
+      kind: payments.kind
     }).from(payments).where(eq(payments.id, id)).limit(1)
 
     if (!existing) {
@@ -228,6 +232,11 @@ export async function updatePaymentRecord(id: number, input: Omit<PaymentRecord,
         statusCode: 404,
         statusMessage: 'Payment not found'
       })
+    }
+
+    const [refunds] = await tx.select({ count: sql<number>`count(*)` }).from(payments).where(eq(payments.originalPaymentId, id))
+    if (existing.kind === 'refund' || Number(refunds?.count || 0) > 0) {
+      throw createError({ statusCode: 409, statusMessage: 'Un mouvement remboursé est conservé dans l’historique et ne peut plus être modifié.', data: { code: 'PAYMENT_IMMUTABLE' } })
     }
 
     if (!canEditPayment(existing.status)) {
@@ -326,6 +335,9 @@ export async function deletePayment(id: number, dossier?: DossierWriteContext) {
       return 0
     }
 
+    if (row.status === 'paid' || row.kind === 'refund' || row.voidedAt) {
+      throw createError({ statusCode: 409, statusMessage: 'Utilisez Rembourser ou Annuler une saisie pour conserver l’historique.', data: { code: 'PAYMENT_IMMUTABLE' } })
+    }
     const result = await tx.delete(payments).where(eq(payments.id, id))
     await syncDocumentStatus(row.documentId, tx)
 

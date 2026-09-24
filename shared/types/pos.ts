@@ -205,6 +205,13 @@ export interface DocumentLineRecord extends CommercialLineRecord {
 }
 
 export interface PaymentRecord {
+  kind?: 'receipt' | 'refund'
+  originalPaymentId?: number | null
+  recordedBy?: string | null
+  voidedAt?: string | null
+  voidReason?: string | null
+  refundedAmount?: number
+  refundableAmount?: number
   dossier?: DossierSnapshot
   id: number
   customerId: number | null
@@ -219,6 +226,7 @@ export interface PaymentRecord {
 }
 
 export interface DocumentRecord {
+  creditedTotal?: number
   id: number
   documentNumber: string
   type: DocumentType

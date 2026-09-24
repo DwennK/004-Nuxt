@@ -3,7 +3,7 @@ import { documentTypeLabels, paymentMethodLabels } from '../constants/pos'
 import type { DocumentDetail } from '../types/pos'
 import type { CompanySettingsRecord } from '../types/settings'
 import { isValidSwissQrBillAccount } from './iban'
-import { formatDate, isPayableDocumentType } from './pos'
+import { formatCurrency, formatDate, isPayableDocumentType } from './pos'
 import { buildSwissQrBill, type SwissQrBillData } from './qr-bill'
 
 // ELCO Classic C5 37896: 229 × 162 mm, window 100 × 45 mm,
@@ -53,7 +53,7 @@ export function buildDocumentPrintPayments(document: DocumentDetail): DocumentPr
     .map(payment => ({
       id: payment.id,
       amount: payment.amount,
-      label: paymentMethodLabels[payment.method],
+      label: (payment.amount < 0 ? 'Remboursement · ' : '') + paymentMethodLabels[payment.method],
       paidAt: formatDate(payment.paidAt)
     }))
 }
@@ -105,7 +105,7 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
     : null
   const paidAmount = payments.reduce((total, payment) => total + payment.amount, 0)
   const isPayableDocument = document.settlement?.isPayable ?? (isPayableDocumentType(document.type) && document.status !== 'cancelled')
-  const balanceDue = document.settlement?.balanceDue ?? (isPayableDocument ? Math.max(document.total - paidAmount, 0) : 0)
+  const balanceDue = document.settlement?.balanceDue ?? (isPayableDocument ? Math.max(document.total - (document.creditedTotal || 0) - paidAmount, 0) : 0)
   const qrBill = buildSwissQrBill(document, company, balanceDue)
   const qrBillNotice = getQrBillNotice(document, company, qrBill, balanceDue)
   const noteBlocks: DocumentPrintNoteBlock[] = []
@@ -126,6 +126,10 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
     )
     if (sav.diagnosis) noteBlocks.push({ label: 'Diagnostic', content: sav.diagnosis })
     if (sav.work) noteBlocks.push({ label: 'Travaux et pièces remplacées', content: sav.work })
+  }
+
+  if (document.creditedTotal) {
+    noteBlocks.push({ label: 'Réduction commerciale', content: `${formatCurrency(document.creditedTotal)} déduits du montant dû après remboursement. Total initial : ${formatCurrency(document.total)}. Montant après réduction : ${formatCurrency(document.total - document.creditedTotal)}.` })
   }
 
   if (document.notes) {

@@ -7,6 +7,8 @@ const props = defineProps<{ summary: DailySummary }>()
 
 const reportDate = computed(() => formatDate(props.summary.date))
 
+const receivedTotal = computed(() => (props.summary.payments).reduce((sum, p) => sum + Math.max(p.amount, 0), 0))
+const refundedTotal = computed(() => (props.summary.payments).reduce((sum, p) => sum - Math.min(p.amount, 0), 0))
 const paymentCount = computed(() => props.summary.payments.length)
 const categories = computed(() => [...props.summary.turnoverByCategory].sort((a, b) => b.total - a.total || a.category.localeCompare(b.category)))
 const categoryTotal = computed(() => categories.value.reduce((sum, item) => sum + item.total, 0))
@@ -34,15 +36,18 @@ function paymentTime(value: string) {
         {{ reportDate }}
       </p>
       <div class="print-total">
-        <p>Total encaissé · {{ paymentCount }} paiement{{ paymentCount > 1 ? 's' : '' }}</p>
+        <p>Encaissement net · {{ paymentCount }} mouvement{{ paymentCount > 1 ? 's' : '' }}</p>
         <p class="print-total-value">
           {{ formatCurrency(summary.totalPaid) }}
         </p>
       </div>
+      <p class="section-note">
+        Encaissé : {{ formatCurrency(receivedTotal) }} · Remboursé : {{ formatCurrency(refundedTotal) }}
+      </p>
     </header>
 
     <section>
-      <h2>Encaissements par moyen de paiement</h2>
+      <h2>Net par moyen de paiement</h2>
       <table v-if="summary.totalsByMethod.length">
         <thead>
           <tr>
@@ -50,7 +55,7 @@ function paymentTime(value: string) {
               Moyen de paiement
             </th>
             <th scope="col" class="amount">
-              Paiements
+              Mouvements
             </th>
             <th scope="col" class="amount">
               Montant CHF
@@ -71,7 +76,7 @@ function paymentTime(value: string) {
           </tr>
           <tr class="subtotal">
             <th scope="row">
-              Total encaissé
+              Encaissement net
             </th>
             <td class="amount">
               {{ paymentCount }}
@@ -88,7 +93,7 @@ function paymentTime(value: string) {
     </section>
 
     <section>
-      <h2>Paiements de la journée</h2>
+      <h2>Mouvements de la journée</h2>
       <table v-if="summary.payments.length" class="documents-table payments-table">
         <colgroup>
           <col class="number-column">
@@ -124,7 +129,7 @@ function paymentTime(value: string) {
             <td>{{ payment.customerName }}</td>
             <td>{{ paymentTime(payment.paidAt) }}</td>
             <td>
-              {{ getPaymentMethodLabel(payment.method) }}
+              {{ payment.amount < 0 ? 'Remb. · ' : '' }}{{ getPaymentMethodLabel(payment.method) }}
             </td>
             <td class="amount emphasis">
               {{ amount(payment.amount) }}
@@ -132,7 +137,7 @@ function paymentTime(value: string) {
           </tr>
           <tr class="subtotal">
             <th scope="row" colspan="4">
-              Total encaissé
+              Encaissement net
             </th>
             <td class="amount">
               {{ amount(summary.totalPaid) }}
@@ -141,14 +146,14 @@ function paymentTime(value: string) {
         </tbody>
       </table>
       <p v-else class="empty">
-        Aucun paiement encaissé ce jour.
+        Aucun mouvement enregistré ce jour.
       </p>
     </section>
 
     <section>
       <h2>Répartition par catégorie</h2>
       <p class="section-note">
-        Lignes des factures entièrement réglées avec encaissement ce jour
+        Valeur nette des factures soldées avec mouvement ce jour, après réductions commerciales
       </p>
       <table v-if="categories.length">
         <thead>

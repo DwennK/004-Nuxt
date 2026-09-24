@@ -70,7 +70,7 @@ const paymentTicks = computed(() => {
   return ticks
 })
 
-const hasPaymentActivity = computed(() => paymentsChartData.value.some(day => day.total > 0))
+const hasPaymentActivity = computed(() => paymentsChartData.value.some(day => paymentSeries.some(series => Number(day[series.key]) !== 0)))
 
 const dayLabel = (tick: number | Date) => {
   const index = Math.round(Number(tick))
@@ -132,7 +132,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
         <div class="space-y-4">
           <div class="flex flex-col gap-1">
             <h2 class="text-base font-semibold text-highlighted">
-              Chiffre d’affaires encaissé
+              Encaissements nets
             </h2>
             <p class="text-sm text-toned">
               {{ activePaymentPeriod?.description || 'Ventilation par mode de paiement sur la période sélectionnée.' }}
@@ -182,8 +182,8 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
       <UEmpty
         v-else
         icon="i-lucide-chart-column-stacked"
-        title="Aucun encaissement sur la période"
-        description="La période sélectionnée ne contient encore aucun paiement encaissé."
+        title="Aucun mouvement net sur la période"
+        description="Les encaissements et remboursements de la période se compensent ou sont absents."
       />
     </UCard>
 
@@ -192,10 +192,10 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
         <template #header>
           <div class="flex flex-col gap-1">
             <h2 class="text-base font-semibold text-highlighted">
-              Répartition du chiffre d’affaires
+              Factures soldées par catégorie
             </h2>
             <p class="text-sm text-toned">
-              Part du CA encaissé par catégorie sur la même fenêtre.
+              Valeur des factures soldées après réductions commerciales.
             </p>
           </div>
         </template>
@@ -215,7 +215,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
           >
             <div class="space-y-1 text-center">
               <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
-                Total encaissé
+                Valeur nette
               </p>
               <p class="text-sm font-semibold text-highlighted">
                 {{ formatCurrency(turnoverTotal) }}

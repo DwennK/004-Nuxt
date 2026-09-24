@@ -214,7 +214,7 @@ function getRowItems(payment: PaymentListItem) {
 
   if (can('financial:adjust') && canEditPayment(payment.status)) {
     groups[0]!.push({
-      label: 'Modifier le paiement',
+      label: payment.status === 'paid' ? 'Gérer / rembourser' : 'Modifier le paiement',
       icon: 'i-lucide-pencil',
       onSelect() {
         navigateTo(`/documents/${payment.documentId}?tab=payments`)
@@ -225,6 +225,7 @@ function getRowItems(payment: PaymentListItem) {
   if (
     can('financial:adjust')
     && can('records:delete')
+    && payment.status === 'pending'
   ) {
     groups.push([{
       label: 'Supprimer',
@@ -277,12 +278,15 @@ const columns: TableColumn<PaymentListItem>[] = [
       const statusBadge = getPaymentStatusBadge(row.original.status)
 
       return h('div', { class: 'flex items-center gap-2 min-w-0' }, [
-        h('p', { class: 'shrink-0 font-medium text-highlighted' }, formatCurrency(row.original.amount)),
+        h('p', { class: row.original.amount < 0 ? 'shrink-0 font-medium text-error' : 'shrink-0 font-medium text-highlighted' }, formatCurrency(row.original.amount)),
         h(UBadge, {
           color: paymentMethodColors[row.original.method],
           variant: 'subtle',
           size: 'sm'
         }, () => getCompactPaymentMethodLabel(row.original.method)),
+        row.original.amount < 0 || row.original.refundedAmount
+          ? h(UBadge, { color: row.original.amount < 0 ? 'error' : 'warning', variant: 'subtle', size: 'sm' }, () => row.original.amount < 0 ? 'Remboursement' : row.original.refundableAmount === 0 ? 'Remboursé' : 'Remboursé en partie')
+          : null,
         statusBadge
           ? h(UBadge, {
               color: statusBadge.color,
@@ -305,7 +309,7 @@ const columns: TableColumn<PaymentListItem>[] = [
   },
   {
     accessorKey: 'paidAt',
-    header: 'Encaissé à',
+    header: 'Date du mouvement',
     cell: ({ row }) => formatDateTime(row.original.paidAt)
   },
   {

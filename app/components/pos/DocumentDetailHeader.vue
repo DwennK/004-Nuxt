@@ -36,7 +36,7 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
             Informations {{ props.document.type === 'sav' ? 'SAV' : documentTypeLabels[props.document.type].toLocaleLowerCase('fr-CH') }}
           </h2>
           <UBadge :color="documentStatusColors[props.document.status]" variant="subtle" size="sm">
-            {{ props.document.sav ? savStatusLabels[props.document.sav.status] : documentStatusLabels[props.document.status] }}
+            {{ props.document.sav ? savStatusLabels[props.document.sav.status] : props.document.creditedTotal === props.document.total && props.document.creditedTotal ? 'Remboursée' : documentStatusLabels[props.document.status] }}
           </UBadge>
           <UTooltip v-if="props.editable" :text="contextLabel">
             <UButton
@@ -106,9 +106,10 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
     </div>
 
     <div v-if="props.document.type !== 'sav'" class="flex flex-wrap items-center justify-end gap-x-5 gap-y-1 border-t border-default bg-muted/30 px-3 py-1.5 text-xs tabular-nums">
-      <span class="text-toned">Total <strong class="ml-1 font-semibold text-highlighted">{{ formatCurrency(props.document.total) }}</strong></span>
+      <span v-if="props.document.creditedTotal" class="text-toned">Réduction commerciale <strong class="ml-1 font-medium text-highlighted">{{ formatCurrency(-props.document.creditedTotal) }}</strong></span>
+      <span class="text-toned">{{ props.document.creditedTotal ? 'Total initial' : 'Total' }} <strong class="ml-1 font-semibold text-highlighted">{{ formatCurrency(props.document.total) }}</strong></span>
       <template v-if="props.isPayableDocument">
-        <span class="text-toned">Encaissé <strong class="ml-1 font-medium text-highlighted">{{ formatCurrency(props.paidAmount) }}</strong></span>
+        <span class="text-toned">Encaissé net <strong class="ml-1 font-medium text-highlighted">{{ formatCurrency(props.paidAmount) }}</strong></span>
         <span :class="isSettled ? 'font-semibold text-success' : 'text-toned'">
           {{ isSettled ? 'Soldé' : 'À encaisser' }}
           <strong v-if="!isSettled" class="ml-1 font-semibold text-highlighted">{{ formatCurrency(props.balanceDue) }}</strong>
