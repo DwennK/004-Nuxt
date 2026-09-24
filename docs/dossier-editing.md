@@ -65,9 +65,10 @@ l’en-tête des paiements et de l’encaissement. Son emplacement reste réserv
 libellé accessible ouvre le même menu. Ce menu permet de copier les saisies, de
 couper le rappel et de tester le son.
 
-Après cinq minutes sans modification, puis toutes les cinq minutes, une
+Après cinq minutes sans modification, puis toutes les dix secondes, une
 notification temporaire de huit secondes accompagne le rappel sonore. Reprendre
-la saisie ou enregistrer ferme cette notification. La coupure du rappel visuel
+la saisie ou enregistrer ferme cette notification. Toute nouvelle modification
+relance le délai initial de cinq minutes. La coupure du rappel visuel
 et sonore dure jusqu’à l’enregistrement ou à l’abandon.
 Une erreur de sauvegarde conserve les saisies et le rappel.
 

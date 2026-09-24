@@ -12,3 +12,4 @@ export type DossierStatus = DossierSnapshot & {
 export const DOSSIER_HEARTBEAT_MS = 15_000
 export const DOSSIER_LEASE_MS = 90_000
 export const UNSAVED_REMINDER_MS = 300_000
+export const UNSAVED_REMINDER_REPEAT_MS = 10_000

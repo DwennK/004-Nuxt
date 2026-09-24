@@ -1,4 +1,4 @@
-import { UNSAVED_REMINDER_MS } from '../types/dossier'
+import { UNSAVED_REMINDER_MS, UNSAVED_REMINDER_REPEAT_MS } from '../types/dossier'
 
 /** Pure clock policy, shared by the UI and fake-clock tests. */
 export function createUnsavedReminder() {
@@ -14,7 +14,7 @@ export function createUnsavedReminder() {
     },
     tick(now: number) {
       if (muted || dueAt === null || now < dueAt) return false
-      dueAt = now + UNSAVED_REMINDER_MS
+      dueAt = now + UNSAVED_REMINDER_REPEAT_MS
       return true
     }
   }
