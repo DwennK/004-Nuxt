@@ -1,4 +1,6 @@
 import { asc, eq, inArray, sql } from 'drizzle-orm'
+import type { z } from 'zod'
+import type { updateSmartphoneStockSchema } from '~~/shared/validation/smartphones'
 import type { SmartphoneStock } from '~~/shared/types/smartphones'
 import type { SmartphoneListResponse, SmartphoneStockListQuery } from '~~/shared/types/smartphone-list'
 import { smartphoneStocks } from '../db/schema'
@@ -12,6 +14,7 @@ const seedSmartphoneStocks: SmartphoneStock[] = [{
   model: 'iPhone 12',
   imei: '356789012345670',
   sku: 'MW-IP12-128-001',
+  supplier: '',
   capacity: '128 Go',
   stockedAt: '2026-01-08',
   sold: false
@@ -20,6 +23,7 @@ const seedSmartphoneStocks: SmartphoneStock[] = [{
   model: 'iPhone 13 Pro',
   imei: '356789012345671',
   sku: 'MW-IP13P-256-002',
+  supplier: '',
   capacity: '256 Go',
   stockedAt: '2026-01-15',
   sold: true
@@ -28,6 +32,7 @@ const seedSmartphoneStocks: SmartphoneStock[] = [{
   model: 'Samsung Galaxy S22',
   imei: '356789012345672',
   sku: 'MW-SGS22-128-003',
+  supplier: '',
   capacity: '128 Go',
   stockedAt: '2026-02-03',
   sold: false
@@ -36,6 +41,7 @@ const seedSmartphoneStocks: SmartphoneStock[] = [{
   model: 'Samsung Galaxy S23',
   imei: '356789012345673',
   sku: 'MW-SGS23-256-004',
+  supplier: '',
   capacity: '256 Go',
   stockedAt: '2026-02-11',
   sold: false
@@ -44,6 +50,7 @@ const seedSmartphoneStocks: SmartphoneStock[] = [{
   model: 'Google Pixel 7',
   imei: '356789012345674',
   sku: 'MW-PIX7-128-005',
+  supplier: '',
   capacity: '128 Go',
   stockedAt: '2026-02-19',
   sold: true
@@ -52,6 +59,7 @@ const seedSmartphoneStocks: SmartphoneStock[] = [{
   model: 'iPhone SE',
   imei: '356789012345675',
   sku: 'MW-IPSE-64-006',
+  supplier: '',
   capacity: '64 Go',
   stockedAt: '2026-02-24',
   sold: false
@@ -60,6 +68,7 @@ const seedSmartphoneStocks: SmartphoneStock[] = [{
   model: 'Xiaomi 12',
   imei: '356789012345676',
   sku: 'MW-X12-256-007',
+  supplier: '',
   capacity: '256 Go',
   stockedAt: '2026-03-02',
   sold: false
@@ -68,6 +77,7 @@ const seedSmartphoneStocks: SmartphoneStock[] = [{
   model: 'Samsung Galaxy A54',
   imei: '356789012345677',
   sku: 'MW-SGA54-128-008',
+  supplier: '',
   capacity: '128 Go',
   stockedAt: '2026-03-09',
   sold: true
@@ -85,6 +95,7 @@ function mapSmartphoneStock(row: SmartphoneStockRow): SmartphoneStock {
     imei: row.imei || '',
     sku: row.sku || '',
     capacity: row.capacity,
+    supplier: row.supplier || '',
     stockedAt: row.stockedAt,
     sold: row.sold
   }
@@ -141,6 +152,10 @@ async function bootstrapSmartphoneStocksTable() {
     WHERE sku LIKE 'MW-AUTO-%'
   `)
 
+  if (!columnNames.has('supplier')) {
+    await client.execute('ALTER TABLE smartphone_stocks ADD COLUMN supplier TEXT')
+  }
+
   const imeiColumn = columnMap.get('imei')
   const skuColumn = columnMap.get('sku')
   const needsSchemaMigration = Number(imeiColumn?.notnull || 0) === 1 || Number(skuColumn?.notnull || 0) === 1
@@ -154,12 +169,13 @@ async function bootstrapSmartphoneStocksTable() {
           imei TEXT UNIQUE,
           sku TEXT UNIQUE,
           capacity TEXT NOT NULL,
+          supplier TEXT,
           stocked_at TEXT NOT NULL,
           sold INTEGER NOT NULL DEFAULT 0
         )
       `,
       `
-        INSERT INTO smartphone_stocks_migrated (id, model, imei, sku, capacity, stocked_at, sold)
+        INSERT INTO smartphone_stocks_migrated (id, model, imei, sku, capacity, supplier, stocked_at, sold)
         SELECT
           id,
           model,
@@ -174,6 +190,7 @@ async function bootstrapSmartphoneStocksTable() {
             ELSE TRIM(sku)
           END,
           capacity,
+          supplier,
           stocked_at,
           sold
         FROM smartphone_stocks
@@ -292,6 +309,7 @@ export async function createSmartphoneStock(input: Omit<SmartphoneStock, 'id'>) 
     imei: normalizeOptionalText(input.imei),
     sku: normalizeOptionalText(input.sku),
     capacity: input.capacity,
+    supplier: normalizeOptionalText(input.supplier),
     stockedAt: input.stockedAt,
     sold: input.sold
   }).returning()
@@ -308,7 +326,7 @@ export async function createSmartphoneStock(input: Omit<SmartphoneStock, 'id'>) 
   return mapSmartphoneStock(row)
 }
 
-export async function updateSmartphoneStock(input: SmartphoneStock) {
+export async function updateSmartphoneStock(input: z.output<typeof updateSmartphoneStockSchema>) {
   await ensureSmartphoneStocksTable()
 
   const db = useDb()
@@ -316,8 +334,9 @@ export async function updateSmartphoneStock(input: SmartphoneStock) {
     .set({
       model: input.model,
       imei: normalizeOptionalText(input.imei),
-      sku: normalizeOptionalText(input.sku),
+      sku: input.sku === undefined ? undefined : normalizeOptionalText(input.sku),
       capacity: input.capacity,
+      supplier: input.supplier === undefined ? undefined : normalizeOptionalText(input.supplier),
       stockedAt: input.stockedAt,
       sold: input.sold
     })

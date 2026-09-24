@@ -1,0 +1,1 @@
+ALTER TABLE `smartphone_stocks` ADD `supplier` text;

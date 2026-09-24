@@ -124,7 +124,7 @@ const secondaryLinks = [{
   icon: 'i-lucide-folder-cog',
   defaultOpen: toolRoutes.some(prefix => route.path.startsWith(prefix)),
   children: [{
-    label: 'Stock téléphones',
+    label: 'Liste IMEI',
     icon: 'i-lucide-smartphone',
     to: '/stocks-smartphone',
     onSelect: () => {

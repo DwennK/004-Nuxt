@@ -1,41 +1,9 @@
-import * as z from 'zod'
-import { normalizeImei } from '../../shared/utils/pos'
+import { smartphoneStockSchema, updateSmartphoneStockSchema } from '../../shared/validation/smartphones'
 import {
   createSmartphoneStock,
   listSmartphoneStocks,
   updateSmartphoneStock
 } from '../utils/smartphone-stocks'
-
-const optionalText = (minLength: number) => z.preprocess((value) => {
-  if (typeof value !== 'string') {
-    return value
-  }
-
-  const normalized = value.trim()
-  return normalized === '' ? undefined : normalized
-}, z.string().min(minLength).optional().default(''))
-
-const optionalImei = z.preprocess((value) => {
-  if (typeof value !== 'string') {
-    return value
-  }
-
-  const normalized = normalizeImei(value)
-  return normalized || undefined
-}, z.string().optional().default(''))
-
-const smartphoneStockSchema = z.object({
-  model: z.string().min(2),
-  imei: optionalImei,
-  sku: optionalText(3),
-  capacity: z.string().min(2),
-  stockedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  sold: z.boolean().default(false)
-})
-
-const updateSmartphoneStockSchema = smartphoneStockSchema.extend({
-  id: z.coerce.number().int().positive()
-})
 
 export default eventHandler(async (event) => {
   if (event.method === 'GET') {
@@ -51,7 +19,7 @@ export default eventHandler(async (event) => {
       if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
         throw createError({
           statusCode: 409,
-          statusMessage: 'IMEI ou SKU deja existant'
+          statusMessage: 'IMEI deja existant'
         })
       }
 
@@ -68,7 +36,7 @@ export default eventHandler(async (event) => {
       if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
         throw createError({
           statusCode: 409,
-          statusMessage: 'IMEI ou SKU deja existant'
+          statusMessage: 'IMEI deja existant'
         })
       }
 

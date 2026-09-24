@@ -4,6 +4,7 @@ export interface SmartphoneStock {
   imei: string
   sku: string
   capacity: string
+  supplier: string
   stockedAt: string
   sold: boolean
 }

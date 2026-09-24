@@ -1,17 +1,10 @@
 <script setup lang="ts">
-import * as z from 'zod'
+import type * as z from 'zod'
+import { smartphoneSuppliers } from '~~/shared/constants/smartphones'
+import { smartphoneStockFormSchema as schema } from '~~/shared/validation/smartphones'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import { formatImei, getImeiWarning, normalizeImei } from '~~/shared/utils/pos'
 import type { SmartphoneStock } from '~/types'
-
-const optionalText = (minLength: number, message: string) => z.preprocess((value) => {
-  if (typeof value !== 'string') {
-    return value
-  }
-
-  const normalized = value.trim()
-  return normalized === '' ? undefined : normalized
-}, z.string().min(minLength, message).optional().default(''))
 
 const props = withDefaults(defineProps<{
   item?: SmartphoneStock | null
@@ -25,25 +18,16 @@ const props = withDefaults(defineProps<{
 
 const open = defineModel<boolean>('open', { default: false })
 const toast = useToast()
-
-const schema = z.object({
-  model: z.string().min(2, 'Trop court'),
-  imei: z.string().optional().default(''),
-  sku: optionalText(3, 'SKU invalide'),
-  capacity: z.string().min(2, 'Capacité invalide'),
-  stockedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide'),
-  sold: z.boolean().default(false)
-})
+const supplierItems: string[] = [...smartphoneSuppliers]
 
 type Schema = z.output<typeof schema>
 
 const state = reactive<Schema>({
   model: '',
   imei: '',
-  sku: '',
   capacity: '',
-  stockedAt: '',
-  sold: false
+  supplier: '',
+  stockedAt: ''
 })
 
 const isEditing = computed(() => props.mode === 'edit')
@@ -56,10 +40,9 @@ watch(() => open.value, (value) => {
 
   state.model = props.item?.model || ''
   state.imei = formatImei(props.item?.imei)
-  state.sku = props.item?.sku || ''
   state.capacity = props.item?.capacity || ''
   state.stockedAt = props.item?.stockedAt || new Date().toISOString().slice(0, 10)
-  state.sold = props.item?.sold || false
+  state.supplier = schema.shape.supplier.parse(props.item?.supplier || '')
 })
 
 function handleImeiInput(value: string | number) {
@@ -103,10 +86,9 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     open.value = false
     state.model = ''
     state.imei = ''
-    state.sku = ''
     state.capacity = ''
     state.stockedAt = ''
-    state.sold = false
+    state.supplier = ''
     await refreshNuxtData('smartphone-stocks')
   } catch (error) {
     const description = error instanceof Error ? error.message : 'Opération impossible'
@@ -167,21 +149,21 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           </div>
         </UFormField>
 
-        <UFormField label="SKU" name="sku">
-          <UInput
-            v-bind="posInputAttrs"
-            v-model="state.sku"
-            class="w-full"
-            placeholder="Optionnel"
-          />
-        </UFormField>
-
         <UFormField label="Capacité" name="capacity">
           <UInput
             v-bind="posInputAttrs"
             v-model="state.capacity"
             class="w-full"
             placeholder="128 Go"
+          />
+        </UFormField>
+
+        <UFormField label="Fournisseur" name="supplier">
+          <USelect
+            v-model="state.supplier"
+            :items="supplierItems"
+            placeholder="Choisir un fournisseur"
+            class="w-full"
           />
         </UFormField>
 
@@ -192,10 +174,6 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
             type="date"
             class="w-full"
           />
-        </UFormField>
-
-        <UFormField label="Vendu" name="sold">
-          <USwitch v-model="state.sold" label="Ce smartphone est déjà vendu" />
         </UFormField>
 
         <div class="flex justify-end gap-2">

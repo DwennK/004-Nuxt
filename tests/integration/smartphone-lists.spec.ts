@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { smartphoneStockSchema, updateSmartphoneStockSchema } from '../../shared/validation/smartphones'
 import { createClient } from '@libsql/client'
 import { createTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel } from '@tanstack/table-core'
 import type { ColumnDef } from '@tanstack/table-core'
@@ -5,7 +7,7 @@ import { defineRelations } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../server/db/schema'
-import { listSmartphoneStocks, listSmartphoneStocksPage } from '../../server/utils/smartphone-stocks'
+import { createSmartphoneStock, updateSmartphoneStock, listSmartphoneStocks, listSmartphoneStocksPage } from '../../server/utils/smartphone-stocks'
 import { listSmartphoneReservations, listSmartphoneReservationsPage } from '../../server/utils/smartphone-reservations'
 import { smartphoneListQuerySchema } from '../../server/utils/smartphone-list'
 import { buildSmartphoneReservationsCsv, parseSmartphoneReservationsCsv } from '../../server/utils/smartphone-reservations-csv'
@@ -79,6 +81,7 @@ describe('smartphone lists use server pages without changing table results', () 
         args: [id, label, '0791234567', `Model ${id}`, '128 Go', `2026-09-${String(1 + index % 20).padStart(2, '0')}`, ['pending', 'contacted', 'sold'][index % 3]!, index % 4 ? `Note ${id}` : null]
       }]
     }).flat(), 'write')
+    await client.executeMultiple(readFileSync(new URL('../../drizzle/20260924150245_smartphone_stock_supplier/migration.sql', import.meta.url), 'utf8'))
     context.queries = []
     context.db = drizzle({
       client,
@@ -88,6 +91,33 @@ describe('smartphone lists use server pages without changing table results', () 
   })
 
   afterEach(() => client.close())
+
+  it('adds the supplier without changing legacy records, then persists creation and editing', async () => {
+    const legacy = (await listSmartphoneStocks())[0]!
+    expect(legacy).toMatchObject({ supplier: '', sku: '', sold: false })
+    for (const supplier of ['MobileSentrix', 'Recommerce'] as const) {
+      const created = await createSmartphoneStock(smartphoneStockSchema.parse({
+        model: 'iPhone 15', imei: '', capacity: '128 Go', supplier, stockedAt: '2026-09-24'
+      }))
+      expect(created).toMatchObject({ supplier, sku: '', sold: false })
+      expect((await listSmartphoneStocks()).find(item => item.id === created.id)?.supplier).toBe(supplier)
+    }
+
+    const existing = (await listSmartphoneStocks()).find(item => item.sku && item.sold)!
+    const edited = await updateSmartphoneStock(updateSmartphoneStockSchema.parse({
+      id: existing.id, model: 'iPhone 16', imei: '356 789 012 345 679',
+      capacity: '256 Go', supplier: 'Recommerce', stockedAt: '2026-09-24'
+    }))
+    expect(edited).toMatchObject({
+      model: 'iPhone 16', imei: '356789012345679', supplier: 'Recommerce',
+      sku: existing.sku, sold: existing.sold
+    })
+    const editedAgain = await updateSmartphoneStock(updateSmartphoneStockSchema.parse({
+      id: edited.id, model: edited.model, imei: edited.imei, capacity: edited.capacity, stockedAt: edited.stockedAt
+    }))
+    expect(editedAgain).toEqual(edited)
+    expect(smartphoneStockSchema.safeParse({ ...edited, supplier: 'Unknown' }).success).toBe(false)
+  })
 
   it('keeps stock status, literal substring, Unicode and natural sorting identical across pages', async () => {
     const all = await listSmartphoneStocks()

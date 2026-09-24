@@ -340,6 +340,7 @@ export const smartphoneStocks = sqliteTable('smartphone_stocks', {
   imei: text('imei'),
   sku: text('sku'),
   capacity: text('capacity').notNull(),
+  supplier: text('supplier'),
   stockedAt: text('stocked_at').notNull(),
   sold: integer('sold', { mode: 'boolean' }).notNull().default(false)
 }, table => ({

@@ -21,7 +21,6 @@ type SmartphoneTableInstance = {
 }
 
 const UButton = resolveComponent('UButton')
-const UBadge = resolveComponent('UBadge')
 const UCheckbox = resolveComponent('UCheckbox')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 
@@ -33,15 +32,13 @@ const editingItem = ref<SmartphoneStock | null>(null)
 
 const columnVisibility = ref()
 const model = ref('')
-const soldFilter = ref<'all' | 'available' | 'sold'>('all')
 const search = refDebounced(model, 250)
-const filters = computed(() => ({ search: search.value, sold: soldFilter.value }))
+const filters = computed(() => ({ search: search.value }))
 const { data, status, pagination, sorting, rowSelection, selectedIds: selectedSmartphoneIds, total } = useSmartphoneList<SmartphoneStock>({
   key: 'smartphone-stocks',
   endpoint: '/api/smartphone-stocks/list',
   filters,
-  matches: item => (filters.value.sold === 'all' || item.sold === (filters.value.sold === 'sold'))
-    && foldSearchText(item.model).includes(foldSearchText(search.value))
+  matches: item => foldSearchText(item.model).includes(foldSearchText(search.value))
 })
 
 function formatSwissDate(value: string) {
@@ -53,34 +50,9 @@ function formatSwissDate(value: string) {
   return isValid(date) ? format(date, 'dd/MM/yyyy') : value
 }
 
-async function updateSoldState(row: SmartphoneStock, sold: boolean) {
-  try {
-    await $fetch('/api/smartphone-stocks', {
-      method: 'PATCH',
-      body: {
-        id: row.id,
-        model: row.model,
-        imei: row.imei,
-        sku: row.sku,
-        capacity: row.capacity,
-        stockedAt: row.stockedAt,
-        sold
-      }
-    })
-
-    toast.add({
-      title: 'Stock mis à jour',
-      description: `${row.model} est maintenant ${sold ? 'vendu' : 'disponible'}.`,
-      color: 'success'
-    })
-    await refreshNuxtData('smartphone-stocks')
-  } catch (error) {
-    toast.add({
-      title: 'Erreur',
-      description: error instanceof Error ? error.message : 'Mise à jour impossible',
-      color: 'error'
-    })
-  }
+function openStockEditor(item: SmartphoneStock) {
+  editingItem.value = item
+  editModalOpen.value = true
 }
 
 async function deleteSingleStock(id: number) {
@@ -135,8 +107,7 @@ function getRowItems(row: Row<SmartphoneStock>) {
       label: 'Modifier',
       icon: 'i-lucide-pencil',
       onSelect() {
-        editingItem.value = row.original
-        editModalOpen.value = true
+        openStockEditor(row.original)
       }
     }
   ]
@@ -199,35 +170,18 @@ const columns: TableColumn<SmartphoneStock>[] = [
     cell: ({ row }) => formatImei(row.original.imei) || '-'
   },
   {
-    accessorKey: 'sku',
-    header: 'SKU'
-  },
-  {
     accessorKey: 'capacity',
     header: 'Capacité'
+  },
+  {
+    accessorKey: 'supplier',
+    header: 'Fournisseur',
+    cell: ({ row }) => row.original.supplier || '—'
   },
   {
     accessorKey: 'stockedAt',
     header: 'Entrée en stock',
     cell: ({ row }) => formatSwissDate(row.original.stockedAt)
-  },
-  {
-    accessorKey: 'sold',
-    header: 'Vendu',
-    filterFn: 'equals',
-    cell: ({ row }) => {
-      return h('div', { class: 'flex items-center gap-3' }, [
-        h(UCheckbox, {
-          'modelValue': row.original.sold,
-          'onUpdate:modelValue': (value: boolean | 'indeterminate') => updateSoldState(row.original, !!value),
-          'ariaLabel': `Toggle sold for ${row.original.model}`
-        }),
-        h(UBadge, {
-          color: row.original.sold ? 'success' : 'neutral',
-          variant: 'subtle'
-        }, () => row.original.sold ? 'Vendu' : 'Disponible')
-      ])
-    }
   },
   {
     id: 'actions',
@@ -264,7 +218,7 @@ function handleImeiScan(value: string) {
 <template>
   <UDashboardPanel id="smartphone-stocks">
     <template #header>
-      <UDashboardNavbar title="Stock téléphones">
+      <UDashboardNavbar title="Liste IMEI">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -320,18 +274,6 @@ function handleImeiScan(value: string) {
             </UButton>
           </SmartphonesDeleteModal>
 
-          <USelect
-            v-model="soldFilter"
-            :items="[
-              { label: 'Tous', value: 'all' },
-              { label: 'Disponibles', value: 'available' },
-              { label: 'Vendus', value: 'sold' }
-            ]"
-            :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
-            placeholder="Filtrer le statut"
-            class="min-w-32"
-          />
-
           <UDropdownMenu
             :items="
               table?.tableApi
@@ -341,10 +283,9 @@ function handleImeiScan(value: string) {
                   label: ({
                     model: 'Modèle',
                     imei: 'IMEI',
-                    sku: 'SKU',
                     capacity: 'Capacité',
-                    stockedAt: 'Entrée en stock',
-                    sold: 'Vendu'
+                    supplier: 'Fournisseur',
+                    stockedAt: 'Entrée en stock'
                   } as Record<string, string>)[column.id] || upperFirst(column.id),
                   type: 'checkbox' as const,
                   checked: column.getIsVisible(),
@@ -391,6 +332,7 @@ function handleImeiScan(value: string) {
           td: 'py-2 align-middle text-sm',
           separator: 'h-0'
         }"
+        @select="(_, row) => openStockEditor(row.original)"
       >
         <template #empty>
           <div v-if="status === 'pending'" class="space-y-3 px-4 py-6">
