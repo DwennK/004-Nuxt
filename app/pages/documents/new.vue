@@ -78,7 +78,7 @@ async function saveDocument(payload: {
 </script>
 
 <template>
-  <UDashboardPanel id="document-create">
+  <UDashboardPanel id="document-create" :ui="{ body: 'min-h-0' }">
     <template #header>
       <UDashboardNavbar :title="pageTitle">
         <template #leading>
@@ -92,7 +92,10 @@ async function saveDocument(payload: {
 
     <template #body>
       <PosDossierBanner :state="dossier.current.value" :refresh="refreshCustomers" />
-      <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-4">
+      <div
+        class="mx-auto flex w-full max-w-[108rem] flex-col gap-4"
+        :class="{ 'lg:min-h-0 lg:flex-1': requestedDocumentType !== 'sav' }"
+      >
         <PosSavEditor
           v-if="requestedDocumentType === 'sav' && ticket"
           :key="dossier.current.value?.epoch"

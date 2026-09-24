@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
   catalogItems: CatalogItemRecord[]
   mode?: 'document' | 'ticket'
   showSearchCard?: boolean
+  fillHeight?: boolean
 }>(), {
   showSearchCard: true
 })
@@ -131,10 +132,14 @@ async function handleBarcodeScan(value: string) {
 </script>
 
 <template>
-  <div class="min-w-0 space-y-3">
+  <div
+    class="min-w-0 space-y-3"
+    :class="{ 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-3 lg:space-y-0': fillHeight }"
+  >
     <div
       v-if="showSearchCard !== false"
       class="relative"
+      :class="{ 'lg:shrink-0': fillHeight }"
       @focusin="cancelSearchClose"
       @focusout="scheduleSearchClose"
       @pointerdown="openSearchPanel"
@@ -230,10 +235,18 @@ async function handleBarcodeScan(value: string) {
       :title="emptyTitle"
       :description="emptyDescription"
       class="rounded-md border border-default bg-default py-8"
+      :class="{ 'lg:flex-1': fillHeight }"
     />
 
-    <div v-else class="office-table overflow-hidden shadow-none">
-      <div class="max-h-[max(12rem,calc(100dvh-33rem))] overflow-auto">
+    <div
+      v-else
+      class="office-table overflow-hidden shadow-none"
+      :class="{ 'lg:flex lg:min-h-32 lg:flex-1 lg:flex-col': fillHeight }"
+    >
+      <div
+        class="max-h-[max(12rem,calc(100dvh-33rem))] overflow-auto"
+        :class="{ 'lg:min-h-0 lg:max-h-none lg:flex-1': fillHeight }"
+      >
         <div class="min-w-[58rem]">
           <div class="grid grid-cols-[minmax(14rem,1fr)_4.25rem_3.5rem_10rem_4rem_8.5rem_7rem] sticky top-0 z-10 items-center gap-3 border-b border-default bg-elevated px-3 py-2 text-xs font-medium text-highlighted">
             <span>Libellé</span>
@@ -386,9 +399,10 @@ async function handleBarcodeScan(value: string) {
       title="Total négatif"
       description="Les lignes négatives sont autorisées, mais le total final du document doit rester positif ou nul."
       class="mt-3"
+      :class="{ 'lg:mt-0 lg:shrink-0': fillHeight }"
     />
 
-    <div class="flex flex-col gap-2 border-t border-default pt-3 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex shrink-0 flex-col gap-2 border-t border-default pt-3 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-toned tabular-nums">
         <span>{{ state.lines.length }} ligne(s)</span>
         <span>Sous-total HT {{ formatCurrency(totals.subtotal) }}</span>

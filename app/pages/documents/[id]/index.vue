@@ -78,6 +78,7 @@ const successorDocument = computed(() => {
 const isPayableDocument = computed(() => document.value?.settlement?.isPayable ?? (document.value ? isPayableDocumentType(document.value.type) && document.value.status !== 'cancelled' : false))
 const canAdjustFinancialRecords = computed(() => can('financial:adjust'))
 const canEditDocument = computed(() => !!document.value && !isSav.value && canAdjustFinancialRecords.value && !successorDocument.value && !document.value.creditedTotal)
+const fillEditorHeight = computed(() => canEditDocument.value && activeTab.value === 'lines')
 const documentLockTitle = computed(() => document.value?.creditedTotal ? 'Document avec réduction commerciale' : 'Modification réservée aux administrateurs')
 const documentLockDescription = computed(() => document.value?.creditedTotal ? 'Les lignes et le total initial sont conservés. Les remboursements et réductions restent consultables dans les paiements.' : 'Les opérateurs peuvent consulter, envoyer, imprimer et encaisser ce document sans modifier son écriture commerciale.')
 const balanceDue = computed(() => document.value?.settlement?.balanceDue ?? (isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0))
@@ -317,7 +318,7 @@ function startNewEmailAttempt() {
 </script>
 
 <template>
-  <UDashboardPanel id="document-detail">
+  <UDashboardPanel id="document-detail" :ui="{ body: 'min-h-0' }">
     <template #header>
       <UDashboardNavbar :title="document?.documentNumber || 'Détail du document'">
         <template #leading>
@@ -397,7 +398,11 @@ function startNewEmailAttempt() {
         loading-label="Chargement du document"
         @retry="refresh()"
       />
-      <div v-if="document" class="space-y-3">
+      <div
+        v-if="document"
+        class="space-y-3"
+        :class="{ 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-3 lg:space-y-0 lg:[&>*]:shrink-0': fillEditorHeight }"
+      >
         <UAlert
           v-if="successorDocument"
           icon="i-lucide-file-check-2"
@@ -464,7 +469,11 @@ function startNewEmailAttempt() {
           @update:model-value="selectTab"
         />
 
-        <div v-if="!isSav && activeTab === 'lines'" class="grid gap-4 xl:h-[calc(100vh-18.5rem)]">
+        <div
+          v-if="!isSav && activeTab === 'lines'"
+          class="grid gap-4"
+          :class="{ 'lg:min-h-0 lg:flex-1': fillEditorHeight }"
+        >
           <PosDocumentEditor
             v-if="canEditDocument"
             ref="documentEditor"
