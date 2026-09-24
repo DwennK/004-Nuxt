@@ -27,8 +27,9 @@ const tabs: TabsItem[] = [
   { label: 'Articles', icon: 'i-lucide-package', value: 'items', slot: 'items' }
 ]
 
-const { data: overview, refresh, status } = await useFetch<ReportsOverview>('/api/reports/overview', {
+const { data: overview, refresh, status, error } = await useFetch<ReportsOverview>('/api/reports/overview', {
   key: 'reports-overview',
+  lazy: true,
   query: computed(() => ({
     date: date.value,
     includeLeaders: false
@@ -181,8 +182,19 @@ const stats = computed(() => {
         >
           <template #revenue>
             <div class="space-y-4">
-              <div v-if="status === 'pending' && !overview" class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <USkeleton v-for="index in 4" :key="index" class="h-28 rounded-2xl" />
+              <PosAsyncState v-if="error && !overview" :error="error" @retry="refresh()" />
+              <div
+                v-if="(status === 'idle' || status === 'pending') && !overview"
+                role="status"
+                aria-label="Chargement des rapports"
+                class="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+              >
+                <USkeleton
+                  v-for="index in 4"
+                  :key="index"
+                  aria-hidden="true"
+                  class="h-28 rounded-2xl"
+                />
               </div>
 
               <div
@@ -215,7 +227,8 @@ const stats = computed(() => {
               </div>
 
               <div
-                v-if="status === 'pending' && !overview"
+                v-if="(status === 'idle' || status === 'pending') && !overview"
+                aria-hidden="true"
                 class="space-y-4"
               >
                 <USkeleton class="h-[28rem] rounded-2xl" />

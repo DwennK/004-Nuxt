@@ -5,6 +5,7 @@ const props = withDefaults(defineProps<{
   empty?: boolean
   loadingLabel?: string
   loadingRows?: number
+  loadingLayout?: 'rows' | 'detail'
   errorTitle?: string
   errorDescription?: string
   retryLabel?: string
@@ -16,6 +17,7 @@ const props = withDefaults(defineProps<{
   empty: false,
   loadingLabel: 'Chargement en cours',
   loadingRows: 5,
+  loadingLayout: 'rows',
   errorTitle: 'Chargement impossible',
   errorDescription: 'Les données n’ont pas pu être chargées. Réessayez dans un instant.',
   retryLabel: 'Réessayer',
@@ -70,16 +72,33 @@ const resolvedErrorDescription = computed(() => getErrorMessage(props.error) || 
     role="status"
     aria-live="polite"
     :aria-label="props.loadingLabel"
-    class="space-y-3 px-4 py-6"
+    :class="props.loadingLayout === 'detail' ? 'space-y-4' : 'space-y-3 px-4 py-6'"
   >
     <span class="sr-only">{{ props.loadingLabel }}</span>
     <slot name="loading">
-      <USkeleton
-        v-for="index in props.loadingRows"
-        :key="index"
-        aria-hidden="true"
-        class="h-10 w-full"
-      />
+      <div v-if="props.loadingLayout === 'detail'" aria-hidden="true" class="space-y-4">
+        <div class="space-y-3 rounded-xl border border-default p-4">
+          <USkeleton class="h-6 w-48 max-w-full" />
+          <USkeleton class="h-4 w-80 max-w-full" />
+        </div>
+        <div class="flex gap-3">
+          <USkeleton v-for="index in 3" :key="index" class="h-8 w-24" />
+        </div>
+        <div class="rounded-xl border border-default p-4">
+          <USkeleton class="mb-5 h-5 w-36" />
+          <div class="space-y-3">
+            <USkeleton v-for="index in props.loadingRows" :key="index" class="h-10 w-full" />
+          </div>
+        </div>
+      </div>
+      <template v-else>
+        <USkeleton
+          v-for="index in props.loadingRows"
+          :key="index"
+          aria-hidden="true"
+          class="h-10 w-full"
+        />
+      </template>
     </slot>
   </div>
 

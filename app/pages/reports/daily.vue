@@ -6,6 +6,7 @@ import { businessTimeZone, formatCurrency, formatDateTime, getPaymentMethodLabel
 
 const date = ref(toDateInputValue())
 const { data: summary, status, error, refresh } = await useFetch<DailySummary>('/api/reports/end-of-day', {
+  lazy: true,
   query: computed(() => ({ date: date.value }))
 })
 
@@ -66,10 +67,13 @@ function printReport() {
     </template>
 
     <template #body>
-      <div v-if="status === 'pending'" role="status" class="flex items-center gap-2 py-6 text-sm text-toned print:hidden">
-        <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
-        Chargement du rapport…
-      </div>
+      <PosAsyncState
+        v-if="status === 'idle' || status === 'pending'"
+        loading
+        loading-layout="detail"
+        loading-label="Chargement du rapport"
+        class="print:hidden"
+      />
       <UAlert
         v-else-if="error"
         title="Le rapport n’a pas pu être chargé."

@@ -25,12 +25,14 @@ const tabItems = [
   { label: 'Paiements', value: 'payments', icon: 'i-lucide-wallet' }
 ]
 
-const [{ data: customer, refresh: refreshCustomer }, { data: tickets, refresh: refreshTickets }, { data: documents, refresh: refreshDocuments }, { data: payments, refresh: refreshPayments }] = await Promise.all([
-  useFetch<CustomerRecord>(() => `/api/customers/${id.value}`),
+const [{ data: customer, status: customerStatus, error: customerError, refresh: refreshCustomer }, { data: tickets, status: ticketsStatus, error: ticketsError, refresh: refreshTickets }, { data: documents, status: documentsStatus, error: documentsError, refresh: refreshDocuments }, { data: payments, status: paymentsStatus, error: paymentsError, refresh: refreshPayments }] = await Promise.all([
+  useFetch<CustomerRecord>(() => `/api/customers/${id.value}`, { lazy: true }),
   useFetch<TicketListResponse>('/api/tickets', {
+    lazy: true,
     query: computed(() => ({ customerId: id.value, page: 1, pageSize: 250 }))
   }),
   useFetch<DocumentListResponse>('/api/documents', {
+    lazy: true,
     query: computed(() => ({
       customerId: id.value,
       page: 1,
@@ -38,6 +40,7 @@ const [{ data: customer, refresh: refreshCustomer }, { data: tickets, refresh: r
     }))
   }),
   useFetch<PaymentListResponse>('/api/payments', {
+    lazy: true,
     query: computed(() => ({
       customerId: id.value,
       page: paymentPagination.value.pageIndex + 1,
@@ -45,6 +48,12 @@ const [{ data: customer, refresh: refreshCustomer }, { data: tickets, refresh: r
     }))
   })
 ])
+
+const activity = computed(() => {
+  if (activeTab.value === 'tickets') return { data: tickets.value, status: ticketsStatus.value, error: ticketsError.value, refresh: refreshTickets }
+  if (activeTab.value === 'documents') return { data: documents.value, status: documentsStatus.value, error: documentsError.value, refresh: refreshDocuments }
+  return { data: payments.value, status: paymentsStatus.value, error: paymentsError.value, refresh: refreshPayments }
+})
 
 const paymentItems = computed(() => payments.value?.items || [])
 const paymentTotal = computed(() => payments.value?.total || 0)
@@ -163,25 +172,35 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
         </template>
 
         <template #right>
-          <UButton
-            label="Modifier"
-            icon="i-lucide-pencil"
-            color="neutral"
-            variant="ghost"
-            @click="editOpen = true"
-          />
-          <UButton
-            :to="`/dossiers/new?customerId=${id}`"
-            label="Nouveau dossier"
-            icon="i-lucide-wrench"
-            variant="subtle"
-          />
-          <UButton :to="`/documents/new?customerId=${id}`" label="Nouveau devis / facture" icon="i-lucide-file-plus-2" />
+          <template v-if="customer">
+            <UButton
+              label="Modifier"
+              icon="i-lucide-pencil"
+              color="neutral"
+              variant="ghost"
+              @click="editOpen = true"
+            />
+            <UButton
+              :to="`/dossiers/new?customerId=${id}`"
+              label="Nouveau dossier"
+              icon="i-lucide-wrench"
+              variant="subtle"
+            />
+            <UButton :to="`/documents/new?customerId=${id}`" label="Nouveau devis / facture" icon="i-lucide-file-plus-2" />
+          </template>
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
+      <PosAsyncState
+        v-if="!customer"
+        :loading="customerStatus === 'idle' || customerStatus === 'pending'"
+        :error="customerError"
+        loading-layout="detail"
+        loading-label="Chargement du client"
+        @retry="refreshCustomer()"
+      />
       <div v-if="customer" class="space-y-4">
         <div class="rounded-2xl border border-default/80 bg-muted/20 px-4 py-3">
           <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
@@ -206,32 +225,36 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
                 <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
                   Dossiers ouverts
                 </p>
-                <p class="text-sm font-semibold text-highlighted">
-                  {{ (tickets?.items || []).filter(ticket => ticket.status !== 'closed' && ticket.status !== 'cancelled').length }}
+                <USkeleton v-if="!tickets && (ticketsStatus === 'idle' || ticketsStatus === 'pending')" class="h-5 w-10" />
+                <p v-else class="text-sm font-semibold text-highlighted">
+                  {{ tickets ? (tickets?.items || []).filter(ticket => ticket.status !== 'closed' && ticket.status !== 'cancelled').length : '—' }}
                 </p>
               </div>
               <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
                 <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
                   Documents
                 </p>
-                <p class="text-sm font-semibold text-highlighted">
-                  {{ documents?.total || 0 }}
+                <USkeleton v-if="!documents && (documentsStatus === 'idle' || documentsStatus === 'pending')" class="h-5 w-10" />
+                <p v-else class="text-sm font-semibold text-highlighted">
+                  {{ documents ? documents?.total || 0 : '—' }}
                 </p>
               </div>
               <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
                 <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
                   Paiements
                 </p>
-                <p class="text-sm font-semibold text-highlighted">
-                  {{ paymentTotal }}
+                <USkeleton v-if="!payments && (paymentsStatus === 'idle' || paymentsStatus === 'pending')" class="h-5 w-10" />
+                <p v-else class="text-sm font-semibold text-highlighted">
+                  {{ payments ? paymentTotal : '—' }}
                 </p>
               </div>
               <div class="rounded-xl border border-default bg-default/80 px-3 py-2">
                 <p class="text-[11px] uppercase tracking-[0.14em] text-toned">
                   Encaissements affichés
                 </p>
-                <p class="text-sm font-semibold text-highlighted">
-                  {{ formatCurrency(displayedPaymentTotal) }}
+                <USkeleton v-if="!payments && (paymentsStatus === 'idle' || paymentsStatus === 'pending')" class="h-5 w-24" />
+                <p v-else class="text-sm font-semibold text-highlighted">
+                  {{ payments ? formatCurrency(displayedPaymentTotal) : '—' }}
                 </p>
               </div>
             </div>
@@ -337,53 +360,62 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
             />
 
             <div class="xl:max-h-[calc(100vh-24rem)] xl:overflow-auto pr-1">
-              <UTable
-                v-if="activeTab === 'tickets'"
-                :data="tickets?.items || []"
-                :columns="ticketColumns"
-                sticky="header"
+              <PosAsyncState
+                :loading="!activity.data && (activity.status === 'idle' || activity.status === 'pending')"
+                :error="activity.error"
+                @retry="activity.refresh()"
               >
-                <template #empty>
-                  <UEmpty icon="i-lucide-wrench" title="Aucun dossier" description="Les dossiers de travail suivis pour ce client apparaîtront ici." />
-                </template>
-              </UTable>
+                <UTable
+                  v-if="activeTab === 'tickets'"
+                  :data="tickets?.items || []"
+                  :columns="ticketColumns"
+                  sticky="header"
+                  :loading="activity.status === 'pending'"
+                >
+                  <template #empty>
+                    <UEmpty icon="i-lucide-wrench" title="Aucun dossier" description="Les dossiers de travail suivis pour ce client apparaîtront ici." />
+                  </template>
+                </UTable>
 
-              <UTable
-                v-else-if="activeTab === 'documents'"
-                :data="documents?.items || []"
-                :columns="documentColumns"
-                sticky="header"
-              >
-                <template #empty>
-                  <UEmpty icon="i-lucide-files" title="Aucun document" description="Les devis, commandes et factures apparaîtront ici." />
-                </template>
-              </UTable>
+                <UTable
+                  v-else-if="activeTab === 'documents'"
+                  :data="documents?.items || []"
+                  :columns="documentColumns"
+                  sticky="header"
+                  :loading="activity.status === 'pending'"
+                >
+                  <template #empty>
+                    <UEmpty icon="i-lucide-files" title="Aucun document" description="Les devis, commandes et factures apparaîtront ici." />
+                  </template>
+                </UTable>
 
-              <UTable
-                v-else
-                :data="paymentItems"
-                :columns="paymentColumns"
-                sticky="header"
-              >
-                <template #empty>
-                  <UEmpty icon="i-lucide-wallet" title="Aucun paiement" description="Les paiements enregistrés pour ce client apparaîtront ici." />
-                </template>
-              </UTable>
+                <UTable
+                  v-else
+                  :data="paymentItems"
+                  :columns="paymentColumns"
+                  sticky="header"
+                  :loading="activity.status === 'pending'"
+                >
+                  <template #empty>
+                    <UEmpty icon="i-lucide-wallet" title="Aucun paiement" description="Les paiements enregistrés pour ce client apparaîtront ici." />
+                  </template>
+                </UTable>
 
-              <div
-                v-if="activeTab === 'payments' && paymentTotal > 0"
-                class="flex items-center justify-between gap-3 border-t border-default pt-3"
-              >
-                <p class="text-sm text-toned">
-                  {{ paymentTotal }} paiement(s) · page {{ paymentPagination.pageIndex + 1 }} / {{ paymentTotalPages }}
-                </p>
-                <UPagination
-                  :page="paymentPagination.pageIndex + 1"
-                  :items-per-page="paymentPagination.pageSize"
-                  :total="paymentTotal"
-                  @update:page="(page: number) => { paymentPagination.pageIndex = page - 1 }"
-                />
-              </div>
+                <div
+                  v-if="activeTab === 'payments' && paymentTotal > 0"
+                  class="flex items-center justify-between gap-3 border-t border-default pt-3"
+                >
+                  <p class="text-sm text-toned">
+                    {{ paymentTotal }} paiement(s) · page {{ paymentPagination.pageIndex + 1 }} / {{ paymentTotalPages }}
+                  </p>
+                  <UPagination
+                    :page="paymentPagination.pageIndex + 1"
+                    :items-per-page="paymentPagination.pageSize"
+                    :total="paymentTotal"
+                    @update:page="(page: number) => { paymentPagination.pageIndex = page - 1 }"
+                  />
+                </div>
+              </PosAsyncState>
             </div>
           </UCard>
         </div>

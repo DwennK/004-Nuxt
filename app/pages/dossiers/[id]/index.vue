@@ -76,13 +76,13 @@ const smsQrDataUrl = ref<string | null>(null)
 const smsQrLoading = ref(false)
 const smsLogKey = ref<string | null>(null)
 
-const [{ data: ticket, refresh: refreshTicket }, { data: customerSmsSettings }] = await Promise.all([
-  useFetch<TicketDetail>(() => `/api/tickets/${id.value}`),
-  useFetch<CustomerSmsSettingsRecord>('/api/settings/customer-sms')
+const [{ data: ticket, status: ticketStatus, error: ticketError, refresh: refreshTicket }, { data: customerSmsSettings }] = await Promise.all([
+  useFetch<TicketDetail>(() => `/api/tickets/${id.value}`, { lazy: true }),
+  useFetch<CustomerSmsSettingsRecord>('/api/settings/customer-sms', { lazy: true })
 ])
 
 const activeTab = ref(ticket.value?.type === 'sale' ? 'overview' : 'lines')
-const dossier = useDossier(() => ({ kind: 'ticket', id: id.value }), {
+const dossier = useDossier(() => ticket.value ? { kind: 'ticket', id: id.value } : null, {
   record: ticket,
   edit: () => activeTab.value === 'lines' && !!ticket.value && !['closed', 'cancelled'].includes(ticket.value.status)
 })
@@ -124,7 +124,7 @@ const showAllHistory = ref(false)
 watch(() => ticket.value?.id, () => {
   activeTab.value = ticket.value?.type === 'sale' ? 'overview' : 'lines'
   showAllHistory.value = false
-})
+}, { flush: 'sync' })
 
 const tabItems = computed(() => [
   { label: 'Lignes', icon: 'i-lucide-list', value: 'lines', badge: lineEditor.state.lines.length },
@@ -788,6 +788,14 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
         :saving="commercialBusy"
       />
       <PosDossierBanner :state="dossier.current.value" :refresh="refreshTicket" />
+      <PosAsyncState
+        v-if="!ticket"
+        :loading="ticketStatus === 'idle' || ticketStatus === 'pending'"
+        :error="ticketError"
+        loading-layout="detail"
+        loading-label="Chargement du dossier"
+        @retry="refreshTicket()"
+      />
       <div v-if="ticket" class="space-y-4">
         <PosFormFeedback :saving="actionSaving" :error="actionError" />
 

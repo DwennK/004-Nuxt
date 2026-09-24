@@ -55,14 +55,16 @@ const emailState = reactive<DocumentEmailInput>({
   message: ''
 })
 
-const [{ data: document, refresh }, { data: company }] = await Promise.all([
-  useFetch<DocumentDetail>(() => `/api/documents/${id.value}`),
-  useFetch<CompanySettingsRecord>('/api/settings/company')
+const [{ data: document, status: documentStatus, error: documentError, refresh }, { data: company, status: companyStatus }] = await Promise.all([
+  useFetch<DocumentDetail>(() => `/api/documents/${id.value}`, { lazy: true }),
+  useFetch<CompanySettingsRecord>('/api/settings/company', { lazy: true })
 ])
 
 const isSav = computed(() => document.value?.type === 'sav')
-const { data: savTicket } = await useAsyncData(() => `sav-ticket-${id.value}`, () => isSav.value && document.value?.ticketId ? useRequestFetch()<TicketDetail>(`/api/tickets/${document.value.ticketId}`) : Promise.resolve(null))
-const dossier = useDossier(() => isSav.value && document.value?.ticketId ? { kind: 'ticket', id: document.value.ticketId } : { kind: 'document', id: id.value }, { record: document, edit: () => isSav.value ? can('financial:record') : can('financial:adjust') })
+const requestFetch = useRequestFetch()
+const savTicketId = computed(() => isSav.value ? document.value?.ticketId : null)
+const { data: savTicket, status: savTicketStatus, error: savTicketError, refresh: refreshSavTicket } = await useAsyncData(() => `sav-ticket-${id.value}`, () => savTicketId.value ? requestFetch<TicketDetail>(`/api/tickets/${savTicketId.value}`) : Promise.resolve(null), { lazy: true, watch: [savTicketId] })
+const dossier = useDossier(() => !document.value ? null : isSav.value && document.value.ticketId ? { kind: 'ticket', id: document.value.ticketId } : { kind: 'document', id: id.value }, { record: document, edit: () => isSav.value ? can('financial:record') : can('financial:adjust') })
 provide('pos-dossier-state', dossier.current)
 
 const paidAmount = computed(() => document.value?.payments
@@ -75,7 +77,7 @@ const successorDocument = computed(() => {
 })
 const isPayableDocument = computed(() => document.value?.settlement?.isPayable ?? (document.value ? isPayableDocumentType(document.value.type) && document.value.status !== 'cancelled' : false))
 const canAdjustFinancialRecords = computed(() => can('financial:adjust'))
-const canEditDocument = computed(() => !isSav.value && canAdjustFinancialRecords.value && !successorDocument.value && !document.value?.creditedTotal)
+const canEditDocument = computed(() => !!document.value && !isSav.value && canAdjustFinancialRecords.value && !successorDocument.value && !document.value.creditedTotal)
 const documentLockTitle = computed(() => document.value?.creditedTotal ? 'Document avec réduction commerciale' : 'Modification réservée aux administrateurs')
 const documentLockDescription = computed(() => document.value?.creditedTotal ? 'Les lignes et le total initial sont conservés. Les remboursements et réductions restent consultables dans les paiements.' : 'Les opérateurs peuvent consulter, envoyer, imprimer et encaisser ce document sans modifier son écriture commerciale.')
 const balanceDue = computed(() => document.value?.settlement?.balanceDue ?? (isPayableDocument.value ? Math.max((document.value?.total || 0) - paidAmount.value, 0) : 0))
@@ -188,10 +190,11 @@ function selectTab(value: string | number) {
 }
 
 onMounted(() => {
-  if (route.query.email === '1' && supportsA4Print.value && !hasOpenedInitialEmailModal.value) {
+  watch([supportsA4Print, companyStatus], () => {
+    if (route.query.email !== '1' || !supportsA4Print.value || ['idle', 'pending'].includes(companyStatus.value) || hasOpenedInitialEmailModal.value) return
     hasOpenedInitialEmailModal.value = true
     openEmailModal()
-  }
+  }, { immediate: true })
 })
 
 function fillEmailState() {
@@ -329,7 +332,7 @@ function startNewEmailAttempt() {
             aria-label="Envoyer par mail"
             color="neutral"
             variant="subtle"
-            :disabled="documentActionsDisabled"
+            :disabled="documentActionsDisabled || companyStatus === 'idle' || companyStatus === 'pending'"
             :ui="{ label: 'hidden sm:inline' }"
             @click="openEmailModal"
           />
@@ -386,6 +389,14 @@ function startNewEmailAttempt() {
 
     <template #body>
       <PosDossierBanner :state="dossier.current.value" :refresh="refresh" />
+      <PosAsyncState
+        v-if="!document"
+        :loading="documentStatus === 'idle' || documentStatus === 'pending'"
+        :error="documentError"
+        loading-layout="detail"
+        loading-label="Chargement du document"
+        @retry="refresh()"
+      />
       <div v-if="document" class="space-y-3">
         <UAlert
           v-if="successorDocument"
@@ -412,18 +423,25 @@ function startNewEmailAttempt() {
           @busy="isConverting = $event"
         />
 
-        <PosSavEditor
+        <PosAsyncState
           v-if="isSav"
-          :key="dossier.current.value?.epoch"
-          ref="savEditor"
-          v-model:dirty="hasUnsavedDocumentChanges"
-          :ticket="savTicket || null"
-          :document="document"
-          :disabled="dossier.blocked.value || !can('financial:record')"
-          :saving="isSavingDocument"
-          :save-error="saveError"
-          @save="saveSav"
-        />
+          :loading="!!savTicketId && !savTicket && (savTicketStatus === 'idle' || savTicketStatus === 'pending')"
+          :error="savTicketError"
+          loading-label="Chargement de la réparation liée"
+          @retry="refreshSavTicket()"
+        >
+          <PosSavEditor
+            :key="dossier.current.value?.epoch"
+            ref="savEditor"
+            v-model:dirty="hasUnsavedDocumentChanges"
+            :ticket="savTicket || null"
+            :document="document"
+            :disabled="dossier.blocked.value || !can('financial:record')"
+            :saving="isSavingDocument"
+            :save-error="saveError"
+            @save="saveSav"
+          />
+        </PosAsyncState>
         <div v-if="isSav && document.sav?.coverage === 'billable' && document.sav.status !== 'cancelled'" class="flex flex-wrap gap-2">
           <UButton
             v-for="type in savCommercialTypes"
