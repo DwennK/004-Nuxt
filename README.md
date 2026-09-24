@@ -11,13 +11,13 @@ Nuxt 4 POS and shop-management app for a physical tech store.
 
 The app is built for day-to-day in-store operations with a strict business split between:
 
-- `ticket`: operational work case such as repair, diagnostic, support or tracked follow-up; displayed as **Dossier client** with a **DOS-** reference (see [conversion guide](docs/dossier-naming.md))
-- `document`: commercial object such as quote, customer order or invoice, or an operational SAV return
+- `ticket`: customer case for repairs, diagnostics, support, sales or tracked follow-up, with a **DOS-** reference (see [reference conversion guide](docs/dossier-naming.md))
+- `document`: commercial object such as a quote, customer order or invoice, or an operational after-sales return (`sav`)
 - `payment`: cashflow object tracked separately from tickets and documents
 
 The app uses Nuxt server routes, Drizzle ORM and Turso/libSQL, and targets Cloudflare Workers through Nitro. User-facing copy is in French.
 
-This README describes the code in the repository, not a verified production deployment. In particular, the Cloudflare e-mail transition requires separate database and infrastructure activation before deployment.
+This README describes the code in the repository, not a verified production deployment. Versioned database migrations and integration setup must be verified against the target environment before deployment.
 
 ## Product Scope
 
@@ -26,9 +26,12 @@ Current core scope:
 - counter workspace with global search, pickups, outstanding payments and blocked tickets
 - customers and product / repair / service catalog
 - direct sales and repair / support tickets
+- after-sales returns with their own commercial documents and payments
 - quotes, customer orders and invoices, including print / PDF output
-- payments, reporting and end-of-day checks
+- payments, recorded refunds, reporting and end-of-day checks
+- shared case editing with reservations, presence and conflict protection
 - company settings and administrator-managed user accounts
+- manual and scheduled Turso backups to Dropbox
 
 Secondary business modules:
 
@@ -54,22 +57,22 @@ Typical business flows:
 - quick support: `Invoice -> Payment`
 - Shopify import: `Shopify order -> POS invoice + Shopify payments`
 
-Within a dossier, quote, order and invoice are successive stages of one operation.
-Each SAV return can have its own independent commercial operation; its documents
-share a `savId` and never reuse payments from the initial repair or another SAV.
-See [SAV workflow](docs/sav.md).
+Within a customer case, quote, order and invoice are successive stages of one operation.
+Each after-sales return can have its own independent commercial operation; its documents
+share a `savId` and never reuse payments from the initial repair or another return.
+See [after-sales workflow](docs/sav.md).
 A quote is optional: an order can be created directly, and a direct invoice remains supported.
 The current invoice takes over from the order for collection; their totals are never added together.
-Invoice lines inherit the order, then the quote, then the dossier lines, in that order.
+Invoice lines inherit the order, then the quote, then the case lines, in that order.
 Order deposits retain their original payment IDs, dates and document links and are deducted from the invoice.
 This also applies to existing linked documents without a data migration; standalone documents remain independent until explicitly converted.
 From a quote, create an order or invoice; from an order, create an invoice.
-`POST /api/documents/:id/convert` creates a `sale` dossier only when the source has
+`POST /api/documents/:id/convert` creates a `sale` case only when the source has
 none, attaching the source and successor in the same transaction. Existing
-repair, support and SAV scopes are retained. Lines and customer notes are copied;
+repair, support and after-sales scopes are retained. Lines and customer notes are copied;
 quote expiry is not reused as invoice due date. Original numbers and receipts stay
 unchanged. Retries reopen the existing stage, and the same customer alone never
-links independent documents. Sale dossiers use preparation / handover / closure
+links independent documents. Sale cases use preparation / handover / closure
 instead of the workshop diagnostic workflow. This adds an application-level text
 enum value only; no SQL migration or historical backfill is required.
 The previous stage stays readable and printable. New collections and commercial edits use the current stage.
@@ -78,16 +81,30 @@ Cancelling an unpaid invoice restores the order balance; cancellation or a lower
 Important product rules:
 
 - money is stored as integer cents
-- pricing is TTC / VAT-inclusive
+- pricing is VAT-inclusive
 - VAT exists both on lines and documents
 - document line quantity is stored as an integer
-- line quantities stay positive; negative TTC unit prices are allowed for discounts and adjustments, including their negative VAT
+- line quantities stay positive; negative VAT-inclusive unit prices are allowed for discounts and adjustments, including their negative VAT
 - documents and quick sales cannot end with a negative total; credit notes are not a supported document type
 - payment methods are `cash`, `card_twint`, `bank_transfer`, `stripe` and the import-specific `shopify`
 - ticket and document numbers are generated server-side
 - direct sales can happen without a ticket
 - payments are tracked separately from documents
 - financial creation routes require an `Idempotency-Key` to prevent duplicate documents and payments on retry; see [API contracts](./docs/api-contracts.md)
+
+### Refunds and Payment Corrections
+
+Receipts are positive payment movements. Refunds are separate negative movements linked to the original receipt, with their own date, method and reason. Recording a refund documents money already returned to the customer; it does not call a payment provider to return funds.
+
+An administrator can either correct the payment balance only or also reduce the current invoice's amount due through an immutable `document_credits` adjustment. Invoice lines and the original total remain unchanged. Cancelling an incorrectly entered receipt requires a reason and removes it from cashflow totals without inventing a refund.
+
+See [payment ledger and refund rules](./docs/payment-ledger.md), including the required additive migration and reporting semantics.
+
+### Shared Case Editing
+
+Multiple operators can view the same case. Editing reserves it for a specific account and browser tab; writes require reservation proof and the current revision. A confirmed takeover invalidates the previous editor's proof. The UI also tracks unsaved changes and provides inactivity reminders.
+
+Use `useDossierFetch()` for mutations to existing cases. See [case editing, reservations and reminders](./docs/dossier-editing.md) for the HTTP contract, recovery behavior and optional browser tests.
 
 ## Stack
 
@@ -169,9 +186,17 @@ Database:
 - `TURSO_URL`: Turso database URL
 - `TURSO_TOKEN`: Turso auth token
 - `DB_REMOTE_TARGETS`: JSON allowlist mapping approved remote database hostnames to environments, used by database tooling
+- `TURSO_ORGANIZATION` and `TURSO_PLATFORM_TOKEN`: optional CLI-only usage reporting credentials, distinct from the database token and excluded from Worker runtime configuration
 - `POS_ALLOW_RUNTIME_SCHEMA_BOOTSTRAP` and `POS_ALLOW_RUNTIME_DEMO_SEED`: disabled by default; temporary local compatibility switches only, never staging or production
 
 Additional migration confirmations and backup requirements are described in the [database runbook](./docs/database-migrations.md).
+
+Dropbox backups:
+
+- `NUXT_DROPBOX_APP_KEY` and `NUXT_DROPBOX_APP_SECRET`: Dropbox application credentials
+- `NUXT_DROPBOX_REDIRECT_URI`: exact OAuth callback URL ending in `/api/settings/backups/dropbox/callback`
+- `NUXT_BACKUP_ENCRYPTION_KEY`: 32 random bytes encoded as base64, used to encrypt the stored Dropbox refresh token; keep a separate recovery copy outside Turso
+- See [backup setup and recovery](./docs/backups.md) for migration, permissions and restore checks.
 
 Authentication:
 
@@ -212,7 +237,7 @@ MobileSentrix:
 Internal AI assistant:
 
 - `MINIMAX_API_KEY`: MiniMax API key used server-side by the internal assistant
-- `MINIMAX_MODEL`: MiniMax model id, defaults to `MiniMax-M2.7`
+- `MINIMAX_MODEL`: MiniMax model id, defaults to `MiniMax-M3`
 - `MINIMAX_BASE_URL`: MiniMax API base URL, defaults to `https://api.minimax.io/v1`
 
 Notes:
@@ -225,7 +250,6 @@ Notes:
 
 Core dashboard routes:
 
-- overview: [`app/pages/index.vue`](./app/pages/index.vue)
 - counter workspace: [`app/pages/index.vue`](./app/pages/index.vue)
 - customers: [`app/pages/customers/index.vue`](./app/pages/customers/index.vue)
 - catalog: [`app/pages/catalog/index.vue`](./app/pages/catalog/index.vue)
@@ -255,6 +279,7 @@ Secondary modules:
 - smartphone reservations: [`app/pages/reservations-smartphone.vue`](./app/pages/reservations-smartphone.vue)
 - assistant: [`app/pages/assistant.vue`](./app/pages/assistant.vue)
 - company settings: [`app/pages/settings/company.vue`](./app/pages/settings/company.vue)
+- backup settings and history: [`app/pages/settings/backups.vue`](./app/pages/settings/backups.vue)
 - user administration: [`app/pages/settings/users.vue`](./app/pages/settings/users.vue)
 - interface settings: [`app/pages/settings/interface.vue`](./app/pages/settings/interface.vue)
 - customer SMS settings: [`app/pages/settings/customer-sms.vue`](./app/pages/settings/customer-sms.vue)
@@ -285,16 +310,19 @@ Current scope:
 - delivery events consumed through a private Queue by the existing Worker
 - no inbound mail, open/click tracking, preview retention dependency or automatic purge
 
-Previous Resend messages are neither imported nor deleted. Production activation
-is blocked until the real database baseline, tested restore and reviewed additive
-migration exist. Follow [`docs/cloudflare-email.md`](./docs/cloudflare-email.md).
+Previous Resend messages are neither imported nor deleted. The adoption baseline
+and email journal migration are versioned in `drizzle/`; their presence does not
+prove they are applied to a remote target. Verify the target ledger, tested restore,
+binding and queues before activation. Follow the setup procedure in
+[`docs/cloudflare-email.md`](./docs/cloudflare-email.md); its dated deployment
+observations are historical, not current environment status.
 
 ## Shopify Import
 
 The POS includes an administrator-only import tool at `/tools/shopify-import`.
 It imports open Shopify orders into invoices with their successful payments,
 using the dedicated `shopify` payment method. Later captures can be retrieved
-with **Actualiser les paiements** without duplicating existing transactions.
+with the payment refresh action without duplicating existing transactions.
 
 The integration supports CHF, discounts, free items, shipping and actual Shopify
 VAT. Unsupported refunds, gift-card/store-credit payments, duties and inconsistent
@@ -310,6 +338,16 @@ The `/tools/mobilesentrix` integration uses OAuth plus the server-side `ms-token
 header supplied by MobileSentrix to authorize REST requests through Cloudflare.
 See [MobileSentrix configuration and live checks](./docs/mobilesentrix.md) for local
 environment variables, Worker secrets and verification steps.
+
+## Database Backups
+
+Administrators manage Dropbox connections, manual backups, the daily schedule and run history at `/settings/backups`. The existing Worker schedules backups at 02:00 UTC; exports run only when Dropbox is connected and daily backups are enabled.
+
+Backups are standalone SQLite `.db` files built from the native Turso snapshot and committed write-ahead log. Before upload, the Worker checks database integrity, foreign keys and the current backup run marker. Dropbox uploads are verified by size and content hash. Exports are limited to 16 MiB; failures do not publish partial files.
+
+An unresolved failure remains visible in settings and navigation until a later successful backup. Files are not automatically deleted. The application encrypts the stored Dropbox refresh token, not the exported database file. A backup must be restored and checked separately before it can be relied on for recovery.
+
+See [Dropbox backup setup, limits and recovery](./docs/backups.md).
 
 ## Authentication
 
@@ -347,13 +385,14 @@ Scripts are defined in [`package.json`](./package.json):
 | `npm run security:regression` | Additional repository security regression checks |
 | `npm run build` | Prepare scanner WASM assets and build the Worker output |
 | `npm run check` | Lint, typecheck, tests, security regression and build |
-| `npm run test:e2e` | Playwright login-page smoke test |
+| `npm run test:e2e` | Playwright login-page smoke test; case editing tests require explicit isolated setup |
 | `npm run preview` | Rebuild, then run Wrangler locally against `.output` |
 | `npm run deploy` | Rebuild, then deploy `.output` with `--keep-vars` |
 | `npm run cf-typegen` | Generate Worker binding types in `server/types/cloudflare-env.d.ts` |
 | `npm run db:push` / `npm run db:studio` | Development schema push / database UI; verify the configured target first |
 | `npm run db:introspect` / `npm run db:verify` | Database inventory / schema and invariant verification |
 | `npm run db:status` | Compare migration files and database ledger; `-- --local-only` avoids database access |
+| `npm run db:usage` | Read Turso organization usage through the Platform API without application SQL |
 | `npm run db:migrate` | Plan migrations; writes require `-- --apply` and applicable target confirmations |
 | `npm run db:backfill:document-totals` | Bounded, resumable totals backfill; plan-only unless `-- --apply` is supplied |
 | `npm run seed:test-user` | Create or refresh the temporary development administrator |
@@ -367,7 +406,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-[`playwright.config.ts`](./playwright.config.ts) uses a 1440×900 viewport and starts or reuses a local server on port 3000. It does not launch the system Google Chrome application. The automated test checks the login shell, not an authenticated sale or an external integration. UI changes still need a desktop check and a mobile check when responsive behavior is affected.
+[`playwright.config.ts`](./playwright.config.ts) uses a 1440×900 viewport and starts or reuses a local server on port 3000. It does not launch the system Google Chrome application. The default smoke test checks the login shell, not an authenticated sale or an external integration. The optional case editing suite requires `POS_DOSSIER_E2E_URL` and an isolated server with disposable fixtures; it modifies those records. Follow [the test setup](./docs/dossier-editing.md) before enabling it. UI changes still need a desktop check and a mobile check when responsive behavior is affected.
 
 The [CI workflow](./.github/workflows/ci.yml) runs `npm ci`, `npm run check`, then the browser smoke job. It does not deploy the Worker. Local e-mail simulation, passing tests and a Git push are not proof of a live delivery or deployment.
 
@@ -375,9 +414,10 @@ The [CI workflow](./.github/workflows/ci.yml) runs `npm ci`, `npm run check`, th
 
 ### Data Model
 
-Main tables:
+Main tables and reporting view:
 
 - `customers`
+- `counter_customer`
 - `catalog_items`
 - `tickets`
 - `ticket_events`
@@ -386,6 +426,8 @@ Main tables:
 - `document_lines`
 - `document_imports`
 - `payments`
+- `document_credits` and the `payment_movements` reporting view
+- `dossier_scopes`, `dossier_presences` and `dossier_handovers`
 - `number_sequences`
 - `company_settings`
 - `smartphone_stocks`
@@ -393,7 +435,8 @@ Main tables:
 - `employees`
 - `vacation_entries`
 - `users` and `login_attempts`
-- `sent_emails` and `sent_email_events` (e-mail transition; migration required before activation)
+- `sent_emails` and `sent_email_events`
+- `backup_settings` and `backup_runs`
 
 Main schema file:
 
@@ -421,7 +464,9 @@ Main POS services:
 - [`server/utils/pos/documents.ts`](./server/utils/pos/documents.ts)
 - [`server/utils/pos/payments.ts`](./server/utils/pos/payments.ts)
 - [`server/utils/pos/reports.ts`](./server/utils/pos/reports.ts)
-- [`server/utils/pos/core.ts`](./server/utils/pos/core.ts)
+- [`server/utils/pos/schema.ts`](./server/utils/pos/schema.ts)
+- [`server/utils/pos/dossiers.ts`](./server/utils/pos/dossiers.ts)
+- [`server/utils/pos/payment-corrections.ts`](./server/utils/pos/payment-corrections.ts)
 
 Integration-specific services:
 
@@ -429,16 +474,17 @@ Integration-specific services:
 - [`server/utils/company-settings.ts`](./server/utils/company-settings.ts)
 - [`server/utils/customer-sms-settings.ts`](./server/utils/customer-sms-settings.ts)
 - [`server/utils/assistant/`](./server/utils/assistant/)
+- [`server/utils/backups/`](./server/utils/backups/)
 
 ### Database Lifecycle
 
 The schema contract is [`server/db/schema.ts`](./server/db/schema.ts), the connection is in [`server/utils/turso.ts`](./server/utils/turso.ts), and tooling safety checks start in [`drizzle.config.ts`](./drizzle.config.ts).
 
-`ensurePosSchema()` in [`server/utils/pos/core.ts`](./server/utils/pos/core.ts) performs no database I/O by default. Legacy schema bootstrap is available only behind an explicit local compatibility switch. Demo seeding additionally requires its own switch. Neither belongs on the staging / production request path. Stored document totals are repaired by the explicit bounded backfill command, not by a cold-start recalculation.
+`ensurePosSchema()` in [`server/utils/pos/schema.ts`](./server/utils/pos/schema.ts) performs no database I/O by default. Legacy schema bootstrap is available only behind an explicit local compatibility switch. Demo seeding additionally requires its own switch. Neither belongs on the staging / production request path. Stored document totals are repaired by the explicit bounded backfill command, not by a cold-start recalculation.
 
-The repository does not yet contain the real database baseline in [`drizzle/`](./drizzle/README.md). An introspection baseline adopts an existing database; its commented SQL cannot provision an empty one. Do not generate a synthetic initial migration and apply it to the existing POS database.
+The repository contains the real adoption baseline `20260902155258_talented_songbird` and subsequent versioned migrations in [`drizzle/`](./drizzle/README.md). An introspection baseline adopts an existing database; its commented SQL cannot provision an empty one. Do not generate a synthetic initial migration and apply it to the existing POS database. Check the committed inventory with `npm run db:status -- --local-only`, then verify the intended target's migration ledger separately.
 
-Before any production schema change: inventory the exact target, verify a backup restore, establish the authorized real baseline, review and rehearse the additive migration, then verify it before switching the Worker. `db:push` is for development only, not staging or production. The full procedure and rollback gates are in [Database migrations](./docs/database-migrations.md).
+Before any production schema change: inventory the exact target, verify a backup restore and its baseline ledger, review and rehearse the additive migration, then verify it before switching the Worker. `db:push` is for development only, not staging or production. The full procedure and rollback gates are in [Database migrations](./docs/database-migrations.md).
 
 ## Internal AI Assistant
 
@@ -465,13 +511,16 @@ The daily report is designed for quick store-closing checks.
 
 Current output includes:
 
-- total paid today
-- invoices paid today
-- totals by payment method
+- net cashflow for the selected business day in the Europe/Zurich timezone
+- individual receipts and refunds, including deposits and split payments, with document, customer, time, method and amount
+- settled invoices with a payment movement that day, plus outstanding invoices issued that day
+- net totals and movement counts by payment method
 - number of open tickets
 - number of tickets opened today
 - number of tickets closed today
-- turnover split by document line category when available
+- current settled invoice value split by document line category when available
+
+The printed daily report lists payment movements, including deposits on quotes or orders and partial payments on invoices that remain unpaid. Refunds appear on their own payment date. Rankings and category totals describe current settled invoice value; they are not the cash ledger or an invoice-date tax report. See [payment ledger semantics](./docs/payment-ledger.md).
 
 Relevant files:
 
@@ -495,7 +544,7 @@ Before an authorized production deployment:
 
 1. Run `npm run check` and the relevant browser / Worker checks.
 2. Complete the [database migration gate](./docs/database-migrations.md), including backup restore verification and a recorded rollback reference.
-3. For the e-mail transition, also complete [Cloudflare e-mail activation](./docs/cloudflare-email.md). The local SQL candidate is not an approved production migration.
+3. For e-mail or backups, also complete [Cloudflare e-mail activation](./docs/cloudflare-email.md) or [Dropbox backup setup](./docs/backups.md). Use reviewed migrations in `drizzle/`; SQL candidates under `docs/sql/` are not the production migration ledger.
 4. Verify the Cloudflare account, Worker target, required runtime secrets, bindings and queues. Changing `.env` does not update Worker secrets.
 5. Deploy using the release procedure. `npm run deploy` rebuilds and directly deploys `.output` with `--keep-vars`; it is not the staged promotion workflow described in the migration runbook.
 6. Verify the affected screens and external integrations on the deployed version. A successful build or upload alone is not a live functional check.
@@ -508,6 +557,12 @@ Before an authorized production deployment:
 - [Database migrations, verification and rollback](./docs/database-migrations.md)
 - [Migration directory status](./drizzle/README.md)
 - [API contracts and financial idempotency](./docs/api-contracts.md)
+- [Payment ledger, refunds and cancellations](./docs/payment-ledger.md)
+- [Customer case references](./docs/dossier-naming.md)
+- [Shared case editing and reminders](./docs/dossier-editing.md)
+- [After-sales returns](./docs/sav.md)
+- [Dropbox backups and recovery](./docs/backups.md)
+- [Query performance and usage reporting](./docs/query-performance.md)
 - [Architecture boundaries](./docs/architecture-boundaries.md)
 - [Development account](./docs/dev-login.md)
 - [Cloudflare document e-mails](./docs/cloudflare-email.md)
