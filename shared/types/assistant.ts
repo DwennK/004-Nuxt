@@ -47,3 +47,16 @@ export interface AssistantChatRequest {
   messages: AssistantChatMessageInput[]
   debug: boolean
 }
+
+export type AssistantStreamEvent
+  = | { type: 'status', text: string }
+    | { type: 'query-start', id: string, summary: string }
+    | { type: 'query-result', id: string, query: AssistantQueryResult }
+    | { type: 'query-error', id: string }
+    | { type: 'text', text: string }
+    | { type: 'finish', response: AssistantChatResponse }
+
+export type AssistantStreamOptions = {
+  signal?: AbortSignal
+  emit?: (event: AssistantStreamEvent) => Promise<void>
+}

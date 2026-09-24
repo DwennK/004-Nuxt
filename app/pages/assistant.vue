@@ -1,28 +1,21 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import { buildAssistantHistory } from '~~/shared/utils/assistant'
-import type {
-  AssistantChatError,
-  AssistantChatMessageInput,
-  AssistantChatResponse,
-  AssistantQueryResult,
-  AssistantTableCell
-} from '~~/shared/types/assistant'
+import type { AssistantTableCell } from '~~/shared/types/assistant'
+import { ASSISTANT_MAX_MESSAGE_LENGTH } from '~~/shared/utils/assistant'
 
-type ChatStatus = 'submitted' | 'ready' | 'error'
 type ChatRow = Record<string, AssistantTableCell>
-
-type AssistantUiMessage = AssistantChatMessageInput & {
-  query?: AssistantQueryResult
-  queries?: AssistantQueryResult[]
-  error?: AssistantChatError
-  includeInRequest?: boolean
-}
-
 const prompt = ref('')
 const debug = ref(false)
-const status = ref<ChatStatus>('ready')
-const requestError = ref<string | null>(null)
+const { messages, status, activity, activeId, pending, retryable, send, retry, stop, reset } = useAssistantChat()
+const { copy, copied, text: copiedText } = useClipboard()
+const toast = useToast()
+const composer = useTemplateRef('composer')
+const hasConversation = computed(() => messages.value.length > 0)
+const chatMessages = computed(() => messages.value.map(message => ({
+  ...message,
+  parts: [{ type: 'text' as const, text: message.content }]
+})))
+const submitStatus = computed(() => status.value === 'error' && (prompt.value.trim() || !retryable.value) ? 'ready' : status.value)
 
 const suggestionPrompts = [
   { icon: 'i-lucide-receipt', label: 'Factures du jour', prompt: 'Quelle est la plus grosse facture du jour ?' },
@@ -31,61 +24,21 @@ const suggestionPrompts = [
   { icon: 'i-lucide-smartphone', label: 'Réservations', prompt: 'Quel est l’état des demandes de réservation smartphone ?' }
 ]
 
-const messages = ref<AssistantUiMessage[]>([])
-const conversation = useTemplateRef('conversation')
-const composer = useTemplateRef('composer')
-const pending = computed(() => status.value === 'submitted')
-const hasConversation = computed(() => messages.value.length > 0)
-
-watch([() => messages.value.length, pending], async () => {
-  const element = conversation.value
-  const followResponse = !element || element.scrollHeight - element.scrollTop - element.clientHeight < 120
-
-  await nextTick()
-
-  if (conversation.value && (pending.value || followResponse)) {
-    conversation.value.scrollTo({ top: conversation.value.scrollHeight })
-  }
-})
-
-function createParts(content: string) {
-  return [{
-    id: crypto.randomUUID(),
-    type: 'text',
-    text: content
-  }] as const
-}
-
-function buildRequestMessages() {
-  return buildAssistantHistory(messages.value)
-}
-
 function formatCellValue(value: AssistantTableCell) {
-  if (value === null || value === undefined) {
-    return '—'
-  }
-
-  if (typeof value === 'boolean') {
-    return value ? 'Oui' : 'Non'
-  }
-
-  if (typeof value === 'number') {
-    return Number.isInteger(value) ? new Intl.NumberFormat('fr-CH').format(value) : String(value)
-  }
-
+  if (value === null || value === undefined) return '—'
+  if (typeof value === 'boolean') return value ? 'Oui' : 'Non'
+  if (typeof value === 'number') return Number.isInteger(value) ? new Intl.NumberFormat('fr-CH').format(value) : String(value)
   return value
 }
 
 function buildTableColumns(columns: string[]): TableColumn<ChatRow>[] {
-  return columns.map((column) => {
-    return {
-      accessorKey: column,
-      header: column.replaceAll('_', ' '),
-      cell: ({ row }) => h('span', {
-        class: 'block max-w-80 whitespace-normal break-words text-sm text-default'
-      }, formatCellValue(row.original[column] ?? null))
-    }
-  })
+  return columns.map(column => ({
+    accessorKey: column,
+    header: column.replaceAll('_', ' '),
+    cell: ({ row }) => h('span', {
+      class: 'block max-w-80 whitespace-normal break-words text-sm text-default'
+    }, formatCellValue(row.original[column] ?? null))
+  }))
 }
 
 function usePromptSuggestion(text: string) {
@@ -93,60 +46,18 @@ function usePromptSuggestion(text: string) {
   composer.value?.textareaRef?.focus()
 }
 
-async function submitPrompt() {
+function submitPrompt() {
   const value = prompt.value.trim()
-
-  if (!value || pending.value) {
-    return
-  }
-
-  requestError.value = null
-  status.value = 'submitted'
-
-  const userMessage: AssistantUiMessage = {
-    id: crypto.randomUUID(),
-    role: 'user',
-    content: value,
-    includeInRequest: true
-  }
-
-  messages.value.push(userMessage)
+  if (!value || pending.value) return
   prompt.value = ''
+  void send(value, debug.value)
+}
 
+async function copyMessage(content: string) {
   try {
-    const response = await $fetch<AssistantChatResponse>('/api/assistant/chat', {
-      method: 'POST',
-      body: {
-        messages: buildRequestMessages(),
-        debug: debug.value
-      }
-    })
-
-    messages.value.push({
-      ...response.message,
-      query: response.query,
-      queries: response.queries,
-      error: response.error,
-      includeInRequest: !response.error
-    })
-
-    status.value = response.error ? 'error' : 'ready'
-    requestError.value = response.error?.message || null
+    await copy(content)
   } catch {
-    status.value = 'error'
-    requestError.value = 'Impossible de contacter le service assistant. Réessayez dans quelques instants.'
-
-    messages.value.push({
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: 'Le service assistant n’a pas répondu correctement. Vérifiez la configuration serveur puis réessayez.',
-      error: {
-        code: 'service_unavailable',
-        message: requestError.value,
-        retryable: true
-      },
-      includeInRequest: false
-    })
+    toast.add({ title: 'La copie a échoué', description: 'Sélectionnez le texte pour le copier.', color: 'error' })
   }
 }
 </script>
@@ -154,7 +65,7 @@ async function submitPrompt() {
 <template>
   <UDashboardPanel
     id="assistant"
-    :ui="{ root: 'h-dvh min-h-0 bg-default', body: 'min-h-0 gap-0 overflow-hidden p-0 sm:p-0' }"
+    :ui="{ root: 'h-dvh min-h-0 bg-default', body: 'relative min-h-0 gap-0 overflow-hidden p-0 sm:p-0' }"
   >
     <template #header>
       <UDashboardNavbar title="Assistant IA">
@@ -163,6 +74,17 @@ async function submitPrompt() {
         </template>
 
         <template #right>
+          <UButton
+            v-if="hasConversation"
+            icon="i-lucide-square-pen"
+            aria-label="Nouvelle conversation"
+            title="Nouvelle conversation"
+            color="neutral"
+            variant="ghost"
+            class="text-white hover:bg-white/15"
+            :disabled="pending"
+            @click="reset"
+          />
           <span class="inline-flex items-center gap-2 rounded-md bg-white/15 px-2.5 py-1.5 text-xs font-medium text-white ring-1 ring-inset ring-white/25">
             <UIcon name="i-lucide-shield-check" class="size-4" />
             Lecture seule
@@ -184,7 +106,7 @@ async function submitPrompt() {
     </template>
 
     <template #body>
-      <div ref="conversation" class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div v-if="!hasConversation" class="mx-auto flex min-h-full w-full max-w-4xl flex-col justify-center px-5 py-10 sm:px-10 sm:py-14">
           <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <UIcon name="i-lucide-sparkles" class="size-6" />
@@ -218,99 +140,114 @@ async function submitPrompt() {
 
         <UChatMessages
           v-else
-          :status="status"
+          :messages="chatMessages"
+          :status="pending ? 'streaming' : status"
           :should-scroll-to-bottom="false"
+          should-auto-scroll
           :auto-scroll="{ label: 'Derniers messages', color: 'neutral', variant: 'outline' }"
+          :ui="{ viewport: 'top-auto bottom-3 z-10 pointer-events-none', autoScroll: 'pointer-events-auto shadow-sm' }"
+          :user="{ side: 'right', variant: 'soft', ui: { container: 'max-w-[90%] sm:max-w-[80%]', content: 'rounded-2xl rounded-tr-sm bg-muted px-4 py-3' } }"
+          :assistant="{ side: 'left', variant: 'naked', avatar: { icon: 'i-lucide-sparkles' }, ui: { leadingAvatar: 'bg-primary/10 text-primary', content: 'min-w-0 pt-1' } }"
           class="mx-auto max-w-4xl px-4 py-6 sm:px-10 sm:py-8"
         >
-          <UChatMessage
-            v-for="message in messages"
-            :id="message.id"
-            :key="message.id"
-            :role="message.role"
-            :parts="createParts(message.content)"
-            :side="message.role === 'user' ? 'right' : 'left'"
-            :variant="message.role === 'user' ? 'soft' : 'naked'"
-            :avatar="message.role === 'assistant' ? { icon: 'i-lucide-sparkles' } : undefined"
-            :ui="{
-              container: message.role === 'user' ? 'max-w-[90%] pb-7 sm:max-w-[80%]' : 'gap-3 pb-8 sm:gap-4',
-              leadingAvatar: 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15',
-              content: message.role === 'user' ? 'rounded-2xl rounded-tr-sm bg-muted px-4 py-3' : 'pt-1'
-            }"
-          >
-            <template #content>
-              <div class="min-w-0 space-y-4">
-                <template v-if="message.role === 'assistant'">
-                  <p class="text-xs font-semibold text-muted">
-                    Assistant IA
-                  </p>
-                  <AssistantMarkdown :content="message.content" />
-                </template>
-                <p v-else class="whitespace-pre-wrap text-sm leading-6 text-default">
-                  {{ message.content }}
+          <template #content="{ message }">
+            <div class="min-w-0 space-y-4">
+              <template v-if="message.role === 'assistant'">
+                <p class="text-xs font-semibold text-muted">
+                  Assistant IA
                 </p>
-
-                <UAlert
-                  v-if="message.error"
-                  role="alert"
-                  color="error"
-                  variant="subtle"
-                  :icon="message.error.code === 'sql_rejected' ? 'i-lucide-shield-alert' : 'i-lucide-triangle-alert'"
-                  :title="message.error.code === 'sql_rejected' ? 'Réponse contrainte par les garde-fous' : 'Assistant indisponible'"
-                  :description="message.error.message"
+                <AssistantMarkdown
+                  v-if="message.content"
+                  :content="message.content"
+                  :streaming="message.id === activeId && status === 'streaming'"
                 />
+                <div v-if="message.id === activeId" role="status" class="flex items-center gap-2 text-xs text-muted">
+                  <UChatShimmer :text="activity" />
+                </div>
+                <p v-if="message.stopped" role="status" class="text-xs text-muted">
+                  Réponse arrêtée.
+                </p>
+              </template>
+              <p v-else class="whitespace-pre-wrap text-sm leading-6 text-default">
+                {{ message.content }}
+              </p>
 
-                <UChatTool
-                  v-for="(query, queryIndex) in message.queries || (message.query ? [message.query] : [])"
-                  :key="queryIndex"
-                  variant="card"
-                  icon="i-lucide-database"
-                  text="Données consultées"
-                  :suffix="`${query.rowCount} ${query.rowCount === 1 ? 'résultat' : 'résultats'}`"
-                  :default-open="debug"
-                  :ui="{
-                    root: 'rounded-lg ring-muted',
-                    trigger: 'gap-2 bg-muted/50 px-3 py-3 text-xs font-medium text-toned hover:bg-muted transition-colors motion-reduce:transition-none',
-                    suffix: 'text-muted',
-                    body: 'max-h-80 whitespace-normal border-muted p-4 text-default'
-                  }"
-                >
-                  <div class="space-y-3">
-                    <p class="text-sm leading-6 text-toned">
-                      {{ query.summary }}
-                    </p>
-                    <UBadge v-if="query.truncated" color="warning" variant="subtle">
-                      Résultat tronqué à 50 lignes
-                    </UBadge>
-                    <div v-if="query.sql" class="overflow-x-auto rounded-md bg-muted p-3">
-                      <pre class="text-xs leading-5 text-toned">{{ query.sql }}</pre>
-                    </div>
-                    <div v-if="query.table.rows.length" class="overflow-hidden rounded-md border border-muted">
-                      <UTable
-                        :data="query.table.rows"
-                        :columns="buildTableColumns(query.table.columns)"
-                        :ui="{
-                          base: 'border-separate border-spacing-0',
-                          th: 'border-b border-muted bg-muted px-3 py-2 text-xs text-toned',
-                          td: 'border-b border-muted px-3 py-2 align-top',
-                          tbody: '[&>tr]:last:[&>td]:border-b-0'
-                        }"
-                      />
-                    </div>
-                    <p v-else class="text-sm text-toned">
-                      Aucun enregistrement n’a été renvoyé pour cette question.
-                    </p>
+              <UAlert
+                v-if="message.error"
+                role="alert"
+                color="error"
+                variant="subtle"
+                :icon="message.error.code === 'sql_rejected' ? 'i-lucide-shield-alert' : 'i-lucide-triangle-alert'"
+                :title="message.error.code === 'sql_rejected' ? 'Réponse contrainte par les garde-fous' : 'Assistant indisponible'"
+                :description="message.error.message"
+                :actions="message.error.retryable && message.id === messages.at(-1)?.id ? [{ label: 'Réessayer', icon: 'i-lucide-rotate-ccw', disabled: pending, onClick: () => retry(debug) }] : undefined"
+              />
+
+              <UChatTool
+                v-for="tool in message.tools || []"
+                :key="tool.id"
+                variant="card"
+                icon="i-lucide-database"
+                :text="tool.summary"
+                :streaming="tool.state === 'running'"
+                :suffix="tool.state === 'running' ? 'En cours…' : tool.state === 'error' ? 'Recherche non aboutie' : tool.state === 'stopped' ? 'Arrêtée' : `${tool.query?.rowCount ?? 0} ${tool.query?.rowCount === 1 ? 'ligne retournée' : 'lignes retournées'}`"
+                :default-open="debug"
+                :ui="{
+                  root: 'rounded-lg ring-muted',
+                  trigger: 'gap-2 bg-muted/50 px-3 py-3 text-xs font-medium text-toned hover:bg-muted transition-colors motion-reduce:transition-none',
+                  suffix: 'text-muted',
+                  body: 'max-h-80 whitespace-normal border-muted p-4 text-default'
+                }"
+              >
+                <div v-if="tool.query" class="space-y-3">
+                  <p class="text-sm leading-6 text-toned">
+                    {{ tool.query.summary }}
+                  </p>
+                  <UBadge v-if="tool.query.truncated" color="warning" variant="subtle">
+                    Résultat tronqué à 50 lignes
+                  </UBadge>
+                  <div v-if="tool.query.sql" class="overflow-x-auto rounded-md bg-muted p-3">
+                    <pre class="text-xs leading-5 text-toned">{{ tool.query.sql }}</pre>
                   </div>
-                </UChatTool>
-              </div>
-            </template>
-          </UChatMessage>
-
-          <template #indicator>
-            <div role="status" class="flex items-center gap-3 pb-5 text-sm text-muted">
-              <UIcon name="i-lucide-loader-circle" class="size-4 motion-safe:animate-spin" />
-              Recherche et vérification des informations…
+                  <div v-if="tool.query.table.rows.length" class="overflow-hidden rounded-md border border-muted">
+                    <UTable
+                      :data="tool.query.table.rows"
+                      :columns="buildTableColumns(tool.query.table.columns)"
+                      :ui="{
+                        base: 'border-separate border-spacing-0',
+                        th: 'border-b border-muted bg-muted px-3 py-2 text-xs text-toned',
+                        td: 'border-b border-muted px-3 py-2 align-top',
+                        tbody: '[&>tr]:last:[&>td]:border-b-0'
+                      }"
+                    />
+                  </div>
+                  <p v-else class="text-sm text-toned">
+                    Aucun enregistrement n’a été renvoyé pour cette question.
+                  </p>
+                </div>
+              </UChatTool>
             </div>
+          </template>
+          <template #actions="{ message }">
+            <UButton
+              v-if="message.role === 'assistant' && message.content && message.id !== activeId"
+              :icon="copied && copiedText === message.content ? 'i-lucide-check' : 'i-lucide-copy'"
+              :label="copied && copiedText === message.content ? 'Copié' : 'Copier'"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              @click="copyMessage(message.content)"
+            />
+            <UButton
+              v-if="message.stopped && message.id === messages.at(-1)?.id"
+              label="Réessayer"
+              icon="i-lucide-rotate-ccw"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :disabled="pending"
+              @click="retry(debug)"
+            />
           </template>
         </UChatMessages>
       </div>
@@ -326,7 +263,7 @@ async function submitPrompt() {
             aria-label="Votre question"
             class="rounded-xl bg-default p-3 shadow-sm sm:p-4"
             :placeholder="hasConversation ? 'Précisez votre question ou posez-en une nouvelle…' : 'Posez une question sur votre activité…'"
-            :disabled="pending"
+            :maxlength="ASSISTANT_MAX_MESSAGE_LENGTH"
             :autofocus="false"
             :rows="2"
             :maxrows="5"
@@ -343,10 +280,12 @@ async function submitPrompt() {
               <UChatPromptSubmit
                 color="primary"
                 size="sm"
-                aria-label="Envoyer la question"
-                :disabled="pending || !prompt.trim()"
-                :loading="pending"
+                :aria-label="pending ? 'Arrêter la réponse' : submitStatus === 'error' ? 'Réessayer' : 'Envoyer la question'"
+                :status="submitStatus"
+                :disabled="!prompt.trim()"
                 class="shrink-0 rounded-lg"
+                @stop.prevent="stop"
+                @reload.prevent="retry(debug)"
               />
             </template>
           </UChatPrompt>

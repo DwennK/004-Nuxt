@@ -1,3 +1,4 @@
+import { createAssistantStream } from '~~/server/utils/assistant/stream'
 import { runAssistantChat } from '~~/server/utils/assistant/chat'
 import { assistantSqlDebugRequiresAdmin } from '~~/server/utils/assistant/policy'
 import { getUseCaseContext, requireCapability } from '~~/server/utils/auth/session'
@@ -11,5 +12,20 @@ export default eventHandler(async (event) => {
   }
 
   const { requestId } = getUseCaseContext(event)
-  return runAssistantChat(event, body.messages, body.debug, requestId)
+  if (!getHeader(event, 'accept')?.includes('text/event-stream')) {
+    return runAssistantChat(event, body.messages, body.debug, requestId)
+  }
+  const stream = createAssistantStream(
+    options => runAssistantChat(event, body.messages, body.debug, requestId, options),
+    event.web?.request?.signal
+  )
+  // Node dev uses a ServerResponse; Worker cancellation propagates through the Web stream.
+  event.node.res.once('close', stream.abort)
+  return new Response(stream.body, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no'
+    }
+  })
 })

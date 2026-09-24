@@ -186,3 +186,47 @@ describe('assistant business dates', () => {
     expect(buildAssistantDateContext(new Date('2026-10-25T12:00:00Z')).today).toEqual({ start: '2026-10-24T22:00:00.000Z', end: '2026-10-25T22:59:59.999Z' })
   })
 })
+
+describe('assistant streamed orchestration', () => {
+  beforeEach(() => {
+    vi.mocked(requestStructuredResponse).mockReset().mockResolvedValue(finish)
+    vi.mocked(requestTextResponse).mockReset().mockResolvedValue('Deux dossiers.')
+    vi.mocked(runReadOnlyQuery).mockReset().mockResolvedValue({ columns: ['total'], rows: [{ total: 2 }], rowCount: 1, truncated: false })
+  })
+  it('emits verified results before answer generation and hides SQL without debug', async () => {
+    vi.mocked(requestStructuredResponse).mockResolvedValueOnce(plan)
+    const emitted: unknown[] = []
+    vi.mocked(requestTextResponse).mockImplementation(async (_event, options) => {
+      expect(emitted).toContainEqual(expect.objectContaining({ type: 'query-result' }))
+      await options.onText?.('Deux dossiers.')
+      return 'Deux dossiers.'
+    })
+    await runAssistantChat(event, messages, false, 'stream-test', { emit: async (value) => {
+      emitted.push(value)
+    } })
+    expect(emitted).toContainEqual(expect.objectContaining({ type: 'query-start' }))
+    expect(emitted).toContainEqual({ type: 'text', text: 'Deux dossiers.' })
+    expect(JSON.stringify(emitted)).not.toContain('SELECT')
+  })
+  it('stops after cancellation during planning, before SQL execution', async () => {
+    const abort = new AbortController()
+    vi.mocked(requestStructuredResponse).mockImplementation(async () => {
+      abort.abort()
+      return plan
+    })
+    await expect(runAssistantChat(event, messages, false, 'cancel', { signal: abort.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    expect(runReadOnlyQuery).not.toHaveBeenCalled()
+    expect(requestTextResponse).not.toHaveBeenCalled()
+  })
+  it('does not start another lookup after cancellation during database work', async () => {
+    const abort = new AbortController()
+    vi.mocked(requestStructuredResponse).mockResolvedValueOnce(plan)
+    vi.mocked(runReadOnlyQuery).mockImplementation(async () => {
+      abort.abort()
+      return { columns: [], rows: [], rowCount: 0, truncated: false }
+    })
+    await expect(runAssistantChat(event, messages, false, 'cancel', { signal: abort.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    expect(requestStructuredResponse).toHaveBeenCalledOnce()
+    expect(requestTextResponse).not.toHaveBeenCalled()
+  })
+})

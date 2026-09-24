@@ -1,9 +1,12 @@
 import type { H3Event } from 'h3'
 import { createError } from 'h3'
+import { readEventStream } from '~~/shared/utils/event-stream'
+import { createReasoningFilter } from './stream-text'
 import { externalFetch, isExternalFetchError } from '../external-fetch'
 
 type StructuredResponseOptions = {
   requestId: string
+  signal?: AbortSignal
   schemaName: string
   schema: Record<string, unknown>
   systemPrompt: string
@@ -11,7 +14,9 @@ type StructuredResponseOptions = {
 }
 
 type TextResponseOptions = {
+  onText?: (text: string) => Promise<void>
   requestId: string
+  signal?: AbortSignal
   systemPrompt: string
   userPrompt: string
 }
@@ -159,10 +164,12 @@ async function requestChatCompletion(
   url: string,
   requestId: string,
   headers: Record<string, string>,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  signal?: AbortSignal
 ) {
   const { response } = await externalFetch(url, {
     method: 'POST',
+    signal,
     headers,
     body: JSON.stringify(body)
   }, {
@@ -187,13 +194,14 @@ async function requestChatCompletion(
   return payload || {}
 }
 
-async function createChatCompletion(event: H3Event, requestId: string, body: Record<string, unknown>) {
+async function createChatCompletion(event: H3Event, requestId: string, body: Record<string, unknown>, signal?: AbortSignal) {
   const { apiKey, baseUrl } = getProviderConfig(event)
   const headers = buildHeaders(apiKey, requestId)
 
   try {
-    return await requestChatCompletion(`${baseUrl}/chat/completions`, requestId, headers, body)
+    return await requestChatCompletion(`${baseUrl}/chat/completions`, requestId, headers, body, signal)
   } catch (error) {
+    signal?.throwIfAborted()
     const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
       ? Number((error as { statusCode?: unknown }).statusCode)
       : NaN
@@ -211,7 +219,7 @@ async function createChatCompletion(event: H3Event, requestId: string, body: Rec
       throw error
     }
 
-    return requestChatCompletion(`${alternativeBaseUrl}/chat/completions`, requestId, headers, body)
+    return requestChatCompletion(`${alternativeBaseUrl}/chat/completions`, requestId, headers, body, signal)
   }
 }
 
@@ -245,10 +253,11 @@ export async function requestStructuredResponse<T>(event: H3Event, options: Stru
           schema: options.schema
         }
       }
-    })
+    }, options.signal)
 
     return parseStructuredContent<T>(getCompletionText(response))
   } catch (error) {
+    options.signal?.throwIfAborted()
     if (!shouldRetryStructuredWithoutSchema(error)) {
       throw error
     }
@@ -270,7 +279,7 @@ export async function requestStructuredResponse<T>(event: H3Event, options: Stru
           content: options.userPrompt
         }
       ]
-    })
+    }, options.signal)
 
     const content = getCompletionText(fallbackResponse)
 
@@ -283,6 +292,7 @@ export async function requestStructuredResponse<T>(event: H3Event, options: Stru
 }
 
 export async function requestTextResponse(event: H3Event, options: TextResponseOptions) {
+  if (options.onText) return requestStreamingText(event, options)
   const { model } = getProviderConfig(event)
   const response = await createChatCompletion(event, options.requestId, {
     model,
@@ -296,7 +306,7 @@ export async function requestTextResponse(event: H3Event, options: TextResponseO
         content: options.userPrompt
       }
     ]
-  })
+  }, options.signal)
 
   const content = getCompletionText(response)
 
@@ -308,4 +318,67 @@ export async function requestTextResponse(event: H3Event, options: TextResponseO
   }
 
   return content
+}
+
+async function requestStreamingText(event: H3Event, options: TextResponseOptions) {
+  const { apiKey, model, baseUrl } = getProviderConfig(event)
+  const timeout = AbortSignal.timeout(45_000)
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout
+  const body = JSON.stringify({
+    model,
+    stream: true,
+    reasoning_split: true,
+    messages: [
+      { role: 'system', content: options.systemPrompt },
+      { role: 'user', content: options.userPrompt }
+    ]
+  })
+  const request = (url: string) => fetch(`${url}/chat/completions`, {
+    method: 'POST', headers: buildHeaders(apiKey, options.requestId), body, signal
+  })
+  let response = await request(baseUrl)
+  const alternative = getAlternativeBaseUrl(baseUrl)
+  if (response.status === 401 && alternative) {
+    await response.body?.cancel().catch(() => undefined)
+    response = await request(alternative)
+  }
+  if (!response.ok || !response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
+    await response.body?.cancel().catch(() => undefined)
+    throw createError({ statusCode: 502, statusMessage: 'MiniMax streaming request failed' })
+  }
+
+  let content = ''
+  let finished = false
+  const filter = createReasoningFilter()
+  for await (const data of readEventStream(response.body, signal)) {
+    if (data === '[DONE]') {
+      finished = true
+      break
+    }
+    const chunk = JSON.parse(data) as {
+      error?: unknown
+      choices?: Array<{ delta?: { content?: string }, finish_reason?: string | null }>
+    }
+    if (chunk.error) throw new Error('MiniMax stream failed')
+    const choice = chunk.choices?.[0]
+    if (choice?.finish_reason && choice.finish_reason !== 'stop') throw new Error('MiniMax response incomplete')
+    // MiniMax ends at EOF after finish_reason=stop, without OpenAI's optional [DONE].
+    if (choice?.finish_reason === 'stop') finished = true
+    // Only final answer text is forwarded; reasoning_details is never exposed.
+    if (typeof choice?.delta?.content === 'string') {
+      const text = filter.push(choice.delta.content)
+      if (text) {
+        content += text
+        await options.onText?.(text)
+      }
+    }
+  }
+  if (!finished) throw new Error('MiniMax stream interrupted')
+  const tail = filter.finish()
+  if (tail) {
+    content += tail
+    await options.onText?.(tail)
+  }
+  if (!content.trim()) throw new Error('MiniMax returned an empty response')
+  return content.trim()
 }

@@ -13,3 +13,19 @@ markdown.renderer.rules.image = (tokens, index) => markdown.utils.escapeHtml(tok
 export function renderAssistantMarkdown(content: string) {
   return markdown.render(content)
 }
+
+// Keep completed blocks stable in the DOM while only the final block grows.
+export function renderAssistantMarkdownBlocks(content: string) {
+  const tokens = markdown.parse(content, {})
+  const blocks: string[] = []
+  let start = 0
+  let depth = 0
+  for (let index = 0; index < tokens.length; index++) {
+    depth += tokens[index]!.nesting
+    if (depth === 0) {
+      blocks.push(markdown.renderer.render(tokens.slice(start, index + 1), markdown.options, {}))
+      start = index + 1
+    }
+  }
+  return blocks
+}

@@ -23,6 +23,16 @@ Les bornes du jour, de la veille, de la semaine et du mois (courants et précéd
 
 Les réponses sont affichées en Markdown (gras, listes, tableaux, code) ; les messages utilisateur restent en texte brut. Le HTML brut est échappé, les URL dangereuses sont rejetées et les images distantes ne sont pas chargées. Les tableaux larges défilent horizontalement à l’intérieur du message.
 
+## Affichage progressif et interruption
+
+La page demande `Accept: text/event-stream` sur le même endpoint. Les clients qui ne demandent pas ce format conservent la réponse JSON existante. Le flux SSE transporte les états de travail, le début et le résultat des recherches validées, les fragments du texte final et un événement terminal `finish`. Les détails SQL restent soumis à la capacité administrateur et au mode debug.
+
+La planification structurée reste côté serveur. La rédaction finale est réellement diffusée depuis MiniMax (`stream: true`, `reasoning_split: true`) ; les raisonnements et les blocs `<think>` ne sont jamais envoyés au navigateur. Les clarifications et refus courts sont envoyés après validation du plan. Une réponse interrompue reste visible mais n’entre pas dans le contexte des demandes suivantes.
+
+Le bouton Arrêter annule la connexion et les appels au fournisseur, y compris pendant la planification. Une lecture SQL déjà lancée reste soumise à sa limite existante ; aucune nouvelle étape n’est lancée après annulation. La relance remplace la réponse échouée ou arrêtée sans dupliquer la question, et conserve le brouillon du champ de saisie. La durée totale du flux est bornée à 180 secondes, chaque appel fournisseur à 45 secondes, et la lecture de chaque flux à 8 Mio.
+
+Les composants Nuxt UI suivent les nouveaux messages tant que l’utilisateur ne remonte pas dans la conversation. Le Markdown est rendu par blocs stables, avec une actualisation limitée à 20 fois par seconde pendant le streaming, en conservant le moteur sécurisé existant. Copier et Nouvelle conversation sont disponibles ; le fil reste limité à la page, sans historique durable.
+
 ## Tables et colonnes exposées
 
 La source de vérité est `server/utils/assistant/allowlist.ts`.

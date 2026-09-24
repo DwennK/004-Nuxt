@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { renderAssistantMarkdown } from '~/utils/assistantMarkdown'
+import { renderAssistantMarkdownBlocks } from '~/utils/assistantMarkdown'
 
-const props = defineProps<{ content: string }>()
-const html = computed(() => renderAssistantMarkdown(props.content))
+const props = defineProps<{ content: string, streaming?: boolean }>()
+const throttledContent = refThrottled(toRef(props, 'content'), 50)
+const blocks = computed(() => renderAssistantMarkdownBlocks(props.streaming ? throttledContent.value : props.content))
 </script>
 
 <template>
-  <!-- HTML comes only from the Markdown renderer with raw HTML disabled. -->
-  <!-- eslint-disable-next-line vue/no-v-html -->
-  <div class="assistant-markdown min-w-0 text-sm leading-6 text-default" v-html="html" />
+  <div class="assistant-markdown min-w-0 text-sm leading-6 text-default">
+    <!-- HTML comes only from the Markdown renderer with raw HTML disabled. -->
+    <!-- eslint-disable-next-line vue/no-v-html -->
+    <div v-for="(block, index) in blocks" :key="index" v-html="block" />
+  </div>
 </template>
 
 <style scoped>

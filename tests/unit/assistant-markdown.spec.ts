@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderAssistantMarkdown } from '../../app/utils/assistantMarkdown'
+import { renderAssistantMarkdown, renderAssistantMarkdownBlocks } from '../../app/utils/assistantMarkdown'
 
 describe('assistant Markdown rendering', () => {
   it('renders emphasis, lists and a scrollable table without preserving empty lines', () => {
@@ -37,4 +37,12 @@ describe('assistant Markdown rendering', () => {
     expect(html).toContain('Graphique &lt;img src=x&gt;')
     expect(html).not.toMatch(/<img\b|src="|tracker\.png/)
   })
+})
+
+it('keeps completed Markdown blocks stable while the final block streams', () => {
+  const first = renderAssistantMarkdownBlocks('**Total**\n\nUne réponse')
+  const next = renderAssistantMarkdownBlocks('**Total**\n\nUne réponse plus longue.')
+  expect(first[0]).toBe(next[0])
+  expect(next.join('')).toBe(renderAssistantMarkdown('**Total**\n\nUne réponse plus longue.'))
+  expect(renderAssistantMarkdownBlocks('<script>alert(1)</script>').join('')).not.toContain('<script>')
 })
