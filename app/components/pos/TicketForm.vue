@@ -277,18 +277,6 @@ function handleImeiScan(value: string) {
                     @created="handleCustomerCreated"
                   />
                 </UFormField>
-
-                <UFormField :label="state.type === 'sale' ? 'Objet de la vente' : 'Problème signalé'" name="issueDescription" hint="Facultatif">
-                  <UTextarea
-                    v-bind="posInputAttrs"
-                    v-model="state.issueDescription"
-                    class="w-full"
-                    :rows="2"
-                    :maxrows="4"
-                    autoresize
-                    :placeholder="state.type === 'sale' ? 'Ex. commande de matériel.' : 'Ex. écran cassé après une chute, tactile encore fonctionnel.'"
-                  />
-                </UFormField>
               </div>
             </UCard>
 
@@ -456,6 +444,18 @@ function handleImeiScan(value: string) {
                 />
               </UFormField>
             </div>
+
+            <UFormField :label="state.type === 'sale' ? 'Objet de la vente' : 'Problème signalé'" name="issueDescription" hint="Facultatif">
+              <UTextarea
+                v-bind="posInputAttrs"
+                v-model="state.issueDescription"
+                class="w-full"
+                :rows="2"
+                :maxrows="4"
+                autoresize
+                :placeholder="state.type === 'sale' ? 'Ex. commande de matériel.' : 'Ex. écran cassé après une chute, tactile encore fonctionnel.'"
+              />
+            </UFormField>
 
             <UFormField label="Notes internes" name="internalNotes">
               <UTextarea
