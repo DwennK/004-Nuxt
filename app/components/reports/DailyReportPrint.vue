@@ -129,7 +129,7 @@ function paymentTime(value: string) {
             <td>{{ payment.customerName }}</td>
             <td>{{ paymentTime(payment.paidAt) }}</td>
             <td>
-              {{ payment.amount < 0 ? 'Remb. · ' : '' }}{{ getPaymentMethodLabel(payment.method) }}
+              {{ payment.amount < 0 ? 'Remb. · ' : '' }}<span class="payment-method">{{ getPaymentMethodLabel(payment.method) }}</span>
             </td>
             <td class="amount emphasis">
               {{ amount(payment.amount) }}
@@ -339,7 +339,9 @@ function paymentTime(value: string) {
   .time-column { width: 12%; }
   .method-column { width: 26%; }
   .payments-table .customer-column { width: 28%; }
-  .payments-table .paid-column { width: 18%; }
+  .payments-table .time-column { width: 10%; }
+  .payments-table .method-column { width: 32%; }
+  .payments-table .paid-column { width: 14%; }
   .paid-column { width: 22%; }
   .balance-column { width: calc(52% / 3); }
 
@@ -365,6 +367,22 @@ function paymentTime(value: string) {
   td:first-child { padding-left: 0; }
   th:last-child,
   td:last-child { padding-right: 0; }
+
+  .payments-table {
+    font-size: 9pt;
+    line-height: 1.15;
+  }
+
+  .payments-table th,
+  .payments-table td {
+    padding-top: 0.6mm;
+    padding-bottom: 0.6mm;
+  }
+
+  .payment-method {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
 
   th {
     font-weight: 400;
