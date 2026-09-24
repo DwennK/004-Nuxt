@@ -16,12 +16,30 @@ import { calculateIncludedVatAmount, formatCurrency, formatDate } from '~~/share
 import type { SwissQrAddress } from '~~/shared/utils/qr-bill'
 import { buildRecordQrUrl } from '~~/shared/utils/record-qr'
 
+// Canonical A4 layout for preview, printing, downloads and email attachments.
+const A4_DOCUMENT_LAYOUT = {
+  marginMm: 7,
+  paddingMm: 5.8,
+  headerTopMm: 4.8,
+  headerGapMm: 6,
+  lookupSizeMm: 32.5,
+  metadataWidthMm: 40,
+  referenceLeftMm: 20,
+  referenceTopMm: 45,
+  bodyFontPx: 10.5,
+  lineFontPx: 11,
+  labelFontPx: 7.3,
+  companyFontPx: 16,
+  numberFontPx: 13
+} as const
+
 const MM = 72 / 25.4
+const PX = 72 / 96
 
 const PAGE_WIDTH = 210 * MM
 const PAGE_HEIGHT = 297 * MM
-const OUTER_MARGIN = 7 * MM
-const SECTION_PADDING_X = 5.8 * MM
+const OUTER_MARGIN = A4_DOCUMENT_LAYOUT.marginMm * MM
+const SECTION_PADDING_X = A4_DOCUMENT_LAYOUT.paddingMm * MM
 const SECTION_LEFT = OUTER_MARGIN + SECTION_PADDING_X
 const SECTION_RIGHT = PAGE_WIDTH - OUTER_MARGIN - SECTION_PADDING_X
 const SECTION_WIDTH = SECTION_RIGHT - SECTION_LEFT
@@ -29,15 +47,15 @@ const SHEET_LEFT = OUTER_MARGIN
 const SHEET_RIGHT = PAGE_WIDTH - OUTER_MARGIN
 const TOP_START = PAGE_HEIGHT - OUTER_MARGIN
 const BOTTOM_LIMIT = OUTER_MARGIN
-const SWISS_REFERENCE_LEFT = 20 * MM
+const SWISS_REFERENCE_LEFT = A4_DOCUMENT_LAYOUT.referenceLeftMm * MM
 
-const FONT_BODY = 8
-const FONT_LINE = 7.7
+const FONT_BODY = A4_DOCUMENT_LAYOUT.bodyFontPx * PX
+const FONT_LINE = A4_DOCUMENT_LAYOUT.lineFontPx * PX
 const FONT_SMALL = 7
-const FONT_LABEL = 6.2
+const FONT_LABEL = A4_DOCUMENT_LAYOUT.labelFontPx * PX
 const FONT_KICKER = 6
-const FONT_COMPANY = 14
-const FONT_NUMBER = 11.5
+const FONT_COMPANY = A4_DOCUMENT_LAYOUT.companyFontPx * PX
+const FONT_NUMBER = A4_DOCUMENT_LAYOUT.numberFontPx * PX
 
 const COLORS = {
   text: hexToRgb('#334155'),
@@ -106,7 +124,7 @@ function getLineHeight(size: number, override?: number) {
 }
 
 function wrapText(font: PDFFont, text: string, size: number, maxWidth: number) {
-  const paragraphs = text.split(/\r?\n/)
+  const paragraphs = normalizePdfText(text).split(/\r?\n/)
   const lines: string[] = []
 
   for (const paragraph of paragraphs) {
@@ -128,11 +146,7 @@ function wrapText(font: PDFFont, text: string, size: number, maxWidth: number) {
         continue
       }
 
-      if (current) {
-        lines.push(current)
-        current = word
-        continue
-      }
+      if (current) lines.push(current)
 
       let segment = ''
 
@@ -157,6 +171,12 @@ function wrapText(font: PDFFont, text: string, size: number, maxWidth: number) {
   }
 
   return lines.length ? lines : ['']
+}
+
+// Intl currency formatting can use narrow no-break spaces, unsupported by
+// standard PDF fonts. Preserve the amount while using an encodable space.
+function normalizePdfText(text: string) {
+  return text.replace(/[\u00a0\u202f]/g, ' ')
 }
 
 function measureTextBlock(font: PDFFont, text: string, size: number, maxWidth: number, lineHeight?: number) {
@@ -198,6 +218,7 @@ function drawRightAlignedText(
   baselineY: number,
   style: TextStyle = {}
 ) {
+  text = normalizePdfText(text)
   const font = style.font || context.regularFont
   const size = style.size || FONT_BODY
   const color = style.color || COLORS.text
@@ -307,10 +328,11 @@ function formatQrLocation(address: SwissQrAddress) {
 
 function drawHeader(context: PdfContext, document: DocumentDetail, company: CompanySettingsRecord, logoImage: PDFImage | null, lookupUrl: string) {
   const model = buildDocumentA4PrintModel(document, company)
-  const topY = context.cursorY - (4.8 * MM)
-  const rightColumnWidth = 49 * MM
-  const headGap = 6 * MM
-  const leftColumnWidth = SECTION_WIDTH - headGap - rightColumnWidth
+  const topY = context.cursorY - (A4_DOCUMENT_LAYOUT.headerTopMm * MM)
+  const rightColumnWidth = A4_DOCUMENT_LAYOUT.metadataWidthMm * MM
+  const headGap = A4_DOCUMENT_LAYOUT.headerGapMm * MM
+  const lookupSize = A4_DOCUMENT_LAYOUT.lookupSizeMm * MM
+  const leftColumnWidth = SECTION_WIDTH - (2 * headGap) - lookupSize - rightColumnWidth
   const logoBoxSize = 11.5 * MM
   const logoGap = 3 * MM
   const brandTextX = SECTION_LEFT + (logoImage ? logoBoxSize + logoGap : 0)
@@ -383,7 +405,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     metaY -= 10
   })
 
-  const windowTopY = PAGE_HEIGHT - (45 * MM)
+  const windowTopY = PAGE_HEIGHT - (A4_DOCUMENT_LAYOUT.referenceTopMm * MM)
   const windowContentTop = PAGE_HEIGHT - (A4_POSTAL_LAYOUT.addressTopMm * MM)
   const windowContentX = A4_POSTAL_LAYOUT.addressLeftMm * MM
   const windowContentWidth = A4_POSTAL_LAYOUT.addressWidthMm * MM
@@ -396,18 +418,13 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     lineHeight: 7.5
   })
   const referencesBottom = drawTextBlock(context, model.referenceLines.join('\n'), SWISS_REFERENCE_LEFT, windowTopY - 9, referencesWidth, {
-    size: FONT_SMALL,
+    size: FONT_BODY,
     color: COLORS.text,
-    lineHeight: 8.8
+    lineHeight: FONT_BODY * 1.25 + (0.65 * MM)
   })
 
-  const lookupSize = 32.5 * MM
-  const lookupY = referencesBottom - (2 * MM) - lookupSize
-  drawQrCode(context.page, lookupUrl, SWISS_REFERENCE_LEFT, lookupY, lookupSize, 4)
-  const lookupBottom = drawTextBlock(context, 'Ouvrir le document', SWISS_REFERENCE_LEFT, lookupY - 2, referencesWidth, {
-    size: FONT_SMALL,
-    color: COLORS.strong
-  })
+  // Three-column header: brand, lookup QR, document metadata.
+  drawQrCode(context.page, lookupUrl, SECTION_LEFT + leftColumnWidth + headGap, topY - lookupSize, lookupSize, 4)
 
   let windowBottom = drawTextBlock(context, model.windowLines[0] || document.customer.displayName, windowContentX, windowContentTop, windowContentWidth, {
     font: context.boldFont,
@@ -424,7 +441,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     })
   }
 
-  const ruleY = Math.min(lookupBottom - (3.2 * MM), windowBottom - (3.2 * MM), PAGE_HEIGHT - (A4_POSTAL_LAYOUT.bodyTopMm * MM))
+  const ruleY = Math.min(referencesBottom - (3.2 * MM), windowBottom - (3.2 * MM), PAGE_HEIGHT - (A4_POSTAL_LAYOUT.bodyTopMm * MM))
   drawHorizontalRule(context, ruleY)
   context.cursorY = ruleY - (3 * MM)
 }
@@ -762,14 +779,15 @@ async function drawQrSection(context: PdfContext, document: DocumentDetail, comp
   })
 
   const paymentHeadColumnWidth = ((SECTION_RIGHT - paymentX) - (3 * MM)) / 2
-  drawTextBlock(context, `Compte / Payable à\n${company.iban || ''}\n${model.qrBill.creditor.name}\n${formatQrStreet(model.qrBill.creditor)}\n${formatQrLocation(model.qrBill.creditor)}`, paymentX + paymentHeadColumnWidth + (3 * MM), topY - 11, paymentHeadColumnWidth, {
+  const creditorBottom = drawTextBlock(context, `Compte / Payable à\n${company.iban || ''}\n${model.qrBill.creditor.name}\n${formatQrStreet(model.qrBill.creditor)}\n${formatQrLocation(model.qrBill.creditor)}`, paymentX + paymentHeadColumnWidth + (3 * MM), topY - 11, paymentHeadColumnWidth, {
     size: FONT_SMALL,
     color: COLORS.text,
     lineHeight: 9
   })
 
   const qrBoxSize = 46 * MM
-  const qrY = topY - (30 * MM) - qrBoxSize
+  const paymentBodyTop = creditorBottom - (2.8 * MM)
+  const qrY = paymentBodyTop - qrBoxSize
   drawQrCode(context.page, model.qrBill.payload, paymentX, qrY, qrBoxSize)
 
   const markSize = 7 * MM
@@ -802,7 +820,7 @@ async function drawQrSection(context: PdfContext, document: DocumentDetail, comp
 
   const detailsX = paymentX + qrBoxSize + (4 * MM)
   const detailsWidth = SECTION_RIGHT - detailsX
-  let detailsBottom = drawTextBlock(context, `Référence\n${model.qrBill.displayReference}`, detailsX, topY - 30, detailsWidth, {
+  let detailsBottom = drawTextBlock(context, `Référence\n${model.qrBill.displayReference}`, detailsX, paymentBodyTop, detailsWidth, {
     size: FONT_SMALL,
     color: COLORS.text,
     lineHeight: 9

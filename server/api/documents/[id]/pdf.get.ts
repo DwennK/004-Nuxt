@@ -14,8 +14,9 @@ export default eventHandler(async (event) => {
     getCompanySettings()
   ])
   const pdf = await generateDocumentPdf(document, company, getRequestURL(event).origin)
+  const disposition = getQuery(event).inline === '1' ? 'inline' : 'attachment'
   setHeader(event, 'Content-Type', 'application/pdf')
-  setHeader(event, 'Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(getDocumentPdfFilename(document))}`)
+  setHeader(event, 'Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(getDocumentPdfFilename(document))}`)
   setHeader(event, 'Cache-Control', 'private, no-store')
   return pdf
 })

@@ -15,8 +15,10 @@ const PRODUCTION_CSP = [
 ].join('; ')
 
 export default defineEventHandler((event) => {
-  // Only printable pages may be embedded, and only by this application's origin.
-  const isPrintPage = /^\/(documents|dossiers)\/[1-9]\d*\/print\/?$/.test(getRequestURL(event).pathname)
+  // Printable pages and authenticated PDFs may be embedded by this origin only.
+  const pathname = getRequestURL(event).pathname
+  const isPrintPage = /^\/(documents|dossiers)\/[1-9]\d*\/print\/?$/.test(pathname)
+    || /^\/api\/documents\/[1-9]\d*\/pdf\/?$/.test(pathname)
   setResponseHeaders(event, {
     'X-Frame-Options': isPrintPage ? 'SAMEORIGIN' : 'DENY',
     'X-Content-Type-Options': 'nosniff',

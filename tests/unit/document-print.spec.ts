@@ -1,7 +1,44 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { documentTypes } from '../../shared/constants/pos'
 import { buildDocumentA4PrintModel } from '../../shared/utils/document-print'
 import { printCompany, printDocument, printPayment } from '../fixtures/document-print'
+
+describe('canonical A4 PDF layout', () => {
+  it('keeps payment references below the creditor address and lookup QR in the header', async () => {
+    const { PDFPage } = await import('pdf-lib')
+    const { generateDocumentPdf } = await import('../../server/utils/documents/pdf')
+    const text = vi.spyOn(PDFPage.prototype, 'drawText')
+    const rectangles = vi.spyOn(PDFPage.prototype, 'drawRectangle')
+    await generateDocumentPdf(printDocument(), printCompany(), 'https://pos.example.test')
+
+    expect(text.mock.calls.some(([value]) => value === 'Ouvrir le document')).toBe(false)
+    const lookup = rectangles.mock.calls.find(([box]) => Math.abs((box?.width || 0) - 32.5 * 72 / 25.4) < 0.01)?.[0]
+    expect(lookup).toBeDefined()
+    expect(lookup!.x).toBeGreaterThan(300)
+    expect(lookup!.y).toBeGreaterThan(700)
+
+    const creditor = text.mock.calls.filter(([value]) => value === 'Compte / Payable à').at(-1)?.[1]
+    const creditorLocation = text.mock.calls.find(([value, options]) => value === '2000 Neuchâtel' && options?.x === creditor?.x)?.[1]
+    const reference = text.mock.calls.find(([value]) => value === 'Référence')?.[1]
+    expect(creditorLocation).toBeDefined()
+    expect(reference).toBeDefined()
+    expect(reference!.y).toBeLessThan(creditorLocation!.y! - 7)
+  })
+
+  it('renders amounts over CHF 1,000 and preserves all lines across pages', async () => {
+    const { PDFDocument, PDFPage } = await import('pdf-lib')
+    const { generateDocumentPdf } = await import('../../server/utils/documents/pdf')
+    const text = vi.spyOn(PDFPage.prototype, 'drawText')
+    const document = printDocument({ total: 6500000, subtotal: 6012951, taxAmount: 487049 })
+    document.lines = Array.from({ length: 65 }, (_, index) => ({
+      ...document.lines[0]!, id: index + 1, label: `Prestation ${index + 1}`, unitPrice: 100000, lineTotal: 100000
+    }))
+    const pdf = await PDFDocument.load(await generateDocumentPdf(document, printCompany(), 'https://pos.example.test'))
+    expect(pdf.getPageCount()).toBeGreaterThan(1)
+    for (const line of document.lines) expect(text.mock.calls.some(([value]) => value === line.label)).toBe(true)
+    expect(text.mock.calls.some(([value]) => value === '65 000.00 CHF')).toBe(true)
+  })
+})
 
 describe('printed customer identity', () => {
   it.each(documentTypes)('prints the customer phone after the postal address on %s documents', (type) => {

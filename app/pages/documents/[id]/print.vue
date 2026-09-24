@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { savStatusLabels } from '~~/shared/types/sav'
-import { createQrCodeDataUrl } from '~~/shared/utils/qr-code'
+import { waitForPdfFrame } from '~/utils/pdf-print'
 import '~/assets/css/thermal-print.css'
 import '~/assets/css/document-print.css'
 import { documentStatusLabels, documentTypeLabels } from '~~/shared/constants/pos'
 import type { DocumentDetail, PrintProfile } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
-import { A4_POSTAL_LAYOUT, buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
+import { buildDocumentA4PrintModel } from '~~/shared/utils/document-print'
 import { getDocumentPrintProfiles, printProfileLabels, supportsDocumentPrintProfile } from '~~/shared/utils/print'
-import type { SwissQrAddress } from '~~/shared/utils/qr-bill'
-import { calculateIncludedVatAmount, formatCurrency, formatDate, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
+import { calculateIncludedVatAmount, formatCurrency, formatDateTime, isPayableDocumentType } from '~~/shared/utils/pos'
 
 definePageMeta({
   layout: false
@@ -38,7 +37,6 @@ const profile = computed<PrintProfile>(() => normalizePrintProfile(route.query.p
 const profileLabel = computed(() => printProfileLabels[profile.value])
 const availableProfiles = computed(() => document.value ? getDocumentPrintProfiles(document.value.type) : [])
 const canRenderSelectedProfile = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, profile.value) : false)
-const isThermalProfile = computed(() => profile.value === 'thermal')
 const printPageRule = computed(() => (
   profile.value === 'thermal'
     ? '@page { margin: 0; }'
@@ -78,43 +76,35 @@ const showThermalCustomer = computed(() => {
   return customer.displayName !== 'Client comptoir' || hasContactDetails
 })
 
-const qrBill = computed(() => {
-  if (isThermalProfile.value) {
-    return null
-  }
-
-  return a4PrintModel.value?.qrBill || null
-})
-
-const { data: qrCodeDataUrl } = await useAsyncData(
-  () => `document-print-qr-${id.value}-${profile.value}`,
-  async () => {
-    if (!qrBill.value) {
-      return null
-    }
-
-    return createQrCodeDataUrl(qrBill.value.payload, {
-      errorCorrectionLevel: 'M',
-      margin: 0,
-      width: 220
-    })
-  },
-  {
-    watch: [qrBill, profile]
-  }
-)
+const pdfUrl = computed(() => `/api/documents/${id.value}/pdf?inline=1#view=FitH&navpanes=0`)
+const pdfFrame = ref<HTMLIFrameElement>()
+const pdfReady = ref(false)
+const pdfError = ref(false)
 
 function printDocument() {
+  if (profile.value === 'a4') {
+    pdfFrame.value?.contentWindow?.focus()
+    pdfFrame.value?.contentWindow?.print()
+    return
+  }
   window.print()
 }
 
-function formatQrStreet(address: SwissQrAddress) {
-  return [address.street, address.buildingNumber].filter(Boolean).join(' ')
-}
-
-function formatQrLocation(address: SwissQrAddress) {
-  return [address.postalCode, address.city].filter(Boolean).join(' ')
-}
+watch([pdfFrame, pdfUrl, profile], async ([frame], _previous, onCleanup) => {
+  let active = true
+  onCleanup(() => {
+    active = false
+  })
+  pdfReady.value = false
+  pdfError.value = false
+  if (!frame) return
+  try {
+    const ready = await waitForPdfFrame(frame, () => active)
+    if (active) pdfReady.value = ready
+  } catch {
+    if (active) pdfError.value = true
+  }
+}, { flush: 'post' })
 
 useHead(() => ({
   title: printDocumentTitle.value,
@@ -167,316 +157,29 @@ useHead(() => ({
           <UButton
             icon="i-lucide-printer"
             label="Imprimer"
+            :disabled="profile === 'a4' && !pdfReady"
             @click="printDocument"
           />
         </div>
       </div>
     </div>
 
-    <main class="mx-auto flex max-w-6xl justify-center px-3 py-4 sm:px-6 sm:py-6 print:max-w-none print:px-0 print:py-0">
-      <article
+    <main class="mx-auto flex max-w-6xl flex-wrap justify-center px-3 py-4 sm:px-6 sm:py-6 print:max-w-none print:px-0 print:py-0">
+      <UAlert
+        v-if="pdfError"
+        title="Impossible de charger le PDF"
+        description="Rechargez la page pour réessayer."
+        color="error"
+        class="mb-3 w-full"
+      />
+      <iframe
         v-if="document && company && canRenderSelectedProfile && profile === 'a4'"
-        :data-print-ready="printReady"
-        class="sheet sheet--a4 w-full max-w-[210mm] bg-white text-slate-900 shadow-sm ring-1 ring-black/5 print:max-w-none print:shadow-none print:ring-0"
-        :class="{ 'sheet--with-qr': !!qrBill }"
-        :style="{
-          '--a4-address-left': `${A4_POSTAL_LAYOUT.addressLeftMm}mm`,
-          '--a4-address-top': `${A4_POSTAL_LAYOUT.addressTopMm}mm`,
-          '--a4-address-width': `${A4_POSTAL_LAYOUT.addressWidthMm}mm`,
-          '--a4-body-top': `${A4_POSTAL_LAYOUT.bodyTopMm}mm`
-        }"
-      >
-        <header class="invoice-header">
-          <div class="invoice-head">
-            <div class="invoice-brand">
-              <div
-                v-if="company.logoDataUrl"
-                class="invoice-logo"
-              >
-                <img :src="company.logoDataUrl" :alt="company.name" class="max-h-full max-w-full object-contain">
-              </div>
-
-              <div>
-                <p class="invoice-kicker">
-                  {{ document.type === 'sav' ? 'Service après-vente' : 'Document commercial' }}
-                </p>
-                <h2 class="invoice-company">
-                  {{ company.name }}
-                </h2>
-                <div class="invoice-company-meta">
-                  <p v-for="line in companyAddress" :key="`company-${line}`">
-                    {{ line }}
-                  </p>
-                  <p v-if="company.phone">
-                    {{ company.phone }}
-                  </p>
-                  <p v-if="company.email">
-                    {{ company.email }}
-                  </p>
-                  <p v-if="company.website">
-                    {{ company.website }}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <PosRecordLookupQr :id="id" type="documents" class="invoice-lookup" />
-
-            <div class="invoice-meta">
-              <p class="invoice-type">
-                {{ documentTitle }}
-              </p>
-              <p class="invoice-number">
-                {{ document.documentNumber }}
-              </p>
-              <p>Émis le {{ formatDate(document.issuedAt) }}</p>
-              <p v-if="document.ticket">
-                Réf. dossier {{ document.ticket.ticketNumber }}
-              </p>
-              <p>
-                Statut {{ document.sav ? savStatusLabels[document.sav.status] : (document.creditedTotal && document.creditedTotal === document.total ? 'Remboursée' : documentStatusLabels[document.status]) }}
-              </p>
-            </div>
-          </div>
-
-          <div class="invoice-party-row">
-            <section class="invoice-party invoice-party--compact">
-              <p class="invoice-label">
-                Références
-              </p>
-              <p v-for="line in a4PrintModel?.referenceLines || []" :key="line">
-                {{ line }}
-              </p>
-            </section>
-
-            <section class="invoice-window-wrap">
-              <p class="invoice-label invoice-window-label">
-                Adresse destinataire
-              </p>
-              <div class="invoice-window">
-                <p class="invoice-strong">
-                  {{ a4PrintModel?.windowLines[0] || document.customer.displayName }}
-                </p>
-                <p v-for="line in (a4PrintModel?.windowLines || []).slice(1)" :key="`customer-${line}`">
-                  {{ line }}
-                </p>
-              </div>
-            </section>
-          </div>
-        </header>
-
-        <section v-if="document.type !== 'sav'" class="invoice-lines">
-          <table class="invoice-table">
-            <thead>
-              <tr>
-                <th>Désignation</th>
-                <th>Qté</th>
-                <th>Prix TTC</th>
-                <th>TVA</th>
-                <th>TVA CHF</th>
-                <th class="text-right">
-                  Total TTC
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="line in document.lines" :key="line.id">
-                <td class="invoice-desc">
-                  {{ line.label }}
-                </td>
-                <td>{{ line.quantity }}</td>
-                <td>{{ formatCurrency(line.unitPrice) }}</td>
-                <td>{{ line.vatRate }}%</td>
-                <td>{{ formatCurrency(calculateIncludedVatAmount(line.lineTotal, line.vatRate)) }}</td>
-                <td class="text-right">
-                  {{ formatCurrency(line.lineTotal) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        <section v-if="payments.length" class="invoice-payments">
-          <p class="invoice-label">
-            Paiements reçus
-          </p>
-          <table class="print-payments-table">
-            <thead>
-              <tr>
-                <th scope="col">
-                  Date
-                </th>
-                <th scope="col">
-                  Moyen de paiement
-                </th>
-                <th scope="col">
-                  Montant
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="payment in payments" :key="payment.id">
-                <td>{{ payment.paidAt }}</td>
-                <td>{{ payment.label }}</td>
-                <td>{{ formatCurrency(payment.amount) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        <section class="invoice-summary">
-          <div v-if="document.type !== 'sav'" class="invoice-totals">
-            <div class="invoice-total-row">
-              <span>Total HT</span>
-              <strong>{{ formatCurrency(document.subtotal) }}</strong>
-            </div>
-            <div class="invoice-total-row">
-              <span>TVA</span>
-              <strong>{{ formatCurrency(document.taxAmount) }}</strong>
-            </div>
-            <div class="invoice-total-row invoice-total-row--grand">
-              <span>Total TTC</span>
-              <strong>{{ formatCurrency(document.total) }}</strong>
-            </div>
-            <div v-if="isPayableDocument" class="invoice-total-row">
-              <span>Encaissé net</span>
-              <strong>{{ formatCurrency(paidAmount) }}</strong>
-            </div>
-            <div v-if="isPayableDocument" class="invoice-total-row invoice-total-row--grand">
-              <span>Reste à payer</span>
-              <strong>{{ formatCurrency(balanceDue) }}</strong>
-            </div>
-          </div>
-
-          <div v-if="a4PrintModel?.noteBlocks.length" class="invoice-notes">
-            <div v-for="block in a4PrintModel.noteBlocks" :key="block.label" class="invoice-note-block">
-              <p class="invoice-label">
-                {{ block.label }}
-              </p>
-              <p class="whitespace-pre-line">
-                {{ block.content }}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section v-if="qrBill && qrCodeDataUrl" class="qr-bill">
-          <div class="qr-bill-receipt">
-            <p class="qr-bill-title">
-              Récépissé
-            </p>
-
-            <div class="qr-bill-block">
-              <p class="qr-bill-label">
-                Compte / Payable à
-              </p>
-              <p>{{ company.iban }}</p>
-              <p>{{ qrBill.creditor.name }}</p>
-              <p>{{ formatQrStreet(qrBill.creditor) }}</p>
-              <p>{{ formatQrLocation(qrBill.creditor) }}</p>
-            </div>
-
-            <div v-if="qrBill.debtor" class="qr-bill-block">
-              <p class="qr-bill-label">
-                Payable par
-              </p>
-              <p>{{ qrBill.debtor.name }}</p>
-              <p>{{ formatQrStreet(qrBill.debtor) }}</p>
-              <p>{{ formatQrLocation(qrBill.debtor) }}</p>
-            </div>
-
-            <div class="qr-bill-amount-row">
-              <div>
-                <p class="qr-bill-label">
-                  Monnaie
-                </p>
-                <p>CHF</p>
-              </div>
-              <div>
-                <p class="qr-bill-label">
-                  Montant
-                </p>
-                <p>{{ qrBill.amount }}</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="qr-bill-payment">
-            <div class="qr-bill-payment-head">
-              <p class="qr-bill-title">
-                Section paiement
-              </p>
-              <div>
-                <p class="qr-bill-label">
-                  Compte / Payable à
-                </p>
-                <p>{{ company.iban }}</p>
-                <p>{{ qrBill.creditor.name }}</p>
-                <p>{{ formatQrStreet(qrBill.creditor) }}</p>
-                <p>{{ formatQrLocation(qrBill.creditor) }}</p>
-              </div>
-            </div>
-
-            <div class="qr-bill-payment-body">
-              <div class="qr-bill-code-wrap">
-                <img :src="qrCodeDataUrl" alt="QR-facture suisse" class="qr-bill-code">
-                <div class="qr-bill-code-mark" aria-hidden="true">
-                  <div class="qr-bill-code-mark-cross" />
-                </div>
-              </div>
-
-              <div class="qr-bill-details">
-                <div class="qr-bill-block">
-                  <p class="qr-bill-label">
-                    Référence
-                  </p>
-                  <p>{{ qrBill.displayReference }}</p>
-                </div>
-
-                <div class="qr-bill-block">
-                  <p class="qr-bill-label">
-                    Informations supplémentaires
-                  </p>
-                  <p>{{ qrBill.message }}</p>
-                </div>
-
-                <div v-if="qrBill.debtor" class="qr-bill-block">
-                  <p class="qr-bill-label">
-                    Payable par
-                  </p>
-                  <p>{{ qrBill.debtor.name }}</p>
-                  <p>{{ formatQrStreet(qrBill.debtor) }}</p>
-                  <p>{{ formatQrLocation(qrBill.debtor) }}</p>
-                </div>
-
-                <div class="qr-bill-amount-row">
-                  <div>
-                    <p class="qr-bill-label">
-                      Monnaie
-                    </p>
-                    <p>CHF</p>
-                  </div>
-                  <div>
-                    <p class="qr-bill-label">
-                      Montant
-                    </p>
-                    <p>{{ qrBill.amount }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <footer v-else-if="a4PrintModel && (a4PrintModel.footerNote || a4PrintModel.footerMeta.length)" class="invoice-footer">
-          <p v-if="a4PrintModel.footerNote" class="invoice-footer-note">
-            {{ a4PrintModel.footerNote }}
-          </p>
-          <div class="invoice-footer-meta">
-            <span v-for="entry in a4PrintModel.footerMeta" :key="entry">{{ entry }}</span>
-          </div>
-        </footer>
-      </article>
+        ref="pdfFrame"
+        :src="pdfUrl"
+        :title="`PDF ${document.documentNumber}`"
+        class="h-[calc(100dvh-13rem)] min-h-96 w-full border-0 bg-white sm:h-[calc(100dvh-9rem)]"
+        @error="pdfError = true"
+      />
 
       <article
         v-else-if="document && company && canRenderSelectedProfile && profile === 'thermal'"

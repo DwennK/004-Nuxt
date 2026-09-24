@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ButtonProps, DropdownMenuItem } from '@nuxt/ui'
 import { getDocumentPdfFilename } from '~~/shared/utils/document-email'
+import { waitForPdfFrame } from '~/utils/pdf-print'
 
 const props = withDefaults(defineProps<{
   previewUrl: string
@@ -56,20 +57,26 @@ async function print(previewUrl = props.previewUrl) {
   printFrame.tabIndex = -1
   printFrame.setAttribute('aria-hidden', 'true')
   printFrame.style.cssText = 'position:fixed;left:-10000px;top:0;width:1200px;height:900px;border:0;'
-  printFrame.src = previewUrl
+  const isPdf = Boolean(props.documentId && previewUrl === props.previewUrl)
+  printFrame.src = isPdf ? `/api/documents/${props.documentId}/pdf?inline=1` : previewUrl
   document.body.append(printFrame)
   cleanupTimer = setTimeout(printError, 30000)
 
   try {
-    // Wait for Nuxt hydration, including the async QR components, before printing.
-    while (!printFrame.contentDocument?.querySelector('[data-print-ready="true"]')) {
-      if (frame !== printFrame) return
-      await new Promise(resolve => setTimeout(resolve, 100))
+    if (isPdf) {
+      // The browser prints the same server-generated PDF used by email/download.
+      if (!await waitForPdfFrame(printFrame, () => frame === printFrame)) return
+    } else {
+      // HTML remains for thermal receipts and dossier worksheets.
+      while (!printFrame.contentDocument?.querySelector('[data-print-ready="true"]')) {
+        if (frame !== printFrame) return
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+      const printDocument = printFrame.contentDocument!
+      await printDocument.fonts.ready
+      await Promise.all(Array.from(printDocument.images, img => img.decode()))
     }
     const printWindow = printFrame.contentWindow!
-    const printDocument = printFrame.contentDocument!
-    await printDocument.fonts.ready
-    await Promise.all(Array.from(printDocument.images, img => img.decode()))
     if (frame !== printFrame) return
     printWindow.addEventListener('afterprint', () => {
       if (frame === printFrame) {
