@@ -4,9 +4,6 @@ export const catalogArticleCategories = [
   'Smartphones',
   'Tablettes',
   'Ordinateurs',
-  'Audio',
-  'Charge',
-  'Protection',
   'Autre'
 ] as const
 export const catalogRepairCategories = [
@@ -26,6 +23,13 @@ export const catalogServiceCategories = [
   'Nettoyage',
   'Autre'
 ] as const
+export const catalogCategoriesByType = {
+  product: catalogArticleCategories,
+  repair: catalogRepairCategories,
+  service: catalogServiceCategories
+} as const
+export const catalogAccessoryLegacyCategories = ['Audio', 'Charge', 'Protection'] as const
+
 export const catalogServiceKindSuggestions = [
   'Remplacement écran',
   'Remplacement batterie',

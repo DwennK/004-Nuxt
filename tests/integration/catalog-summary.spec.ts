@@ -3,7 +3,7 @@ import { defineRelations } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../server/db/schema'
-import { createCatalogItem, deleteCatalogItem, getCatalogSummary, listCatalogItems, updateCatalogItem } from '../../server/utils/pos/catalog'
+import { createCatalogItem, deleteCatalogItem, getCatalogSummary, getCatalogItemById, suggestCatalogItems, listCatalogItems, updateCatalogItem } from '../../server/utils/pos/catalog'
 import type { CatalogItemInput, CatalogItemType } from '../../shared/types/pos'
 
 const context = vi.hoisted(() => ({ db: null as unknown }))
@@ -63,6 +63,26 @@ describe('catalog summary preserves each tab total without loading its rows', ()
       expect(summary[type]).toBe((await listCatalogItems({ ...filters[type], type, pageSize: 1 })).total)
     }
     expect(await getCatalogSummary({ ...filters, repair: { search: 'absent' } })).toEqual({ product: 1, repair: 0, service: 1 })
+  })
+
+  it('groups legacy product categories consistently in reads, filters, search and counts', async () => {
+    for (const [index, category] of ['Audio', 'Charge', 'Protection'].entries()) {
+      const item = await createCatalogItem({ ...base, sku: `LEGACY-${index}`, name: `Legacy ${index}` })
+      // Simulate persisted records from before categories became fixed.
+      await client.execute({ sql: 'UPDATE catalog_items SET category = ? WHERE id = ?', args: [category, item.id] })
+      expect((await getCatalogItemById(item.id)).category).toBe('Accessoires')
+    }
+    const filter = { type: 'product' as const, category: 'Accessoires' }
+    const list = await listCatalogItems({ ...filter, pageSize: 2 })
+    expect(list.total).toBe(4)
+    expect(list.items.every(item => item.category === 'Accessoires')).toBe(true)
+    expect((await listCatalogItems({ ...filter, page: 2, pageSize: 2 })).items).toHaveLength(2)
+    expect((await suggestCatalogItems(filter)).items).toHaveLength(4)
+    expect((await listCatalogItems({ search: 'accessoires' })).total).toBe(4)
+    expect(await getCatalogSummary({ product: filter })).toEqual({ product: 4, repair: 1, service: 1 })
+    await client.execute({ sql: 'UPDATE catalog_items SET category = ? WHERE id = ?', args: ['Audio', repairId] })
+    expect((await getCatalogItemById(repairId)).category).toBe('Audio')
+    expect((await listCatalogItems({ category: 'Accessoires' })).total).toBe(4)
   })
 
   it('reflects moved and deleted items in both affected type counts', async () => {

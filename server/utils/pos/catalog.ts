@@ -7,6 +7,8 @@ import type { CatalogSuggestionsResponse, CatalogSummaryResponse } from '~~/shar
 import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
 import { normalizeOptionalText, normalizeRequiredText } from '~~/shared/lib/text'
+import { catalogAccessoryLegacyCategories } from '~~/shared/constants/pos'
+import { normalizeCatalogCategory } from '~~/shared/utils/catalog'
 import { catalogMobileSentrixSchema } from '~~/shared/validation/pos'
 
 type ListCatalogItemsOptions = {
@@ -81,7 +83,7 @@ function normalizeCatalogItemInput(input: CatalogItemInput) {
     name: normalizeRequiredText(input.name),
     sku: normalizeOptionalText(input.sku),
     type,
-    category: normalizeRequiredText(input.category),
+    category: normalizeCatalogCategory(type, input.category),
     brand: isRepair ? normalizeOptionalText(input.brand) : null,
     model: isRepair ? normalizeOptionalText(input.model) : null,
     serviceKind: (isRepair || isService) ? normalizeOptionalText(input.serviceKind) : null,
@@ -99,7 +101,7 @@ function mapCatalogItem(row: typeof catalogItems.$inferSelect): CatalogItemRecor
     sku: row.sku,
     mobileSentrix: parseMobileSentrix(row.mobileSentrixJson),
     type: row.type,
-    category: row.category,
+    category: normalizeCatalogCategory(row.type, row.category),
     brand: row.brand,
     model: row.model,
     serviceKind: row.serviceKind,
@@ -111,6 +113,14 @@ function mapCatalogItem(row: typeof catalogItems.$inferSelect): CatalogItemRecor
     updatedAt: row.updatedAt
   }
 }
+
+// Keep existing products in the Accessories filter without rewriting stored records.
+const catalogCategory = sql<string>`case
+  when ${catalogItems.type} = 'product'
+    and trim(${catalogItems.category}) in (${sql.join(catalogAccessoryLegacyCategories.map(category => sql`${category}`), sql`, `)})
+  then 'Accessoires'
+  else ${catalogItems.category}
+end`
 
 function catalogSearchQuery(options: ListCatalogItemsOptions) {
   const normalizedSearch = normalizeSearchText(options.search)
@@ -128,7 +138,7 @@ function catalogSearchQuery(options: ListCatalogItemsOptions) {
     sql`coalesce(${catalogItems.sku}, '')`,
     sql`coalesce(json_extract(${catalogItems.mobileSentrixJson}, '$.sku'), '')`,
     sql`${catalogItems.type}`,
-    sql`${catalogItems.category}`
+    catalogCategory
   ] as const
   const searchClause = searchTokens.length
     ? and(...searchTokens.map(token => or(
@@ -139,7 +149,7 @@ function catalogSearchQuery(options: ListCatalogItemsOptions) {
   const whereClause = and(
     options.activeOnly ? eq(catalogItems.isActive, true) : undefined,
     options.type ? eq(catalogItems.type, options.type) : undefined,
-    normalizedCategory ? eq(catalogItems.category, normalizedCategory) : undefined,
+    normalizedCategory ? eq(catalogCategory, normalizedCategory) : undefined,
     searchClause
   )
   // Rank device/service matches before technical references such as SERV-*.
@@ -173,7 +183,7 @@ function catalogSearchQuery(options: ListCatalogItemsOptions) {
     orderBy: [
       ...(matchOrder ? [matchOrder] : []),
       ...(relevanceOrder ? [relevanceOrder] : []),
-      asc(catalogItems.category),
+      asc(catalogCategory),
       asc(catalogItems.name),
       asc(catalogItems.id)
     ]

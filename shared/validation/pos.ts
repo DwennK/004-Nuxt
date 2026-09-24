@@ -1,5 +1,6 @@
 import { savDetailsSchema } from './sav'
 import { z } from 'zod'
+import { isCatalogCategory } from '../utils/catalog'
 import { normalizeImei } from '../utils/pos'
 import {
   catalogItemTypes,
@@ -105,6 +106,9 @@ export const catalogItemInputSchema = z.object({
   vatRate: z.coerce.number().min(0).max(100),
   isActive: z.coerce.boolean().default(true)
 }).superRefine((value, ctx) => {
+  if (!isCatalogCategory(value.type, value.category)) {
+    ctx.addIssue({ code: 'custom', path: ['category'], message: 'Choisissez une catégorie proposée pour ce type' })
+  }
   if ((value.type === 'repair' || value.type === 'service') && !value.serviceKind) {
     ctx.addIssue({
       code: 'custom',

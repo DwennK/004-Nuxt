@@ -2,15 +2,14 @@
 import { z } from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import {
-  catalogArticleCategories,
+  catalogCategoriesByType,
   catalogItemTypeLabels,
   catalogItemTypes,
-  catalogRepairCategories,
-  catalogServiceCategories,
   catalogServiceKindSuggestions
 } from '~~/shared/constants/pos'
 import type { CatalogItemInput, CatalogMobileSentrix } from '~~/shared/types/pos'
 import { catalogMobileSentrixSchema } from '~~/shared/validation/pos'
+import { isCatalogCategory, normalizeCatalogCategory } from '~~/shared/utils/catalog'
 import { formatCurrency } from '~~/shared/utils/pos'
 
 type FormState = {
@@ -62,6 +61,9 @@ const schema = z.object({
   vatRate: z.coerce.number().min(0).max(100),
   isActive: z.boolean().default(true)
 }).superRefine((value, ctx) => {
+  if (!isCatalogCategory(value.type, value.category)) {
+    ctx.addIssue({ code: 'custom', path: ['category'], message: 'Choisissez une catégorie proposée pour ce type' })
+  }
   if ((value.type === 'repair' || value.type === 'service') && !value.serviceKind.trim()) {
     ctx.addIssue({
       code: 'custom',
@@ -95,13 +97,14 @@ const state = reactive<FormState>({
   isActive: true
 })
 
-watchEffect(() => {
+watch(() => props.initialValue, () => {
   state.name = props.initialValue.name || ''
   state.sku = props.initialValue.sku || ''
   state.mobileSentrix = { ...(props.initialValue.mobileSentrix || emptyMobileSentrix()) }
   state.type = props.initialValue.type || 'product'
-  state.category = props.initialValue.category
-    || (state.type === 'repair' ? 'iPhone' : state.type === 'service' ? 'Diagnostic' : 'Autre')
+  const category = normalizeCatalogCategory(state.type, props.initialValue.category
+    || (state.type === 'repair' ? 'iPhone' : state.type === 'service' ? 'Diagnostic' : 'Autre'))
+  state.category = isCatalogCategory(state.type, category) ? category : ''
   state.brand = props.initialValue.brand || ''
   state.model = props.initialValue.model || ''
   state.serviceKind = props.initialValue.serviceKind || ''
@@ -109,7 +112,7 @@ watchEffect(() => {
   state.defaultPrice = (props.initialValue.defaultPrice ?? 0) / 100
   state.vatRate = props.initialValue.vatRate ?? 8.1
   state.isActive = props.initialValue.isActive ?? true
-})
+}, { immediate: true, deep: true })
 
 const isRepair = computed(() => state.type === 'repair')
 const mobileSentrixStatuses = [
@@ -141,17 +144,7 @@ const currentItemNameLabel = computed(() => {
 
   return state.type === 'repair' ? 'Nom de la réparation' : 'Nom du service'
 })
-const categorySuggestions = computed(() => {
-  if (isRepair.value) {
-    return catalogRepairCategories
-  }
-
-  if (isService.value) {
-    return catalogServiceCategories
-  }
-
-  return catalogArticleCategories
-})
+const categoryItems = computed<string[]>(() => [...catalogCategoriesByType[state.type]])
 const categoryDescription = computed(() => {
   if (isRepair.value) {
     return 'Univers appareil utilisé pour structurer les réparations atelier.'
@@ -164,18 +157,10 @@ const categoryDescription = computed(() => {
   return 'Famille de produit utilisée pour structurer les articles vendus.'
 })
 
-watch(() => state.type, (type) => {
-  if (type === 'repair' && (!state.category || state.category === 'Autre')) {
-    state.category = 'iPhone'
+function onTypeChange(type: FormState['type']) {
+  if (!isCatalogCategory(type, state.category)) {
+    state.category = type === 'repair' ? 'iPhone' : type === 'service' ? 'Diagnostic' : 'Autre'
   }
-
-  if (type === 'service' && (!state.category || state.category === 'Autre' || state.category === 'iPhone')) {
-    state.category = 'Diagnostic'
-  }
-})
-
-function applyCategorySuggestion(value: string) {
-  state.category = value
 }
 
 function applyServiceKindSuggestion(value: string) {
@@ -249,6 +234,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
                 :items="typeItems"
                 value-key="value"
                 class="w-full"
+                @update:model-value="onTypeChange"
               />
             </UFormField>
           </div>
@@ -264,21 +250,13 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
               :description="categoryDescription"
               required
             >
-              <UInput v-bind="posInputAttrs" v-model="state.category" class="w-full" />
+              <USelect
+                v-model="state.category"
+                :items="categoryItems"
+                placeholder="Choisir une catégorie"
+                class="w-full"
+              />
             </UFormField>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <UButton
-              v-for="suggestion in categorySuggestions"
-              :key="suggestion"
-              type="button"
-              color="neutral"
-              variant="soft"
-              size="xs"
-              :label="suggestion"
-              @click="applyCategorySuggestion(suggestion)"
-            />
           </div>
         </div>
       </UPageCard>
@@ -435,6 +413,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             :items="typeItems"
             value-key="value"
             class="w-full"
+            @update:model-value="onTypeChange"
           />
         </UFormField>
 
@@ -449,21 +428,13 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         :description="categoryDescription"
         required
       >
-        <UInput v-bind="posInputAttrs" v-model="state.category" class="w-full" />
-      </UFormField>
-
-      <div class="flex flex-wrap gap-2">
-        <UButton
-          v-for="suggestion in categorySuggestions"
-          :key="suggestion"
-          type="button"
-          color="neutral"
-          variant="soft"
-          size="xs"
-          :label="suggestion"
-          @click="applyCategorySuggestion(suggestion)"
+        <USelect
+          v-model="state.category"
+          :items="categoryItems"
+          placeholder="Choisir une catégorie"
+          class="w-full"
         />
-      </div>
+      </UFormField>
 
       <template v-if="isCatalogService">
         <div v-if="isRepair" class="grid gap-4 md:grid-cols-2">
