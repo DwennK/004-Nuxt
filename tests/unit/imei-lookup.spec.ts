@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { smartphoneImeiLookupSchema } from '../../shared/validation/smartphones'
+import { encodeTacBlock, decodeTacBlock } from '../../server/utils/tac-block'
 import { parseTacDataset } from '../../server/utils/tac-dataset'
 
 function models(csv: string) {
@@ -52,5 +53,20 @@ APPLE,12345680,<script>alert(1)</script>
     for (const csv of ['Brand,Code,SPECS\nAPPLE,35219560,APPLE IPHONE 13', 'Brand,TAC,SPECS\nAPPLE,35219560,"unterminated', 'Brand,TAC,SPECS\n']) {
       expect(() => parseTacDataset(csv)).toThrow()
     }
+  })
+})
+
+describe('compressed TAC blocks', () => {
+  it('round-trips models, supports legacy JSON and reduces repeated model data', async () => {
+    const models = Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [String(35000000 + i), 'iPhone 13 Pro']))
+    const json = JSON.stringify(models)
+    const compressed = await encodeTacBlock(json)
+    expect(compressed.length).toBeLessThan(json.length / 4)
+    expect(await decodeTacBlock(compressed)).toEqual(models)
+    expect(await decodeTacBlock(json)).toEqual(models)
+  })
+  it('rejects malformed and oversized compressed blocks', async () => {
+    await expect(decodeTacBlock('gz:invalid')).rejects.toThrow()
+    await expect(decodeTacBlock(await encodeTacBlock('x'.repeat(1024 * 1024 + 1)))).rejects.toThrow('size limit')
   })
 })

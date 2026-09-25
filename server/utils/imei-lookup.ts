@@ -1,3 +1,4 @@
+import { decodeTacBlock } from './tac-block'
 import type { Client } from '@libsql/client'
 import type { SmartphoneImeiLookup } from '~~/shared/types/smartphones'
 import { smartphoneImeiLookupSchema } from '~~/shared/validation/smartphones'
@@ -14,7 +15,7 @@ export async function lookupSmartphoneImei(imei: string, client: Client): Promis
     const row = result.rows[0]
     if (!row?.active_version) return { status: 'unavailable' }
     if (!row.payload) return { status: 'not_found' }
-    const model: unknown = JSON.parse(String(row.payload))[tac]
+    const model: unknown = (await decodeTacBlock(String(row.payload)))[tac]
     if (typeof model === 'string' && model.length >= 2 && model.length <= 200) return { status: 'found', model }
     return { status: 'not_found' }
   } catch {

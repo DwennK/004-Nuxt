@@ -1,5 +1,7 @@
 import { createClient, type Client } from '@libsql/client'
 import type { H3Event } from 'h3'
+import { SQLITE_BACKUP_BYTE_LIMIT } from './backups/limits'
+import { encodeTacBlock } from './tac-block'
 import { externalFetch } from './external-fetch'
 import { parseTacDataset, TAC_COMMIT_URL, TAC_SOURCE, TacError } from './tac-dataset'
 
@@ -74,11 +76,27 @@ export async function syncTacDataset(client: Client) {
       // Reject a truncated/replaced source, while allowing its known incomplete rows.
       if (dataset.entries < 100_000 || dataset.entries < Number(current.entry_count) * 0.9) throw new TacError('unexpected_entry_count')
       if ((dataset.ignored + dataset.conflicts) / dataset.rows > 0.1) throw new TacError('excessive_invalid_rows')
+      // Reuse the retired version's pages before staging. Keeping three copies
+      // would permanently raise SQLite's file size, even after DELETE.
+      await client.batch([
+        { sql: 'UPDATE tac_sync_state SET previous_version=NULL WHERE id=1 AND lock_token=? AND lock_until>?', args: [token, Date.now()] },
+        { sql: `DELETE FROM tac_blocks WHERE version NOT IN (SELECT active_version FROM tac_sync_state WHERE active_version IS NOT NULL)
+            AND EXISTS(SELECT 1 FROM tac_sync_state WHERE id=1 AND lock_token=? AND lock_until>?)`, args: [token, Date.now()] }
+      ], 'write')
+      const compressedChunks = []
+      for (const chunk of dataset.chunks) compressedChunks.push({ ...chunk, payload: await encodeTacBlock(chunk.payload) })
+      const [pages, free, pageSize] = await client.batch(['PRAGMA page_count', 'PRAGMA freelist_count', 'PRAGMA page_size'], 'read')
+      const size = Number(pageSize!.rows[0]!.page_size)
+      const allocated = Number(pages!.rows[0]!.page_count) * size
+      const occupied = allocated - Number(free!.rows[0]!.freelist_count) * size
+      const incoming = compressedChunks.reduce((total, chunk) => total + Math.ceil((chunk.payload.length + 512) / size) * size, 0)
+      if (Math.max(allocated, occupied + incoming + 128 * 1024) > SQLITE_BACKUP_BYTE_LIMIT) throw new TacError('backup_capacity')
       const version = `${sha}-${token}`
       // Staging is isolated by run ID, including after an expired lease is reclaimed.
-      for (let offset = 0; offset < dataset.chunks.length; offset += 4) {
+      for (let offset = 0; offset < compressedChunks.length; offset += 4) {
         signal.throwIfAborted()
-        const results = await client.batch(dataset.chunks.slice(offset, offset + 4).map(chunk => ({
+        const compressed = compressedChunks.slice(offset, offset + 4)
+        const results = await client.batch(compressed.map(chunk => ({
           sql: `INSERT INTO tac_blocks(id,version,prefix,payload)
             SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM tac_sync_state WHERE id=1 AND lock_token=? AND lock_until>?)`,
           args: [`${version}:${chunk.prefix}`, version, chunk.prefix, chunk.payload, token, Date.now()]

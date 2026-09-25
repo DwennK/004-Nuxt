@@ -1,9 +1,10 @@
+import { SQLITE_BACKUP_BYTE_LIMIT as MAX_SQLITE_BYTES } from './limits'
 import { BackupError } from './dropbox'
 
 export type TursoExportConfig = { url: string, authToken: string }
 // Keep room for the source, committed/pending pages and SQLite WASM validation
 // inside the existing Worker's 128 MiB memory budget. Fail before uploading.
-export const MAX_SQLITE_BYTES = 16 * 1024 * 1024
+export { SQLITE_BACKUP_BYTE_LIMIT as MAX_SQLITE_BYTES } from './limits'
 const MAX_WAL_BYTES = 256 * 1024 * 1024
 const BATCH_FRAMES = 128
 const SIGNATURE = 'SQLite format 3\0'

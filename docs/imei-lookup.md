@@ -25,7 +25,7 @@ réécrites par une mise à jour de la base TAC.
   (zéros initiaux préservés), sans compléter les anciens codes incomplets.
 - Les valeurs vides, N/A, codes de test et modèles inutilisables sont ignorés.
   Deux modèles ou marques contradictoires pour un TAC excluent ce TAC.
-- Tables : `tac_blocks` contient les dictionnaires JSON par préfixe de trois
+- Tables : `tac_blocks` contient les dictionnaires JSON compressés (gzip/base64) par préfixe de trois
   chiffres et version ; `tac_sync_state` contient la version active/précédente,
   le commit, les dates, compteurs, verrou et dernier code d'erreur.
 - Cron Cloudflare : `0 3 * * *`, tous les jours à **03:00 UTC** (05:00 en été,
@@ -36,7 +36,7 @@ réécrites par une mise à jour de la base TAC.
   encore le propriétaire du verrou. Une exécution interrompue est récupérable
   après expiration. Le téléchargement est limité à 24 Mio / 60 secondes.
 - Une nouvelle version est entièrement préparée avant activation atomique.
-  La précédente est conservée ; les anciens imports et imports incomplets sont
+  Après activation, l'ancienne base active devient la version précédente ; les anciens imports et imports incomplets sont
   nettoyés sous verrou. La recherche lit version et bloc dans une seule requête,
   sans cache qui pourrait servir une ancienne version après synchronisation.
 - Protection contre un fichier tronqué/remplacé : au moins 100 000
@@ -119,3 +119,11 @@ personnalisée du projet, utiliser `--local-upstream 127.0.0.1:8787
 Le déclencheur local est `/cdn-cgi/local/scheduled?cron=0%203%20*%20*%20*`.
 Aucune migration, import TAC ou livraison en production n'est inclus dans ces
 vérifications locales.
+
+Les blocs sont compressés pour préserver la capacité des sauvegardes SQLite.
+La lecture accepte également les anciens blocs JSON non compressés.
+Avant de préparer une nouvelle version, l'ancienne version de secours est
+retirée pour réutiliser ses pages SQLite ; la base active reste disponible,
+y compris en cas d'échec. Le budget de pages est vérifié avant les écritures
+pour respecter la limite des sauvegardes (`backup_capacity` si insuffisant).
+Le fichier réel occupe 2 629 665 octets une fois compressé en gzip/base64.

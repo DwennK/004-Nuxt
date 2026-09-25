@@ -96,6 +96,16 @@ describe('versioned TAC synchronization', () => {
     expect(await syncTacDataset(client)).toEqual({ status: 'updated' })
   })
 
+  it('refuses staging when it would exceed the SQLite backup budget', async () => {
+    await syncTacDataset(client)
+    await client.execute('CREATE TABLE backup_pressure(payload BLOB)')
+    await client.execute('INSERT INTO backup_pressure VALUES(zeroblob(16 * 1024 * 1024))')
+    sourceSha = nextSha
+    await expect(syncTacDataset(client)).rejects.toThrow('backup_capacity')
+    expect(await lookupSmartphoneImei('490154203237518', client)).toEqual({ status: 'found', model: 'Nokia 6110' })
+    expect(await getTacStatus(client)).toMatchObject({ sourceCommit: sha, lastError: 'backup_capacity' })
+  })
+
   it('a superseded run cannot publish or release the new owner’s lease', async () => {
     const batch = client.batch.bind(client)
     vi.spyOn(client, 'batch').mockImplementationOnce(async (...args) => {
