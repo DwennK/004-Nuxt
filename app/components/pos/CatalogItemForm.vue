@@ -351,7 +351,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             :description="`Aperçu actuel: ${preview}`"
             required
           >
-            <UInputNumber
+            <PosMoneyInput
               v-bind="posInputAttrs"
               :model-value="state.defaultPrice"
               :min="0"
@@ -511,7 +511,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           name="defaultPrice"
           required
         >
-          <UInputNumber
+          <PosMoneyInput
             v-bind="posInputAttrs"
             :model-value="state.defaultPrice"
             :min="0"

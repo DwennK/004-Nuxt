@@ -392,7 +392,7 @@ async function removePayment(payment: PaymentRecord) {
                 </UFormField>
 
                 <UFormField label="Montant">
-                  <UInputNumber
+                  <PosMoneyInput
                     v-bind="posInputAttrs"
                     v-model="paymentDrafts[payment.id]!.amount"
                     :min="0"

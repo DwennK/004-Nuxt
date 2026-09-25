@@ -669,7 +669,7 @@ defineShortcuts({
                     <label :for="`sale-line-price-${line.id}`" class="sr-only">
                       Prix unitaire
                     </label>
-                    <UInputNumber
+                    <PosMoneyInput
                       v-bind="posInputAttrs"
                       :id="`sale-line-price-${line.id}`"
                       :model-value="line.unitPriceCents / 100"
@@ -851,7 +851,7 @@ defineShortcuts({
                   </div>
 
                   <div class="relative">
-                    <UInputNumber
+                    <PosMoneyInput
                       v-bind="posInputAttrs"
                       v-model="cashReceived"
                       :min="0"

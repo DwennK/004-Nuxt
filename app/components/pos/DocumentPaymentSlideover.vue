@@ -101,7 +101,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         </div>
 
         <UFormField label="Montant (CHF)" name="amount">
-          <UInputNumber
+          <PosMoneyInput
             v-bind="posInputAttrs"
             v-model="state.amount"
             :min="0.05"

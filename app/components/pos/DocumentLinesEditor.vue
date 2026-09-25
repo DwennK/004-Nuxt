@@ -288,7 +288,7 @@ async function handleBarcodeScan(value: string) {
               </div>
 
               <UFormField :name="`lines.${index}.unitPriceCents`" class="justify-self-end">
-                <UInputNumber
+                <PosMoneyInput
                   v-bind="posInputAttrs"
                   :id="`document-line-price-${line.id}`"
                   :model-value="line.unitPriceCents / 100"

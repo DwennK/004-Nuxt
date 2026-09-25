@@ -92,9 +92,10 @@ async function submit() {
               :description="`Max. ${formatCurrency(available)}`"
               required
             >
-              <UInput
-                v-model.number="state.amount"
-                type="number"
+              <PosMoneyInput
+                v-model="state.amount"
+                :increment="false"
+                :decrement="false"
                 :min="0.01"
                 :max="available / 100"
                 :step="0.01"
