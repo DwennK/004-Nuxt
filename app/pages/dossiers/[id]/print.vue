@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import '~/assets/css/thermal-print.css'
 import '~/assets/css/document-print.css'
+import { buildTicketIntakePrintModel } from '~~/shared/utils/ticket-print'
 import { A4_POSTAL_LAYOUT } from '~~/shared/utils/document-print'
 import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
 import { ticketStatusLabels, ticketTypeLabels } from '~~/shared/constants/pos'
@@ -71,47 +72,8 @@ const customerWindowLines = computed(() => {
   ].filter((line): line is string => Boolean(line))
 })
 
-const deviceLabel = computed(() => {
-  if (!ticket.value) {
-    return 'Appareil'
-  }
-
-  return [ticket.value.brand, ticket.value.model].filter(Boolean).join(' ').trim() || 'Appareil non renseigné'
-})
-
 const lineTotals = computed(() => calculateCommercialTotals(ticket.value?.lines || []))
-
-function parsePatternPoints(value?: string | null) {
-  if (!value?.toLowerCase().startsWith('pattern')) {
-    return []
-  }
-
-  return value
-    .replace(/pattern/i, '')
-    .split(/[^0-9]+/)
-    .map(part => Number(part))
-    .filter(point => Number.isInteger(point) && point >= 1 && point <= 9)
-    .filter((point, index, array) => array.indexOf(point) === index)
-}
-
-const patternPoints = computed(() => parsePatternPoints(ticket.value?.accessCode))
-const isAccessPattern = computed(() => patternPoints.value.length > 0)
-
-const patternPath = computed(() => {
-  return patternPoints.value
-    .map((point) => {
-      const col = (point - 1) % 3
-      const row = Math.floor((point - 1) / 3)
-      const x = 20 + col * 30
-      const y = 20 + row * 30
-      return `${x},${y}`
-    })
-    .join(' ')
-})
-
-const hasCodesSection = computed(() => {
-  return Boolean(ticket.value?.accessCode || ticket.value?.simCode)
-})
+const intake = computed(() => ticket.value ? buildTicketIntakePrintModel(ticket.value) : null)
 
 function printTicket() {
   window.print()
@@ -303,79 +265,7 @@ function printTicket() {
           </p>
         </section>
 
-        <section class="ticket-intake" :class="profile === 'a4' ? 'ticket-a4-section' : 'thermal-block'">
-          <div class="ticket-device">
-            <p :class="profile === 'a4' ? 'invoice-label' : 'thermal-kicker'">
-              {{ ticket.type === 'sale' ? 'Vente' : 'Appareil' }}
-            </p>
-            <p v-if="ticket.type !== 'sale'" class="thermal-strong">
-              {{ deviceLabel }}
-            </p>
-            <p v-if="ticket.issueDescription">
-              {{ ticket.issueDescription }}
-            </p>
-          </div>
-
-          <div
-            v-if="hasCodesSection"
-            class="ticket-codes"
-            role="group"
-            aria-label="Codes d’accès"
-          >
-            <div v-if="ticket.accessCode" class="ticket-code-row">
-              <p :class="profile === 'a4' ? 'invoice-label' : 'thermal-kicker'">
-                Déverrouillage
-              </p>
-              <div v-if="isAccessPattern" class="ticket-pattern">
-                <svg viewBox="0 0 100 100" class="ticket-pattern-svg" aria-label="Schéma de déverrouillage">
-                  <polyline
-                    v-if="patternPath"
-                    :points="patternPath"
-                    fill="none"
-                    stroke="#000"
-                    stroke-width="4"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <g>
-                    <template v-for="point in 9" :key="point">
-                      <circle
-                        :cx="20 + ((point - 1) % 3) * 30"
-                        :cy="20 + Math.floor((point - 1) / 3) * 30"
-                        r="4"
-                        fill="#000"
-                      />
-                      <text
-                        :x="20 + ((point - 1) % 3) * 30"
-                        :y="20 + Math.floor((point - 1) / 3) * 30 + 11"
-                        text-anchor="middle"
-                        font-size="6"
-                        fill="#000"
-                      >
-                        {{ point }}
-                      </text>
-                    </template>
-                  </g>
-                </svg>
-                <p class="ticket-pattern-sequence">
-                  {{ patternPoints.join(' - ') }}
-                </p>
-              </div>
-              <p v-else class="ticket-code-value">
-                {{ ticket.accessCode }}
-              </p>
-            </div>
-
-            <div v-if="ticket.simCode" class="ticket-code-row">
-              <p :class="profile === 'a4' ? 'invoice-label' : 'thermal-kicker'">
-                SIM (PIN/PUK)
-              </p>
-              <p class="ticket-code-value">
-                {{ ticket.simCode }}
-              </p>
-            </div>
-          </div>
-        </section>
+        <PosTicketIntakePrint v-if="intake" :model="intake" :profile="profile" />
 
         <template v-if="lineTotals.lines.length">
           <section v-if="profile === 'a4'" class="invoice-lines ticket-print-lines" aria-label="Articles et prestations">
@@ -547,97 +437,5 @@ function printTicket() {
 
 .ticket-a4-section > .invoice-label {
   break-after: avoid;
-}
-
-.ticket-intake {
-  display: grid;
-  gap: 3mm;
-  align-items: start;
-}
-
-.ticket-sheet--a4 .ticket-intake:has(.ticket-codes) {
-  grid-template-columns: minmax(0, 1fr) 78mm;
-  gap: 6mm;
-}
-
-.ticket-device {
-  min-width: 0;
-}
-
-.ticket-device > p:not(.invoice-label):not(.thermal-kicker) {
-  margin: 0 0 1mm;
-  white-space: pre-line;
-}
-
-.ticket-codes {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  padding-block: 2.5mm;
-  border: 0.2mm solid #ddd;
-  border-radius: 1.5mm;
-  background: #f8f8f8;
-  color: #111;
-  break-inside: avoid;
-}
-
-.ticket-code-row {
-  min-width: 0;
-  padding-inline: 3mm;
-}
-
-.ticket-code-row + .ticket-code-row {
-  border-left: 0.2mm solid #ddd;
-}
-
-.ticket-codes .invoice-label {
-  color: #666;
-  letter-spacing: 0.12em;
-}
-
-.ticket-codes p:last-child {
-  margin-bottom: 0;
-}
-
-.ticket-code-value {
-  font-size: 11pt;
-  line-height: 1.2;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-.ticket-sheet--a4 .ticket-code-value {
-  font-size: 13px;
-}
-
-.thermal-sheet .ticket-codes {
-  background: #fff;
-  border-color: #000;
-}
-
-.thermal-sheet .ticket-code-row + .ticket-code-row {
-  border-color: #000;
-}
-
-.thermal-sheet .ticket-codes .thermal-kicker {
-  font-size: 8pt;
-}
-
-.ticket-pattern {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1mm;
-}
-
-.ticket-pattern-svg {
-  width: 20mm;
-  height: 20mm;
-  flex-shrink: 0;
-}
-
-.ticket-pattern-sequence {
-  font-size: 8pt;
-  font-weight: 700;
 }
 </style>

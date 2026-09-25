@@ -1,4 +1,4 @@
-import type { DocumentDetail, PaymentRecord } from '../../shared/types/pos'
+import type { DocumentDetail, PaymentRecord, TicketRecord } from '../../shared/types/pos'
 import type { CompanySettingsRecord } from '../../shared/types/settings'
 
 const timestamp = '2026-09-08T12:00:00.000Z'
@@ -34,5 +34,15 @@ export function printCompany(): CompanySettingsRecord {
     countryCode: 'CH', phone: null, email: null, website: null, vatNumber: null, bankName: null,
     iban: 'CH9300762011623852957', paymentTerms: null, footerNotes: null, logoDataUrl: null,
     createdAt: timestamp, updatedAt: timestamp
+  }
+}
+
+export function printTicket(overrides: Partial<TicketRecord> = {}): TicketRecord {
+  return {
+    id: 1, ticketNumber: 'DOS-TEST-001', customerId: 1, type: 'repair', status: 'new',
+    brand: 'Apple', model: 'iPhone 14', serialNumber: 'SERIAL-TEST', imei: null,
+    accessCode: '123456', simCode: '696969', issueDescription: 'Caméra défectueuse', internalNotes: null,
+    openedAt: timestamp, closedAt: null, createdAt: timestamp, updatedAt: timestamp,
+    ...overrides
   }
 }

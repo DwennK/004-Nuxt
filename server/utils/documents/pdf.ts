@@ -15,6 +15,7 @@ import { A4_POSTAL_LAYOUT, buildDocumentA4PrintModel } from '~~/shared/utils/doc
 import { calculateIncludedVatAmount, formatCurrency, formatDate } from '~~/shared/utils/pos'
 import type { SwissQrAddress } from '~~/shared/utils/qr-bill'
 import { buildRecordQrUrl } from '~~/shared/utils/record-qr'
+import type { TicketIntakePrintModel } from '~~/shared/types/print'
 
 // Canonical A4 layout for preview, printing, downloads and email attachments.
 const A4_DOCUMENT_LAYOUT = {
@@ -903,6 +904,65 @@ function drawFooter(context: PdfContext, document: DocumentDetail, company: Comp
   context.cursorY = footerBottom - (3 * MM)
 }
 
+function drawTicketIntake(context: PdfContext, intake: TicketIntakePrintModel) {
+  const padding = 3 * MM
+  const boxWidth = intake.codes.length ? 78 * MM : 0
+  const deviceWidth = SECTION_WIDTH - (boxWidth ? boxWidth + 6 * MM : 0)
+  const columnWidth = boxWidth / Math.max(intake.codes.length, 1)
+  const codeWidth = columnWidth - 2 * padding
+  const patternSize = 20 * MM
+  const valueSize = 13 * PX
+  const labelHeight = 10
+  const codeHeights = intake.codes.map(code => labelHeight + (code.patternPoints.length
+    ? patternSize + 3 + measureTextBlock(context.boldFont, code.patternPoints.join(' - '), 8, codeWidth)
+    : measureTextBlock(context.boldFont, code.value, valueSize, codeWidth)))
+  const boxHeight = intake.codes.length ? Math.max(...codeHeights) + 2 * padding : 0
+  const deviceHeight = labelHeight
+    + (intake.deviceLabel ? measureTextBlock(context.boldFont, intake.deviceLabel, FONT_LINE, deviceWidth) + 3 : 0)
+    + (intake.description ? measureTextBlock(context.regularFont, intake.description, FONT_LINE, deviceWidth) : 0)
+  const height = Math.max(boxHeight, deviceHeight)
+  ensureSpace(context, height + 6 * MM + 30)
+  const top = context.cursorY - 3 * MM
+  drawTextBlock(context, intake.title.toUpperCase(), SECTION_LEFT, top, deviceWidth, { size: FONT_LABEL, color: COLORS.muted })
+  let deviceY = top - labelHeight
+  if (intake.deviceLabel) {
+    deviceY = drawTextBlock(context, intake.deviceLabel, SECTION_LEFT, deviceY, deviceWidth, { font: context.boldFont, size: FONT_LINE }) - 3
+  }
+  if (intake.description) {
+    drawTextBlock(context, intake.description, SECTION_LEFT, deviceY, deviceWidth, { size: FONT_LINE })
+  }
+  if (intake.codes.length) {
+    const boxLeft = SECTION_RIGHT - boxWidth
+    context.page.drawRectangle({ x: boxLeft, y: top - boxHeight, width: boxWidth, height: boxHeight, color: hexToRgb('#f8f8f8'), borderColor: hexToRgb('#dddddd'), borderWidth: 0.6 })
+    intake.codes.forEach((code, index) => {
+      const left = boxLeft + index * columnWidth
+      if (index) {
+        context.page.drawLine({ start: { x: left, y: top - padding }, end: { x: left, y: top - boxHeight + padding }, color: hexToRgb('#dddddd'), thickness: 0.6 })
+      }
+      drawTextBlock(context, code.label.toUpperCase(), left + padding, top - padding, codeWidth, { size: FONT_LABEL, color: hexToRgb('#666666') })
+      const valueTop = top - padding - labelHeight
+      if (code.patternPoints.length) {
+        const pointPosition = (point: number) => ({
+          x: left + padding + (20 + ((point - 1) % 3) * 30) / 100 * patternSize,
+          y: valueTop - (20 + Math.floor((point - 1) / 3) * 30) / 100 * patternSize
+        })
+        code.patternPoints.slice(1).forEach((point, pointIndex) => {
+          context.page.drawLine({ start: pointPosition(code.patternPoints[pointIndex]!), end: pointPosition(point), thickness: 4 / 100 * patternSize, color: rgb(0, 0, 0) })
+        })
+        for (let point = 1; point <= 9; point++) {
+          const position = pointPosition(point)
+          context.page.drawCircle({ ...position, size: 4 / 100 * patternSize, color: rgb(0, 0, 0) })
+          context.page.drawText(String(point), { x: position.x - 1, y: position.y - 11 / 100 * patternSize, size: 6 / 100 * patternSize, font: context.regularFont })
+        }
+        drawTextBlock(context, code.patternPoints.join(' - '), left + padding, valueTop - patternSize - 3, codeWidth, { font: context.boldFont, size: 8 })
+      } else {
+        drawTextBlock(context, code.value, left + padding, valueTop, codeWidth, { font: context.boldFont, size: valueSize })
+      }
+    })
+  }
+  context.cursorY = top - height - 3 * MM
+}
+
 export async function generateDocumentPdf(document: DocumentDetail, company: CompanySettingsRecord, appOrigin: string) {
   const lookupUrl = buildRecordQrUrl('documents', document.id, appOrigin)
   const pdfDoc = await PDFDocument.create()
@@ -920,8 +980,10 @@ export async function generateDocumentPdf(document: DocumentDetail, company: Com
   }
 
   drawHeader(context, document, company, logoImage, lookupUrl)
+  const model = buildDocumentA4PrintModel(document, company)
+  if (model.intake) drawTicketIntake(context, model.intake)
   if (document.type === 'sav') {
-    for (const block of buildDocumentA4PrintModel(document, company).noteBlocks) {
+    for (const block of model.noteBlocks) {
       ensureSpace(context, 35)
       drawTextBlock(context, block.label, SECTION_LEFT, context.cursorY, SECTION_WIDTH, { font: context.boldFont, size: FONT_LABEL, color: COLORS.muted })
       context.cursorY -= 14

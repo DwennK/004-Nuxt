@@ -5,6 +5,8 @@ import type { CompanySettingsRecord } from '../types/settings'
 import { isValidSwissQrBillAccount } from './iban'
 import { formatCurrency, formatDate, isPayableDocumentType } from './pos'
 import { buildSwissQrBill, type SwissQrBillData } from './qr-bill'
+import { buildTicketIntakePrintModel } from './ticket-print'
+import type { TicketIntakePrintModel } from '../types/print'
 
 // ELCO Classic C5 37896: 229 × 162 mm, window 100 × 45 mm,
 // 12 mm from the right and 65 mm from the bottom. An A4 folded at
@@ -30,6 +32,7 @@ export interface DocumentPrintNoteBlock {
 }
 
 export interface DocumentA4PrintModel {
+  intake: TicketIntakePrintModel | null
   documentTitle: string
   companyAddress: string[]
   customerAddress: string[]
@@ -94,6 +97,9 @@ function getQrBillNotice(document: DocumentDetail, company: CompanySettingsRecor
 }
 
 export function buildDocumentA4PrintModel(document: DocumentDetail, company: CompanySettingsRecord): DocumentA4PrintModel {
+  const intake = document.ticket && ['quote', 'customer_order', 'sav'].includes(document.type)
+    ? { ...buildTicketIntakePrintModel(document.ticket), description: document.ticket.imei || document.ticket.serialNumber || null }
+    : null
   const payments = buildDocumentPrintPayments(document)
   const companyAddress = getCompanyAddress(company)
   const customerAddress = getCustomerAddress(document)
@@ -118,7 +124,7 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
     const sav = document.sav
     const source = document.relatedDocuments?.find(row => row.id === sav.sourceDocumentId)
     noteBlocks.push(
-      { label: 'Appareil', content: [document.ticket?.brand, document.ticket?.model, document.ticket?.imei || document.ticket?.serialNumber].filter(Boolean).join(' · ') || 'Voir dossier' },
+      ...(!intake ? [{ label: 'Appareil', content: 'Voir dossier' }] : []),
       { label: 'Réparation concernée', content: sav.repair + (source ? ` · ${source.documentNumber}` : '') },
       { label: 'Motif du retour', content: sav.reason },
       { label: 'Prise en charge', content: savCoverageLabels[sav.coverage] },
@@ -154,6 +160,7 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
   }
 
   return {
+    intake,
     documentTitle: documentTypeLabels[document.type],
     companyAddress,
     customerAddress,
