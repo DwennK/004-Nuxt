@@ -36,7 +36,10 @@ export async function getHandover(event: H3Event, target: DossierTarget, db: Pos
   const state = shopify
     ? fulfillmentState(await fetchFulfillment(await linkedConfig(event, shopify.domain), shopify.orderId))
     : { collected: row?.collected ?? false, partial: false }
-  return { ...state, pending: !!row?.operationId && row.operationExpiresAt > Date.now(), shopify }
+  // A local handover stays recorded even if Shopify later changes its available actions.
+  // A subsequently completed Shopify order takes over as the authoritative state.
+  const localOnly = !!shopify && !!row?.localOnly && !state.collected
+  return { ...state, collected: localOnly ? row!.collected : state.collected, localOnly, pending: !!row?.operationId && row.operationExpiresAt > Date.now(), shopify }
 }
 
 export async function updateHandover(event: H3Event, target: DossierTarget, collected: boolean, context: DossierWriteContext, db: PosDatabase = useDb()): Promise<HandoverState> {
@@ -57,14 +60,16 @@ export async function updateHandover(event: H3Event, target: DossierTarget, coll
   })
   for (const revision of revisions) context.onRevision?.(revision)
   try {
+    let localOnly = false
     if (resolved.shopify) {
       const config = await linkedConfig(event, resolved.shopify.domain)
-      await setFulfillment(config, resolved.shopify.orderId, collected)
+      const result = await setFulfillment(config, resolved.shopify.orderId, collected)
+      localOnly = result.localOnly
     }
-    const updated = await db.update(dossierHandovers).set({ collected, operationId: null, operationExpiresAt: 0, updatedAt: new Date().toISOString() })
+    const updated = await db.update(dossierHandovers).set({ collected, localOnly, operationId: null, operationExpiresAt: 0, updatedAt: new Date().toISOString() })
       .where(and(eq(dossierHandovers.key, resolved.key), eq(dossierHandovers.operationId, operationId))).returning({ key: dossierHandovers.key })
     if (!updated.length) return shopifyError('La synchronisation a expiré. Actualisez l’état.', 'HANDOVER_EXPIRED', 409)
-    return { collected, partial: false, pending: false, shopify: resolved.shopify }
+    return { collected, partial: false, pending: false, localOnly, shopify: resolved.shopify }
   } catch (error) {
     // A remote success followed by a lost response is reconciled from Shopify on
     // the next read/retry. Never claim a rollback of a remote side effect.

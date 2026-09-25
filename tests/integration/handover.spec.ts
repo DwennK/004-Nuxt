@@ -39,9 +39,10 @@ beforeEach(async () => {
   `)
   await createDossierTables(client)
   await client.executeMultiple(await readFile(new URL('../../drizzle/20260923152440_dossier_handover/migration.sql', import.meta.url), 'utf8'))
+  await client.executeMultiple(await readFile(new URL('../../drizzle/20260925120449_handover_local_pickup/migration.sql', import.meta.url), 'utf8'))
   vi.mocked(connectShopify).mockResolvedValue({ config, name: 'Test', allOrders: false })
   vi.mocked(fetchFulfillment).mockResolvedValue({ collected: false, partial: false } as never)
-  vi.mocked(setFulfillment).mockResolvedValue({} as never)
+  vi.mocked(setFulfillment).mockResolvedValue({ localOnly: false } as never)
 })
 afterEach(async () => {
   client.close()
@@ -107,7 +108,7 @@ describe('shared device handover persistence', () => {
       await new Promise<void>((resolve) => {
         release = resolve
       })
-      return {} as never
+      return { localOnly: false } as never
     })
     const first = updateHandover(event, target, true, await testDossierContext(db, target), db)
     await waiting
@@ -129,5 +130,38 @@ describe('shared device handover persistence', () => {
     vi.mocked(connectShopify).mockResolvedValue({ config: { ...config, domain: 'wrong.myshopify.com' }, name: 'Wrong', allOrders: false })
     await expect(updateHandover(event, target, true, await testDossierContext(db, target), db)).rejects.toMatchObject({ data: { code: 'SHOPIFY_SHOP_MISMATCH' } })
     expect(setFulfillment).not.toHaveBeenCalled()
+  })
+})
+
+describe('local pickup persistence', () => {
+  it('persists local collection across reads and shares it with linked dossier documents', async () => {
+    await link(2)
+    vi.mocked(setFulfillment).mockResolvedValue({ localOnly: true } as never)
+    expect(await updateHandover(event, target, true, await testDossierContext(db, target), db)).toMatchObject({ collected: true, localOnly: true })
+    for (const scope of [target, { kind: 'ticket' as const, id: 1 }, { kind: 'document' as const, id: 2 }]) {
+      expect(await getHandover(event, scope, db)).toMatchObject({ collected: true, localOnly: true, partial: false })
+    }
+    expect(await getHandover(event, { kind: 'document', id: 3 }, db)).toMatchObject({ collected: false, localOnly: false })
+    await updateHandover(event, target, false, await testDossierContext(db, target), db)
+    expect(await getHandover(event, target, db)).toMatchObject({ collected: false, localOnly: true })
+    expect(await collected()).toBe(0)
+  })
+  it('recognizes a later Shopify completion and resumes remote cancellation', async () => {
+    await link()
+    vi.mocked(setFulfillment).mockResolvedValueOnce({ localOnly: true } as never)
+    await updateHandover(event, target, true, await testDossierContext(db, target), db)
+    vi.mocked(fetchFulfillment).mockResolvedValueOnce({ collected: true, partial: false } as never)
+    expect(await getHandover(event, target, db)).toMatchObject({ collected: true, localOnly: false })
+    await updateHandover(event, target, false, await testDossierContext(db, target), db)
+    expect(setFulfillment).toHaveBeenLastCalledWith(config, 'gid://shopify/Order/1', false)
+    expect(await getHandover(event, target, db)).toMatchObject({ collected: false, localOnly: false })
+  })
+  it('preserves local collection on a later remote failure', async () => {
+    await link()
+    vi.mocked(setFulfillment).mockResolvedValueOnce({ localOnly: true } as never)
+    await updateHandover(event, target, true, await testDossierContext(db, target), db)
+    vi.mocked(setFulfillment).mockRejectedValueOnce(new Error('Shopify unavailable'))
+    await expect(updateHandover(event, target, false, await testDossierContext(db, target), db)).rejects.toThrow('Shopify unavailable')
+    expect(await getHandover(event, target, db)).toMatchObject({ collected: true, localOnly: true, pending: false })
   })
 })

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { externalFetch } from '../../server/utils/external-fetch'
-import { fetchFulfillment, setFulfillment } from '../../server/utils/shopify/fulfillment'
+import { fetchFulfillment, isLocalPickupHandover, setFulfillment } from '../../server/utils/shopify/fulfillment'
 
 vi.mock('../../server/utils/external-fetch', () => ({ externalFetch: vi.fn() }))
 const config = { domain: 'test-pos.myshopify.com', clientId: '', clientSecret: '', accessToken: 'test-token' }
@@ -11,7 +11,7 @@ function order(status = 'UNFULFILLED') {
     fulfillments: status === 'FULFILLED' ? [{ id: 'f1', status: 'SUCCESS' }] : [],
     fulfillmentsCount: { count: status === 'FULFILLED' ? 1 : 0, precision: 'EXACT' },
     fulfillmentOrders: { nodes: [
-      { id: 'fo1', status: status === 'FULFILLED' ? 'CLOSED' : 'OPEN', supportedActions: [{ action: 'CREATE_FULFILLMENT' }], assignedLocation: { location: { id: 'l1' } } }
+      { id: 'fo1', status: status === 'FULFILLED' ? 'CLOSED' : 'OPEN', supportedActions: [{ action: 'CREATE_FULFILLMENT' }], assignedLocation: { location: { id: 'l1' } }, deliveryMethod: { methodType: 'SHIPPING' }, fulfillmentHolds: [] as { reason: string }[] }
     ], pageInfo: { hasNextPage: false } }
   }
 }
@@ -109,5 +109,53 @@ describe('Shopify handover', () => {
     response({ order: value })
     await expect(setFulfillment(config, id, true)).rejects.toMatchObject({ data: { code: 'SHOPIFY_ORDER_CANCELLED' } })
     expect(externalFetch).toHaveBeenCalledTimes(1)
+  })
+})
+
+function pickupOrder() {
+  const value = order()
+  Object.assign(value.fulfillmentOrders.nodes[0]!, {
+    status: 'IN_PROGRESS', supportedActions: [], deliveryMethod: { methodType: 'PICK_UP' }
+  })
+  return value
+}
+
+describe('native pickup handover fallback', () => {
+  it.each([true, false])('allows a local pickup state %s without any Shopify mutation', async (collected) => {
+    response({ order: pickupOrder() })
+    expect(await setFulfillment(config, id, collected)).toMatchObject({ localOnly: true, displayFulfillmentStatus: 'UNFULFILLED' })
+    expect(externalFetch).toHaveBeenCalledTimes(1)
+    expect(bodies().every(body => body.query.startsWith('query '))).toBe(true)
+  })
+  it.each(['shipping', 'hold', 'scheduled', 'location', 'cancelled', 'partial', 'mixed', 'empty', 'allowed'])('does not bypass Shopify constraints: %s', async (reason) => {
+    const value = pickupOrder()
+    const item = value.fulfillmentOrders.nodes[0]!
+    if (reason === 'shipping') item.deliveryMethod.methodType = 'SHIPPING'
+    if (reason === 'hold') item.fulfillmentHolds.push({ reason: 'OTHER' })
+    if (reason === 'scheduled') item.status = 'SCHEDULED'
+    if (reason === 'location') Object.assign(item.assignedLocation, { location: null })
+    if (reason === 'cancelled') value.cancelledAt = '2026-09-25T10:00:00Z'
+    if (reason === 'partial') {
+      value.fulfillments.push({ id: 'f1', status: 'SUCCESS' })
+      value.fulfillmentsCount.count = 1
+    }
+    if (reason === 'mixed') value.fulfillmentOrders.nodes.push({ ...order().fulfillmentOrders.nodes[0]!, id: 'shipping' })
+    if (reason === 'empty') value.fulfillmentOrders.nodes = []
+    if (reason === 'allowed') item.supportedActions = [{ action: 'CREATE_FULFILLMENT' }]
+    expect(isLocalPickupHandover(value as Parameters<typeof isLocalPickupHandover>[0])).toBe(false)
+    if (reason !== 'allowed') {
+      response({ order: value })
+      await expect(setFulfillment(config, id, true)).rejects.toThrow()
+      expect(externalFetch).toHaveBeenCalledTimes(1)
+    }
+  })
+  it('still cancels an actual Shopify fulfillment for a pickup order', async () => {
+    const value = order('FULFILLED')
+    value.fulfillmentOrders.nodes[0]!.deliveryMethod.methodType = 'PICK_UP'
+    response({ order: value })
+    mutation('fulfillmentCancel', 'CANCELLED')
+    response({ order: pickupOrder() })
+    expect(await setFulfillment(config, id, false)).toMatchObject({ localOnly: false })
+    expect(bodies()[1].query).toContain('mutation PosFulfillmentCancel')
   })
 })

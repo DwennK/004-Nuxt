@@ -8,7 +8,7 @@ export const fulfillmentQuery = `query PosOrderFulfillment($id: ID!) {
     fulfillments(first: 250) { id status }
     fulfillmentsCount { count precision }
     fulfillmentOrders(first: 100) {
-      nodes { id status supportedActions { action } assignedLocation { location { id } } }
+      nodes { id status supportedActions { action } assignedLocation { location { id } } deliveryMethod { methodType } fulfillmentHolds { reason } }
       pageInfo { hasNextPage }
     }
   }
@@ -34,7 +34,9 @@ const orderSchema = z.object({
   fulfillmentOrders: z.object({
     nodes: z.array(z.object({
       id: z.string(), status: z.string(), supportedActions: z.array(z.object({ action: z.string() })),
-      assignedLocation: z.object({ location: z.object({ id: z.string() }).nullable() })
+      assignedLocation: z.object({ location: z.object({ id: z.string() }).nullable() }),
+      deliveryMethod: z.object({ methodType: z.string() }).nullable(),
+      fulfillmentHolds: z.array(z.object({ reason: z.string() }))
     })),
     pageInfo: z.object({ hasNextPage: z.boolean() })
   })
@@ -46,6 +48,18 @@ export function fulfillmentState(order: FulfillmentOrderState) {
     collected: order.displayFulfillmentStatus === 'FULFILLED',
     partial: order.displayFulfillmentStatus !== 'FULFILLED' && activeFulfillments(order).length > 0
   }
+}
+
+// Only native pickup orders without any remote fulfillment can fall back locally.
+// Shipping, holds, missing locations and ambiguous/partial operations still fail closed.
+export function isLocalPickupHandover(order: FulfillmentOrderState) {
+  const pending = order.fulfillmentOrders.nodes.filter(item => !['CLOSED', 'CANCELLED'].includes(item.status))
+  return !order.cancelledAt && order.displayFulfillmentStatus === 'UNFULFILLED'
+    && !activeFulfillments(order).length && pending.length > 0
+    && pending.every(item => item.deliveryMethod?.methodType === 'PICK_UP'
+      && ['OPEN', 'IN_PROGRESS'].includes(item.status)
+      && item.assignedLocation.location !== null && !item.fulfillmentHolds.length
+      && !item.supportedActions.some(action => action.action === 'CREATE_FULFILLMENT'))
 }
 
 export async function fetchFulfillment(config: ShopifyConfig, id: string) {
@@ -73,10 +87,11 @@ function mutationResult(value: unknown, expectedStatus: string) {
 export async function setFulfillment(config: ShopifyConfig, id: string, collected: boolean) {
   const order = await fetchFulfillment(config, id)
   if (order.cancelledAt) return shopifyError('La commande Shopify est annulée.', 'SHOPIFY_ORDER_CANCELLED', 409)
-  if (collected && fulfillmentState(order).collected) return order
+  if (collected && fulfillmentState(order).collected) return { ...order, localOnly: false }
+  if (isLocalPickupHandover(order)) return { ...order, localOnly: true }
   if (!collected && !activeFulfillments(order).length) {
     if (fulfillmentState(order).collected) return shopifyError('Aucun traitement annulable n’est accessible dans Shopify.', 'SHOPIFY_FULFILLMENT_BLOCKED', 409)
-    return order
+    return { ...order, localOnly: false }
   }
 
   if (collected) {
@@ -109,5 +124,5 @@ export async function setFulfillment(config: ShopifyConfig, id: string, collecte
   if (collected ? !state.collected : state.collected || state.partial) {
     return shopifyError('Le traitement Shopify est encore partiel ou en cours. Actualisez puis réessayez.', 'SHOPIFY_FULFILLMENT_UNCONFIRMED', 409)
   }
-  return verified
+  return { ...verified, localOnly: false }
 }

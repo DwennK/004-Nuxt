@@ -142,7 +142,7 @@ reste distincte des tests locaux. Les anciens secrets WooCommerce peuvent ensuit
 Une case « Appareil récupéré / livré » figure sous la barre supérieure des
 documents et dossiers. Les documents liés au même dossier partagent son état.
 Sans commande Shopify importée dans ce périmètre, la case reste un suivi local.
-Avec une commande liée, Shopify est la source de vérité, relue à l’ouverture,
+Avec une commande liée, Shopify est normalement la source de vérité, relue à l’ouverture,
 à l’actualisation et après chaque mutation. Plusieurs commandes liées au même
 dossier sont refusées pour éviter une action ambiguë.
 
@@ -164,6 +164,17 @@ jamais présentés comme des réussites. La vérification finale exige une comma
 avec plus de 100 ordres de traitement, 250 traitements historiques ou 10 mutations
 nécessaires doit être gérée directement dans Shopify.
 
+Exception pour le retrait natif en magasin : si tous les lots restants sont
+`PICK_UP`, ouverts ou en cours, avec un emplacement, sans blocage ni traitement
+actif et sans action `CREATE_FULFILLMENT`, cocher ou décocher enregistre la remise
+uniquement dans le POS. La mention « POS uniquement · Retrait Shopify non confirmé »
+reste visible après rechargement. Aucun appel de mutation ni notification Shopify
+n’est effectué dans ce cas. Le marqueur `local_only` conserve cette origine même
+si les actions Shopify changent ensuite. Dès que Shopify confirme `FULFILLED`,
+son état reprend la priorité et décocher annule à nouveau ses traitements.
+Les commandes mixtes, partielles, annulées, bloquées ou les erreurs réseau ne
+bénéficient pas de ce secours local.
+
 Les opérateurs disposant de `financial:record` peuvent utiliser cette action.
 Les routes PATCH exigent aussi la réservation du dossier. La table additive
 `dossier_handovers` garde le suivi local et un verrou de synchronisation partagé
@@ -173,7 +184,8 @@ ou une opération multi-emplacements échoue partiellement, l’état est relu a
 toute nouvelle tentative ; une annulation distante déjà effectuée n’est jamais
 présentée comme annulée par un rollback SQLite.
 
-Appliquer la migration `20260923152440_dossier_handover` avant le nouveau Worker,
+Appliquer les migrations `20260923152440_dossier_handover` puis
+`20260925120449_handover_local_pickup` avant le nouveau Worker,
 selon le runbook base de données. La vérification des autorisations peut rester
 en lecture seule ; les tests automatisés utilisent une boutique simulée et des
 bases SQLite jetables.

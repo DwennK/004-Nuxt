@@ -35,7 +35,7 @@ async function update(collected: boolean) {
     if (endpoint.value !== url) return
     state.value = result
     cancelOpen.value = false
-    toast.add({ title: collected ? 'Appareil récupéré / livré' : 'Récupération / livraison annulée', description: result.shopify ? 'Traitement Shopify mis à jour.' : undefined, color: 'success' })
+    toast.add({ title: collected ? 'Appareil récupéré / livré' : 'Récupération / livraison annulée', description: result.localOnly ? 'Enregistré dans le POS uniquement. Retrait Shopify non confirmé.' : result.shopify ? 'Traitement Shopify mis à jour.' : undefined, color: 'success' })
   } catch (error) {
     if (endpoint.value !== url) return
     const failure = error as { data?: { message?: string, statusMessage?: string } }
@@ -45,9 +45,13 @@ async function update(collected: boolean) {
     saving.value = false
   }
 }
+async function refreshState() {
+  await refresh()
+  if (!loadError.value) saveError.value = null
+}
 function toggle(value: boolean | 'indeterminate') {
   if (value === 'indeterminate') return
-  if (!value && state.value?.shopify) cancelOpen.value = true
+  if (!value && state.value?.shopify && (!state.value.localOnly || state.value.partial)) cancelOpen.value = true
   else void update(value)
 }
 </script>
@@ -67,6 +71,7 @@ function toggle(value: boolean | 'indeterminate') {
       aria-label="Synchronisation en cours"
     />
     <span v-if="state?.shopify" class="text-xs text-muted">Shopify {{ state.shopify.orderName }}<template v-if="state.partial"> · Partiellement traité</template></span>
+    <span v-if="state?.localOnly" class="text-xs text-warning" role="status">POS uniquement · Retrait Shopify non confirmé</span>
     <UButton
       v-if="state?.partial"
       label="Annuler les traitements"
@@ -86,7 +91,7 @@ function toggle(value: boolean | 'indeterminate') {
       color="neutral"
       variant="link"
       :loading="status === 'pending'"
-      @click="refresh()"
+      @click="refreshState()"
     />
   </div>
   <UModal v-model:open="cancelOpen" title="Annuler la livraison ?" :description="`Les traitements de la commande Shopify ${state?.shopify?.orderName || ''} seront annulés. La commande et ses paiements seront conservés.`">

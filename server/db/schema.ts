@@ -59,6 +59,7 @@ export const dossierPresences = sqliteTable('dossier_presences', {
 export const dossierHandovers = sqliteTable('dossier_handovers', {
   key: text('key').primaryKey(),
   collected: integer('collected', { mode: 'boolean' }).notNull().default(false),
+  localOnly: integer('local_only', { mode: 'boolean' }).notNull().default(false),
   updatedAt: text('updated_at').notNull(),
   updatedBy: integer('updated_by').notNull(),
   operationId: text('operation_id'),
