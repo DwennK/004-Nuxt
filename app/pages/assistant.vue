@@ -289,9 +289,6 @@ async function copyMessage(content: string) {
               />
             </template>
           </UChatPrompt>
-          <p class="mt-3 text-center text-xs leading-5 text-muted">
-            Aucune donnée modifiée. Codes d’accès et secrets exclus.
-          </p>
         </div>
       </div>
     </template>
