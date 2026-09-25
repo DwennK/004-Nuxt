@@ -3,7 +3,8 @@ import type * as z from 'zod'
 import { smartphoneSuppliers } from '~~/shared/constants/smartphones'
 import { smartphoneStockFormSchema as schema } from '~~/shared/validation/smartphones'
 import type { FormSubmitEvent } from '@nuxt/ui'
-import { formatImei, getImeiWarning, normalizeImei } from '~~/shared/utils/pos'
+import { formatImei, getImeiWarning, isValidImei, normalizeImei } from '~~/shared/utils/pos'
+import type { SmartphoneImeiLookup } from '~~/shared/types/smartphones'
 import type { SmartphoneStock } from '~/types'
 
 const props = withDefaults(defineProps<{
@@ -32,8 +33,78 @@ const state = reactive<Schema>({
 
 const isEditing = computed(() => props.mode === 'edit')
 const imeiWarning = computed(() => getImeiWarning(state.imei))
+const lookupPending = ref(false)
+const lookupResult = ref<SmartphoneImeiLookup | null>(null)
+let lookupTimer: ReturnType<typeof setTimeout> | undefined
+let lookupController: AbortController | undefined
+let lookupVersion = 0
+let modelVersion = 0
+let automaticModel: string | null = null
+
+const lookupMessage = computed(() => {
+  if (lookupPending.value) return 'Recherche du modèle…'
+  const result = lookupResult.value
+  if (!result) return 'Le modèle est recherché automatiquement à partir de l’IMEI.'
+  if (result.status === 'found') {
+    return state.model === result.model
+      ? 'Modèle identifié. Vérifiez la capacité sur l’appareil.'
+      : `Modèle identifié : ${result.model}.`
+  }
+  const messages = {
+    not_found: 'Modèle non trouvé. Renseignez-le manuellement.',
+    unavailable: 'Recherche momentanément indisponible. Renseignez le modèle manuellement.'
+  }
+  return messages[result.status]
+})
+
+function cancelLookup() {
+  clearTimeout(lookupTimer)
+  lookupController?.abort()
+  lookupVersion += 1
+  lookupPending.value = false
+  lookupResult.value = null
+}
+
+function handleModelInput(value: string | number) {
+  modelVersion += 1
+  automaticModel = null
+  state.model = String(value || '')
+}
+
+function applyDetectedModel() {
+  if (lookupResult.value?.status !== 'found') return
+  state.model = lookupResult.value.model
+  automaticModel = state.model
+}
+
+async function lookupModel(imei: string, version: number, initialModelVersion: number) {
+  lookupController = new AbortController()
+  try {
+    const result = await $fetch('/api/smartphone-stocks/imei-lookup', {
+      method: 'POST',
+      body: { imei },
+      signal: lookupController.signal,
+      retry: 0,
+      timeout: 10_000
+    })
+    if (version !== lookupVersion || !open.value) return
+    lookupResult.value = result
+    if (result.status === 'found' && modelVersion === initialModelVersion && !state.model.trim()) {
+      applyDetectedModel()
+    }
+  } catch {
+    if (version === lookupVersion && open.value) lookupResult.value = { status: 'unavailable' }
+  } finally {
+    if (version === lookupVersion) lookupPending.value = false
+  }
+}
+
+onBeforeUnmount(cancelLookup)
 
 watch(() => open.value, (value) => {
+  cancelLookup()
+  automaticModel = null
+  modelVersion += 1
   if (!value) {
     return
   }
@@ -46,7 +117,18 @@ watch(() => open.value, (value) => {
 })
 
 function handleImeiInput(value: string | number) {
+  const previousImei = normalizeImei(state.imei)
   state.imei = formatImei(String(value || ''))
+  const imei = normalizeImei(state.imei)
+  if (imei === previousImei) return
+  cancelLookup()
+  if (automaticModel !== null && state.model === automaticModel) state.model = ''
+  automaticModel = null
+  if (!open.value || !imei || !isValidImei(imei)) return
+  lookupPending.value = true
+  const version = lookupVersion
+  const initialModelVersion = modelVersion
+  lookupTimer = setTimeout(() => lookupModel(imei, version, initialModelVersion), 450)
 }
 
 async function onSubmit(event: FormSubmitEvent<Schema>) {
@@ -124,29 +206,50 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         class="space-y-4"
         @submit="onSubmit"
       >
-        <UFormField label="Modèle" name="model">
-          <UInput
-            v-bind="posInputAttrs"
-            v-model="state.model"
-            class="w-full"
-            placeholder="iPhone 13 Pro"
-          />
-        </UFormField>
-
         <UFormField label="IMEI" name="imei">
           <div class="space-y-1">
-            <UInput
-              v-bind="posInputAttrs"
-              :model-value="state.imei"
-              class="w-full"
-              placeholder="356 789 123 456 789"
-              inputmode="numeric"
-              @update:model-value="handleImeiInput"
-            />
+            <div class="flex items-center gap-2">
+              <UInput
+                v-bind="posInputAttrs"
+                :model-value="state.imei"
+                :loading="lookupPending"
+                class="min-w-0 flex-1"
+                placeholder="356 789 123 456 789"
+                inputmode="numeric"
+                @update:model-value="handleImeiInput"
+              />
+              <PosBarcodeScanner
+                title="Scanner un IMEI"
+                description="Scannez le code-barres IMEI de l’appareil ou de son emballage."
+                trigger-aria-label="Scanner un IMEI"
+                @scanned="handleImeiInput"
+              />
+            </div>
             <p v-if="imeiWarning" class="text-xs text-warning">
               {{ imeiWarning }}
             </p>
+            <p class="text-xs text-muted" role="status" aria-live="polite">
+              {{ lookupMessage }}
+            </p>
           </div>
+        </UFormField>
+
+        <UFormField label="Modèle" name="model">
+          <UInput
+            v-bind="posInputAttrs"
+            :model-value="state.model"
+            class="w-full"
+            placeholder="iPhone 13 Pro"
+            @update:model-value="handleModelInput"
+          />
+          <UButton
+            v-if="lookupResult?.status === 'found' && state.model !== lookupResult.model"
+            :label="`Utiliser ${lookupResult.model}`"
+            variant="link"
+            size="xs"
+            class="px-0"
+            @click="applyDetectedModel"
+          />
         </UFormField>
 
         <UFormField label="Capacité" name="capacity">

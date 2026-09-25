@@ -1,6 +1,12 @@
 import { z } from 'zod'
 import { smartphoneSuppliers } from '../constants/smartphones'
-import { normalizeImei } from '../utils/pos'
+import { isValidImei, normalizeImei } from '../utils/pos'
+
+export const smartphoneImeiLookupSchema = z.object({
+  imei: z.string().trim().regex(/^[\d\s]+$/, 'IMEI invalide')
+    .transform(value => normalizeImei(value) || '')
+    .refine(isValidImei, 'IMEI invalide')
+})
 
 export const smartphoneStockFormSchema = z.object({
   model: z.string().trim().min(2, 'Trop court'),

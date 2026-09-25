@@ -9,6 +9,10 @@ export interface SmartphoneStock {
   sold: boolean
 }
 
+export type SmartphoneImeiLookup
+  = | { status: 'found', model: string }
+    | { status: 'not_found' | 'unavailable' }
+
 export type SmartphoneReservationStatus = 'pending' | 'contacted' | 'sold'
 
 export interface SmartphoneReservationRequest {

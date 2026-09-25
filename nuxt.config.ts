@@ -78,7 +78,7 @@ export default defineNuxtConfig({
       deployConfig: true,
       nodeCompat: true,
       wrangler: {
-        triggers: { crons: ['0 2 * * *'] }
+        triggers: { crons: ['0 2 * * *', '0 3 * * *'] }
       }
     }
   },

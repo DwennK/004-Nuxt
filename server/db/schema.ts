@@ -460,3 +460,28 @@ export const smartphoneReservationRequests = sqliteTable('smartphone_reservation
   statusIdx: index('smartphone_reservation_requests_status_idx').on(table.status),
   statusRequestedAtIdIdx: index('smartphone_reservation_requests_status_requested_at_id_idx').on(table.status, table.requestedAt, table.id)
 }))
+
+// Versioned reference data, independent from stock and customer records.
+export const tacBlocks = sqliteTable('tac_blocks', {
+  id: text('id').primaryKey(),
+  version: text('version').notNull(),
+  prefix: text('prefix').notNull(),
+  payload: text('payload').notNull()
+}, table => ({
+  versionPrefixIdx: uniqueIndex('tac_blocks_version_prefix_idx').on(table.version, table.prefix)
+}))
+
+export const tacSyncState = sqliteTable('tac_sync_state', {
+  id: integer('id').primaryKey(),
+  activeVersion: text('active_version'),
+  previousVersion: text('previous_version'),
+  sourceCommit: text('source_commit'),
+  checkedAt: integer('checked_at'),
+  updatedAt: integer('updated_at'),
+  entryCount: integer('entry_count').notNull().default(0),
+  ignoredCount: integer('ignored_count').notNull().default(0),
+  conflictCount: integer('conflict_count').notNull().default(0),
+  lockToken: text('lock_token'),
+  lockUntil: integer('lock_until').notNull().default(0),
+  lastError: text('last_error')
+})
