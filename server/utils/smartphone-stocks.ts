@@ -1,4 +1,4 @@
-import { asc, eq, inArray, sql } from 'drizzle-orm'
+import { asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import type { updateSmartphoneStockSchema } from '~~/shared/validation/smartphones'
 import type { SmartphoneStock } from '~~/shared/types/smartphones'
@@ -259,13 +259,15 @@ export async function listSmartphoneStocksPage(query: SmartphoneStockListQuery):
 
   const db = useDb()
   const where = query.sold === 'all' ? undefined : eq(smartphoneStocks.sold, query.sold === 'sold')
+  const defaultOrder = [desc(smartphoneStocks.stockedAt), desc(smartphoneStocks.id)]
   let total: number | undefined
   let page = query.page
   let rows: SmartphoneStockRow[]
 
   if (query.search || query.sort !== 'default') {
     const candidates = await db.select({ id: smartphoneStocks.id, label: smartphoneStocks.model })
-      .from(smartphoneStocks).where(where).orderBy(asc(smartphoneStocks.id))
+      .from(smartphoneStocks).where(where)
+      .orderBy(...(query.sort === 'default' ? defaultOrder : [asc(smartphoneStocks.id)]))
     const matching = filterAndSortSmartphoneCandidates(candidates, query)
     total = matching.length
     page = smartphoneListPage(total, query)
@@ -281,7 +283,7 @@ export async function listSmartphoneStocksPage(query: SmartphoneStockListQuery):
       total = Number(counts[0]?.total || 0)
       page = smartphoneListPage(total, query)
     }
-    rows = await db.select().from(smartphoneStocks).where(where).orderBy(asc(smartphoneStocks.id))
+    rows = await db.select().from(smartphoneStocks).where(where).orderBy(...defaultOrder)
       .limit(query.pageSize).offset((page - 1) * query.pageSize)
   }
 

@@ -125,14 +125,35 @@ describe('smartphone lists use server pages without changing table results', () 
       for (const search of ['', 'IPHONE', 'Él', '%_', '  ', 'Item']) {
         for (const sort of ['default', 'asc', 'desc'] as const) {
           const query = stockQuery({ sold, search, sort, pageSize: 3 })
-          const first = previousTableResult(all, 'model', 'sold', sold === 'all' ? undefined : sold === 'sold', query)
+          const ordered = sort === 'default'
+            ? [...all].sort((a, b) => b.stockedAt.localeCompare(a.stockedAt) || b.id - a.id)
+            : all
+          const first = previousTableResult(ordered, 'model', 'sold', sold === 'all' ? undefined : sold === 'sold', query)
           for (let page = 1; page <= Math.max(1, Math.ceil(first.total / query.pageSize)); page++) {
-            const expected = previousTableResult(all, 'model', 'sold', sold === 'all' ? undefined : sold === 'sold', { ...query, page })
+            const expected = previousTableResult(ordered, 'model', 'sold', sold === 'all' ? undefined : sold === 'sold', { ...query, page })
             const actual = await listSmartphoneStocksPage({ ...query, page })
             expect({ items: actual.items, total: actual.total }).toEqual(expected)
           }
         }
       }
+    }
+  })
+
+  it('shows newest stock entries first across pages and searches, breaking date ties by newest ID', async () => {
+    await client.execute('DELETE FROM smartphone_stocks')
+    await client.batch([
+      { sql: 'INSERT INTO smartphone_stocks (id, model, capacity, stocked_at, sold) VALUES (?, ?, ?, ?, ?)', args: [1, 'iPhone 13', '128 Go', '2026-09-25', 0] },
+      { sql: 'INSERT INTO smartphone_stocks (id, model, capacity, stocked_at, sold) VALUES (?, ?, ?, ?, ?)', args: [2, 'iPhone 13', '256 Go', '2026-09-23', 0] },
+      { sql: 'INSERT INTO smartphone_stocks (id, model, capacity, stocked_at, sold) VALUES (?, ?, ?, ?, ?)', args: [3, 'iPhone 13', '512 Go', '2026-09-25', 0] },
+      { sql: 'INSERT INTO smartphone_stocks (id, model, capacity, stocked_at, sold) VALUES (?, ?, ?, ?, ?)', args: [4, 'iPhone 13', '128 Go', '2026-09-24', 0] }
+    ], 'write')
+
+    for (const search of ['', 'iPhone']) {
+      const first = await listSmartphoneStocksPage(stockQuery({ search, pageSize: 2 }))
+      const second = await listSmartphoneStocksPage(stockQuery({ search, pageSize: 2, page: 2, includeTotal: false }))
+      expect(first.items.map(item => item.id)).toEqual([3, 1])
+      expect(second.items.map(item => item.id)).toEqual([4, 2])
+      expect(first.total).toBe(4)
     }
   })
 
