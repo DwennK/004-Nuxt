@@ -2,11 +2,12 @@
 import '~/assets/css/thermal-print.css'
 import '~/assets/css/document-print.css'
 import { A4_POSTAL_LAYOUT } from '~~/shared/utils/document-print'
+import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
 import { ticketStatusLabels, ticketTypeLabels } from '~~/shared/constants/pos'
 import type { PrintProfile, TicketDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { getTicketPrintProfiles, printProfileLabels, supportsTicketPrintProfile } from '~~/shared/utils/print'
-import { formatDateTime } from '~~/shared/utils/pos'
+import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
 definePageMeta({
   layout: false
@@ -77,6 +78,8 @@ const deviceLabel = computed(() => {
 
   return [ticket.value.brand, ticket.value.model].filter(Boolean).join(' ').trim() || 'Appareil non renseigné'
 })
+
+const lineTotals = computed(() => calculateCommercialTotals(ticket.value?.lines || []))
 
 function parsePatternPoints(value?: string | null) {
   if (!value?.toLowerCase().startsWith('pattern')) {
@@ -312,6 +315,87 @@ function printTicket() {
           </p>
         </section>
 
+        <template v-if="lineTotals.lines.length">
+          <section v-if="profile === 'a4'" class="invoice-lines ticket-print-lines" aria-label="Articles et prestations">
+            <table class="invoice-table">
+              <thead>
+                <tr>
+                  <th scope="col">
+                    Désignation
+                  </th>
+                  <th scope="col">
+                    Qté
+                  </th>
+                  <th scope="col">
+                    Prix TTC
+                  </th>
+                  <th scope="col">
+                    TVA
+                  </th>
+                  <th scope="col">
+                    TVA CHF
+                  </th>
+                  <th scope="col">
+                    Total TTC
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="line in lineTotals.lines" :key="line.id">
+                  <td class="invoice-desc">
+                    {{ line.label }}
+                  </td>
+                  <td>{{ line.quantity }}</td>
+                  <td>{{ formatCurrency(line.unitPrice) }}</td>
+                  <td>{{ line.vatRate }}%</td>
+                  <td>{{ formatCurrency(line.taxAmount) }}</td>
+                  <td>{{ formatCurrency(line.lineTotal) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section v-else class="thermal-block thermal-lines" aria-label="Articles et prestations">
+            <p class="thermal-kicker">
+              Articles et prestations
+            </p>
+            <div v-for="line in lineTotals.lines" :key="line.id" class="thermal-line">
+              <div class="thermal-line-head">
+                <p class="thermal-line-label whitespace-pre-line">
+                  {{ line.label }}
+                </p>
+                <p class="thermal-line-total">
+                  {{ formatCurrency(line.lineTotal) }}
+                </p>
+              </div>
+              <div class="thermal-line-meta">
+                <span>{{ line.quantity }} x {{ formatCurrency(line.unitPrice) }}</span>
+                <span>TVA {{ line.vatRate }}% · {{ formatCurrency(line.taxAmount) }}</span>
+              </div>
+            </div>
+          </section>
+
+          <section
+            :class="profile === 'a4' ? 'invoice-summary ticket-print-summary' : 'thermal-block thermal-totals'"
+            aria-label="Total des lignes du dossier"
+          >
+            <div :class="profile === 'a4' ? 'invoice-totals' : undefined">
+              <div :class="profile === 'a4' ? 'invoice-total-row' : 'thermal-total-row'">
+                <span>Total HT</span>
+                <strong>{{ formatCurrency(lineTotals.subtotal) }}</strong>
+              </div>
+              <div :class="profile === 'a4' ? 'invoice-total-row' : 'thermal-total-row'">
+                <span>TVA</span>
+                <strong>{{ formatCurrency(lineTotals.taxAmount) }}</strong>
+              </div>
+              <div :class="profile === 'a4' ? 'invoice-total-row invoice-total-row--grand' : 'thermal-total-row thermal-total-row--grand'">
+                <span>Total TTC</span>
+                <strong>{{ formatCurrency(lineTotals.total) }}</strong>
+              </div>
+            </div>
+          </section>
+        </template>
+
         <section v-if="hasCodesSection" :class="profile === 'a4' ? 'ticket-a4-section' : 'thermal-block'">
           <p :class="profile === 'a4' ? 'invoice-label' : 'thermal-kicker'">
             Codes
@@ -404,6 +488,44 @@ function printTicket() {
 </template>
 
 <style>
+.ticket-print-lines .invoice-table thead {
+  background: #222;
+}
+
+.ticket-print-lines .invoice-table th {
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.ticket-print-lines .invoice-table th,
+.ticket-print-lines .invoice-table td {
+  border-bottom-color: #ddd;
+}
+
+.ticket-print-lines .invoice-desc,
+.ticket-print-summary .invoice-totals {
+  color: #111;
+}
+
+.ticket-print-summary .invoice-totals {
+  background: #f8f8f8;
+  border-color: #ddd;
+}
+
+.ticket-print-summary .invoice-total-row + .invoice-total-row {
+  border-color: #ddd;
+}
+
+@media print {
+  .ticket-print-lines {
+    break-inside: auto;
+  }
+
+  .ticket-print-lines tr {
+    break-inside: avoid;
+  }
+}
+
 .ticket-a4-section {
   padding: 3mm 5.8mm;
   font-size: 11px;
