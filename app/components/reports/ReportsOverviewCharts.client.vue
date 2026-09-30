@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui'
+import { StackedBar, XYLabels } from '@unovis/ts'
+import { VisAxis, VisBulletLegend, VisStackedBar, VisTooltip, VisXYContainer, VisXYLabels } from '@unovis/vue'
 import { BarChart, DonutChart } from 'vue-chrts'
 import { lineCategoryColors, paymentMethodColors, paymentMethodLabels } from '~~/shared/constants/pos'
 import type { PaymentMethod, ReportsOverview } from '~~/shared/types/pos'
 import { formatCurrency, formatDate } from '~~/shared/utils/pos'
 
 type UiColorToken = 'primary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+type PaymentBucket = ReportsOverview['paymentPeriods'][number]['buckets'][number]
 
 const props = defineProps<{
   overview: ReportsOverview
@@ -27,7 +30,7 @@ const activePaymentPeriod = computed(() => {
   return props.overview.paymentPeriods.find(period => period.key === selectedPaymentPeriod.value) || props.overview.paymentPeriods[0]
 })
 
-const paymentsChartData = computed(() => activePaymentPeriod.value?.buckets || [])
+const paymentsChartData = computed(() => (activePaymentPeriod.value?.buckets || []).map((bucket, index) => ({ ...bucket, index })))
 
 const paymentSeries: Array<{
   method: PaymentMethod
@@ -50,7 +53,47 @@ const paymentsCategories = Object.fromEntries(
   ])
 )
 
-const paymentAxisKeys = paymentSeries.map(({ key }) => key)
+const paymentAccessors = paymentSeries.map(({ key }) => (bucket: PaymentBucket) => Number(bucket[key]))
+const paymentColor = (_bucket: PaymentBucket, index: number) => toChartColor(paymentMethodColors[paymentSeries[index]!.method])
+const paymentIndex = (bucket: PaymentBucket & { index: number }) => bucket.index
+const paymentTotalLabel = (bucket: PaymentBucket) => formatCurrency(bucket.total)
+
+const paymentStackTop = (bucket: PaymentBucket) => paymentAccessors.reduce((sum, accessor) => sum + Math.max(0, accessor(bucket)), 0)
+const paymentChartRange = computed(() => {
+  const maximum = Math.max(0, ...paymentsChartData.value.map(paymentStackTop))
+  const minimum = Math.min(0, ...paymentsChartData.value.map(bucket => paymentAccessors.reduce((sum, accessor) => sum + Math.min(0, accessor(bucket)), 0)))
+  return { minimum, maximum, span: Math.max(maximum - minimum, 100) }
+})
+// Position totals above the positive stack, including when refunds reduce the net total.
+const paymentLabelY = (bucket: PaymentBucket) => paymentStackTop(bucket) + paymentChartRange.value.span * 0.055
+const paymentYDomain = computed<[number, number]>(() => {
+  const { minimum, maximum, span } = paymentChartRange.value
+  return [minimum < 0 ? minimum - span * 0.04 : 0, maximum + span * 0.14]
+})
+const paymentChartMinWidth = computed(() => {
+  const labelWidth = Math.max(84, ...paymentsChartData.value.map(bucket => paymentTotalLabel(bucket).length * 6 + 6))
+  return `${paymentsChartData.value.length * labelWidth + 80}px`
+})
+
+const paymentTooltipContainer = import.meta.client ? document.body : undefined
+const paymentTooltip = useTemplateRef<HTMLDivElement>('paymentTooltip')
+const hoveredPayment = ref<PaymentBucket>()
+
+function showPaymentTooltip(value: PaymentBucket | { datum: PaymentBucket }) {
+  hoveredPayment.value = 'datum' in value ? value.datum : value
+  if (!paymentTooltip.value) return ''
+  paymentTooltip.value.style.display = ''
+  return paymentTooltip.value
+}
+
+const paymentTooltipTriggers = {
+  [StackedBar.selectors.bar]: showPaymentTooltip,
+  [XYLabels.selectors.label]: showPaymentTooltip
+}
+
+watch(activePaymentPeriod, () => {
+  hoveredPayment.value = undefined
+})
 
 const paymentTicks = computed(() => {
   const count = paymentsChartData.value.length
@@ -156,27 +199,80 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
 
       <div
         v-if="hasPaymentActivity"
-        class="overflow-hidden rounded-2xl border border-default/80 bg-muted/20 px-3 py-3"
+        class="space-y-3 rounded-2xl border border-default/80 bg-muted/20 p-3"
       >
-        <BarChart
-          :data="paymentsChartData"
-          :categories="paymentsCategories"
-          :height="320"
-          :stacked="true"
-          :y-axis="paymentAxisKeys"
-          :padding="{ top: 12, right: 12, bottom: 0, left: 0 }"
-          :radius="10"
-          :group-padding="18"
-          :bar-padding="0.12"
-          :x-explicit-ticks="paymentTicks"
-          :x-grid-line="false"
-          :x-tick-line="false"
-          :y-grid-line="true"
-          :y-tick-line="false"
-          :x-formatter="dayLabel"
-          :y-formatter="currencyLabel"
-          :tooltip-title-formatter="(item) => item.tooltipLabel"
-        />
+        <div
+          class="overflow-x-auto"
+          tabindex="0"
+          role="region"
+          aria-label="Encaissements nets par période, graphique défilant"
+        >
+          <div :style="{ minWidth: paymentChartMinWidth }">
+            <VisXYContainer
+              :key="selectedPaymentPeriod"
+              :data="paymentsChartData"
+              :height="320"
+              :padding="{ top: 12, right: 12, bottom: 0, left: 0 }"
+              :x-domain="[-0.5, paymentsChartData.length - 0.5]"
+              :y-domain="paymentYDomain"
+            >
+              <VisStackedBar
+                :x="paymentIndex"
+                :y="paymentAccessors"
+                :color="paymentColor"
+                :rounded-corners="10"
+                :group-padding="18"
+                :bar-padding="0.12"
+              />
+              <VisXYLabels
+                :x="paymentIndex"
+                :y="paymentLabelY"
+                :label="paymentTotalLabel"
+                :clustering="false"
+                :label-font-size="11"
+                color="var(--ui-text-highlighted)"
+                background-color="transparent"
+              />
+              <VisAxis
+                type="x"
+                :tick-values="paymentTicks"
+                :tick-format="dayLabel"
+                :grid-line="false"
+                :tick-line="false"
+                :domain-line="false"
+              />
+              <VisAxis
+                type="y"
+                :tick-format="currencyLabel"
+                :grid-line="true"
+                :tick-line="false"
+                :domain-line="false"
+              />
+              <VisTooltip
+                :triggers="paymentTooltipTriggers"
+                :container="paymentTooltipContainer"
+                class-name="reports-payment-tooltip"
+              />
+            </VisXYContainer>
+          </div>
+        </div>
+        <VisBulletLegend :items="Object.values(paymentsCategories)" class="flex flex-wrap justify-center gap-x-3 gap-y-1" />
+        <div ref="paymentTooltip" style="display: none">
+          <div v-if="hoveredPayment" class="w-72 max-w-[calc(100vw-7rem)] space-y-2 p-3 text-sm">
+            <p class="font-semibold text-highlighted">
+              {{ hoveredPayment.tooltipLabel }}
+            </p>
+            <div v-for="series in paymentSeries" :key="series.key" class="flex items-center gap-2">
+              <span class="size-2 shrink-0 rounded-full" :style="{ backgroundColor: toChartColor(paymentMethodColors[series.method]) }" />
+              <span class="flex-1 text-toned">{{ paymentMethodLabels[series.method] }}</span>
+              <span class="font-medium whitespace-nowrap text-highlighted tabular-nums">{{ formatCurrency(Number(hoveredPayment[series.key])) }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-4 border-t border-default pt-2 font-semibold text-highlighted">
+              <span>Total net</span>
+              <span class="whitespace-nowrap tabular-nums">{{ formatCurrency(hoveredPayment.total) }}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <UEmpty
@@ -280,6 +376,13 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
 </template>
 
 <style scoped>
+:global(.reports-payment-tooltip) {
+  --vis-tooltip-background-color: var(--ui-bg);
+  --vis-tooltip-border-color: var(--ui-border);
+  --vis-tooltip-text-color: var(--ui-text);
+  --vis-tooltip-shadow-color: color-mix(in srgb, var(--ui-text) 12%, transparent);
+}
+
 .reports-overview-chart {
   --vis-axis-grid-color: color-mix(in srgb, var(--ui-border) 86%, transparent);
   --vis-axis-tick-color: var(--ui-border);
