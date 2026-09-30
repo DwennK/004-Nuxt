@@ -3,7 +3,8 @@ import type * as z from 'zod'
 import { smartphoneSuppliers } from '~~/shared/constants/smartphones'
 import { smartphoneStockFormSchema as schema } from '~~/shared/validation/smartphones'
 import type { FormSubmitEvent } from '@nuxt/ui'
-import { formatImei, getImeiWarning, isValidImei, normalizeImei } from '~~/shared/utils/pos'
+import { formatSmartphoneIdentifier, normalizeSmartphoneIdentifier } from '~~/shared/utils/smartphones'
+import { getImeiWarning, isValidImei } from '~~/shared/utils/pos'
 import type { SmartphoneImeiLookup } from '~~/shared/types/smartphones'
 import type { SmartphoneStock } from '~/types'
 
@@ -32,7 +33,7 @@ const state = reactive<Schema>({
 })
 
 const isEditing = computed(() => props.mode === 'edit')
-const imeiWarning = computed(() => getImeiWarning(state.imei))
+const imeiWarning = computed(() => /^\d+$/.test(normalizeSmartphoneIdentifier(state.imei)) ? getImeiWarning(state.imei) : null)
 const lookupPending = ref(false)
 const lookupResult = ref<SmartphoneImeiLookup | null>(null)
 let lookupTimer: ReturnType<typeof setTimeout> | undefined
@@ -42,6 +43,7 @@ let modelVersion = 0
 let automaticModel: string | null = null
 
 const lookupMessage = computed(() => {
+  if (/[a-z]/i.test(state.imei)) return 'Numéro de série : renseignez le modèle manuellement.'
   if (lookupPending.value) return 'Recherche du modèle…'
   const result = lookupResult.value
   if (!result) return 'Le modèle est recherché automatiquement à partir de l’IMEI.'
@@ -110,21 +112,21 @@ watch(() => open.value, (value) => {
   }
 
   state.model = props.item?.model || ''
-  state.imei = formatImei(props.item?.imei)
+  state.imei = formatSmartphoneIdentifier(props.item?.imei)
   state.capacity = props.item?.capacity || ''
   state.stockedAt = props.item?.stockedAt || new Date().toISOString().slice(0, 10)
   state.supplier = schema.shape.supplier.parse(props.item?.supplier || '')
 })
 
 function handleImeiInput(value: string | number) {
-  const previousImei = normalizeImei(state.imei)
-  state.imei = formatImei(String(value || ''))
-  const imei = normalizeImei(state.imei)
+  const previousImei = normalizeSmartphoneIdentifier(state.imei)
+  state.imei = formatSmartphoneIdentifier(String(value || ''))
+  const imei = normalizeSmartphoneIdentifier(state.imei)
   if (imei === previousImei) return
   cancelLookup()
   if (automaticModel !== null && state.model === automaticModel) state.model = ''
   automaticModel = null
-  if (!open.value || !imei || !isValidImei(imei)) return
+  if (!open.value || !/^\d{15}$/.test(imei) || !isValidImei(imei)) return
   lookupPending.value = true
   const version = lookupVersion
   const initialModelVersion = modelVersion
@@ -135,7 +137,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   try {
     const payload = {
       ...event.data,
-      imei: normalizeImei(event.data.imei) || ''
+      imei: normalizeSmartphoneIdentifier(event.data.imei) || ''
     }
 
     if (isEditing.value && props.item) {
@@ -206,7 +208,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         class="space-y-4"
         @submit="onSubmit"
       >
-        <UFormField label="IMEI" name="imei">
+        <UFormField label="IMEI / N° de série" name="imei">
           <div class="space-y-1">
             <div class="flex items-center gap-2">
               <UInput
@@ -214,14 +216,16 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
                 :model-value="state.imei"
                 :loading="lookupPending"
                 class="min-w-0 flex-1"
-                placeholder="356 789 123 456 789"
-                inputmode="numeric"
+                placeholder="IMEI ou numéro de série"
+                inputmode="text"
+                autocapitalize="characters"
+                :spellcheck="false"
                 @update:model-value="handleImeiInput"
               />
               <PosBarcodeScanner
-                title="Scanner un IMEI"
-                description="Scannez le code-barres IMEI de l’appareil ou de son emballage."
-                trigger-aria-label="Scanner un IMEI"
+                title="Scanner un IMEI ou un numéro de série"
+                description="Scannez le code-barres IMEI ou le numéro de série de l’appareil."
+                trigger-aria-label="Scanner un IMEI ou un numéro de série"
                 @scanned="handleImeiInput"
               />
             </div>

@@ -119,6 +119,28 @@ describe('smartphone lists use server pages without changing table results', () 
     expect(smartphoneStockSchema.safeParse({ ...edited, supplier: 'Unknown' }).success).toBe(false)
   })
 
+  it('persists, edits and finds iPad serial numbers without requiring an IMEI', async () => {
+    await client.execute('CREATE UNIQUE INDEX stock_identifier_unique_test ON smartphone_stocks(imei)')
+    const created = await createSmartphoneStock(smartphoneStockSchema.parse({
+      model: 'iPad Air Wi-Fi', imei: 'dmpx 1234abcd', capacity: '256 Go', stockedAt: '2026-09-30'
+    }))
+    expect(created.imei).toBe('DMPX1234ABCD')
+    expect((await listSmartphoneStocksPage(stockQuery({ search: '1234abcd' }))).items).toEqual([created])
+    const edited = await updateSmartphoneStock(updateSmartphoneStockSchema.parse({
+      ...created, imei: '00ABCD5678XY'
+    }))
+    expect(edited.imei).toBe('00ABCD5678XY')
+    expect((await listSmartphoneStocks()).find(item => item.id === created.id)?.imei).toBe('00ABCD5678XY')
+    expect((await listSmartphoneStocksPage(stockQuery({ search: '00abcd 5678xy', sort: 'asc' }))).items).toEqual([edited])
+    expect((await listSmartphoneStocksPage(stockQuery({ search: 'DMPX1234ABCD' }))).total).toBe(0)
+    await expect(createSmartphoneStock(smartphoneStockSchema.parse({ ...edited, imei: '00abcd5678xy' })))
+      .rejects.toMatchObject({ cause: { message: expect.stringContaining('UNIQUE constraint failed') } })
+    const phone = await createSmartphoneStock(smartphoneStockSchema.parse({
+      model: 'iPhone test', imei: '490 154 203 237 518', capacity: '128 Go', stockedAt: '2026-09-30'
+    }))
+    expect((await listSmartphoneStocksPage(stockQuery({ search: '490 154 203' }))).items).toEqual([phone])
+  })
+
   it('keeps stock status, literal substring, Unicode and natural sorting identical across pages', async () => {
     const all = await listSmartphoneStocks()
     for (const sold of ['all', 'available', 'sold'] as const) {

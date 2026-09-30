@@ -1,6 +1,7 @@
 export interface SmartphoneStock {
   id: number
   model: string
+  /** IMEI or serial number for devices without a cellular modem. */
   imei: string
   sku: string
   capacity: string

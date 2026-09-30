@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeSmartphoneIdentifier } from '../utils/smartphones'
 import { smartphoneSuppliers } from '../constants/smartphones'
 import { isValidImei, normalizeImei } from '../utils/pos'
 
@@ -10,7 +11,7 @@ export const smartphoneImeiLookupSchema = z.object({
 
 export const smartphoneStockFormSchema = z.object({
   model: z.string().trim().min(2, 'Trop court'),
-  imei: z.string().optional().default('').transform(value => normalizeImei(value) || ''),
+  imei: z.string().optional().default('').transform(normalizeSmartphoneIdentifier),
   capacity: z.string().trim().min(2, 'Capacité invalide'),
   supplier: z.enum(['', ...smartphoneSuppliers]).default(''),
   stockedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide')

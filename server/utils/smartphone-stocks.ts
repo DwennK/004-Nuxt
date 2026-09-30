@@ -1,3 +1,4 @@
+import { matchesSmartphoneStock } from '~~/shared/utils/smartphones'
 import { asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import type { updateSmartphoneStockSchema } from '~~/shared/validation/smartphones'
@@ -265,10 +266,13 @@ export async function listSmartphoneStocksPage(query: SmartphoneStockListQuery):
   let rows: SmartphoneStockRow[]
 
   if (query.search || query.sort !== 'default') {
-    const candidates = await db.select({ id: smartphoneStocks.id, label: smartphoneStocks.model })
+    const candidates = await db.select({ id: smartphoneStocks.id, label: smartphoneStocks.model, imei: smartphoneStocks.imei })
       .from(smartphoneStocks).where(where)
       .orderBy(...(query.sort === 'default' ? defaultOrder : [asc(smartphoneStocks.id)]))
-    const matching = filterAndSortSmartphoneCandidates(candidates, query)
+    const matching = filterAndSortSmartphoneCandidates(
+      candidates.filter(row => matchesSmartphoneStock({ model: row.label, imei: row.imei }, query.search)),
+      { ...query, search: '' }
+    )
     total = matching.length
     page = smartphoneListPage(total, query)
     const pageIds = matching.slice((page - 1) * query.pageSize, page * query.pageSize).map(row => row.id)

@@ -19,7 +19,7 @@ export default eventHandler(async (event) => {
       if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
         throw createError({
           statusCode: 409,
-          statusMessage: 'IMEI deja existant'
+          statusMessage: 'IMEI ou numero de serie deja existant'
         })
       }
 
@@ -36,7 +36,7 @@ export default eventHandler(async (event) => {
       if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
         throw createError({
           statusCode: 409,
-          statusMessage: 'IMEI deja existant'
+          statusMessage: 'IMEI ou numero de serie deja existant'
         })
       }
 

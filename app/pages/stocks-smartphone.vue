@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { foldSearchText } from '~~/shared/utils/search'
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { Row } from '@tanstack/table-core'
 import { format, isValid, parseISO } from 'date-fns'
 import { upperFirst } from 'scule'
-import { formatImei } from '~~/shared/utils/pos'
+import { formatSmartphoneIdentifier, matchesSmartphoneStock } from '~~/shared/utils/smartphones'
 import type { SmartphoneStock } from '~/types'
 
 type SmartphoneTableInstance = {
@@ -38,7 +37,7 @@ const { data, status, pagination, sorting, rowSelection, selectedIds: selectedSm
   key: 'smartphone-stocks',
   endpoint: '/api/smartphone-stocks/list',
   filters,
-  matches: item => foldSearchText(item.model).includes(foldSearchText(search.value))
+  matches: item => matchesSmartphoneStock(item, search.value)
 })
 
 function formatSwissDate(value: string) {
@@ -166,8 +165,8 @@ const columns: TableColumn<SmartphoneStock>[] = [
   },
   {
     accessorKey: 'imei',
-    header: 'IMEI',
-    cell: ({ row }) => formatImei(row.original.imei) || '-'
+    header: 'IMEI / N° de série',
+    cell: ({ row }) => formatSmartphoneIdentifier(row.original.imei) || '-'
   },
   {
     accessorKey: 'capacity',
@@ -243,12 +242,12 @@ function handleImeiScan(value: string) {
             v-model="model"
             class="max-w-sm"
             icon="i-lucide-search"
-            placeholder="Filtrer par modèle ou IMEI..."
+            placeholder="Modèle, IMEI ou numéro de série..."
           />
           <PosBarcodeScanner
-            title="Scanner un IMEI"
-            description="Scannez le code-barres IMEI pour rechercher dans le stock."
-            trigger-aria-label="Scanner un IMEI"
+            title="Scanner un IMEI ou un numéro de série"
+            description="Scannez un IMEI ou un numéro de série pour rechercher dans le stock."
+            trigger-aria-label="Scanner un IMEI ou un numéro de série"
             @scanned="handleImeiScan"
           />
         </div>
@@ -282,7 +281,7 @@ function handleImeiScan(value: string) {
                 .map((column: any) => ({
                   label: ({
                     model: 'Modèle',
-                    imei: 'IMEI',
+                    imei: 'IMEI / N° de série',
                     capacity: 'Capacité',
                     supplier: 'Fournisseur',
                     stockedAt: 'Entrée en stock'
