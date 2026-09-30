@@ -30,8 +30,8 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
 <template>
   <section aria-label="Résumé du document" class="overflow-hidden rounded-lg border border-default bg-default text-sm">
     <div class="grid md:grid-cols-2">
-      <div class="min-w-0 px-3 py-2.5 md:border-r md:border-default">
-        <div class="mb-2 flex h-8 items-center gap-2 border-b border-default pb-1.5">
+      <div class="min-w-0 px-3 py-2 md:border-r md:border-default">
+        <div class="mb-1 flex min-h-7 items-center gap-2 border-b border-default pb-0.5">
           <h2 class="min-w-0 text-xs font-semibold uppercase tracking-wide text-toned">
             Informations {{ props.document.type === 'sav' ? 'SAV' : documentTypeLabels[props.document.type].toLocaleLowerCase('fr-CH') }}
           </h2>
@@ -51,22 +51,26 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
             />
           </UTooltip>
         </div>
-        <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-0.5 text-xs leading-5">
-          <dt class="text-muted">
-            Numéro
-          </dt>
-          <dd class="font-semibold text-highlighted">
-            {{ props.document.documentNumber }}
-          </dd>
-          <dt class="text-muted">
-            Date
-          </dt>
-          <dd>
-            <time :datetime="props.document.issuedAt" :title="formatDateTime(props.document.issuedAt)">
-              {{ formatDate(props.document.issuedAt) }}
-            </time>
-          </dd>
-          <template v-if="['quote', 'invoice'].includes(props.document.type)">
+        <dl class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 text-xs leading-5">
+          <div class="flex items-baseline gap-2">
+            <dt class="text-muted">
+              Numéro
+            </dt>
+            <dd class="font-semibold text-highlighted">
+              {{ props.document.documentNumber }}
+            </dd>
+          </div>
+          <div v-if="!$slots.fields" class="flex items-baseline gap-2">
+            <dt class="text-muted">
+              Émis le
+            </dt>
+            <dd>
+              <time :datetime="props.document.issuedAt" :title="formatDateTime(props.document.issuedAt)">
+                {{ formatDate(props.document.issuedAt) }}
+              </time>
+            </dd>
+          </div>
+          <div v-if="['quote', 'invoice'].includes(props.document.type)" class="flex items-baseline gap-2">
             <dt class="text-muted">
               {{ deadlineLabel }}
             </dt>
@@ -74,48 +78,56 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
               <time v-if="props.document.dueDate" :datetime="props.document.dueDate">{{ formatDate(props.document.dueDate) }}</time>
               <span v-else class="text-muted">Non définie</span>
             </dd>
-          </template>
-          <dt class="text-muted">
-            Lié à
-          </dt>
-          <dd class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-            <NuxtLink
-              v-for="related in relatedDocuments"
-              :key="related.id"
-              :to="`/documents/${related.id}`"
-              :title="`${documentTypeLabels[related.type]} · ${documentStatusLabels[related.status]}`"
-              class="inline-flex items-center gap-0.5 font-medium text-primary hover:underline"
-            >
-              {{ related.documentNumber }}<UIcon name="i-lucide-arrow-up-right" class="size-3" />
-            </NuxtLink>
-            <NuxtLink
-              v-if="props.document.ticket"
-              :to="`/dossiers/${props.document.ticket.id}`"
-              class="inline-flex items-center gap-0.5 text-primary hover:underline"
-            >
-              {{ props.document.ticket.ticketNumber }}<UIcon name="i-lucide-arrow-up-right" class="size-3" />
-            </NuxtLink>
-            <span v-if="!relatedDocuments.length && !props.document.ticket" class="text-muted">Document autonome</span>
-          </dd>
+          </div>
+          <div class="flex min-w-0 items-baseline gap-2">
+            <dt class="text-muted">
+              Lié à
+            </dt>
+            <dd class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+              <NuxtLink
+                v-for="related in relatedDocuments"
+                :key="related.id"
+                :to="`/documents/${related.id}`"
+                :title="`${documentTypeLabels[related.type]} · ${documentStatusLabels[related.status]}`"
+                class="inline-flex items-center gap-0.5 font-medium text-primary hover:underline"
+              >
+                {{ related.documentNumber }}<UIcon name="i-lucide-arrow-up-right" class="size-3" />
+              </NuxtLink>
+              <NuxtLink
+                v-if="props.document.ticket"
+                :to="`/dossiers/${props.document.ticket.id}`"
+                class="inline-flex items-center gap-0.5 text-primary hover:underline"
+              >
+                {{ props.document.ticket.ticketNumber }}<UIcon name="i-lucide-arrow-up-right" class="size-3" />
+              </NuxtLink>
+              <span v-if="!relatedDocuments.length && !props.document.ticket" class="text-muted">Document autonome</span>
+            </dd>
+          </div>
         </dl>
+        <div v-if="$slots.fields" class="mt-1">
+          <slot name="fields" />
+        </div>
       </div>
 
-      <div class="min-w-0 border-t border-default px-3 py-2.5 md:border-t-0">
-        <PosCustomerInfo :customer="props.document.customer" @edit="emit('editCustomer')" />
+      <div class="min-w-0 border-t border-default px-3 py-2 md:border-t-0">
+        <PosCustomerInfo compact :customer="props.document.customer" @edit="emit('editCustomer')" />
       </div>
     </div>
 
-    <div v-if="props.document.type !== 'sav'" class="flex flex-wrap items-center justify-end gap-x-5 gap-y-1 border-t border-default bg-muted/30 px-3 py-1.5 text-xs tabular-nums">
-      <span v-if="props.document.creditedTotal" class="text-toned">Réduction commerciale <strong class="ml-1 font-medium text-highlighted">{{ formatCurrency(-props.document.creditedTotal) }}</strong></span>
-      <span class="text-toned">{{ props.document.creditedTotal ? 'Total initial' : 'Total' }} <strong class="ml-1 font-semibold text-highlighted">{{ formatCurrency(props.document.total) }}</strong></span>
-      <template v-if="props.isPayableDocument">
-        <span class="text-toned">Encaissé net <strong class="ml-1 font-medium text-highlighted">{{ formatCurrency(props.paidAmount) }}</strong></span>
-        <span :class="isSettled ? 'font-semibold text-success' : 'text-toned'">
-          {{ isSettled ? 'Soldé' : 'À encaisser' }}
-          <strong v-if="!isSettled" class="ml-1 font-semibold text-highlighted">{{ formatCurrency(props.balanceDue) }}</strong>
-          <UIcon v-else name="i-lucide-circle-check" class="ml-1 size-3.5 align-middle" />
-        </span>
-      </template>
+    <div class="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-default bg-muted/30 px-3 py-1.5 text-xs tabular-nums">
+      <slot name="handover" />
+      <div v-if="props.document.type !== 'sav'" class="ml-auto flex flex-wrap items-center justify-end gap-x-5 gap-y-1">
+        <span v-if="props.document.creditedTotal" class="text-toned">Réduction commerciale <strong class="ml-1 font-medium text-highlighted">{{ formatCurrency(-props.document.creditedTotal) }}</strong></span>
+        <span class="text-toned">{{ props.document.creditedTotal ? 'Total initial' : 'Total' }} <strong class="ml-1 font-semibold text-highlighted">{{ formatCurrency(props.document.total) }}</strong></span>
+        <template v-if="props.isPayableDocument">
+          <span class="text-toned">Encaissé net <strong class="ml-1 font-medium text-highlighted">{{ formatCurrency(props.paidAmount) }}</strong></span>
+          <span :class="isSettled ? 'font-semibold text-success' : 'text-toned'">
+            {{ isSettled ? 'Soldé' : 'À encaisser' }}
+            <strong v-if="!isSettled" class="ml-1 font-semibold text-highlighted">{{ formatCurrency(props.balanceDue) }}</strong>
+            <UIcon v-else name="i-lucide-circle-check" class="ml-1 size-3.5 align-middle" />
+          </span>
+        </template>
+      </div>
     </div>
   </section>
 </template>

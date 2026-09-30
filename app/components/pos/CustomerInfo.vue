@@ -5,6 +5,7 @@ const props = withDefaults(defineProps<{
   customer: CustomerRecord
   editable?: boolean
   disabled?: boolean
+  compact?: boolean
 }>(), {
   editable: true,
   disabled: false
@@ -23,7 +24,7 @@ const address = computed(() => [
 
 <template>
   <section aria-label="Informations du client" class="min-w-0">
-    <div class="mb-2 flex h-8 items-center gap-2 border-b border-default pb-1.5">
+    <div class="flex items-center gap-2 border-b border-default" :class="compact ? 'mb-1 min-h-7 pb-0.5' : 'mb-2 h-8 pb-1.5'">
       <h2 class="min-w-0 text-xs font-semibold uppercase tracking-wide text-toned">
         Informations du client
       </h2>
@@ -42,7 +43,7 @@ const address = computed(() => [
       </UTooltip>
       <slot name="actions" />
     </div>
-    <div class="space-y-0.5 text-xs leading-5">
+    <div class="text-xs leading-5" :class="compact ? 'grid gap-x-3 gap-y-0.5 xl:grid-cols-2' : 'space-y-0.5'">
       <NuxtLink :to="`/customers/${customer.id}`" class="block w-fit max-w-full break-words font-semibold text-highlighted hover:text-primary hover:underline">
         {{ customer.displayName }}
       </NuxtLink>
@@ -56,7 +57,7 @@ const address = computed(() => [
         <a v-if="customer.email" :href="`mailto:${customer.email}`" class="break-all hover:text-primary hover:underline">{{ customer.email }}</a>
         <span v-else class="text-muted">Email non renseigné</span>
       </div>
-      <div class="flex min-w-0 items-start gap-2">
+      <div class="flex min-w-0 items-start gap-2" :class="{ 'xl:col-span-2': compact }">
         <UIcon name="i-lucide-map-pin" class="mt-0.5 size-3.5 shrink-0 text-muted" />
         <address class="min-w-0 break-words not-italic" :class="address ? '' : 'text-muted'">
           {{ address || 'Adresse non renseignée' }}

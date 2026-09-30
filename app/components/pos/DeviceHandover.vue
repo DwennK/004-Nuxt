@@ -6,6 +6,7 @@ const props = defineProps<{
   recordId: number
   revision?: number
   disabled?: boolean
+  inline?: boolean
 }>()
 const $fetch = useDossierFetch()
 const { can } = useCapabilities()
@@ -57,7 +58,11 @@ function toggle(value: boolean | 'indeterminate') {
 </script>
 
 <template>
-  <div class="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-default px-4 py-2 sm:px-6" data-testid="device-handover">
+  <div
+    class="flex flex-wrap items-center gap-x-3 gap-y-1.5"
+    :class="inline ? 'min-w-0' : 'min-h-11 border-t border-default px-4 py-2 sm:px-6'"
+    data-testid="device-handover"
+  >
     <UCheckbox
       :model-value="state?.partial ? 'indeterminate' : (state?.collected ?? false)"
       label="Appareil récupéré / livré"

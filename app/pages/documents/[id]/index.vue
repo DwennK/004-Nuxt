@@ -318,7 +318,7 @@ function startNewEmailAttempt() {
 </script>
 
 <template>
-  <UDashboardPanel id="document-detail" :ui="{ body: 'min-h-0' }">
+  <UDashboardPanel id="document-detail" :ui="{ body: 'min-h-0 p-3 sm:p-3' }">
     <template #header>
       <UDashboardNavbar :title="document?.documentNumber || 'Détail du document'">
         <template #leading>
@@ -378,14 +378,6 @@ function startNewEmailAttempt() {
           />
         </template>
       </UDashboardNavbar>
-      <PosDeviceHandover
-        v-if="document"
-        :key="id"
-        kind="document"
-        :record-id="id"
-        :revision="dossier.current.value?.status?.revision"
-        :disabled="dossier.blocked.value"
-      />
     </template>
 
     <template #body>
@@ -420,7 +412,21 @@ function startNewEmailAttempt() {
           :editable="canEditDocument && !dossier.blocked.value"
           @edit-context="openContextEditor"
           @edit-customer="openCustomerEditor"
-        />
+        >
+          <template v-if="fillEditorHeight" #fields>
+            <div id="document-context-fields" />
+          </template>
+          <template #handover>
+            <PosDeviceHandover
+              :key="id"
+              inline
+              kind="document"
+              :record-id="id"
+              :revision="dossier.current.value?.status?.revision"
+              :disabled="dossier.blocked.value"
+            />
+          </template>
+        </PosDocumentDetailHeader>
 
         <PosDocumentConversionActions
           :document="document"
@@ -482,6 +488,7 @@ function startNewEmailAttempt() {
             v-model:dirty="hasUnsavedDocumentChanges"
             :disabled="dossier.blocked.value || isConverting"
             :form-id="documentFormId"
+            fields-target="#document-context-fields"
             :show-submit-button="false"
             unsaved-target="#document-unsaved-status"
             :saving="isSavingDocument"

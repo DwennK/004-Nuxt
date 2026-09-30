@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
   submitLabel?: string
   unsavedTarget?: string
   actionsTarget?: string
+  fieldsTarget?: string
   formId?: string
   showSubmitButton?: boolean
   allowedTypes?: DocumentType[]
@@ -121,8 +122,7 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
     >
       <fieldset :disabled="props.saving || props.disabled" class="min-w-0 space-y-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4 lg:space-y-0">
         <div
-          class="grid shrink-0 gap-3 rounded-lg border border-default bg-muted/30 p-3 sm:grid-cols-2 lg:items-end"
-          :class="isExistingDocument ? 'lg:grid-cols-[12rem_9rem]' : showTypeSelector ? 'lg:grid-cols-[9rem_minmax(12rem,1fr)_12rem_9rem]' : 'lg:grid-cols-[minmax(12rem,1fr)_12rem_9rem]'"
+          :class="props.fieldsTarget ? 'contents' : ['grid shrink-0 gap-3 rounded-lg border border-default bg-muted/30 p-3 sm:grid-cols-2 lg:items-end', isExistingDocument ? 'lg:grid-cols-[12rem_9rem]' : showTypeSelector ? 'lg:grid-cols-[9rem_minmax(12rem,1fr)_12rem_9rem]' : 'lg:grid-cols-[minmax(12rem,1fr)_12rem_9rem]']"
         >
           <UFormField v-if="showTypeSelector" label="Type" name="type">
             <USelectMenu
@@ -144,34 +144,54 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
             />
           </UFormField>
 
-          <UFormField label="Émis le" name="issuedAt">
-            <ClientOnly>
-              <UInput
-                v-bind="posInputAttrs"
-                v-model="state.issuedAt"
-                type="datetime-local"
-                class="w-full"
-              />
-              <template #fallback>
-                <UInput
-                  v-bind="posInputAttrs"
-                  type="datetime-local"
-                  disabled
-                  class="w-full"
-                />
-              </template>
-            </ClientOnly>
-          </UFormField>
+          <ClientOnly>
+            <Teleport :to="props.fieldsTarget || 'body'" :disabled="!props.fieldsTarget" defer>
+              <div :class="props.fieldsTarget ? 'flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2' : 'contents'">
+                <UFormField
+                  label="Émis le"
+                  name="issuedAt"
+                  :class="{ 'flex items-center gap-2': props.fieldsTarget }"
+                  :ui="props.fieldsTarget ? { container: 'mt-0' } : undefined"
+                >
+                  <ClientOnly>
+                    <UInput
+                      v-bind="posInputAttrs"
+                      v-model="state.issuedAt"
+                      type="datetime-local"
+                      :form="resolvedFormId"
+                      :disabled="props.saving || props.disabled"
+                      class="w-full"
+                    />
+                    <template #fallback>
+                      <UInput
+                        v-bind="posInputAttrs"
+                        type="datetime-local"
+                        disabled
+                        class="w-full"
+                      />
+                    </template>
+                  </ClientOnly>
+                </UFormField>
 
-          <UFormField label="Statut" name="status">
-            <USelectMenu
-              v-model="state.status"
-              :items="documentStatusItems"
-              value-key="value"
-              :search-input="false"
-              class="w-full"
-            />
-          </UFormField>
+                <UFormField
+                  label="Statut"
+                  name="status"
+                  :class="{ 'flex items-center gap-2': props.fieldsTarget }"
+                  :ui="props.fieldsTarget ? { container: 'mt-0' } : undefined"
+                >
+                  <USelectMenu
+                    v-model="state.status"
+                    aria-label="Statut"
+                    :items="documentStatusItems"
+                    value-key="value"
+                    :search-input="false"
+                    :disabled="props.saving || props.disabled"
+                    class="w-full"
+                  />
+                </UFormField>
+              </div>
+            </Teleport>
+          </ClientOnly>
 
           <div v-if="!isExistingDocument || showSubmitButton" class="col-span-full flex flex-wrap items-center justify-end gap-2">
             <UButton
@@ -227,6 +247,7 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
           :saving="props.saving"
           :error="props.saveError"
           class="shrink-0"
+          :class="{ contents: props.fieldsTarget && !props.saving && !props.saveError }"
         />
 
         <PosDocumentLinesEditor
