@@ -66,7 +66,6 @@ const COLORS = {
   dark: hexToRgb('#111827'),
   tableHead: hexToRgb('#18233b'),
   tableHeadText: rgb(1, 1, 1),
-  primary: hexToRgb('#0f9f6e'),
   totalsBg: hexToRgb('#f8fafc'),
   logoBorder: hexToRgb('#d9e1ed'),
   white: rgb(1, 1, 1)
@@ -380,10 +379,10 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
     })
   }
 
-  drawRightAlignedText(context, model.documentTitle.toUpperCase(), SECTION_RIGHT, topY - FONT_KICKER, {
+  drawRightAlignedText(context, model.documentTitle.toUpperCase(), SECTION_RIGHT, topY - FONT_NUMBER, {
     font: context.boldFont,
-    size: FONT_KICKER,
-    color: COLORS.primary
+    size: FONT_NUMBER,
+    color: COLORS.strong
   })
   drawRightAlignedText(context, document.documentNumber, SECTION_RIGHT, topY - 20, {
     font: context.boldFont,
@@ -392,7 +391,7 @@ function drawHeader(context: PdfContext, document: DocumentDetail, company: Comp
   })
 
   const metaLines = [
-    `Émis le ${formatDate(document.issuedAt)}`,
+    formatDate(document.issuedAt),
     document.ticket ? `Réf. dossier ${document.ticket.ticketNumber}` : null,
     `Statut ${document.sav ? savStatusLabels[document.sav.status] : (document.creditedTotal && document.creditedTotal === document.total ? 'Remboursée' : documentStatusLabels[document.status])}`
   ].filter(Boolean) as string[]

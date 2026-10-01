@@ -111,15 +111,15 @@ body {
 
 .invoice-type {
   margin: 0 0 0.8mm;
-  color: var(--ui-color-primary-600, #0f9f6e);
-  font-size: 8px;
-  letter-spacing: 0.28em;
   text-transform: uppercase;
-  font-weight: 600;
 }
 
 .invoice-number {
   margin: 0 0 1.2mm;
+}
+
+.invoice-type,
+.invoice-number {
   font-size: 13px;
   line-height: 1.1;
   font-weight: 700;

@@ -169,7 +169,7 @@ function printTicket() {
               <p class="invoice-number">
                 {{ ticket.ticketNumber }}
               </p>
-              <p>Ouvert le {{ formatDateTime(ticket.openedAt) }}</p>
+              <p>{{ formatDateTime(ticket.openedAt) }}</p>
               <p>Statut {{ ticketStatusLabels[ticket.status] }}</p>
             </div>
           </div>
@@ -227,7 +227,7 @@ function printTicket() {
 
           <div class="thermal-meta">
             <div>
-              <p class="thermal-kicker">
+              <p class="thermal-reference">
                 Dossier client
               </p>
               <p class="thermal-reference">

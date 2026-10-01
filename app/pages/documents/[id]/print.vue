@@ -212,7 +212,7 @@ useHead(() => ({
               <p class="thermal-kicker">
                 Document
               </p>
-              <p class="thermal-strong">
+              <p class="thermal-reference">
                 {{ documentTitle }}
               </p>
               <p class="thermal-reference">
