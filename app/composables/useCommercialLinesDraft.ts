@@ -59,7 +59,7 @@ export type CommercialLinesDraftController = {
   serializeLines: (lines?: readonly CommercialDraftLine[]) => EditableCommercialLinePayload[]
 }
 
-function getLineCategoryFromItem(item: CatalogItemRecord): LineCategoryHint {
+export function getLineCategoryFromItem(item: CatalogItemRecord): LineCategoryHint {
   if (item.type === 'product') {
     return 'accessory'
   }
@@ -67,7 +67,7 @@ function getLineCategoryFromItem(item: CatalogItemRecord): LineCategoryHint {
   return item.type === 'repair' ? 'repair' : 'service'
 }
 
-function getLineLabelFromItem(item: CatalogItemRecord): string {
+export function getLineLabelFromItem(item: CatalogItemRecord): string {
   const description = item.serviceKind?.trim()
   return description ? `${item.name}\n${description}` : item.name
 }

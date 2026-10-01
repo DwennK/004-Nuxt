@@ -75,6 +75,18 @@ const counterActions: CounterAction[] = [{
   icon: 'i-lucide-wrench',
   to: '/dossiers/new',
   variant: 'soft'
+}, {
+  label: 'Vente smartphone neuf',
+  description: 'Créer un dossier de vente',
+  icon: 'i-lucide-smartphone',
+  to: '/dossiers/new?smartphone=new',
+  variant: 'soft'
+}, {
+  label: 'Vente smartphone reconditionné',
+  description: 'Créer un dossier de vente',
+  icon: 'i-lucide-refresh-cw',
+  to: '/dossiers/new?smartphone=refurbished',
+  variant: 'soft'
 }]
 
 const { data: counterOverview, status: counterOverviewStatus, refresh } = await useFetch<CounterOverviewResponse>('/api/comptoir', {

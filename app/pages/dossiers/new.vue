@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { CustomerRecord, LineCategoryHint, PrintProfile, TicketRecord } from '~~/shared/types/pos'
+import type { CatalogSuggestionsResponse } from '~~/shared/types/lookups'
+import { getLineCategoryFromItem, getLineLabelFromItem } from '~/composables/useCommercialLinesDraft'
 
 const $fetch = useDossierFetch()
 const requestFetch = useRequestFetch()
@@ -13,6 +15,39 @@ const formVersion = ref(0)
 const createdTicket = ref<TicketRecord | null>(null)
 const completionOpen = ref(false)
 const completionHandled = ref(false)
+const smartphonePreset = computed(() => {
+  if (route.query.smartphone === 'new') return { sku: 'smartphoneneuf', name: 'Smartphone Neuf' }
+  if (route.query.smartphone === 'refurbished') return { sku: 'smartphonereconditionne', name: 'Smartphone Reconditionné' }
+  return null
+})
+const { data: smartphoneItem, status: smartphoneStatus, error: smartphoneError, refresh: refreshSmartphone } = await useAsyncData(
+  () => `new-ticket-smartphone-${smartphonePreset.value?.sku || 'none'}`,
+  async () => {
+    const preset = smartphonePreset.value
+    if (!preset) return null
+    const response = await requestFetch<CatalogSuggestionsResponse>('/api/catalog-items/suggestions', {
+      query: { search: preset.sku, activeOnly: true, type: 'product' }
+    })
+    const item = response.items.find(item => item.sku === preset.sku && item.isActive)
+    if (!item) throw new Error(`Article « ${preset.name} » introuvable ou inactif dans le catalogue.`)
+    return item
+  }
+)
+const presetReady = computed(() => !smartphonePreset.value || (smartphoneStatus.value === 'success' && !!smartphoneItem.value))
+const initialValue = computed(() => ({
+  customerId: customerId.value || undefined,
+  type: smartphonePreset.value ? 'sale' as const : 'repair' as const,
+  lines: smartphoneItem.value
+    ? [{
+        catalogItemId: smartphoneItem.value.id,
+        label: getLineLabelFromItem(smartphoneItem.value),
+        quantity: 1,
+        unitPrice: smartphoneItem.value.defaultPrice,
+        vatRate: smartphoneItem.value.vatRate,
+        categoryHint: getLineCategoryFromItem(smartphoneItem.value)
+      }]
+    : undefined
+}))
 
 async function openCreatedTicket(profile?: PrintProfile) {
   if (!createdTicket.value) return
@@ -59,7 +94,7 @@ async function saveTicket(payload: {
     categoryHint: LineCategoryHint | null
   }>
 }) {
-  if (createdTicket.value) return
+  if (createdTicket.value || !presetReady.value) return
   const result = await save(() => $fetch<TicketRecord>(`/api/tickets`, {
     method: 'POST',
     body: { ...payload, customerId: payload.customerId || customerId.value }
@@ -99,7 +134,7 @@ async function saveTicket(payload: {
               type="submit"
               :label="isSaving ? 'Enregistrement…' : 'Créer le dossier'"
               :loading="isSaving"
-              :disabled="!!createdTicket"
+              :disabled="!!createdTicket || !presetReady"
               icon="i-lucide-check"
               aria-label="Créer le dossier"
               :ui="{ label: 'hidden sm:inline' }"
@@ -111,8 +146,17 @@ async function saveTicket(payload: {
 
     <template #body>
       <div class="mx-auto flex w-full max-w-[108rem] flex-col gap-3">
+        <UAlert
+          v-if="smartphoneError"
+          color="error"
+          title="Impossible de présélectionner le smartphone"
+          :description="smartphoneError.message"
+          :actions="[{ label: 'Réessayer', color: 'error', variant: 'soft', onClick: () => refreshSmartphone() }]"
+        />
+        <USkeleton v-else-if="!presetReady" class="h-64 w-full" />
         <PosTicketForm
-          :key="formVersion"
+          v-if="presetReady"
+          :key="`${smartphonePreset?.sku || 'repair'}-${formVersion}`"
           v-model:dirty="dirty"
           :form-id="formId"
           unsaved-target="#ticket-unsaved-status"
@@ -122,7 +166,7 @@ async function saveTicket(payload: {
           layout="intake"
           :show-submit="false"
           :customers="customer ? [customer] : []"
-          :initial-value="{ customerId: customerId || undefined, type: 'repair' }"
+          :initial-value="initialValue"
           @save="saveTicket"
         />
       </div>
