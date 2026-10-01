@@ -22,14 +22,14 @@ function selectTheme(theme: typeof dashboardTheme.value) {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <div class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
         <h2 class="text-lg font-semibold text-highlighted">
-          Votre espace de travail
+          Interface
         </h2>
         <p class="mt-1 text-sm text-toned">
-          L’esprit Office, avec le confort de lecture du POS.
+          Choisissez le thème et l’apparence de votre espace de travail.
         </p>
       </div>
       <ClientOnly>
@@ -49,7 +49,7 @@ function selectTheme(theme: typeof dashboardTheme.value) {
       </ClientOnly>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="group" aria-label="Thème Office">
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" role="group" aria-label="Thème Office">
       <button
         v-for="option in dashboardThemeOptions"
         :key="option.value"
@@ -67,10 +67,10 @@ function selectTheme(theme: typeof dashboardTheme.value) {
         </div>
 
         <div class="w-full p-4">
-          <p class="min-h-10 text-sm text-toned">
+          <p class="sm:min-h-10 text-sm text-toned">
             {{ option.description }}
           </p>
-          <div aria-hidden="true" class="mt-4 overflow-hidden rounded border border-default bg-muted p-2.5">
+          <div aria-hidden="true" class="mt-3 overflow-hidden rounded border border-default bg-muted p-2.5">
             <div class="mb-2 flex items-center gap-1 border-b border-default pb-2 text-[10px] font-medium text-toned">
               <span class="rounded-sm bg-default px-2 py-1 shadow-xs" :style="{ borderBottom: `2px solid ${option.swatch}` }">Accueil</span>
               <span class="px-2">Documents</span>

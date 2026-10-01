@@ -7,6 +7,7 @@ const settingsNavigation = useTemplateRef<HTMLDivElement>('settingsNavigation')
 const { can } = useCapabilities()
 const isInterfacePage = computed(() => route.path === '/settings/interface')
 const isWidePage = computed(() => isInterfacePage.value || route.path === '/settings/backups')
+const isWorkspacePage = computed(() => ['/settings/company', '/settings/customer-sms', '/settings/interface'].includes(route.path))
 
 function revealActiveTab() {
   settingsNavigation.value?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
@@ -42,7 +43,7 @@ const links = computed(() => [[{
 </script>
 
 <template>
-  <UDashboardPanel id="settings" :ui="{ body: isWidePage ? 'lg:py-6' : 'lg:py-12' }">
+  <UDashboardPanel id="settings" :ui="{ body: isWorkspacePage ? 'gap-4 lg:p-6' : isWidePage ? 'lg:py-6' : 'lg:py-12' }">
     <template #header>
       <UDashboardNavbar title="Paramètres">
         <template #leading>
@@ -59,7 +60,7 @@ const links = computed(() => [[{
     </template>
 
     <template #body>
-      <div class="flex flex-col gap-4 sm:gap-6 lg:gap-12 w-full mx-auto" :class="isWidePage ? 'lg:max-w-5xl' : 'lg:max-w-2xl'">
+      <div class="flex flex-col w-full mx-auto" :class="isWorkspacePage ? 'min-w-0 gap-4' : ['gap-4 sm:gap-6 lg:gap-12', isWidePage ? 'lg:max-w-5xl' : 'lg:max-w-2xl']">
         <NuxtPage />
       </div>
     </template>

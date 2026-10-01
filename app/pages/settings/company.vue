@@ -134,198 +134,170 @@ async function onSubmit(event: FormSubmitEvent<FormState>) {
     id="company-settings"
     :schema="schema"
     :state="state"
+    class="space-y-4"
     @submit="onSubmit"
   >
-    <UPageCard
-      title="Société"
-      description="Informations de l’entreprise utilisées sur les documents commerciaux."
-      variant="naked"
-      orientation="horizontal"
-      class="mb-4"
-    >
+    <div class="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-default bg-default py-3">
+      <div>
+        <h2 class="text-lg font-semibold text-highlighted">
+          Société
+        </h2>
+        <p class="text-sm text-muted">
+          Coordonnées et informations affichées sur vos documents.
+        </p>
+      </div>
       <UButton
         form="company-settings"
         label="Enregistrer"
-        color="neutral"
+        icon="i-lucide-save"
         type="submit"
-        class="w-fit lg:ms-auto"
       />
-    </UPageCard>
+    </div>
 
-    <UPageCard variant="subtle">
-      <UFormField
-        name="name"
-        label="Nom"
-        description="Nom commercial affiché sur les devis, commandes et factures."
-        required
-        class="flex max-sm:flex-col justify-between items-start gap-4"
-      >
-        <UInput v-bind="posInputAttrs" v-model="state.name" />
-      </UFormField>
-      <USeparator />
-      <UFormField
-        name="address"
-        label="Adresse"
-        description="Adresse principale structurée, utilisée sur les documents et la QR-facture."
-        class="flex max-sm:flex-col justify-between items-start gap-4"
-      >
-        <UInput v-bind="posInputAttrs" v-model="state.address" />
-      </UFormField>
-      <USeparator />
-      <div class="grid gap-4 md:grid-cols-3">
-        <UFormField
-          name="postalCode"
-          label="Code postal"
-          class="flex max-sm:flex-col justify-between items-start gap-4"
-        >
-          <UInput v-bind="posInputAttrs" v-model="state.postalCode" />
+    <div class="grid items-start gap-4 xl:grid-cols-2">
+      <UCard :ui="{ body: 'space-y-4 sm:p-5', header: 'px-4 py-3 sm:px-5' }">
+        <template #header>
+          <h3 class="font-semibold text-highlighted">
+            Coordonnées
+          </h3>
+        </template>
+        <UFormField name="name" label="Nom commercial" required>
+          <UInput v-bind="posInputAttrs" v-model="state.name" class="w-full" />
         </UFormField>
-        <UFormField
-          name="city"
-          label="Ville"
-          class="flex max-sm:flex-col justify-between items-start gap-4"
-        >
-          <UInput v-bind="posInputAttrs" v-model="state.city" />
+        <UFormField name="address" label="Adresse">
+          <UInput v-bind="posInputAttrs" v-model="state.address" class="w-full" />
         </UFormField>
-        <UFormField
-          name="countryCode"
-          label="Pays"
-          description="Code ISO à 2 lettres pour la QR-facture."
-          class="flex max-sm:flex-col justify-between items-start gap-4"
-        >
+        <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
+          <UFormField name="postalCode" label="Code postal">
+            <UInput v-bind="posInputAttrs" v-model="state.postalCode" class="w-full" />
+          </UFormField>
+          <UFormField name="city" label="Ville">
+            <UInput v-bind="posInputAttrs" v-model="state.city" class="w-full" />
+          </UFormField>
+          <UFormField name="countryCode" label="Pays" hint="ISO">
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="state.countryCode"
+              maxlength="2"
+              class="w-full uppercase"
+            />
+          </UFormField>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <UFormField name="phone" label="Téléphone">
+            <UInput v-bind="posInputAttrs" v-model="state.phone" class="w-full" />
+          </UFormField>
+          <UFormField name="email" label="Email">
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="state.email"
+              type="email"
+              class="w-full"
+            />
+          </UFormField>
+        </div>
+        <UFormField name="website" label="Site web">
           <UInput
             v-bind="posInputAttrs"
-            v-model="state.countryCode"
-            maxlength="2"
-            class="uppercase"
+            v-model="state.website"
+            placeholder="https://..."
+            class="w-full"
           />
         </UFormField>
+      </UCard>
+
+      <div class="min-w-0 space-y-4">
+        <UCard :ui="{ body: 'space-y-4 sm:p-5', header: 'px-4 py-3 sm:px-5' }">
+          <template #header>
+            <h3 class="font-semibold text-highlighted">
+              Facturation et banque
+            </h3>
+          </template>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <UFormField name="vatNumber" label="N° TVA / IDE">
+              <UInput v-bind="posInputAttrs" v-model="state.vatNumber" class="w-full" />
+            </UFormField>
+            <UFormField name="bankName" label="Banque">
+              <UInput v-bind="posInputAttrs" v-model="state.bankName" class="w-full" />
+            </UFormField>
+          </div>
+          <UFormField name="iban" label="IBAN" help="IBAN CH ou LI requis pour la QR-facture suisse.">
+            <UInput v-bind="posInputAttrs" v-model="state.iban" class="w-full" />
+          </UFormField>
+        </UCard>
+
+        <UCard :ui="{ body: 'sm:p-5', header: 'px-4 py-3 sm:px-5' }">
+          <template #header>
+            <h3 class="font-semibold text-highlighted">
+              Logo des documents
+            </h3>
+          </template>
+          <UFormField name="logoDataUrl" label="Logo" :ui="{ label: 'sr-only' }">
+            <div class="flex flex-wrap items-center gap-4">
+              <div class="flex h-24 w-40 shrink-0 items-center justify-center rounded-md border border-default bg-muted/20 p-3">
+                <img
+                  v-if="state.logoDataUrl"
+                  :src="state.logoDataUrl"
+                  alt="Logo société"
+                  class="max-h-full max-w-full object-contain"
+                >
+                <span v-else class="text-sm text-muted">Aucun logo</span>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <UButton
+                  label="Choisir un logo"
+                  icon="i-lucide-image-up"
+                  color="neutral"
+                  variant="outline"
+                  type="button"
+                  @click="openFilePicker"
+                />
+                <UButton
+                  v-if="state.logoDataUrl"
+                  label="Supprimer le logo"
+                  color="neutral"
+                  variant="ghost"
+                  type="button"
+                  @click="removeLogo"
+                />
+              </div>
+              <input
+                ref="fileRef"
+                type="file"
+                class="hidden"
+                accept=".jpg,.jpeg,.png,.svg,.webp"
+                @change="onFileChange"
+              >
+            </div>
+          </UFormField>
+        </UCard>
       </div>
-      <USeparator />
-      <div class="grid gap-4 md:grid-cols-2">
-        <UFormField
-          name="phone"
-          label="Téléphone"
-          class="flex max-sm:flex-col justify-between items-start gap-4"
-        >
-          <UInput v-bind="posInputAttrs" v-model="state.phone" />
-        </UFormField>
-        <UFormField
-          name="email"
-          label="Email"
-          class="flex max-sm:flex-col justify-between items-start gap-4"
-        >
-          <UInput v-bind="posInputAttrs" v-model="state.email" type="email" />
-        </UFormField>
-      </div>
-      <USeparator />
-      <UFormField
-        name="website"
-        label="Site web"
-        description="Affiché dans le pied de page ou l’en-tête du document."
-        class="flex max-sm:flex-col justify-between items-start gap-4"
-      >
-        <UInput v-bind="posInputAttrs" v-model="state.website" placeholder="https://..." />
-      </UFormField>
-      <USeparator />
-      <UFormField
-        name="vatNumber"
-        label="TVA"
-        description="Numéro de TVA / IDE si applicable."
-        class="flex max-sm:flex-col justify-between items-start gap-4"
-      >
-        <UInput v-bind="posInputAttrs" v-model="state.vatNumber" />
-      </UFormField>
-      <USeparator />
-      <UFormField
-        name="bankName"
-        label="Banque"
-        description="Établissement bancaire affiché pour les virements."
-        class="flex max-sm:flex-col justify-between items-start gap-4"
-      >
-        <UInput v-bind="posInputAttrs" v-model="state.bankName" />
-      </UFormField>
-      <USeparator />
-      <UFormField
-        name="iban"
-        label="IBAN"
-        description="Un IBAN valide est requis. La QR-facture suisse n’est générée qu’avec un IBAN CH ou LI."
-        class="flex max-sm:flex-col justify-between items-start gap-4"
-      >
-        <UInput v-bind="posInputAttrs" v-model="state.iban" />
-      </UFormField>
-      <USeparator />
-      <UFormField
-        name="paymentTerms"
-        label="Conditions de paiement"
-        description="Texte court affiché sous les totaux du document."
-        class="flex max-sm:flex-col justify-between items-start gap-4"
-      >
+    </div>
+
+    <UCard :ui="{ body: 'space-y-4 sm:p-5', header: 'px-4 py-3 sm:px-5' }">
+      <template #header>
+        <h3 class="font-semibold text-highlighted">
+          Textes des documents
+        </h3>
+      </template>
+      <UFormField name="paymentTerms" label="Conditions de paiement" help="Affichées sous les totaux.">
         <UTextarea
           v-bind="posInputAttrs"
           v-model="state.paymentTerms"
-          :rows="4"
+          :rows="2"
+          autoresize
           class="w-full"
         />
       </UFormField>
-      <USeparator />
-      <UFormField
-        name="footerNotes"
-        label="Mentions de bas de page"
-        description="Mentions commerciales ou légales visibles en pied de page."
-        class="flex max-sm:flex-col justify-between items-start gap-4"
-      >
+      <UFormField name="footerNotes" label="Mentions de bas de page" help="Garanties et mentions commerciales ou légales.">
         <UTextarea
           v-bind="posInputAttrs"
           v-model="state.footerNotes"
-          :rows="4"
+          :rows="8"
+          autoresize
           class="w-full"
         />
       </UFormField>
-      <USeparator />
-      <UFormField
-        name="logoDataUrl"
-        label="Logo"
-        description="Stocké dans Turso pour être réutilisé sur les documents."
-        class="flex max-sm:flex-col justify-between items-start gap-4"
-      >
-        <div class="w-full space-y-3">
-          <div class="flex flex-wrap items-center gap-3">
-            <UButton
-              label="Choisir un logo"
-              color="neutral"
-              type="button"
-              @click="openFilePicker"
-            />
-            <UButton
-              v-if="state.logoDataUrl"
-              label="Supprimer le logo"
-              color="neutral"
-              variant="soft"
-              type="button"
-              @click="removeLogo"
-            />
-          </div>
-
-          <input
-            ref="fileRef"
-            type="file"
-            class="hidden"
-            accept=".jpg,.jpeg,.png,.svg,.webp"
-            @change="onFileChange"
-          >
-
-          <div
-            v-if="state.logoDataUrl"
-            class="flex min-h-28 items-center justify-center rounded-lg border border-default bg-muted/20 p-4"
-          >
-            <img :src="state.logoDataUrl" alt="Logo société" class="max-h-24 max-w-full object-contain">
-          </div>
-          <div v-else class="rounded-lg border border-dashed border-default p-4 text-sm text-toned">
-            Aucun logo enregistré.
-          </div>
-        </div>
-      </UFormField>
-    </UPageCard>
+    </UCard>
   </UForm>
 </template>
