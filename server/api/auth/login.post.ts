@@ -36,7 +36,6 @@ export default eventHandler(async (event) => {
   await assertLoginAllowed(event, throttleKey)
 
   if (companyWebsite) {
-    await registerLoginFailure(throttleKey)
     throw createError({
       statusCode: 401,
       statusMessage: 'Identifiants invalides'
