@@ -68,8 +68,8 @@ function getLineCategoryFromItem(item: CatalogItemRecord): LineCategoryHint {
 }
 
 function getLineLabelFromItem(item: CatalogItemRecord): string {
-  const serviceLabel = item.type === 'service' ? item.serviceKind?.trim() : ''
-  return serviceLabel ? `${item.name}\n${serviceLabel}` : item.name
+  const description = item.serviceKind?.trim()
+  return description ? `${item.name}\n${description}` : item.name
 }
 
 export function useCommercialLinesDraft(options: UseCommercialLinesDraftOptions): CommercialLinesDraftController {

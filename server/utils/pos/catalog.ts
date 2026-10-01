@@ -86,7 +86,7 @@ function normalizeCatalogItemInput(input: CatalogItemInput) {
     category: normalizeCatalogCategory(type, input.category),
     brand: isRepair ? normalizeOptionalText(input.brand) : null,
     model: isRepair ? normalizeOptionalText(input.model) : null,
-    serviceKind: (isRepair || isService) ? normalizeOptionalText(input.serviceKind) : null,
+    serviceKind: normalizeOptionalText(input.serviceKind),
     keywordsJson: (isRepair || isService) ? serializeKeywords(input.keywords) : null,
     defaultPrice: input.defaultPrice,
     vatRate: input.vatRate,

@@ -89,6 +89,7 @@ export interface CatalogItemRecord {
   category: string
   brand: string | null
   model: string | null
+  /** Multiline commercial description, displayed below the name for every item type. */
   serviceKind: string | null
   keywords: string[]
   defaultPrice: number
@@ -106,6 +107,7 @@ export interface CatalogItemInput {
   category: string
   brand: string | null
   model: string | null
+  /** Multiline commercial description, displayed below the name for every item type. */
   serviceKind: string | null
   keywords: string[]
   defaultPrice: number

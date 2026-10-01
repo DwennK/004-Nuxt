@@ -260,7 +260,7 @@ useHead(() => ({
 
           <div v-for="line in document.lines" :key="line.id" class="thermal-line">
             <div class="thermal-line-head">
-              <p class="thermal-line-label">
+              <p class="thermal-line-label whitespace-pre-line">
                 {{ line.label }}
               </p>
               <p class="thermal-line-total">

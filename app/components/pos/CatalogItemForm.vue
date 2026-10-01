@@ -69,7 +69,7 @@ const schema = z.object({
       code: 'custom',
       path: ['serviceKind'],
       message: value.type === 'repair'
-        ? 'Le type d’intervention est obligatoire pour une réparation'
+        ? 'Le libellé de la réparation est obligatoire'
         : 'Le libellé est obligatoire'
     })
   }
@@ -192,7 +192,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
     category: event.data.category.trim(),
     brand: isRepairType ? (event.data.brand.trim() || null) : null,
     model: isRepairType ? (event.data.model.trim() || null) : null,
-    serviceKind: isCatalogServiceType ? (event.data.serviceKind.trim() || null) : null,
+    serviceKind: event.data.serviceKind.trim() || null,
     keywords: isCatalogServiceType ? parseKeywords(event.data.keywordsText) : [],
     defaultPrice: Math.round((event.data.defaultPrice || 0) * 100),
     vatRate: event.data.vatRate,
@@ -219,14 +219,33 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       >
         <div class="space-y-4">
           <div class="grid gap-4 md:grid-cols-2">
-            <UFormField :label="currentItemNameLabel" name="name" required>
-              <UInput
-                v-bind="posInputAttrs"
-                v-model="state.name"
-                autofocus
-                class="w-full"
-              />
-            </UFormField>
+            <div class="space-y-4">
+              <UFormField :label="currentItemNameLabel" name="name" required>
+                <UInput
+                  v-bind="posInputAttrs"
+                  v-model="state.name"
+                  autofocus
+                  class="w-full"
+                />
+              </UFormField>
+
+              <UFormField
+                label="Libellé / Description"
+                name="serviceKind"
+                :required="isCatalogService"
+                :hint="isCatalogService ? undefined : 'Optionnel'"
+              >
+                <UTextarea
+                  v-bind="posInputAttrs"
+                  v-model="state.serviceKind"
+                  class="w-full"
+                  :rows="3"
+                  :maxrows="8"
+                  autoresize
+                  placeholder="Détails affichés sous le titre dans les documents"
+                />
+              </UFormField>
+            </div>
 
             <UFormField label="Type" name="type" required>
               <USelect
@@ -289,26 +308,6 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
               />
             </UFormField>
           </div>
-
-          <UFormField :label="isRepair ? 'Type d’intervention' : 'Libellé'" name="serviceKind" required>
-            <UInput
-              v-if="isRepair"
-              v-bind="posInputAttrs"
-              v-model="state.serviceKind"
-              class="w-full"
-              placeholder="Remplacement écran"
-            />
-            <UTextarea
-              v-else
-              v-bind="posInputAttrs"
-              v-model="state.serviceKind"
-              class="w-full"
-              :rows="3"
-              :maxrows="8"
-              autoresize
-              placeholder="Diagnostic, configuration, support..."
-            />
-          </UFormField>
 
           <div class="flex flex-wrap gap-2">
             <UButton
@@ -406,6 +405,23 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
         />
       </UFormField>
 
+      <UFormField
+        label="Libellé / Description"
+        name="serviceKind"
+        :required="isCatalogService"
+        :hint="isCatalogService ? undefined : 'Optionnel'"
+      >
+        <UTextarea
+          v-bind="posInputAttrs"
+          v-model="state.serviceKind"
+          class="w-full"
+          :rows="3"
+          :maxrows="8"
+          autoresize
+          placeholder="Détails affichés sous le titre dans les documents"
+        />
+      </UFormField>
+
       <div class="grid gap-4 md:grid-cols-2">
         <UFormField label="Type" name="type" required>
           <USelect
@@ -456,26 +472,6 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
             />
           </UFormField>
         </div>
-
-        <UFormField :label="isRepair ? 'Type d’intervention' : 'Libellé'" name="serviceKind" required>
-          <UInput
-            v-if="isRepair"
-            v-bind="posInputAttrs"
-            v-model="state.serviceKind"
-            class="w-full"
-            placeholder="Remplacement écran"
-          />
-          <UTextarea
-            v-else
-            v-bind="posInputAttrs"
-            v-model="state.serviceKind"
-            class="w-full"
-            :rows="3"
-            :maxrows="8"
-            autoresize
-            placeholder="Diagnostic, configuration, support..."
-          />
-        </UFormField>
 
         <div class="flex flex-wrap gap-2">
           <UButton

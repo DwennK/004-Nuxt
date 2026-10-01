@@ -23,8 +23,8 @@ function editor(allowEmpty = false, catalogItems = [item]) {
 afterEach(() => scopes.splice(0).forEach(scope => scope.stop()))
 
 describe('shared commercial line drafts', () => {
-  it('includes the multiline service label when adding, merging or selecting a service', () => {
-    const service = { ...item, type: 'service' as const, name: 'Installation', serviceKind: 'Configuration\n\nTransfert des données' }
+  it.each(['product', 'repair', 'service'] as const)('includes the multiline description when adding, merging or selecting a %s', (type) => {
+    const service = { ...item, type, name: 'Installation', serviceKind: 'Configuration\n\nTransfert des données' }
     const expectedLabel = 'Installation\nConfiguration\n\nTransfert des données'
 
     for (const allowEmpty of [false, true]) {
@@ -45,17 +45,25 @@ describe('shared commercial line drafts', () => {
     }
   })
 
-  it('keeps the name alone for repairs, products and services without a label', () => {
-    for (const catalogItem of [
-      item,
-      { ...item, type: 'product' as const },
-      { ...item, type: 'service' as const, serviceKind: null },
-      { ...item, type: 'service' as const, serviceKind: ' \n ' }
-    ]) {
+  it.each(['product', 'repair', 'service'] as const)('keeps the name alone for a %s without a description', (type) => {
+    for (const serviceKind of [null, ' \n ']) {
+      const catalogItem = { ...item, type, serviceKind }
       const draft = editor()
       draft.addCatalogItem(catalogItem)
       expect(draft.serializeLines()[0]?.label).toBe(catalogItem.name)
     }
+  })
+
+  it('preserves saved document text when the catalog description changes', () => {
+    const draft = editor()
+    draft.addCatalogItem(item)
+    const saved = draft.serializeLines()
+    const updatedItem = { ...item, serviceKind: 'Nouveau détail' }
+    const reopened = editor(false, [updatedItem])
+    reopened.resetLines(saved)
+    expect(reopened.serializeLines()[0]?.label).toBe('Réparation\nRéparation')
+    reopened.addCatalogItem(updatedItem)
+    expect(reopened.serializeLines()[1]?.label).toBe('Réparation\nNouveau détail')
   })
 
   it('keeps integer cents through input, totals and serialization for sales and documents', () => {

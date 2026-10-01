@@ -25,6 +25,22 @@ describe('canonical A4 PDF layout', () => {
     expect(reference!.y).toBeLessThan(creditorLocation!.y! - 7)
   })
 
+  it('prints a catalog title and each description line underneath in the PDF', async () => {
+    const { PDFPage } = await import('pdf-lib')
+    const { generateDocumentPdf } = await import('../../server/utils/documents/pdf')
+    const text = vi.spyOn(PDFPage.prototype, 'drawText')
+    const document = printDocument()
+    document.lines[0]!.label = 'Coque de protection\nCompatible MagSafe\nGarantie 2 ans'
+    await generateDocumentPdf(document, printCompany(), 'https://pos.example.test')
+    const positions = ['Coque de protection', 'Compatible MagSafe', 'Garantie 2 ans'].map(label =>
+      text.mock.calls.find(([value]) => value === label)?.[1]
+    )
+    expect(positions.every(Boolean)).toBe(true)
+    expect(positions[1]!.x).toBe(positions[0]!.x)
+    expect(positions[1]!.y).toBeLessThan(positions[0]!.y!)
+    expect(positions[2]!.y).toBeLessThan(positions[1]!.y!)
+  })
+
   it('renders amounts over CHF 1,000 and preserves all lines across pages', async () => {
     const { PDFDocument, PDFPage } = await import('pdf-lib')
     const { generateDocumentPdf } = await import('../../server/utils/documents/pdf')

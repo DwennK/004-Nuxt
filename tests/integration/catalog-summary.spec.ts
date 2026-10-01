@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/libsql'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../server/db/schema'
 import { createCatalogItem, deleteCatalogItem, getCatalogSummary, getCatalogItemById, suggestCatalogItems, listCatalogItems, updateCatalogItem } from '../../server/utils/pos/catalog'
+import { catalogItemInputSchema } from '../../shared/validation/pos'
 import type { CatalogItemInput, CatalogItemType } from '../../shared/types/pos'
 
 const context = vi.hoisted(() => ({ db: null as unknown }))
@@ -38,6 +39,22 @@ describe('catalog summary preserves each tab total without loading its rows', ()
   })
 
   afterEach(() => client.close())
+
+  it.each(['product', 'repair', 'service'] as const)('persists, searches and clears multiline descriptions on %s items', async (type) => {
+    const input = catalogItemInputSchema.parse({
+      ...base, type, category: type === 'repair' ? 'iPhone' : type === 'service' ? 'Diagnostic' : 'Accessoires',
+      sku: `DESC-${type}`, serviceKind: '  Compatible MagSafe\nGarantie 2 ans  '
+    })
+    const created = await createCatalogItem(input)
+    expect((await getCatalogItemById(created.id)).serviceKind).toBe('Compatible MagSafe\nGarantie 2 ans')
+    expect((await suggestCatalogItems({ type, search: 'magsafe' })).items.map(item => item.id)).toContain(created.id)
+    await updateCatalogItem(created.id, { ...input, serviceKind: 'Nouveau descriptif\nDeuxième ligne' })
+    expect((await getCatalogItemById(created.id)).serviceKind).toBe('Nouveau descriptif\nDeuxième ligne')
+    if (type === 'product') {
+      await updateCatalogItem(created.id, catalogItemInputSchema.parse({ ...input, serviceKind: '  ' }))
+      expect((await getCatalogItemById(created.id)).serviceKind).toBeNull()
+    }
+  })
 
   it('returns all three nonzero counts using one grouped query', async () => {
     expect(await getCatalogSummary()).toEqual({ product: 1, repair: 1, service: 1 })

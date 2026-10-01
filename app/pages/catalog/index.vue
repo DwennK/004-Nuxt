@@ -304,6 +304,9 @@ const articleColumns: TableColumn<CatalogItemRecord>[] = [
           { class: 'truncate font-medium text-highlighted' },
           row.original.name
         ),
+        row.original.serviceKind
+          ? h('p', { class: 'truncate text-xs text-toned', title: row.original.serviceKind }, row.original.serviceKind)
+          : null,
         h(
           'p',
           { class: 'truncate text-xs text-toned' },

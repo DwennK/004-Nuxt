@@ -519,7 +519,7 @@ function startNewEmailAttempt() {
                   class="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
                 >
                   <div class="min-w-0">
-                    <p class="truncate text-sm font-medium text-highlighted">
+                    <p class="whitespace-pre-line break-words text-sm font-medium text-highlighted">
                       {{ line.label }}
                     </p>
                     <p class="text-xs text-toned">
