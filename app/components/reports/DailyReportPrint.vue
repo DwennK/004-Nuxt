@@ -94,7 +94,7 @@ function paymentTime(value: string) {
 
     <section>
       <h2>Mouvements de la journée</h2>
-      <table v-if="summary.payments.length" class="documents-table payments-table">
+      <table v-if="summary.payments.length" class="documents-table payments-table compact-table">
         <colgroup>
           <col class="number-column">
           <col class="customer-column">
@@ -152,10 +152,10 @@ function paymentTime(value: string) {
 
     <section>
       <h2>Répartition par catégorie</h2>
-      <p class="section-note">
+      <p class="section-note compact-note">
         Valeur nette des factures soldées avec mouvement ce jour, après réductions commerciales
       </p>
-      <table v-if="categories.length">
+      <table v-if="categories.length" class="compact-table">
         <thead>
           <tr>
             <th scope="col">
@@ -171,7 +171,7 @@ function paymentTime(value: string) {
             <th scope="row">
               {{ lineCategoryLabels[item.category] }}
             </th>
-            <td class="amount">
+            <td class="amount emphasis">
               {{ amount(item.total) }}
             </td>
           </tr>
@@ -368,13 +368,14 @@ function paymentTime(value: string) {
   th:last-child,
   td:last-child { padding-right: 0; }
 
-  .payments-table {
+  .compact-table,
+  .compact-note {
     font-size: 9pt;
     line-height: 1.15;
   }
 
-  .payments-table th,
-  .payments-table td {
+  .compact-table th,
+  .compact-table td {
     padding-top: 0.6mm;
     padding-bottom: 0.6mm;
   }
