@@ -1,0 +1,10 @@
+allowBuilds:
+  "esbuild": true
+  "fsevents": true
+  "unrs-resolver": true
+  "vue-demi": true
+  "workerd": true
+minimumReleaseAgeExclude:
+  - '@cloudflare/workers-types@5.20261005.1'
+  - '@iconify-json/lucide@1.2.140'
+  - '@iconify-json/simple-icons@1.2.99'

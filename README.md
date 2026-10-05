@@ -126,7 +126,7 @@ Use `useDossierFetch()` for mutations to existing cases. See [case editing, rese
 Use the toolchain pinned by the repository:
 
 - Node.js 22.23.2 ([`.node-version`](./.node-version), also used by CI)
-- `npm` 10.9.9 (`package.json` and CI use the same version)
+- `pnpm` 11.28.4 (`package.json` and CI use the same version)
 
 The authenticated app also needs a prepared Turso / libSQL development database, `TURSO_URL`, `TURSO_TOKEN` and a session secret. Unit and local SQLite integration tests do not require production credentials. External integrations are optional for working on unrelated POS features.
 
@@ -135,7 +135,7 @@ The authenticated app also needs a prepared Turso / libSQL development database,
 Install dependencies:
 
 ```bash
-npm ci
+pnpm install --frozen-lockfile
 ```
 
 Create a local environment file only if you do not already have one:
@@ -149,7 +149,7 @@ Fill in `.env` with credentials for a dedicated development database, never prod
 Prepare that database before starting the app. It no longer creates the POS schema or demo data automatically. For an empty development database, `db:push` uses [`server/db/schema.ts`](./server/db/schema.ts). A remote development target must be mapped to `development` in `DB_REMOTE_TARGETS` and explicitly confirmed:
 
 ```bash
-DB_TARGET_ENV=development DB_CONFIRM_TARGET="development-database-host" npm run db:push
+DB_TARGET_ENV=development DB_CONFIRM_TARGET="development-database-host" pnpm run db:push
 ```
 
 Replace the placeholder with the exact hostname from your development `TURSO_URL`; the allowlist belongs in your protected environment. Do not relabel an existing staging or production database as development. For those databases, follow the [migration runbook](./docs/database-migrations.md), not `db:push`.
@@ -164,7 +164,7 @@ The script prompts for email, name and password. Pass an explicit local target
 (`--url file:./test.db`) or the remote environment and exact host confirmation
 described in [Database migrations](./docs/database-migrations.md). Remote targets
 must be allowlisted; production administrator creation also requires
-`--allow-production-write`. Alternatively, `npm run seed:test-user -- --url
+`--allow-production-write`. Alternatively, `pnpm run seed:test-user --url
 file:./test.db` creates the temporary account documented in
 [Development Login](./docs/dev-login.md). Test accounts and report fixtures are
 restricted to explicit local development or test databases.
@@ -172,7 +172,7 @@ restricted to explicit local development or test databases.
 Run the dev server:
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Open `/login`, then `/`. The legacy `/comptoir` URL redirects to `/`. Complete company settings before issuing real documents. The development login uses Turnstile test keys by default; production builds and Worker previews need explicit Turnstile configuration.
@@ -378,37 +378,37 @@ Scripts are defined in [`package.json`](./package.json):
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Prepare scanner WASM assets and start Nuxt development mode |
-| `npm run lint` / `npm run typecheck` | ESLint and Nuxt / Vue TypeScript checks |
-| `npm run test` | Unit, integration and security tests |
-| `npm run test:unit` / `npm run test:integration` / `npm run test:security` | Run one test group |
-| `npm run security:regression` | Additional repository security regression checks |
-| `npm run build` | Prepare scanner WASM assets and build the Worker output |
-| `npm run check` | Lint, typecheck, tests, security regression and build |
-| `npm run test:e2e` | Playwright login-page smoke test; case editing tests require explicit isolated setup |
-| `npm run preview` | Rebuild, then run Wrangler locally against `.output` |
-| `npm run deploy` | Rebuild, then deploy `.output` with `--keep-vars` |
-| `npm run cf-typegen` | Generate Worker binding types in `server/types/cloudflare-env.d.ts` |
-| `npm run db:push` / `npm run db:studio` | Development schema push / database UI; verify the configured target first |
-| `npm run db:introspect` / `npm run db:verify` | Database inventory / schema and invariant verification |
-| `npm run db:status` | Compare migration files and database ledger; `-- --local-only` avoids database access |
-| `npm run db:usage` | Read Turso organization usage through the Platform API without application SQL |
-| `npm run db:migrate` | Plan migrations; writes require `-- --apply` and applicable target confirmations |
-| `npm run db:backfill:document-totals` | Bounded, resumable totals backfill; plan-only unless `-- --apply` is supplied |
-| `npm run seed:test-user` | Create or refresh the temporary development administrator |
+| `pnpm run dev` | Prepare scanner WASM assets and start Nuxt development mode |
+| `pnpm run lint` / `pnpm run typecheck` | ESLint and Nuxt / Vue TypeScript checks |
+| `pnpm run test` | Unit, integration and security tests |
+| `pnpm run test:unit` / `pnpm run test:integration` / `pnpm run test:security` | Run one test group |
+| `pnpm run security:regression` | Additional repository security regression checks |
+| `pnpm run build` | Prepare scanner WASM assets and build the Worker output |
+| `pnpm run check` | Lint, typecheck, tests, security regression and build |
+| `pnpm run test:e2e` | Playwright login-page smoke test; case editing tests require explicit isolated setup |
+| `pnpm run preview` | Rebuild, then run Wrangler locally against `.output` |
+| `pnpm run deploy` | Rebuild, then deploy `.output` with `--keep-vars` |
+| `pnpm run cf-typegen` | Generate Worker binding types in `server/types/cloudflare-env.d.ts` |
+| `pnpm run db:push` / `pnpm run db:studio` | Development schema push / database UI; verify the configured target first |
+| `pnpm run db:introspect` / `pnpm run db:verify` | Database inventory / schema and invariant verification |
+| `pnpm run db:status` | Compare migration files and database ledger; `--local-only` avoids database access |
+| `pnpm run db:usage` | Read Turso organization usage through the Platform API without application SQL |
+| `pnpm run db:migrate` | Plan migrations; writes require `--apply` and applicable target confirmations |
+| `pnpm run db:backfill:document-totals` | Bounded, resumable totals backfill; plan-only unless `--apply` is supplied |
+| `pnpm run seed:test-user` | Create or refresh the temporary development administrator |
 
-Run lint and typecheck after meaningful code changes, plus the relevant tests. Use `npm run check` for the full non-browser gate and `npm run preview` for Worker-specific behavior. Do not edit generated `.nuxt/` or `.output/` files.
+Run lint and typecheck after meaningful code changes, plus the relevant tests. Use `pnpm run check` for the full non-browser gate and `pnpm run preview` for Worker-specific behavior. Do not edit generated `.nuxt/` or `.output/` files.
 
 For the browser smoke test, install Playwright's bundled Chromium once:
 
 ```bash
 npx playwright install chromium
-npm run test:e2e
+pnpm run test:e2e
 ```
 
 [`playwright.config.ts`](./playwright.config.ts) uses a 1440×900 viewport and starts or reuses a local server on port 3000. It does not launch the system Google Chrome application. The default smoke test checks the login shell, not an authenticated sale or an external integration. The optional case editing suite requires `POS_DOSSIER_E2E_URL` and an isolated server with disposable fixtures; it modifies those records. Follow [the test setup](./docs/dossier-editing.md) before enabling it. UI changes still need a desktop check and a mobile check when responsive behavior is affected.
 
-The [CI workflow](./.github/workflows/ci.yml) runs `npm ci`, `npm run check`, then the browser smoke job. It does not deploy the Worker. Local e-mail simulation, passing tests and a Git push are not proof of a live delivery or deployment.
+The [CI workflow](./.github/workflows/ci.yml) runs `pnpm install --frozen-lockfile`, `pnpm run check`, then the browser smoke job. It does not deploy the Worker. Local e-mail simulation, passing tests and a Git push are not proof of a live delivery or deployment.
 
 ## Architecture
 
@@ -482,7 +482,7 @@ The schema contract is [`server/db/schema.ts`](./server/db/schema.ts), the conne
 
 `ensurePosSchema()` in [`server/utils/pos/schema.ts`](./server/utils/pos/schema.ts) performs no database I/O by default. Legacy schema bootstrap is available only behind an explicit local compatibility switch. Demo seeding additionally requires its own switch. Neither belongs on the staging / production request path. Stored document totals are repaired by the explicit bounded backfill command, not by a cold-start recalculation.
 
-The repository contains the real adoption baseline `20260902155258_talented_songbird` and subsequent versioned migrations in [`drizzle/`](./drizzle/README.md). An introspection baseline adopts an existing database; its commented SQL cannot provision an empty one. Do not generate a synthetic initial migration and apply it to the existing POS database. Check the committed inventory with `npm run db:status -- --local-only`, then verify the intended target's migration ledger separately.
+The repository contains the real adoption baseline `20260902155258_talented_songbird` and subsequent versioned migrations in [`drizzle/`](./drizzle/README.md). An introspection baseline adopts an existing database; its commented SQL cannot provision an empty one. Do not generate a synthetic initial migration and apply it to the existing POS database. Check the committed inventory with `pnpm run db:status --local-only`, then verify the intended target's migration ledger separately.
 
 Before any production schema change: inventory the exact target, verify a backup restore and its baseline ledger, review and rehearse the additive migration, then verify it before switching the Worker. `db:push` is for development only, not staging or production. The full procedure and rollback gates are in [Database migrations](./docs/database-migrations.md).
 
@@ -535,18 +535,18 @@ The app uses the `cloudflare_module` Nitro preset configured in [`nuxt.config.ts
 For local Worker verification:
 
 ```bash
-npm run preview
+pnpm run preview
 ```
 
 `preview` already rebuilds the app. Use a disposable development database and explicit test configuration; local Wrangler execution does not make a remote Turso database disposable.
 
 Before an authorized production deployment:
 
-1. Run `npm run check` and the relevant browser / Worker checks.
+1. Run `pnpm run check` and the relevant browser / Worker checks.
 2. Complete the [database migration gate](./docs/database-migrations.md), including backup restore verification and a recorded rollback reference.
 3. For e-mail or backups, also complete [Cloudflare e-mail activation](./docs/cloudflare-email.md) or [Dropbox backup setup](./docs/backups.md). Use reviewed migrations in `drizzle/`; SQL candidates under `docs/sql/` are not the production migration ledger.
 4. Verify the Cloudflare account, Worker target, required runtime secrets, bindings and queues. Changing `.env` does not update Worker secrets.
-5. Deploy using the release procedure. `npm run deploy` rebuilds and directly deploys `.output` with `--keep-vars`; it is not the staged promotion workflow described in the migration runbook.
+5. Deploy using the release procedure. `pnpm run deploy` rebuilds and directly deploys `.output` with `--keep-vars`; it is not the staged promotion workflow described in the migration runbook.
 6. Verify the affected screens and external integrations on the deployed version. A successful build or upload alone is not a live functional check.
 
 [`wrangler.json`](./wrangler.json) declares Worker `nuxt` and the custom domain `pos.microwest.ch`. Use the provided preview / deploy scripts so Wrangler reads the generated `.output` configuration. Do not change that output by hand. A Worker rollback does not restore the external Turso database.

@@ -18,20 +18,20 @@ Favor small, production-friendly changes that preserve the current business mode
 
 ## Commands
 
-- Install: `npm install`
-- Dev: `npm run dev`
-- Lint: `npm run lint`
-- Typecheck: `npm run typecheck`
-- Build: `npm run build`
-- Preview worker output: `npm run preview`
-- DB push: `npm run db:push`
-- DB studio: `npm run db:studio`
-- Deploy worker: `npm run deploy`
-- Refresh Cloudflare worker types: `npm run cf-typegen`
+- Install: `pnpm install`
+- Dev: `pnpm run dev`
+- Lint: `pnpm run lint`
+- Typecheck: `pnpm run typecheck`
+- Build: `pnpm run build`
+- Preview worker output: `pnpm run preview`
+- DB push: `pnpm run db:push`
+- DB studio: `pnpm run db:studio`
+- Deploy worker: `pnpm run deploy`
+- Refresh Cloudflare worker types: `pnpm run cf-typegen`
 
-Run `npm run lint` and `npm run typecheck` after meaningful code changes. Run `npm run build` when the change affects app wiring, server routes, or deployment behavior.
+Run `pnpm run lint` and `pnpm run typecheck` after meaningful code changes. Run `pnpm run build` when the change affects app wiring, server routes, or deployment behavior.
 
-Use `npm run preview` when the change may behave differently on Cloudflare Workers than in local Nuxt dev.
+Use `pnpm run preview` when the change may behave differently on Cloudflare Workers than in local Nuxt dev.
 
 ## Environment
 
@@ -45,7 +45,7 @@ Before local work, check `.env.example` and confirm the relevant variables exist
 ## Development Login
 
 The temporary pre-live POS test login is documented in `docs/dev-login.md`.
-Use `npm run seed:test-user` to create or refresh that account in the configured Turso database.
+Use `pnpm run seed:test-user` to create or refresh that account in the configured Turso database.
 
 ## Repo Shape
 
@@ -73,8 +73,8 @@ This app is deployed through Nitro to Cloudflare Workers.
 - prefer Worker-compatible server code
 - avoid introducing Node-only runtime assumptions unless explicitly requested
 - keep deployment-sensitive changes small and easy to verify
-- run `npm run build` for server, route, runtime config, or deployment-sensitive changes
-- run `npm run preview` when checking Worker-specific behavior locally
+- run `pnpm run build` for server, route, runtime config, or deployment-sensitive changes
+- run `pnpm run preview` when checking Worker-specific behavior locally
 
 ## UI Guidance
 
@@ -236,13 +236,13 @@ When working in this repository:
 
 Default verification after meaningful changes:
 
-- run `npm run lint`
-- run `npm run typecheck`
+- run `pnpm run lint`
+- run `pnpm run typecheck`
 
 Additionally:
 
-- run `npm run build` when changing app wiring, server routes, runtime config, or deployment behavior
-- run `npm run preview` when debugging Worker-specific behavior
+- run `pnpm run build` when changing app wiring, server routes, runtime config, or deployment behavior
+- run `pnpm run preview` when debugging Worker-specific behavior
 - manually check the affected screens for layout, density, and workflow regressions when changing UI
 
 ## Change Style

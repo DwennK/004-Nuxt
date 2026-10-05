@@ -6,15 +6,15 @@
     "node": ">=22.19.0 <23 || >=24.11.0 <25 || >=26"
   },
   "scripts": {
-    "build": "npm run scanner:wasm && NODE_OPTIONS=--max-old-space-size=4096 nuxt build",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run security:regression && npm run build",
-    "dev": "npm run scanner:wasm && nuxt dev",
-    "preview": "npm run build && wrangler --cwd .output dev",
-    "postinstall": "npm run scanner:wasm && nuxt prepare",
+    "build": "pnpm run scanner:wasm && NODE_OPTIONS=--max-old-space-size=4096 nuxt build",
+    "check": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run security:regression && pnpm run build",
+    "dev": "pnpm run scanner:wasm && nuxt dev",
+    "preview": "pnpm run build && wrangler --cwd .output dev",
+    "postinstall": "pnpm run scanner:wasm && nuxt prepare",
     "scanner:wasm": "node scripts/copy-scanner-wasm.mjs",
     "lint": "eslint .",
     "security:regression": "node scripts/security-regression.mjs",
-    "test": "npm run test:unit && npm run test:integration && npm run test:security",
+    "test": "pnpm run test:unit && pnpm run test:integration && pnpm run test:security",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:security": "node --test tests/security/*.test.mjs",
@@ -29,7 +29,7 @@
     "db:migrate": "node scripts/db/migrate-safe.mjs",
     "db:backfill:document-totals": "node scripts/db/backfill-document-totals.mjs",
     "seed:test-user": "node scripts/seed-test-user.mjs",
-    "deploy": "npm run build && wrangler --cwd .output deploy --keep-vars",
+    "deploy": "pnpm run build && wrangler --cwd .output deploy --keep-vars",
     "cf-typegen": "wrangler types server/types/cloudflare-env.d.ts --include-runtime false --env-file .env.example --env-interface PosCloudflareEnv"
   },
   "dependencies": {
@@ -47,6 +47,7 @@
     "barcode-detector": "^3.2.1",
     "date-fns": "^4.4.0",
     "drizzle-orm": "1.0.0-rc.4",
+    "h3": "1.15.11",
     "markdown-it": "^15.0.1",
     "nostics": "1.2.0",
     "nuxt": "^4.5.0",
@@ -59,7 +60,9 @@
     "tailwindcss": "^4.3.3",
     "vue": "^3.5.42",
     "vue-chrts": "^2.2.0",
-    "zod": "^4.5.4"
+    "vue-router": "5.3.0",
+    "zod": "^4.5.4",
+    "zxing-wasm": "3.1.3"
   },
   "devDependencies": {
     "@adonisjs/hash": "^10.1.0",
@@ -68,6 +71,7 @@
     "@types/papaparse": "^5.5.2",
     "@types/qrcode": "^1.5.6",
     "@types/sql.js": "^1.4.11",
+    "@vue/server-renderer": "3.5.43",
     "dotenv": "^17.4.2",
     "drizzle-kit": "1.0.0-rc.4",
     "eslint": "^10.9.1",
@@ -78,5 +82,5 @@
     "vue-tsc": "^3.3.8",
     "wrangler": "^4.128.0"
   },
-  "packageManager": "npm@10.9.9"
+  "packageManager": "pnpm@11.28.4"
 }
