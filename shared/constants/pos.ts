@@ -159,12 +159,12 @@ export const paymentMethodLabels: Record<(typeof paymentMethods)[number], string
   shopify: 'Shopify'
 }
 
-export const paymentMethodColors: Record<(typeof paymentMethods)[number], 'success' | 'info' | 'neutral' | 'warning'> = {
+export const paymentMethodColors: Record<(typeof paymentMethods)[number], 'success' | 'info' | 'neutral' | 'warning' | 'error'> = {
   cash: 'success',
   card_twint: 'info',
   bank_transfer: 'neutral',
   stripe: 'warning',
-  shopify: 'success'
+  shopify: 'error'
 }
 
 export const paymentStatusLabels: Record<(typeof paymentStatuses)[number], string> = {
