@@ -42,9 +42,7 @@ const optionalImei = optionalText.transform((value) => {
 })
 
 export const customerInputSchema = z.object({
-  displayName: optionalText,
-  firstName: optionalText,
-  lastName: optionalText,
+  name: optionalText,
   companyName: optionalText,
   phone: optionalText,
   email: optionalEmail,
@@ -53,18 +51,16 @@ export const customerInputSchema = z.object({
   postalCode: optionalText,
   city: optionalText,
   notes: optionalText
-}).superRefine((value, ctx) => {
+}).strict().superRefine((value, ctx) => {
   const hasIdentity = Boolean(
-    value.displayName
+    value.name
     || value.companyName
-    || value.firstName
-    || value.lastName
   )
 
   if (!hasIdentity) {
     ctx.addIssue({
       code: 'custom',
-      path: ['displayName'],
+      path: ['name'],
       message: 'Le nom du client ou de la société est obligatoire'
     })
   }
@@ -274,8 +270,7 @@ export const ticketNoteInputSchema = z.object({
 })
 
 export const employeeInputSchema = z.object({
-  firstName: z.string().trim().min(1, 'Le prénom est obligatoire'),
-  lastName: z.string().trim().min(1, 'Le nom est obligatoire'),
+  name: z.string().trim().min(1, 'Le nom est obligatoire'),
   email: optionalEmail,
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Couleur invalide'),
   vacationDaysPerYear: z.coerce.number().int().min(0).max(365).default(25),

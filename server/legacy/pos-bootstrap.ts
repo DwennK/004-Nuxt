@@ -2,7 +2,6 @@
 import { eq, sql } from 'drizzle-orm'
 import { catalogItems, companySettings, customers, documentLines, documents, payments, tickets } from '~~/server/db/schema'
 import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
-import { splitLegacyName } from '~~/shared/lib/text'
 import { toIsoDateTime } from '~~/shared/utils/pos'
 import { useDb, useTursoClient } from '../utils/turso'
 import { buildRepairCatalogSeedItems } from '../utils/pos/repair-service-seed'
@@ -48,8 +47,7 @@ async function createPosTables() {
     `
       CREATE TABLE IF NOT EXISTS customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        first_name TEXT NOT NULL,
-        last_name TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
         company_name TEXT,
         phone TEXT NOT NULL,
         email TEXT NOT NULL,
@@ -220,7 +218,7 @@ async function createPosTables() {
         FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
       )
     `,
-    'CREATE INDEX IF NOT EXISTS customers_last_name_idx ON customers(last_name)',
+    'CREATE INDEX IF NOT EXISTS customers_name_order_idx ON customers(name, id)',
     'CREATE INDEX IF NOT EXISTS customers_phone_idx ON customers(phone)',
     'CREATE INDEX IF NOT EXISTS customers_email_idx ON customers(email)',
     'CREATE INDEX IF NOT EXISTS catalog_items_name_idx ON catalog_items(name)',
@@ -634,83 +632,6 @@ async function ensureUniqueNumberIndexes() {
   await client.batch(statements, 'write')
 }
 
-async function migrateLegacyCustomersTable() {
-  const client = useTursoClient()
-  const tableInfo = await client.execute('PRAGMA table_info(customers)')
-  const columns = new Set(tableInfo.rows.map(row => String(row.name)))
-
-  if (!columns.size || columns.has('first_name')) {
-    return
-  }
-
-  if (!columns.has('name')) {
-    return
-  }
-
-  const legacyRows = await client.execute('SELECT * FROM customers')
-
-  await client.execute(`
-    CREATE TABLE customers_v2 (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      first_name TEXT NOT NULL,
-      last_name TEXT NOT NULL,
-      company_name TEXT,
-      phone TEXT NOT NULL,
-      email TEXT NOT NULL,
-      address_line_1 TEXT,
-      address_line_2 TEXT,
-      postal_code TEXT,
-      city TEXT,
-      notes TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
-
-  for (const row of legacyRows.rows) {
-    const { firstName, lastName } = splitLegacyName(String(row.name || 'Customer'))
-    await client.execute(
-      `
-        INSERT INTO customers_v2 (
-          id,
-          first_name,
-          last_name,
-          company_name,
-          phone,
-          email,
-          address_line_1,
-          address_line_2,
-          postal_code,
-          city,
-          notes,
-          created_at,
-          updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        Number(row.id),
-        firstName,
-        lastName,
-        null,
-        String(row.phone || ''),
-        String(row.email || ''),
-        row.address ? String(row.address) : null,
-        null,
-        row.postal_code ? String(row.postal_code) : null,
-        row.city ? String(row.city) : null,
-        row.comment ? String(row.comment) : null,
-        toIsoDateTime(),
-        toIsoDateTime()
-      ]
-    )
-  }
-
-  await client.batch([
-    'DROP TABLE customers',
-    'ALTER TABLE customers_v2 RENAME TO customers'
-  ], 'write')
-}
-
 async function seedCustomers() {
   const db = useDb()
   const count = await db.select({ count: sql<number>`count(*)` }).from(customers)
@@ -721,8 +642,7 @@ async function seedCustomers() {
 
   await db.insert(customers).values([
     {
-      firstName: 'Alex',
-      lastName: 'Martin',
+      name: 'Alex Martin',
       companyName: null,
       phone: '+41 79 555 10 01',
       email: 'alex.martin@example.com',
@@ -735,8 +655,7 @@ async function seedCustomers() {
       updatedAt: toIsoDateTime()
     },
     {
-      firstName: 'Sofia',
-      lastName: 'Rossi',
+      name: 'Sofia Rossi',
       companyName: null,
       phone: '+41 78 555 10 02',
       email: 'sofia.rossi@example.com',
@@ -749,8 +668,7 @@ async function seedCustomers() {
       updatedAt: toIsoDateTime()
     },
     {
-      firstName: 'Nora',
-      lastName: 'Bianchi',
+      name: 'Nora Bianchi',
       companyName: 'Atelier Pixel',
       phone: '+41 76 555 10 03',
       email: 'contact@atelierpixel.example.com',
@@ -1157,8 +1075,7 @@ async function createVacationTables() {
     `
       CREATE TABLE IF NOT EXISTS employees (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        first_name TEXT NOT NULL,
-        last_name TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
         email TEXT,
         color TEXT NOT NULL,
         vacation_days_per_year INTEGER NOT NULL DEFAULT 25,
@@ -1182,7 +1099,7 @@ async function createVacationTables() {
         FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
       )
     `,
-    'CREATE INDEX IF NOT EXISTS employees_last_name_idx ON employees(last_name)',
+    'CREATE INDEX IF NOT EXISTS employees_name_idx ON employees(name)',
     'CREATE INDEX IF NOT EXISTS employees_is_active_idx ON employees(is_active)',
     'CREATE INDEX IF NOT EXISTS vacation_entries_employee_id_idx ON vacation_entries(employee_id)',
     'CREATE INDEX IF NOT EXISTS vacation_entries_start_date_idx ON vacation_entries(start_date)',
@@ -1195,7 +1112,6 @@ export async function bootstrapLegacyPosSchema() {
   const config = useRuntimeConfig()
   if (config.posAllowRuntimeSchemaBootstrap !== true) return
 
-  await migrateLegacyCustomersTable()
   await createPosTables()
   await useTursoClient().execute(
     'CREATE TABLE IF NOT EXISTS counter_customer (id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE RESTRICT)'

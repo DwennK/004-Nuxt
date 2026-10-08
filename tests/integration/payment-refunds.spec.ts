@@ -46,7 +46,7 @@ describe('signed payment ledger and commercial reductions', () => {
     // Fixture tables already expose the additive columns; execute the actual
     // production constraints, credit table and ledger view unchanged.
     for (const statement of migration.split('--> statement-breakpoint').filter(s => s.trim() && !s.trim().startsWith('ALTER TABLE'))) await client.executeMultiple(statement)
-    await client.execute(`INSERT INTO customers (id, first_name, last_name, phone, email, created_at, updated_at) VALUES (1, 'Test', 'Client', '', '', '${receiptDate}', '${receiptDate}')`)
+    await client.execute(`INSERT INTO customers (id, name, phone, email, created_at, updated_at) VALUES (1, 'Test Client', '', '', '${receiptDate}', '${receiptDate}')`)
     await client.execute(`INSERT INTO documents (id, document_number, type, status, customer_id, issued_at, subtotal, tax_amount, total, created_at, updated_at) VALUES (1, 'FA-1', 'invoice', 'paid', 1, '${receiptDate}', 3900, 0, 3900, '${receiptDate}', '${receiptDate}')`)
     await client.execute(`INSERT INTO document_lines (document_id, label, quantity, unit_price, vat_rate, line_total, category_hint) VALUES (1, 'Service', 1, 3900, 0, 3900, 'repair')`)
     await client.execute(`INSERT INTO payments (id, document_id, customer_id, method, status, amount, paid_at, created_at, updated_at) VALUES (1, 1, 1, 'cash', 'paid', 3900, '${receiptDate}', '${receiptDate}', '${receiptDate}')`)

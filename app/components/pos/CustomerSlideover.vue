@@ -1,17 +1,22 @@
 <script setup lang="ts">
-import type { CustomerFormValue } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerUpsertInput } from '~~/shared/types/pos'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   title: string
-  description: string
+  description?: string
   saving?: boolean
   saveError?: string | null
   submitLabel: string
-  initialValue?: Partial<CustomerFormValue>
-}>()
+  initialValue?: Partial<CustomerUpsertInput>
+  submitIcon?: string
+  returnFocus?: () => HTMLElement | null | undefined
+}>(), {
+  submitIcon: 'i-lucide-save'
+})
 
 const open = defineModel<boolean>('open', { default: false })
-const focusReturn = usePosFocusReturn(open)
+const focusReturn = usePosFocusReturn(open, () => props.returnFocus?.())
+const formId = `customer-form-${useId()}`
 
 const emit = defineEmits<{
   save: [payload: CustomerFormValue]
@@ -27,17 +32,41 @@ const emit = defineEmits<{
     :close="!saving"
     :description="description"
     side="right"
-    :ui="{ content: 'max-w-2xl' }"
+    :ui="{
+      content: 'max-w-lg',
+      description: 'sr-only',
+      body: 'space-y-5 overflow-y-auto',
+      footer: 'border-t border-default bg-default/95 backdrop-blur supports-[backdrop-filter]:bg-default/80'
+    }"
   >
     <template #body>
       <PosCustomerForm
+        :form-id="formId"
         :initial-value="initialValue"
         :saving="saving"
         :save-error="saveError"
-        mode="full"
+        :show-submit="false"
         :submit-label="submitLabel"
         @save="emit('save', $event)"
       />
+    </template>
+    <template #footer>
+      <div class="flex items-center justify-end gap-3">
+        <UButton
+          label="Annuler"
+          color="neutral"
+          variant="ghost"
+          :disabled="saving"
+          @click="open = false"
+        />
+        <UButton
+          :form="formId"
+          type="submit"
+          :label="saving ? 'Enregistrement…' : submitLabel"
+          :icon="submitIcon"
+          :loading="saving"
+        />
+      </div>
     </template>
   </USlideover>
 </template>

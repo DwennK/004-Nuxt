@@ -26,9 +26,7 @@ export type PaymentStatus = (typeof paymentStatuses)[number]
 export type LineCategoryHint = (typeof lineCategoryHints)[number]
 
 export interface CustomerUpsertInput {
-  displayName?: string | null
-  firstName?: string | null
-  lastName?: string | null
+  name?: string | null
   companyName?: string | null
   phone?: string | null
   email?: string | null
@@ -40,9 +38,7 @@ export interface CustomerUpsertInput {
 }
 
 export interface CustomerFormValue {
-  displayName: string
-  firstName: string
-  lastName: string
+  name: string
   companyName: string
   phone: string
   email: string
@@ -55,8 +51,7 @@ export interface CustomerFormValue {
 
 export interface CustomerRecord {
   id: number
-  firstName: string
-  lastName: string
+  name: string
   companyName: string | null
   phone: string
   email: string
@@ -377,8 +372,7 @@ export type VacationEntryStatus = (typeof vacationEntryStatuses)[number]
 
 export interface EmployeeRecord {
   id: number
-  firstName: string
-  lastName: string
+  name: string
   email: string | null
   color: string
   displayName: string

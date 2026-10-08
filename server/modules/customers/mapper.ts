@@ -5,8 +5,7 @@ import { formatCustomerName } from '~~/shared/utils/pos'
 export function mapCustomer(row: typeof customers.$inferSelect): CustomerRecord {
   return {
     id: row.id,
-    firstName: row.firstName,
-    lastName: row.lastName,
+    name: row.name,
     companyName: row.companyName,
     phone: row.phone,
     email: row.email,

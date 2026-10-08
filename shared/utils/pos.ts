@@ -207,12 +207,17 @@ export function normalizeSearchText(value: string | null | undefined) {
 }
 
 export function formatCustomerName(customer: {
-  firstName: string
-  lastName: string
+  name: string
   companyName?: string | null
 }) {
-  const personName = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim()
-  return customer.companyName?.trim() || personName || 'Unknown customer'
+  return customer.companyName?.trim() || customer.name.trim() || 'Unknown customer'
+}
+
+export function formatCustomerContactName(customer: { name: string, companyName?: string | null }) {
+  const name = customer.name.trim()
+  const company = customer.companyName?.trim()
+  const comparable = (value: string) => value.replace(/\s+/g, ' ').toLocaleLowerCase('fr-CH')
+  return company && name && comparable(name) !== comparable(company) ? name : null
 }
 
 export function getTicketTypeLabel(value: TicketType) {

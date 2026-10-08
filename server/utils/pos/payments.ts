@@ -1,6 +1,6 @@
 import { guardDossierWrite, type DossierWriteContext } from './dossiers'
 import { and, asc, desc, eq, gte, lte, or, sql } from 'drizzle-orm'
-import { searchLike } from './search'
+import { searchLike, searchName } from './search'
 import { foldSearchText } from '~~/shared/utils/search'
 import { customers, documents, payments } from '~~/server/db/schema'
 import {
@@ -94,7 +94,7 @@ async function readPayments(filters?: PaymentListFilters, exportAll = false): Pr
     searchPattern
       ? or(
           searchLike(sql`coalesce(${customers.companyName}, '')`, searchPattern),
-          searchLike(sql`trim(${customers.firstName} || ' ' || ${customers.lastName})`, searchPattern),
+          searchName(customers.name, normalizedSearch),
           searchLike(documents.documentNumber, searchPattern)
         )
       : undefined
@@ -134,7 +134,7 @@ async function readPayments(filters?: PaymentListFilters, exportAll = false): Pr
       ...mapPayment(row.payment),
       refundedAmount: Number(row.refundedAmount || 0),
       refundableAmount: row.payment.status === 'paid' && row.payment.amount > 0 ? Math.max(row.payment.amount - Number(row.refundedAmount || 0), 0) : 0,
-      customerName: row.customer ? (row.customer.companyName || `${row.customer.firstName} ${row.customer.lastName}`) : null,
+      customerName: row.customer ? (row.customer.companyName || row.customer.name) : null,
       documentNumber: row.documentNumber,
       documentType: row.documentType
     })),

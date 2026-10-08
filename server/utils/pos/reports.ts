@@ -281,7 +281,7 @@ async function getTopLeaders(
   const [topCustomerRows, topItemRows]: [TopCustomerRow[], TopItemRow[]] = await Promise.all([
     db.select({
       customerId: customers.id,
-      customerName: sql<string>`coalesce(${customers.companyName}, ${customers.firstName} || ' ' || ${customers.lastName})`,
+      customerName: sql<string>`coalesce(${customers.companyName}, ${customers.name})`,
       total: sql<number>`sum(${documents.total} - coalesce(${documents.creditedTotal}, 0))`,
       documentCount: sql<number>`count(${documents.id})`
     })
@@ -304,7 +304,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
 
   const db = useDb()
   const { start, end } = buildDayRange(date)
-  const customerNameValue = sql<string>`coalesce(nullif(trim(${customers.companyName}), ''), nullif(trim(${customers.firstName} || ' ' || ${customers.lastName}), ''), 'Unknown customer')`
+  const customerNameValue = sql<string>`coalesce(nullif(trim(${customers.companyName}), ''), nullif(${customers.name}, ''), 'Unknown customer')`
 
   const [paymentRows, paidDocumentRows, unpaidDocumentRows, openTicketRows, openedTodayRows, closedTodayRows] = await Promise.all([
     db.select({

@@ -8,7 +8,7 @@ import { ticketStatusLabels, ticketTypeLabels } from '~~/shared/constants/pos'
 import type { PrintProfile, TicketDetail } from '~~/shared/types/pos'
 import type { CompanySettingsRecord } from '~~/shared/types/settings'
 import { getTicketPrintProfiles, printProfileLabels, supportsTicketPrintProfile } from '~~/shared/utils/print'
-import { formatCurrency, formatDateTime } from '~~/shared/utils/pos'
+import { formatCustomerContactName, formatCurrency, formatDateTime } from '~~/shared/utils/pos'
 
 definePageMeta({
   layout: false
@@ -53,19 +53,15 @@ const companyAddress = computed(() => {
   ].filter((line): line is string => Boolean(line))
 })
 
+const customerContactName = computed(() => ticket.value ? formatCustomerContactName(ticket.value.customer) : null)
+
 const customerWindowLines = computed(() => {
   const customer = ticket.value?.customer
   if (!customer) return []
 
-  const personName = [customer.firstName, customer.lastName].map(part => part.trim()).filter(Boolean).join(' ')
-  const contactName = customer.companyName?.trim()
-    && personName.toLocaleLowerCase('fr-CH') !== customer.displayName.trim().toLocaleLowerCase('fr-CH')
-    ? personName
-    : null
-
   return [
     customer.displayName,
-    contactName,
+    customerContactName.value,
     customer.addressLine1,
     customer.addressLine2,
     [customer.postalCode, customer.city].filter(Boolean).join(' ')
@@ -256,6 +252,9 @@ function printTicket() {
           </p>
           <p class="thermal-strong">
             {{ ticket.customer.displayName }}
+          </p>
+          <p v-if="customerContactName">
+            {{ customerContactName }}
           </p>
           <p v-if="ticket.customer.phone">
             {{ ticket.customer.phone }}

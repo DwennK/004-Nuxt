@@ -76,7 +76,7 @@ async function resolveCustomer(order: ShopifyOrder, tx: PosDatabaseExecutor) {
   const a = order.billingAddress || order.shippingAddress
   const now = new Date().toISOString()
   const [customer] = await tx.insert(customers).values({
-    ...mapCustomerInput({ displayName: customerName(order), firstName: a?.firstName, lastName: a?.lastName, companyName: a?.company,
+    ...mapCustomerInput({ name: [a?.firstName, a?.lastName].filter(Boolean).join(' ').trim() || (a?.company ? '' : customerName(order)), companyName: a?.company,
       email, phone: order.phone || a?.phone, addressLine1: a?.address1, addressLine2: a?.address2, postalCode: a?.zip, city: a?.city,
       notes: `Client créé depuis Shopify ${order.name}` }), createdAt: now, updatedAt: now
   }).returning({ id: customers.id })

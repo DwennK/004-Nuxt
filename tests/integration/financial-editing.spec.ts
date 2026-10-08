@@ -32,8 +32,7 @@ describe('editing recorded financial data', () => {
       )`,
       `CREATE TABLE customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        first_name TEXT NOT NULL,
-        last_name TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
         company_name TEXT,
         phone TEXT NOT NULL,
         email TEXT NOT NULL,
@@ -154,9 +153,9 @@ describe('editing recorded financial data', () => {
       'DELETE FROM customers',
       {
         sql: `INSERT INTO customers (
-          id, first_name, last_name, company_name, phone, email,
+          id, name, company_name, phone, email,
           address_line_1, address_line_2, postal_code, city, notes, created_at, updated_at
-        ) VALUES (1, 'Ada', 'Lovelace', NULL, '0220000000', 'ada@example.test', NULL, NULL, '1200', 'Genève', NULL, ?, ?)`,
+        ) VALUES (1, 'Ada Lovelace', NULL, '0220000000', 'ada@example.test', NULL, NULL, '1200', 'Genève', NULL, ?, ?)`,
         args: [now, now]
       },
       {
@@ -245,17 +244,17 @@ describe('editing recorded financial data', () => {
   it('adopts an existing walk-in customer outside the first page without changing legacy duplicates', async () => {
     const now = paymentInput.paidAt
     await client.batch(Array.from({ length: 75 }, (_, index) => ({
-      sql: `INSERT INTO customers (id, first_name, last_name, phone, email, created_at, updated_at) VALUES (?, 'A', 'A', '', '', ?, ?)`,
+      sql: `INSERT INTO customers (id, name, phone, email, created_at, updated_at) VALUES (?, 'A A', '', '', ?, ?)`,
       args: [index + 2, now, now]
     })), 'write')
     await client.batch([100, 101].map(id => ({
-      sql: `INSERT INTO customers (id, first_name, last_name, phone, email, created_at, updated_at) VALUES (?, 'Client', 'comptoir', '', '', ?, ?)`,
+      sql: `INSERT INTO customers (id, name, phone, email, created_at, updated_at) VALUES (?, 'Client comptoir', '', '', ?, ?)`,
       args: [id, now, now]
     })), 'write')
     const sale = await createAndPayDocumentRecord(anonymousSale, paymentInput, 'adopt-counter-key')
     expect(sale.customerId).toBe(100)
     expect((await client.execute('SELECT COUNT(*) AS n FROM customers')).rows[0]?.n).toBe(78)
-    await client.execute(`UPDATE customers SET first_name = 'Passage', last_name = 'renommé' WHERE id = 100`)
+    await client.execute(`UPDATE customers SET name = 'Passage renommé' WHERE id = 100`)
     const nextSale = await createAndPayDocumentRecord(anonymousSale, paymentInput, 'renamed-counter-key')
     expect(nextSale.customerId).toBe(100)
   })

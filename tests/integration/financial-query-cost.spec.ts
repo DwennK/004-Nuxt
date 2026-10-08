@@ -51,7 +51,9 @@ describe('financial query equivalence and bounded query plans', () => {
       await client.execute(`CREATE TABLE "${name}" (${table.columns.map(column => `"${column.name}" ${column.type}${column.primaryKey ? ' PRIMARY KEY' : ''}`).join(', ')})`)
     }
     const migration = readFileSync(new URL('../../drizzle/20260911095852_query_read_indexes/migration.sql', import.meta.url), 'utf8')
-    await client.batch(migration.split('--> statement-breakpoint').filter(Boolean), 'write')
+    // The historical two-column customer index is replaced by the name migration.
+    await client.batch(migration.split('--> statement-breakpoint').filter(statement => statement.trim() && !statement.includes('customers_name_order_idx')), 'write')
+    await client.execute('CREATE INDEX customers_name_order_idx ON customers(name, id)')
   })
   afterAll(() => client.close())
 
@@ -71,7 +73,7 @@ describe('financial query equivalence and bounded query plans', () => {
   beforeEach(async () => {
     await client.batch(['DELETE FROM documents', 'DELETE FROM payments', 'DELETE FROM customers', 'DELETE FROM tickets', 'DELETE FROM document_lines'], 'write')
     await client.batch([
-      'INSERT INTO customers (id, first_name, last_name, company_name) VALUES (1, \'Ada\', \'Alpha\', \'\'), (2, \'Bob\', \'Beta\', NULL)',
+      'INSERT INTO customers (id, name, company_name) VALUES (1, \'Ada Alpha\', \'\'), (2, \'Bob Beta\', NULL)',
       `INSERT INTO tickets (id, ticket_number, customer_id, status, opened_at) VALUES (10, 'DOS-10', 1, 'diagnosis', '${day}'), (20, 'DOS-20', 1, 'diagnosis', '${day}')`
     ], 'write')
     docs = [

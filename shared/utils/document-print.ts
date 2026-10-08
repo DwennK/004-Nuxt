@@ -3,7 +3,7 @@ import { documentTypeLabels, paymentMethodLabels } from '../constants/pos'
 import type { DocumentDetail } from '../types/pos'
 import type { CompanySettingsRecord } from '../types/settings'
 import { isValidSwissQrBillAccount } from './iban'
-import { formatCurrency, formatDate, isPayableDocumentType } from './pos'
+import { formatCustomerContactName, formatCurrency, formatDate, isPayableDocumentType } from './pos'
 import { buildSwissQrBill, type SwissQrBillData } from './qr-bill'
 import { buildTicketIntakePrintModel } from './ticket-print'
 import type { TicketIntakePrintModel } from '../types/print'
@@ -103,12 +103,7 @@ export function buildDocumentA4PrintModel(document: DocumentDetail, company: Com
   const payments = buildDocumentPrintPayments(document)
   const companyAddress = getCompanyAddress(company)
   const customerAddress = getCustomerAddress(document)
-  const personName = [document.customer.firstName, document.customer.lastName].map(part => part.trim()).filter(Boolean).join(' ')
-  const customerContactName = document.customer.companyName?.trim()
-    && personName
-    && personName.toLocaleLowerCase('fr-CH') !== document.customer.displayName.trim().toLocaleLowerCase('fr-CH')
-    ? personName
-    : null
+  const customerContactName = formatCustomerContactName(document.customer)
   const paidAmount = payments.reduce((total, payment) => total + payment.amount, 0)
   const isPayableDocument = document.settlement?.isPayable ?? (isPayableDocumentType(document.type) && document.status !== 'cancelled')
   const balanceDue = document.settlement?.balanceDue ?? (isPayableDocument ? Math.max(document.total - (document.creditedTotal || 0) - paidAmount, 0) : 0)

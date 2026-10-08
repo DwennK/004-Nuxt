@@ -15,16 +15,15 @@ import { getSwissHolidaySet, isWorkingDay } from '~~/shared/utils/pos'
 import type { PosDatabaseExecutor } from '../turso'
 import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
-import { normalizeOptionalText } from '~~/shared/lib/text'
+import { nameInitials, normalizeOptionalText } from '~~/shared/lib/text'
 
 function mapEmployee(row: typeof employees.$inferSelect): EmployeeRecord {
-  const displayName = [row.firstName, row.lastName].filter(Boolean).join(' ').trim() || 'Employé'
-  const initials = ((row.firstName?.[0] || '') + (row.lastName?.[0] || '')).toUpperCase() || '?'
+  const displayName = row.name.trim() || 'Employé'
+  const initials = nameInitials(row.name)
 
   return {
     id: row.id,
-    firstName: row.firstName,
-    lastName: row.lastName,
+    name: row.name,
     email: row.email,
     color: row.color,
     displayName,
@@ -59,7 +58,7 @@ export async function listEmployees() {
 
   const rows = await db.select()
     .from(employees)
-    .orderBy(asc(employees.lastName), asc(employees.firstName))
+    .orderBy(asc(employees.name))
 
   return rows.map(mapEmployee)
 }
@@ -79,8 +78,7 @@ export async function getEmployeeById(id: number) {
 }
 
 export async function createEmployee(input: {
-  firstName: string
-  lastName: string
+  name: string
   email?: string | null
   color: string
   vacationDaysPerYear?: number
@@ -91,8 +89,7 @@ export async function createEmployee(input: {
   const now = new Date().toISOString()
 
   const rows = await db.insert(employees).values({
-    firstName: input.firstName.trim(),
-    lastName: input.lastName.trim(),
+    name: input.name.trim(),
     email: normalizeOptionalText(input.email),
     color: input.color,
     vacationDaysPerYear: input.vacationDaysPerYear ?? 25,
@@ -105,8 +102,7 @@ export async function createEmployee(input: {
 }
 
 export async function updateEmployee(id: number, input: {
-  firstName?: string
-  lastName?: string
+  name?: string
   email?: string | null
   color?: string
   vacationDaysPerYear?: number
@@ -122,8 +118,7 @@ export async function updateEmployee(id: number, input: {
 
   const rows = await db.update(employees)
     .set({
-      firstName: input.firstName?.trim() ?? existing[0].firstName,
-      lastName: input.lastName?.trim() ?? existing[0].lastName,
+      name: input.name?.trim() ?? existing[0].name,
       email: input.email !== undefined ? normalizeOptionalText(input.email) : existing[0].email,
       color: input.color ?? existing[0].color,
       vacationDaysPerYear: input.vacationDaysPerYear ?? existing[0].vacationDaysPerYear,
@@ -169,8 +164,7 @@ export async function listVacationEntries(filters?: { year?: number, employeeId?
 
   const rows = await db.select({
     entry: vacationEntries,
-    employeeFirstName: employees.firstName,
-    employeeLastName: employees.lastName,
+    employeeName: employees.name,
     employeeColor: employees.color
   })
     .from(vacationEntries)
@@ -179,8 +173,8 @@ export async function listVacationEntries(filters?: { year?: number, employeeId?
     .orderBy(asc(vacationEntries.startDate))
 
   return rows.map((row): VacationEntryListItem => {
-    const name = [row.employeeFirstName, row.employeeLastName].filter(Boolean).join(' ').trim()
-    const initials = ((row.employeeFirstName?.[0] || '') + (row.employeeLastName?.[0] || '')).toUpperCase()
+    const name = row.employeeName.trim()
+    const initials = nameInitials(row.employeeName)
 
     return {
       ...mapVacationEntry(row.entry),
@@ -292,7 +286,7 @@ export async function getVacationSummariesByYear(year: number): Promise<Employee
   await ensurePosSchema()
   const db = useDb()
 
-  const allEmployees = await db.select().from(employees).where(eq(employees.isActive, true)).orderBy(asc(employees.lastName))
+  const allEmployees = await db.select().from(employees).where(eq(employees.isActive, true)).orderBy(asc(employees.name))
   const entries = await db.select()
     .from(vacationEntries)
     .where(and(
@@ -354,7 +348,7 @@ export async function getVacationYearData(year: number): Promise<VacationYearDat
   // The calendar, employee table and annual balances share these two reads.
   // A batch also keeps them on the same snapshot during concurrent edits.
   const [employeeRows, entryRows] = await db.batch([
-    db.select().from(employees).orderBy(asc(employees.lastName), asc(employees.firstName)),
+    db.select().from(employees).orderBy(asc(employees.name)),
     db.select().from(vacationEntries)
       .where(and(
         lte(vacationEntries.startDate, `${year}-12-31`),
@@ -373,9 +367,9 @@ export async function getVacationYearData(year: number): Promise<VacationYearDat
 
     entries.push({
       ...mapVacationEntry(entry),
-      employeeName: [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim(),
+      employeeName: employee.name.trim(),
       employeeColor: employee.color,
-      employeeInitials: ((employee.firstName?.[0] || '') + (employee.lastName?.[0] || '')).toUpperCase()
+      employeeInitials: nameInitials(employee.name)
     })
   }
 

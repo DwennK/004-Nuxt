@@ -32,7 +32,7 @@ describe('POS suggestions preserve search results without financial aggregation'
     client = createClient({ url: `file:${join(directory, 'test.sqlite')}` })
     await client.executeMultiple(`
       CREATE TABLE customers (
-        id INTEGER PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL, company_name TEXT,
+        id INTEGER PRIMARY KEY, name TEXT NOT NULL DEFAULT '', company_name TEXT,
         phone TEXT NOT NULL, email TEXT NOT NULL, address_line_1 TEXT, address_line_2 TEXT, postal_code TEXT,
         city TEXT, notes TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
       );
@@ -72,10 +72,10 @@ describe('POS suggestions preserve search results without financial aggregation'
     db = drizzle({ client, relations: defineRelations(schema), logger: { logQuery: query => queries.push(query) } })
     context.db = db
     await db.insert(schema.customers).values([
-      { id: 1, firstName: 'Ada', lastName: 'Lovelace', companyName: null, phone: '0790001234', email: 'ada@example.test' },
-      { id: 2, firstName: 'Grace', lastName: 'Hopper', companyName: 'Ada atelier', phone: '0792223344', email: 'grace@example.test' },
-      { id: 3, firstName: 'Ada', lastName: '', companyName: '', phone: '0791112233', email: 'ada-other@example.test' },
-      { id: 4, firstName: 'Marc', lastName: 'Zada', companyName: 'TIC-Services', phone: '0796667788', email: 'marc@example.test' }
+      { id: 1, name: 'Ada Lovelace', companyName: null, phone: '0790001234', email: 'ada@example.test' },
+      { id: 2, name: 'Grace Hopper', companyName: 'Ada atelier', phone: '0792223344', email: 'grace@example.test' },
+      { id: 3, name: 'Ada', companyName: '', phone: '0791112233', email: 'ada-other@example.test' },
+      { id: 4, name: 'Marc Zada', companyName: 'TIC-Services', phone: '0796667788', email: 'marc@example.test' }
     ])
     await db.insert(schema.tickets).values(Array.from({ length: 12 }, (_, index) => ({
       id: index + 1,
@@ -138,13 +138,27 @@ describe('POS suggestions preserve search results without financial aggregation'
   })
 
   it('finds full customer names in either order in lists and suggestions', async () => {
-    await db.insert(schema.customers).values({ id: 50, firstName: 'Élodie', lastName: 'Müller', phone: '', email: '' })
+    await db.insert(schema.customers).values({ id: 50, name: 'Élodie Müller', phone: '', email: '' })
     for (const search of ['Ada Lovelace', 'Lovelace Ada', 'elodie muller', 'MÜLLER ÉLODIE']) {
       const expectedId = search.includes('Ada') ? 1 : 50
       expect((await suggestCustomers({ search })).items.map(row => row.id)).toEqual([expectedId])
       const list = await listCustomers({ search, pageSize: 1 })
       expect(list.total).toBe(1)
       expect(list.items.map(row => row.id)).toEqual([expectedId])
+    }
+  })
+
+  it('finds company contacts by complete name in either order across POS lists', async () => {
+    for (const q of ['Grace Hopper', 'hopper grace']) {
+      expect((await suggestCustomers({ search: q })).items.map(row => row.id)).toEqual([2])
+      const tickets = await listTickets({ q, pageSize: 50 })
+      expect(tickets.items.length).toBeGreaterThan(0)
+      expect(tickets.items.every(row => row.customerName === 'Ada atelier')).toBe(true)
+      expect((await suggestTickets({ q, pageSize: 50 })).items.map(row => row.id)).toEqual(tickets.items.map(row => row.id))
+      const documents = await listDocuments({ q, pageSize: 50 })
+      expect(documents.items.length).toBeGreaterThan(0)
+      expect(documents.items.every(row => row.customerName === 'Ada atelier')).toBe(true)
+      expect((await suggestDocuments({ q, pageSize: 50 })).items.map(row => row.id)).toEqual(documents.items.map(row => row.id))
     }
   })
 
@@ -174,7 +188,7 @@ describe('POS suggestions preserve search results without financial aggregation'
   it('resolves exact and legacy references before prefix matches', async () => {
     expect((await suggestTickets({ q: 'DOS-12', pageSize: 2 })).items.map(item => item.id)).toEqual([1, 12])
     expect((await suggestDocuments({ q: 'FAC-12', pageSize: 2 })).items.map(item => item.id)).toEqual([1, 2])
-    expect((await suggestCustomers({ search: 'ada', pageSize: 2 })).items.map(item => item.id)).toEqual([3, 2])
+    expect((await suggestCustomers({ search: 'ada', pageSize: 2 })).items.map(item => item.id)).toEqual([3, 1])
   })
 
   it.each([
@@ -182,8 +196,8 @@ describe('POS suggestions preserve search results without financial aggregation'
     ['Àlâñ', 'Alan'], ['ÉÈÊËéèêë', 'eeeeeeee'], ['ÎÏîï', 'iiii'],
     ['ÔÖôö', 'oooo'], ['ÙÚÛÜùúûü', 'uuuuuuuu'], ['Ÿÿ', 'yy'], ['Šimon', 'Simon']
   ])('finds customers with or without accents in both directions: %s / %s', async (plain, accented) => {
-    await db.update(schema.customers).set({ firstName: plain, lastName: '', companyName: null }).where(eq(schema.customers.id, 1))
-    await db.update(schema.customers).set({ firstName: accented, lastName: '', companyName: null }).where(eq(schema.customers.id, 2))
+    await db.update(schema.customers).set({ name: plain, companyName: null }).where(eq(schema.customers.id, 1))
+    await db.update(schema.customers).set({ name: accented, companyName: null }).where(eq(schema.customers.id, 2))
     const variants = [plain, accented, plain.toUpperCase(), accented.toUpperCase(), accented.normalize('NFD')]
     const expectedIds = (await suggestCustomers({ search: plain })).items.map(item => item.id)
     expect([...expectedIds].sort()).toEqual([1, 2])
@@ -201,11 +215,11 @@ describe('POS suggestions preserve search results without financial aggregation'
       expect((await listPayments({ search })).total).toBe(2)
     }
     // Searching never rewrites the original spelling.
-    expect((await db.select().from(schema.customers).where(eq(schema.customers.id, 2)))[0]?.firstName).toBe(accented)
+    expect((await db.select().from(schema.customers).where(eq(schema.customers.id, 2)))[0]?.name).toBe(accented)
   })
 
   it('matches company names, surnames and accented issue descriptions', async () => {
-    await db.update(schema.customers).set({ lastName: 'Façonné', companyName: 'Société Noël' }).where(eq(schema.customers.id, 1))
+    await db.update(schema.customers).set({ name: 'Façonné', companyName: 'Société Noël' }).where(eq(schema.customers.id, 1))
     expect((await suggestCustomers({ search: 'faconne' })).items.map(item => item.id)).toEqual([1])
     for (const search of ['societe noel', 'SOCIÉTÉ NOËL']) {
       expect((await suggestCustomers({ search })).items.map(item => item.id)).toEqual([1])

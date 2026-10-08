@@ -1,4 +1,4 @@
-import { searchEquals, searchLike } from './search'
+import { searchEquals, searchLike, searchName } from './search'
 import { foldSearchText } from '~~/shared/utils/search'
 import { getActivePayableDocument } from '~~/shared/domain/documents/settlement'
 import { dossierEventLabel } from '~~/shared/utils/dossier-labels'
@@ -621,7 +621,7 @@ function ticketSearchQuery(filters?: TicketListFilters) {
   const referenceTerm = dossierReferenceTerm(searchTerm)
   const referenceColumn = dossierReferenceSearch(sql`${tickets.ticketNumber}`)
 
-  const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
+  const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), ${customers.name})`
   const relevanceOrder = searchTerm
     ? sql<number>`case
         when ${referenceColumn} = ${referenceTerm} then 0
@@ -643,6 +643,7 @@ function ticketSearchQuery(filters?: TicketListFilters) {
       ? or(
           sql`${referenceColumn} like ${`%${referenceTerm}%`}`,
           searchLike(customerNameValue, searchPattern),
+          searchName(customers.name, searchTerm),
           searchLike(customers.phone, searchPattern),
           searchLike(sql`coalesce(${tickets.brand}, '')`, searchPattern),
           searchLike(sql`coalesce(${tickets.model}, '')`, searchPattern),
@@ -677,7 +678,7 @@ export async function suggestTickets(filters: Pick<TicketListFilters, 'q' | 'pag
     model: tickets.model,
     serialNumber: tickets.serialNumber,
     imei: tickets.imei,
-    customerName: sql<string>`coalesce(nullif(${customers.companyName}, ''), ${customers.firstName} || ' ' || ${customers.lastName})`
+    customerName: sql<string>`coalesce(nullif(${customers.companyName}, ''), ${customers.name})`
   }).from(tickets)
     .innerJoin(customers, eq(tickets.customerId, customers.id))
     .where(whereClause)
@@ -742,7 +743,7 @@ export async function listTickets(filters?: TicketListFilters): Promise<TicketLi
   return {
     items: orderedRows.map((row): TicketListItem => ({
       ...mapTicket(row.ticket),
-      customerName: row.customer.companyName || `${row.customer.firstName} ${row.customer.lastName}`,
+      customerName: row.customer.companyName || row.customer.name,
       documentCount: Number(row.documentCount || 0),
       openSavCount: Number(row.openSavCount || 0)
     })),

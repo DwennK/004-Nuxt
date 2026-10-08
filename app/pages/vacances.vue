@@ -20,7 +20,7 @@ const UDropdownMenu = resolveComponent('UDropdownMenu')
 const toast = useToast()
 const { can } = useCapabilities()
 
-type EmployeeFormPayload = Pick<EmployeeRecord, 'firstName' | 'lastName' | 'color' | 'vacationDaysPerYear' | 'isActive'> & {
+type EmployeeFormPayload = Pick<EmployeeRecord, 'name' | 'color' | 'vacationDaysPerYear' | 'isActive'> & {
   email: string
 }
 
@@ -64,8 +64,7 @@ const employeeSorting = ref([{ id: 'displayName', desc: false }])
 const editingEmployeeForm = computed(() => {
   if (!editingEmployee.value) return undefined
   return {
-    firstName: editingEmployee.value.firstName,
-    lastName: editingEmployee.value.lastName,
+    name: editingEmployee.value.name,
     email: editingEmployee.value.email,
     color: editingEmployee.value.color,
     vacationDaysPerYear: editingEmployee.value.vacationDaysPerYear,

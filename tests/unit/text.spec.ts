@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeOptionalText, normalizeRequiredText, splitLegacyName } from '../../shared/lib/text'
+import { normalizeOptionalText, normalizeRequiredText, nameInitials } from '../../shared/lib/text'
 
 describe('shared text normalization', () => {
   it('normalizes optional text without inventing a value', () => {
@@ -14,12 +14,10 @@ describe('shared text normalization', () => {
     expect(normalizeRequiredText('   ')).toBe('')
   })
 
-  it('keeps the legacy first-name and last-name split behavior', () => {
-    expect(splitLegacyName(null)).toEqual({ firstName: '', lastName: 'Customer' })
-    expect(splitLegacyName('  Prince  ')).toEqual({ firstName: '', lastName: 'Prince' })
-    expect(splitLegacyName('Ada Byron Lovelace')).toEqual({
-      firstName: 'Ada Byron',
-      lastName: 'Lovelace'
-    })
+  it('derives initials without splitting or rewriting the stored name', () => {
+    expect(nameInitials('')).toBe('?')
+    expect(nameInitials('  Prince  ')).toBe('P')
+    expect(nameInitials('Ada Byron Lovelace')).toBe('AL')
+    expect(nameInitials('Élodie Müller')).toBe('ÉM')
   })
 })

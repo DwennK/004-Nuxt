@@ -421,7 +421,7 @@ function createCounterQueries(db: PosDatabase, date: string) {
         t.closed_at AS "closedAt",
         t.created_at AS "createdAt",
         t.updated_at AS "updatedAt",
-        coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS "customerName",
+        coalesce(nullif(c.company_name, ''), c.name) AS "customerName",
         count(d.id) AS "documentCount"
       FROM tickets t
       INNER JOIN customers c ON c.id = t.customer_id
@@ -462,7 +462,7 @@ function createHomeQueries(db: PosDatabase, date: string) {
     WITH ${settlementCtes(sql`SELECT * FROM documents WHERE type IN ('customer_order', 'invoice') AND status != 'cancelled'`)},
     due AS MATERIALIZED (
       SELECT d.id, d.document_number, d.type, d.issued_at, d.total, d.balance_due,
-        coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS customer_name
+        coalesce(nullif(c.company_name, ''), c.name) AS customer_name
       FROM settled_documents d INNER JOIN customers c ON c.id = d.customer_id
       WHERE d.balance_due > 0
     )
@@ -488,7 +488,7 @@ function createHomeQueries(db: PosDatabase, date: string) {
     SELECT
       t.id,
       t.ticket_number AS "ticketNumber",
-      coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS "customerName",
+      coalesce(nullif(c.company_name, ''), c.name) AS "customerName",
       t.issue_description AS "issueDescription",
       t.brand,
       t.model,
@@ -505,7 +505,7 @@ function createHomeQueries(db: PosDatabase, date: string) {
       p.id,
       d.id AS "documentId",
       d.document_number AS "documentNumber",
-      coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS "customerName",
+      coalesce(nullif(c.company_name, ''), c.name) AS "customerName",
       p.amount,
       p.method,
       p.paid_at AS "paidAt"
@@ -529,7 +529,7 @@ function createHomeQueries(db: PosDatabase, date: string) {
       t.status,
       t.brand,
       t.model,
-      coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS "customerName"
+      coalesce(nullif(c.company_name, ''), c.name) AS "customerName"
     FROM ticket_events e
     INNER JOIN tickets t ON t.id = e.ticket_id
     INNER JOIN customers c ON c.id = t.customer_id

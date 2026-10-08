@@ -81,7 +81,7 @@ describe('printed customer identity', () => {
   it('prints the company and its contact before the postal address', () => {
     const document = printDocument()
     Object.assign(document.customer, {
-      firstName: 'Gregory', lastName: 'Bersac', companyName: 'Les Brasseurs',
+      name: 'Gregory Bersac', companyName: 'Les Brasseurs',
       displayName: 'Les Brasseurs', addressLine1: 'Faubourg du Lac 1'
     })
 
@@ -99,8 +99,8 @@ describe('printed customer identity', () => {
   })
 
   it.each([
-    { firstName: '', lastName: '' },
-    { firstName: ' Les ', lastName: ' BRASSEURS ' }
+    { name: '' },
+    { name: ' Les   BRASSEURS ' }
   ])('omits empty or duplicate company contacts: %j', (name) => {
     const document = printDocument()
     Object.assign(document.customer, name, { companyName: 'Les Brasseurs', displayName: 'Les Brasseurs' })

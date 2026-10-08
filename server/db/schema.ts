@@ -68,8 +68,7 @@ export const dossierHandovers = sqliteTable('dossier_handovers', {
 
 export const customers = sqliteTable('customers', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  firstName: text('first_name').notNull(),
-  lastName: text('last_name').notNull(),
+  name: text('name').notNull().default(''),
   companyName: text('company_name'),
   phone: text('phone').notNull(),
   email: text('email').notNull(),
@@ -83,8 +82,7 @@ export const customers = sqliteTable('customers', {
 }, table => ({
   emailIdx: index('customers_email_idx').on(table.email),
   normalizedEmailIdx: index('customers_normalized_email_idx').on(sql`lower(trim(${table.email}))`),
-  lastNameIdx: index('customers_last_name_idx').on(table.lastName),
-  nameOrderIdx: index('customers_name_order_idx').on(table.lastName, table.firstName, table.id),
+  nameOrderIdx: index('customers_name_order_idx').on(table.name, table.id),
   phoneIdx: index('customers_phone_idx').on(table.phone)
 }))
 
@@ -353,8 +351,7 @@ export const smartphoneStocks = sqliteTable('smartphone_stocks', {
 
 export const employees = sqliteTable('employees', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  firstName: text('first_name').notNull(),
-  lastName: text('last_name').notNull(),
+  name: text('name').notNull().default(''),
   email: text('email'),
   color: text('color').notNull(),
   vacationDaysPerYear: integer('vacation_days_per_year').notNull().default(25),
@@ -362,7 +359,7 @@ export const employees = sqliteTable('employees', {
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, table => ({
-  lastNameIdx: index('employees_last_name_idx').on(table.lastName),
+  nameIdx: index('employees_name_idx').on(table.name),
   activeIdx: index('employees_is_active_idx').on(table.isActive)
 }))
 

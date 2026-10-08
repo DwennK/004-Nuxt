@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { CustomerFormValue, CustomerRecord } from '~~/shared/types/pos'
 import type { CustomerSuggestionsResponse } from '~~/shared/types/lookups'
+import { matchesCustomerSearch } from '~~/shared/utils/search'
+import { formatCustomerContactName } from '~~/shared/utils/pos'
 
 type CustomerSelectItem = CustomerRecord & {
   label: string
@@ -26,7 +28,6 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
-const formId = `customer-inline-${useId()}`
 const menuOpen = ref(false)
 const createOpen = ref(false)
 const editOpen = ref(false)
@@ -34,7 +35,6 @@ const editingCustomer = ref<CustomerRecord | null>(null)
 const updatedCustomers = ref<CustomerRecord[]>([])
 const { isSaving: isEditing, saveError: editError, save: saveEdit, clearSaveError: clearEditError } = useFormAction()
 const customerSelect = useTemplateRef<{ inputRef?: HTMLInputElement }>('customerSelect')
-const focusReturn = usePosFocusReturn(createOpen, () => customerSelect.value?.inputRef)
 const isSaving = ref(false)
 const saveError = ref<string | null>(null)
 const searchTerm = ref('')
@@ -71,7 +71,7 @@ const customersList = computed(() => {
 
 const customerItems = computed<CustomerSelectItem[]>(() => customersList.value.map((customer) => {
   const secondaryInfo = [
-    customer.companyName && customer.companyName !== customer.displayName ? customer.companyName : null,
+    formatCustomerContactName(customer),
     customer.phone,
     customer.email
   ].filter(Boolean)
@@ -87,7 +87,9 @@ const trimmedSearch = computed(() => searchTerm.value.trim())
 const debouncedSearch = refDebounced(trimmedSearch, 250)
 const canSearch = computed(() => trimmedSearch.value.length >= 2)
 const searchPending = computed(() => canSearch.value && (trimmedSearch.value !== debouncedSearch.value || remoteSearchPending.value))
-const visibleCustomerItems = computed(() => canSearch.value ? customerItems.value : [])
+const visibleCustomerItems = computed(() => canSearch.value
+  ? customerItems.value.filter(customer => matchesCustomerSearch(customer, trimmedSearch.value))
+  : [])
 const selectedCustomer = computed(() => customerItems.value.find(customer => customer.id === props.modelValue))
 
 watch([debouncedSearch, trimmedSearch], async ([term, currentTerm], _previous, onCleanup) => {
@@ -184,12 +186,10 @@ const quickInitialValue = computed<CustomerFormValue>(() => {
     remaining = remaining.replace(phoneMatch[0], ' ')
   }
 
-  const displayName = remaining.replace(/\s+/g, ' ').trim()
+  const name = remaining.replace(/\s+/g, ' ').trim()
 
   return {
-    displayName,
-    firstName: '',
-    lastName: '',
+    name,
     companyName: '',
     phone: phoneMatch?.[0]?.trim() || '',
     email: emailMatch?.[0]?.trim() || '',
@@ -314,7 +314,7 @@ onBeforeUnmount(() => {
       :placeholder="placeholder"
       name="customer-lookup"
       :spellcheck="false"
-      :filter-fields="['displayName', 'companyName', 'phone', 'email', 'label', 'description']"
+      ignore-filter
       :clear="!disabled"
       :disabled="disabled"
       :loading="searchPending"
@@ -391,50 +391,16 @@ onBeforeUnmount(() => {
       @save="saveCustomer"
     />
 
-    <USlideover
+    <PosCustomerSlideover
       v-model:open="createOpen"
-      :content="focusReturn"
       title="Créer un client"
-      side="right"
-      :dismissible="!isSaving"
-      :close="!isSaving"
-      :ui="{
-        content: 'max-w-lg',
-        body: 'space-y-5 overflow-y-auto',
-        footer: 'border-t border-default bg-default/95 backdrop-blur supports-[backdrop-filter]:bg-default/80'
-      }"
-    >
-      <template #body>
-        <PosCustomerForm
-          :form-id="formId"
-          :saving="isSaving"
-          :save-error="saveError"
-          mode="quick"
-          :show-submit="false"
-          submit-label="Créer et sélectionner"
-          :initial-value="quickInitialValue"
-          @save="createCustomer"
-        />
-      </template>
-
-      <template #footer>
-        <div class="flex items-center justify-end gap-3">
-          <UButton
-            label="Annuler"
-            color="neutral"
-            variant="ghost"
-            :disabled="isSaving"
-            @click="createOpen = false"
-          />
-          <UButton
-            :form="formId"
-            type="submit"
-            :label="isSaving ? 'Enregistrement…' : 'Créer et sélectionner'"
-            icon="i-lucide-user-plus"
-            :loading="isSaving"
-          />
-        </div>
-      </template>
-    </USlideover>
+      submit-label="Créer et sélectionner"
+      submit-icon="i-lucide-user-plus"
+      :return-focus="() => customerSelect?.inputRef"
+      :saving="isSaving"
+      :save-error="saveError"
+      :initial-value="quickInitialValue"
+      @save="createCustomer"
+    />
   </div>
 </template>

@@ -138,9 +138,7 @@ const customerForm = computed(() => {
   if (!customer) return undefined
 
   return {
-    displayName: customer.displayName,
-    firstName: customer.firstName,
-    lastName: customer.lastName,
+    name: customer.name,
     companyName: customer.companyName || '',
     phone: customer.phone,
     email: customer.email,

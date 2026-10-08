@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { employeeColorPalette } from '~~/shared/constants/pos'
 import type { EmployeeRecord } from '~~/shared/types/pos'
 
-type EmployeeFormValue = Partial<Pick<EmployeeRecord, 'firstName' | 'lastName' | 'email' | 'color' | 'vacationDaysPerYear' | 'isActive'>>
-type EmployeeFormState = Pick<EmployeeRecord, 'firstName' | 'lastName' | 'color' | 'vacationDaysPerYear' | 'isActive'> & {
+type EmployeeFormValue = Partial<Pick<EmployeeRecord, 'name' | 'email' | 'color' | 'vacationDaysPerYear' | 'isActive'>>
+type EmployeeFormState = Pick<EmployeeRecord, 'name' | 'color' | 'vacationDaysPerYear' | 'isActive'> & {
   email: string
 }
 
@@ -21,8 +21,7 @@ const emit = defineEmits<{
 }>()
 
 const schema = z.object({
-  firstName: z.string().trim().min(1, 'Le prénom est obligatoire'),
-  lastName: z.string().trim().min(1, 'Le nom est obligatoire'),
+  name: z.string().trim().min(1, 'Le nom est obligatoire'),
   email: z.string().optional().default(''),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Couleur invalide'),
   vacationDaysPerYear: z.coerce.number().int().min(0).max(365).default(25),
@@ -30,8 +29,7 @@ const schema = z.object({
 })
 
 const state = reactive<EmployeeFormState>({
-  firstName: '',
-  lastName: '',
+  name: '',
   email: '',
   color: employeeColorPalette[0]!,
   vacationDaysPerYear: 25,
@@ -39,8 +37,7 @@ const state = reactive<EmployeeFormState>({
 })
 
 watchEffect(() => {
-  state.firstName = props.initialValue.firstName || ''
-  state.lastName = props.initialValue.lastName || ''
+  state.name = props.initialValue.name || ''
   state.email = props.initialValue.email || ''
   state.color = props.initialValue.color || employeeColorPalette[0]!
   state.vacationDaysPerYear = props.initialValue.vacationDaysPerYear ?? 25
@@ -59,20 +56,14 @@ function onSubmit() {
     class="space-y-5"
     @submit="onSubmit"
   >
-    <div class="grid gap-4 md:grid-cols-2">
-      <UFormField label="Prénom" name="firstName">
-        <UInput
-          v-bind="posInputAttrs"
-          v-model="state.firstName"
-          class="w-full"
-          autofocus
-        />
-      </UFormField>
-
-      <UFormField label="Nom" name="lastName">
-        <UInput v-bind="posInputAttrs" v-model="state.lastName" class="w-full" />
-      </UFormField>
-    </div>
+    <UFormField label="Nom" name="name">
+      <UInput
+        v-bind="posInputAttrs"
+        v-model="state.name"
+        class="w-full"
+        autofocus
+      />
+    </UFormField>
 
     <UFormField label="E-mail" name="email" hint="Optionnel">
       <UInput

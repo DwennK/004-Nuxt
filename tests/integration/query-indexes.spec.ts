@@ -13,7 +13,9 @@ describe('query read indexes', () => {
       await client.execute(`CREATE TABLE "${name}" (${table.columns.map(column => `"${column.name}" ${column.type}${column.primaryKey ? ' PRIMARY KEY' : ''}`).join(', ')})`)
     }
     const migration = readFileSync(new URL('../../drizzle/20260911095852_query_read_indexes/migration.sql', import.meta.url), 'utf8')
-    await client.batch(migration.split('--> statement-breakpoint').filter(Boolean), 'write')
+    // The historical two-column customer index is replaced by the name migration.
+    await client.batch(migration.split('--> statement-breakpoint').filter(statement => statement.trim() && !statement.includes('customers_name_order_idx')), 'write')
+    await client.execute('CREATE INDEX customers_name_order_idx ON customers(name, id)')
   })
 
   afterAll(() => client.close())
@@ -24,7 +26,7 @@ describe('query read indexes', () => {
     ['SELECT id FROM documents WHERE ticket_id=42 AND customer_id=8 AND type=\'invoice\' AND status!=\'cancelled\'', 'documents_settlement_scope_idx'],
     ['SELECT id FROM documents WHERE type=\'invoice\' ORDER BY issued_at DESC, id DESC LIMIT 50', 'documents_type_issued_at_id_idx'],
     ['SELECT id FROM customers WHERE lower(trim(email))=\'client@example.test\' LIMIT 2', 'customers_normalized_email_idx'],
-    ['SELECT id FROM customers ORDER BY last_name, first_name, id LIMIT 50', 'customers_name_order_idx'],
+    ['SELECT id FROM customers ORDER BY name, id LIMIT 50', 'customers_name_order_idx'],
     ['SELECT id FROM catalog_items WHERE type=\'repair\' ORDER BY category, name, id LIMIT 50', 'catalog_items_type_order_idx'],
     ['SELECT id FROM smartphone_stocks WHERE sold=0 ORDER BY id DESC LIMIT 10', 'smartphone_stocks_sold_id_idx'],
     ['SELECT id FROM smartphone_reservation_requests WHERE status=\'pending\' ORDER BY requested_at DESC, id DESC LIMIT 10', 'smartphone_reservation_requests_status_requested_at_id_idx'],

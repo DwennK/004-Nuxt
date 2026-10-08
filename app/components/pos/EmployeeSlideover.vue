@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { EmployeeRecord } from '~~/shared/types/pos'
 
-type EmployeeFormValue = Partial<Pick<EmployeeRecord, 'firstName' | 'lastName' | 'email' | 'color' | 'vacationDaysPerYear' | 'isActive'>>
-type EmployeeFormPayload = Pick<EmployeeRecord, 'firstName' | 'lastName' | 'color' | 'vacationDaysPerYear' | 'isActive'> & {
+type EmployeeFormValue = Partial<Pick<EmployeeRecord, 'name' | 'email' | 'color' | 'vacationDaysPerYear' | 'isActive'>>
+type EmployeeFormPayload = Pick<EmployeeRecord, 'name' | 'color' | 'vacationDaysPerYear' | 'isActive'> & {
   email: string
 }
 

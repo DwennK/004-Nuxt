@@ -4,10 +4,10 @@ import { customerInputSchema } from '../../shared/validation/pos'
 describe('customer validation', () => {
   it('accepts a counter customer without an email property', () => {
     expect(customerInputSchema.parse({
-      displayName: 'Client comptoir',
+      name: 'Client comptoir',
       notes: 'Client créé automatiquement pour les ventes rapides sans client nominatif.'
     })).toMatchObject({
-      displayName: 'Client comptoir',
+      name: 'Client comptoir',
       email: null
     })
   })
@@ -18,19 +18,19 @@ describe('customer validation', () => {
     { label: 'null', email: null }
   ])('normalizes $label to null', ({ email }) => {
     expect(customerInputSchema.parse({
-      displayName: 'Client test',
+      name: 'Client test',
       email
     }).email).toBeNull()
   })
 
   it('normalizes a valid email and rejects an invalid one', () => {
     expect(customerInputSchema.parse({
-      displayName: 'Client test',
+      name: 'Client test',
       email: ' client@example.com '
     }).email).toBe('client@example.com')
 
     expect(customerInputSchema.safeParse({
-      displayName: 'Client test',
+      name: 'Client test',
       email: 'client-invalide'
     }).success).toBe(false)
   })

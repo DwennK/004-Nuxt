@@ -31,7 +31,7 @@ describe('shared annual vacation data', () => {
     context.db = drizzle({ client, relations: defineRelations(schema) })
     await client.batch([
       `CREATE TABLE employees (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
+        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL DEFAULT '',
         email TEXT, color TEXT NOT NULL, vacation_days_per_year INTEGER NOT NULL,
         is_active INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
       )`,
@@ -53,9 +53,9 @@ describe('shared annual vacation data', () => {
   })
 
   async function seedYear() {
-    const inactive = await createEmployee({ firstName: 'Zoé', lastName: 'Zulu', color: '#666666', isActive: false })
-    const active = await createEmployee({ firstName: 'Ada', lastName: 'Alpha', color: '#008000', vacationDaysPerYear: 20 })
-    const withoutAbsences = await createEmployee({ firstName: 'Bruno', lastName: 'Bravo', color: '#0088ff' })
+    const inactive = await createEmployee({ name: 'Zoé Zulu', color: '#666666', isActive: false })
+    const active = await createEmployee({ name: 'Ada Alpha', color: '#008000', vacationDaysPerYear: 20 })
+    const withoutAbsences = await createEmployee({ name: 'Bruno Bravo', color: '#0088ff' })
 
     const spanningYear = await createVacationEntry({ employeeId: active.id, startDate: '2025-12-29', endDate: '2026-01-05', status: 'approved' })
     const halfDay = await createVacationEntry({ employeeId: active.id, startDate: '2026-02-03', endDate: '2026-02-03', type: 'half_day_am', status: 'pending' })
@@ -69,8 +69,8 @@ describe('shared annual vacation data', () => {
   }
 
   it('rejects duplicate or overlapping absences but permits complementary half days and other employees', async () => {
-    const employee = await createEmployee({ firstName: 'Ada', lastName: 'Test', color: '#008000' })
-    const other = await createEmployee({ firstName: 'Bob', lastName: 'Test', color: '#008000' })
+    const employee = await createEmployee({ name: 'Ada Test', color: '#008000' })
+    const other = await createEmployee({ name: 'Bob Test', color: '#008000' })
     const entry = { employeeId: employee.id, startDate: '2026-09-21', endDate: '2026-09-21', status: 'approved' as const }
     const original = await createVacationEntry(entry)
     await expect(createVacationEntry(entry)).rejects.toMatchObject({ statusCode: 409 })
@@ -89,7 +89,7 @@ describe('shared annual vacation data', () => {
   })
 
   it('deduplicates historical overlaps without modifying entries or counting rejected and nonworking days', async () => {
-    const employee = await createEmployee({ firstName: 'Ada', lastName: 'Test', color: '#008000' })
+    const employee = await createEmployee({ name: 'Ada Test', color: '#008000' })
     const entry = { employeeId: employee.id, startDate: '2026-09-21', endDate: '2026-09-22', status: 'approved' as const }
     await createVacationEntry(entry)
     // Simulate entries saved before overlap validation existed.
@@ -141,13 +141,13 @@ describe('shared annual vacation data', () => {
   it('returns fresh names, colors, allowances and absence balances after writes', async () => {
     const { active, halfDay } = await seedYear()
     await getVacationYearData(2026)
-    await updateEmployee(active.id, { firstName: 'Aline', color: '#ff0000', vacationDaysPerYear: 30 })
+    await updateEmployee(active.id, { name: 'Aline', color: '#ff0000', vacationDaysPerYear: 30 })
     await updateVacationEntry(halfDay.id, { status: 'approved' })
 
     const result = await getVacationYearData(2026)
 
-    expect(result.employees[0]).toMatchObject({ firstName: 'Aline', color: '#ff0000', vacationDaysPerYear: 30 })
-    expect(result.entries.find(entry => entry.id === halfDay.id)).toMatchObject({ employeeName: 'Aline Alpha', employeeColor: '#ff0000', status: 'approved' })
+    expect(result.employees[0]).toMatchObject({ name: 'Aline', color: '#ff0000', vacationDaysPerYear: 30 })
+    expect(result.entries.find(entry => entry.id === halfDay.id)).toMatchObject({ employeeName: 'Aline', employeeColor: '#ff0000', status: 'approved' })
     expect(result.summaries[0]).toMatchObject({ totalDays: 30, usedDays: 3, pendingDays: 0, remainingDays: 27 })
   })
 

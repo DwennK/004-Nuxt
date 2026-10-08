@@ -193,8 +193,7 @@ function buildCustomerFixtures() {
       : null
 
     return {
-      first_name: firstName,
-      last_name: lastName,
+      name: `${firstName} ${lastName}`,
       company_name: companyName,
       phone: `+41 79 ${String(100 + (index % 900)).padStart(3, '0')} ${String(10 + (index % 90)).padStart(2, '0')} ${String(10 + ((index * 7) % 90)).padStart(2, '0')}`,
       email: `fixture-customer-${index + 1}@${FIXTURE_DOMAIN}`,
@@ -360,8 +359,7 @@ async function insertCustomers() {
 
   for (const rowsChunk of chunk(rows, 100)) {
     const statement = buildInsertStatement('customers', [
-      'first_name',
-      'last_name',
+      'name',
       'company_name',
       'phone',
       'email',
@@ -372,13 +370,12 @@ async function insertCustomers() {
       'notes',
       'created_at',
       'updated_at'
-    ], rowsChunk, ['id', 'first_name', 'last_name', 'company_name'])
+    ], rowsChunk, ['id', 'name', 'company_name'])
 
     const result = await client.execute(statement)
     inserted.push(...result.rows.map(row => ({
       id: Number(row.id),
-      firstName: String(row.first_name),
-      lastName: String(row.last_name),
+      name: String(row.name),
       companyName: row.company_name ? String(row.company_name) : null
     })))
   }

@@ -22,8 +22,7 @@ describe('batched POS read models', () => {
     await client.batch([
       `CREATE TABLE customers (
         id INTEGER PRIMARY KEY,
-        first_name TEXT NOT NULL,
-        last_name TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
         company_name TEXT,
         phone TEXT NOT NULL,
         email TEXT NOT NULL,
@@ -108,7 +107,7 @@ describe('batched POS read models', () => {
         created_at TEXT NOT NULL
       )`,
       `INSERT INTO customers VALUES
-        (1, 'Ada', 'Lovelace', NULL, '1', 'ada@example.test', NULL, NULL, NULL, NULL, NULL, '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z')`,
+        (1, 'Ada Lovelace', NULL, '1', 'ada@example.test', NULL, NULL, NULL, NULL, NULL, '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z')`,
       `INSERT INTO tickets VALUES
         (1, 'TIC-1', 1, 'repair', 'ready_for_pickup', 'Apple', 'iPhone', 'SER-1', 'IMEI-1', '1234', '5678', 'Écran', 'Note interne', '2026-08-20T08:00:00.000Z', NULL, '2026-08-20T08:00:00.000Z', '2020-01-01T00:00:00.000Z'),
         (2, 'TIC-2', 1, 'repair', 'diagnosis', NULL, NULL, NULL, NULL, NULL, NULL, 'Diagnostic', NULL, '2026-08-19T08:00:00.000Z', NULL, '2026-08-19T08:00:00.000Z', '2026-08-19T08:00:00.000Z'),

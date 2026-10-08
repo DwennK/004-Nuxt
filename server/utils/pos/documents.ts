@@ -1,5 +1,5 @@
 import { validateSavWrite } from './sav'
-import { searchEquals, searchLike } from './search'
+import { searchEquals, searchLike, searchName } from './search'
 import { foldSearchText } from '~~/shared/utils/search'
 import type { SavDetails } from '~~/shared/types/sav'
 import { getDocumentSettlement, settlementCtes } from './document-settlement'
@@ -381,7 +381,7 @@ export async function listDocuments(filters?: {
   const referenceTerm = dossierReferenceTerm(searchTerm)
   const dateFrom = filters?.dateFrom ? normalizeDocumentDateFrom(filters.dateFrom) : undefined
   const dateTo = filters?.dateTo ? normalizeDocumentDateTo(filters.dateTo) : undefined
-  const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
+  const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), ${customers.name})`
   // Apply cheap/search filters before calculating settlements. Related receipts
   // and active invoices remain scoped by dossier + customer, outside these filters.
   const candidateFilters = and(
@@ -394,6 +394,7 @@ export async function listDocuments(filters?: {
       ? or(
           searchLike(documents.documentNumber, searchPattern),
           searchLike(customerNameValue, searchPattern),
+          searchName(customers.name, searchTerm),
           sql`${dossierReferenceSearch(sql`${tickets.ticketNumber}`)} like ${`%${referenceTerm}%`}`
         )
       : undefined
@@ -412,7 +413,7 @@ export async function listDocuments(filters?: {
     ? sql`CASE
     WHEN ${searchEquals(sql`d.document_number`, searchTerm)} THEN 0
     WHEN ${dossierReferenceSearch(sql`t.ticket_number`)} = ${referenceTerm} THEN 0
-    WHEN ${searchEquals(sql`coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name))`, searchTerm)} THEN 0
+    WHEN ${searchEquals(sql`coalesce(nullif(c.company_name, ''), c.name)`, searchTerm)} THEN 0
     WHEN ${searchLike(sql`d.document_number`, `${searchTerm}%`)} THEN 1
     WHEN ${dossierReferenceSearch(sql`t.ticket_number`)} LIKE ${`${referenceTerm}%`} THEN 1
     ELSE 2 END`
@@ -426,7 +427,7 @@ export async function listDocuments(filters?: {
   const rows = await db.all<ListRow>(sql`
     WITH ${settlementCtes(source)},
     filtered AS MATERIALIZED (
-      SELECT d.*, coalesce(nullif(c.company_name, ''), trim(c.first_name || ' ' || c.last_name)) AS customer_name,
+      SELECT d.*, coalesce(nullif(c.company_name, ''), c.name) AS customer_name,
         t.ticket_number, ${relevance} AS relevance
       FROM settled_documents d
       INNER JOIN customers c ON c.id = d.customer_id

@@ -57,7 +57,6 @@ async function saveCustomer(payload: CustomerFormValue) {
           :form-id="formId"
           :saving="isSaving"
           :save-error="saveError"
-          layout="page"
           :show-submit="false"
           submit-label="Créer le client"
           @save="saveCustomer"

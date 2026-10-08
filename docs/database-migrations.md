@@ -250,3 +250,59 @@ NO-GO when:
 - a destructive migration shares the switch release;
 - `db:push` or runtime DDL is still the only deployment mechanism;
 - the previous Worker cannot run against the migrated schema.
+
+## Single complete person name (20261008150655)
+
+`customers.name` and `employees.name` replace the separate name columns. Input,
+search, sorting and printed contacts use this complete name without splitting it.
+`displayName` remains a derived display label (company first for customers), not
+an editable identity field. Shopify's external first/last fields are joined only
+at the import boundary. Existing migration history must not be rewritten.
+
+This migration requires a maintenance window, as an explicit exception to the
+rolling deployment procedure above. Do not use gradual traffic promotion or mix
+old and new Workers against the migrated database. Applying it to production and
+deploying the matching Worker require separate release authorization.
+
+Before releasing this version:
+
+1. Follow the backup/restore rehearsal above and pause all POS writes. This is a
+   coordinated schema/application cutover: the old Worker cannot operate after
+   the old columns are removed, and the new Worker requires the new columns.
+2. Run `node scripts/db/audit-person-names.mjs` against the approved target with
+   the usual read-only flags. Save its JSON alongside the restricted backup.
+   It reports IDs with possibly duplicated name prefixes, without changing them.
+   It contains personal names and must not be committed or published.
+3. Rehearse the migration and new application against a disposable restoration.
+   The SQL copies trimmed first + last into `name`, retains empty personal names
+   for company-only customers, replaces name indexes and removes old columns.
+   Suspect repetitions are preserved, never guessed away. Existing IDs and all
+   customer/employee references remain unchanged. No table is rebuilt.
+4. Apply through `db:migrate` with the usual target/backup confirmations and
+   `--allow-destructive` (required for the old column removal), then deploy the
+   matching Worker while writes remain paused. Reload open operator tabs: stale
+   name payloads are rejected, not silently interpreted as new data.
+5. Verify schema, integrity, foreign keys, customer/employee counts, migration
+   status, edit/reopen, name search, vacation labels and A4/thermal/PDF output
+   before resuming writes. Re-running the migration runner must be a no-op.
+
+Rollback requires restoring the verified backup together with the previous
+Worker before resuming writes; rolling back only the Worker is not compatible.
+Review suspected duplicates from the saved audit individually. The migration
+never deletes apparent repeated words because they may be legitimate names.
+
+Local rehearsal only (replace the path with a disposable database):
+
+```sh
+node scripts/db/audit-person-names.mjs --url file:/absolute/path/rehearsal.db
+pnpm run db:migrate --url file:/absolute/path/rehearsal.db --apply \
+  --allow-destructive --backup-reference /absolute/path/verified-backup
+pnpm run db:verify --url file:/absolute/path/rehearsal.db
+pnpm run db:migrate --url file:/absolute/path/rehearsal.db
+pnpm exec vitest run tests/integration/person-names.spec.ts
+```
+
+The migration regression tests exercise name preservation, FK links, schema
+parity, runner idempotence, transactional rollback on unexpected legacy indexes,
+repeated edits, company-only records, reversed/accented name search and rejection
+of obsolete payloads. They never connect to a remote database.

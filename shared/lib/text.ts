@@ -11,19 +11,7 @@ export function normalizeRequiredText(value: string) {
   return value.trim()
 }
 
-export function splitLegacyName(name: string | null | undefined) {
-  const normalized = normalizeOptionalText(name) || 'Customer'
-  const parts = normalized.split(/\s+/)
-
-  if (parts.length === 1) {
-    return {
-      firstName: '',
-      lastName: parts[0] || 'Customer'
-    }
-  }
-
-  return {
-    firstName: parts.slice(0, -1).join(' ') || parts[0] || 'Customer',
-    lastName: parts[parts.length - 1] || 'Customer'
-  }
+export function nameInitials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  return [words[0]?.[0], words.length > 1 ? words.at(-1)?.[0] : ''].join('').toUpperCase() || '?'
 }

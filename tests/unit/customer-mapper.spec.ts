@@ -5,8 +5,7 @@ describe('customer row mapper', () => {
   it('preserves persisted fields and derives the person display name', () => {
     expect(mapCustomer({
       id: 42,
-      firstName: 'Ada',
-      lastName: 'Lovelace',
+      name: 'Ada Lovelace',
       companyName: null,
       phone: '+41 22 555 01 02',
       email: 'ada@example.test',
@@ -19,8 +18,7 @@ describe('customer row mapper', () => {
       updatedAt: '2026-02-03T04:05:06.000Z'
     })).toEqual({
       id: 42,
-      firstName: 'Ada',
-      lastName: 'Lovelace',
+      name: 'Ada Lovelace',
       companyName: null,
       phone: '+41 22 555 01 02',
       email: 'ada@example.test',
@@ -38,8 +36,7 @@ describe('customer row mapper', () => {
   it('uses the trimmed company name for display without rewriting stored data', () => {
     const mapped = mapCustomer({
       id: 7,
-      firstName: 'Grace',
-      lastName: 'Hopper',
+      name: 'Grace Hopper',
       companyName: '  Microwest  ',
       phone: '',
       email: '',

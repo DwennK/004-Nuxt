@@ -12,7 +12,6 @@ const { isSaving, saveError, save, clearSaveError } = useFormAction()
 const id = computed(() => Number(route.params.id))
 const activeTab = ref('tickets')
 const editOpen = ref(false)
-const focusReturn = usePosFocusReturn(editOpen)
 watch(editOpen, clearSaveError)
 const paymentPagination = ref({
   pageIndex: 0,
@@ -423,24 +422,14 @@ const paymentColumns: TableColumn<PaymentListItem>[] = [
     </template>
   </UDashboardPanel>
 
-  <USlideover
+  <PosCustomerSlideover
+    v-if="customer"
     v-model:open="editOpen"
-    :content="focusReturn"
-    :dismissible="!isSaving"
-    :close="!isSaving"
     title="Modifier le client"
-    description="Mettre à jour les informations de la fiche client."
-    :ui="{ content: 'max-w-2xl' }"
-  >
-    <template #body>
-      <PosCustomerForm
-        v-if="customer"
-        :initial-value="customer"
-        :saving="isSaving"
-        :save-error="saveError"
-        submit-label="Enregistrer les modifications"
-        @save="saveCustomer"
-      />
-    </template>
-  </USlideover>
+    :initial-value="customer"
+    :saving="isSaving"
+    :save-error="saveError"
+    submit-label="Enregistrer les modifications"
+    @save="saveCustomer"
+  />
 </template>

@@ -82,9 +82,7 @@ const editingCustomerForm = computed(() => {
   }
 
   return {
-    displayName: editingCustomer.value.displayName,
-    firstName: editingCustomer.value.firstName,
-    lastName: editingCustomer.value.lastName,
+    name: editingCustomer.value.name,
     companyName: editingCustomer.value.companyName || '',
     phone: editingCustomer.value.phone,
     email: editingCustomer.value.email,
@@ -97,7 +95,7 @@ const editingCustomerForm = computed(() => {
 })
 
 async function saveCustomer(payload: CustomerFormValue) {
-  if (editingCustomer.value) {
+  if (editOpen.value && editingCustomer.value) {
     const result = await save(
       () => $fetch<unknown>(`/api/customers/${editingCustomer.value!.id}`, {
         method: 'PATCH',

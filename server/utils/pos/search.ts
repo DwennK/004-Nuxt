@@ -1,4 +1,4 @@
-import { sql, type SQLWrapper } from 'drizzle-orm'
+import { and, sql, type SQLWrapper } from 'drizzle-orm'
 import { foldSearchText } from '~~/shared/utils/search'
 
 // SQLite LOWER/LIKE only fold ASCII case. GLOB character classes let the
@@ -35,4 +35,9 @@ export function searchLike(column: SQLWrapper, pattern: string) {
 
 export function searchEquals(column: SQLWrapper, value: string) {
   return sql`${column} glob ${searchPattern(value, false)}`
+}
+
+// Match a complete personal name in either word order without storing name parts.
+export function searchName(column: SQLWrapper, value: string) {
+  return and(...foldSearchText(value).trim().split(/\s+/).filter(Boolean).map(word => searchLike(column, `%${word}%`)))
 }

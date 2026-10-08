@@ -99,7 +99,7 @@ describe('Shopify atomic invoice and payment import', () => {
     order.transactions[0]!.id = 'gid://shopify/OrderTransaction/2'
     await persistShopifyOrder(domain, order, db)
     expect(await count('customers')).toBe(1)
-    expect((await client.execute('SELECT first_name FROM customers')).rows[0]!.first_name).toBe('Ada')
+    expect((await client.execute('SELECT name FROM customers')).rows[0]!.name).toBe('Ada Lovelace')
   })
 
   it('rolls back all rows and numbering when payment insertion fails', async () => {

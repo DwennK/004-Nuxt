@@ -1,9 +1,9 @@
 import { and, asc, eq, or, sql } from 'drizzle-orm'
-import { searchEquals, searchLike } from './search'
+import { searchEquals, searchLike, searchName } from './search'
 import { foldSearchText } from '~~/shared/utils/search'
 import { customers } from '~~/server/db/schema'
 import { mapCustomer } from '~~/server/modules/customers/mapper'
-import { normalizeOptionalText, normalizeRequiredText, splitLegacyName } from '~~/shared/lib/text'
+import { normalizeOptionalText, normalizeRequiredText } from '~~/shared/lib/text'
 import type { CustomerListResponse, CustomerUpsertInput } from '~~/shared/types/pos'
 import type { CustomerSuggestionsResponse } from '~~/shared/types/lookups'
 import { useDb } from '../turso'
@@ -12,15 +12,12 @@ import { ensurePosSchema } from '~~/server/utils/pos/schema'
 function customerSearchQuery(search?: string) {
   const normalizedSearch = foldSearchText(search).trim()
   const searchPattern = normalizedSearch ? `%${normalizedSearch}%` : null
-  const customerNameValue = sql<string>`trim(${customers.firstName} || ' ' || ${customers.lastName})`
+  const customerNameValue = customers.name
 
   const whereClause = and(
     searchPattern
       ? or(
-          searchLike(customers.firstName, searchPattern),
-          searchLike(customers.lastName, searchPattern),
-          searchLike(customerNameValue, searchPattern),
-          searchLike(sql`trim(${customers.lastName} || ' ' || ${customers.firstName})`, searchPattern),
+          searchName(customerNameValue, normalizedSearch),
           searchLike(sql`coalesce(${customers.companyName}, '')`, searchPattern),
           searchLike(customers.phone, searchPattern),
           searchLike(customers.email, searchPattern)
@@ -43,8 +40,7 @@ function customerSearchQuery(search?: string) {
     whereClause,
     orderBy: [
       ...(relevanceOrder ? [relevanceOrder] : []),
-      asc(customers.lastName),
-      asc(customers.firstName),
+      asc(customers.name),
       asc(customers.id)
     ]
   }
@@ -114,16 +110,9 @@ export async function getCustomerById(id: number) {
 
 export function mapCustomerInput(input: CustomerUpsertInput) {
   const companyName = normalizeOptionalText(input.companyName)
-  const displayName = normalizeOptionalText(input.displayName)
-  const explicitFirstName = normalizeOptionalText(input.firstName)
-  const explicitLastName = normalizeOptionalText(input.lastName)
-
-  const personName = displayName || [explicitFirstName, explicitLastName].filter(Boolean).join(' ').trim() || null
-  const splitName = personName ? splitLegacyName(personName) : { firstName: '', lastName: '' }
 
   return {
-    firstName: normalizeRequiredText(explicitFirstName ?? splitName.firstName),
-    lastName: normalizeRequiredText(explicitLastName ?? splitName.lastName),
+    name: normalizeRequiredText(input.name ?? ''),
     companyName,
     phone: normalizeRequiredText(input.phone ?? ''),
     email: normalizeRequiredText(input.email ?? ''),

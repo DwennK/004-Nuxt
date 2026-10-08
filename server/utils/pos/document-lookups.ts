@@ -1,5 +1,5 @@
 import { desc, eq, or, sql } from 'drizzle-orm'
-import { searchEquals, searchLike } from './search'
+import { searchEquals, searchLike, searchName } from './search'
 import { foldSearchText } from '~~/shared/utils/search'
 import { customers, documents, tickets } from '~~/server/db/schema'
 import type { DocumentLookupItem, SuggestionsResponse } from '~~/shared/types/lookups'
@@ -17,7 +17,7 @@ export async function suggestDocuments(filters: {
   const searchTerm = foldSearchText(filters.q).trim()
   const searchPattern = searchTerm ? `%${searchTerm}%` : null
   const referenceTerm = dossierReferenceTerm(searchTerm)
-  const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), trim(${customers.firstName} || ' ' || ${customers.lastName}))`
+  const customerNameValue = sql<string>`coalesce(nullif(${customers.companyName}, ''), ${customers.name})`
   const referenceColumn = dossierReferenceSearch(sql`${tickets.ticketNumber}`)
   const relevanceOrder = searchTerm
     ? sql<number>`case
@@ -43,6 +43,7 @@ export async function suggestDocuments(filters: {
       ? or(
           searchLike(documents.documentNumber, searchPattern),
           searchLike(customerNameValue, searchPattern),
+          searchName(customers.name, searchTerm),
           sql`${referenceColumn} like ${`%${referenceTerm}%`}`
         )
       : undefined)

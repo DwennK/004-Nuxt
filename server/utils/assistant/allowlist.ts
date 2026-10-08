@@ -11,8 +11,7 @@ export const assistantTableAllowlist = {
     description: 'Clients, identités de base et localisation légère pour le suivi commercial.',
     columns: {
       id: 'Identifiant client.',
-      first_name: 'Prénom du client.',
-      last_name: 'Nom du client.',
+      name: 'Nom complet, conservé tel que saisi.',
       company_name: 'Société du client si applicable.',
       phone: 'Téléphone du client.',
       email: 'E-mail du client.',
@@ -182,8 +181,7 @@ export const assistantTableAllowlist = {
     description: 'Employés et statut d’activité.',
     columns: {
       id: 'Identifiant employé.',
-      first_name: 'Prénom.',
-      last_name: 'Nom.',
+      name: 'Nom complet, conservé tel que saisi.',
       color: 'Couleur d’affichage.',
       vacation_days_per_year: 'Quota annuel.',
       is_active: 'Actif ou non.',

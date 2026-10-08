@@ -17,7 +17,7 @@ export async function resolveCounterCustomer(tx: PosTransaction): Promise<number
 
   // Adopt the oldest matching walk-in identity, without merging or editing legacy rows.
   const [legacy] = await tx.select({ id: customers.id }).from(customers)
-    .where(sql`trim(${customers.firstName} || ' ' || ${customers.lastName}) = 'Client comptoir'
+    .where(sql`${customers.name} = 'Client comptoir'
       and trim(coalesce(${customers.companyName}, '')) = ''
       and trim(${customers.phone}) = '' and trim(${customers.email}) = ''`)
     .orderBy(asc(customers.id))
@@ -27,7 +27,7 @@ export async function resolveCounterCustomer(tx: PosTransaction): Promise<number
   if (!customerId) {
     const now = new Date().toISOString()
     const [created] = await tx.insert(customers).values({
-      firstName: 'Client', lastName: 'comptoir', phone: '', email: '',
+      name: 'Client comptoir', phone: '', email: '',
       notes: 'Client créé automatiquement pour les ventes rapides sans client nominatif.',
       createdAt: now, updatedAt: now
     }).returning({ id: customers.id })
