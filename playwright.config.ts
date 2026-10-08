@@ -19,6 +19,8 @@ export default defineConfig({
     name: 'chromium',
     use: {
       ...devices['Desktop Chrome'],
+      // Playwright creates a temporary test profile, separate from personal Chrome.
+      channel: process.platform === 'darwin' && !process.env.CI ? 'chrome' : undefined,
       viewport: { width: 1440, height: 900 }
     }
   }],

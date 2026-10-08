@@ -399,14 +399,14 @@ Scripts are defined in [`package.json`](./package.json):
 
 Run lint and typecheck after meaningful code changes, plus the relevant tests. Use `pnpm run check` for the full non-browser gate and `pnpm run preview` for Worker-specific behavior. Do not edit generated `.nuxt/` or `.output/` files.
 
-For the browser smoke test, install Playwright's bundled Chromium once:
+For the browser smoke test on macOS, use the installed Google Chrome with a temporary test profile. No Playwright browser download is needed:
 
 ```bash
-npx playwright install chromium
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 pnpm run test:e2e
 ```
 
-[`playwright.config.ts`](./playwright.config.ts) uses a 1440×900 viewport and starts or reuses a local server on port 3000. It does not launch the system Google Chrome application. The default smoke test checks the login shell, not an authenticated sale or an external integration. The optional case editing suite requires `POS_DOSSIER_E2E_URL` and an isolated server with disposable fixtures; it modifies those records. Follow [the test setup](./docs/dossier-editing.md) before enabling it. UI changes still need a desktop check and a mobile check when responsive behavior is affected.
+[`playwright.config.ts`](./playwright.config.ts) uses a 1440×900 viewport and starts or reuses a local server on port 3000. Local macOS runs use `channel: 'chrome'` without accessing the personal Chrome profile. If Chrome is missing, install it separately; do not download Chromium as a fallback. CI and other operating systems keep Playwright's bundled Chromium (`npx playwright install --with-deps chromium` in that environment). The default smoke test checks the login shell, not an authenticated sale or an external integration. The optional case editing suite requires `POS_DOSSIER_E2E_URL` and an isolated server with disposable fixtures; it modifies those records. Follow [the test setup](./docs/dossier-editing.md) before enabling it. UI changes still need a desktop check and a mobile check when responsive behavior is affected.
 
 The [CI workflow](./.github/workflows/ci.yml) runs `pnpm install --frozen-lockfile`, `pnpm run check`, then the browser smoke job. It does not deploy the Worker. Local e-mail simulation, passing tests and a Git push are not proof of a live delivery or deployment.
 
