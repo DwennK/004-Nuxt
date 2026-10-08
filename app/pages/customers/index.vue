@@ -99,7 +99,7 @@ const editingCustomerForm = computed(() => {
 async function saveCustomer(payload: CustomerFormValue) {
   if (editingCustomer.value) {
     const result = await save(
-      () => $fetch(`/api/customers/${editingCustomer.value!.id}`, {
+      () => $fetch<unknown>(`/api/customers/${editingCustomer.value!.id}`, {
         method: 'PATCH',
         body: payload
       }),
@@ -114,7 +114,7 @@ async function saveCustomer(payload: CustomerFormValue) {
     editingCustomer.value = null
   } else {
     const result = await save(
-      () => $fetch('/api/customers', {
+      () => $fetch<unknown>('/api/customers', {
         method: 'POST',
         body: payload
       }),
@@ -146,7 +146,7 @@ async function removeCustomer(customer: CustomerRecord) {
   }
 
   const result = await runApiAction(
-    () => $fetch(`/api/customers/${customer.id}`, { method: 'DELETE' }),
+    () => $fetch<unknown>(`/api/customers/${customer.id}`, { method: 'DELETE' }),
     { success: 'Client supprimé', errorTitle: 'Suppression impossible' }
   )
 

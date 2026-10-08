@@ -74,7 +74,7 @@ export default defineNuxtPlugin(() => {
           dossiers.retries[id] = {
             failed: false,
             scopeKeys: JSON.parse(headers['X-Dossier-Proofs'] || '[]').map((proof: { key: string }) => proof.key),
-            run: () => dossierFetch(path, { method: method as 'POST' | 'PATCH' | 'DELETE', body: requestBody, headers: { ...headers, 'Idempotency-Key': attemptKey }, retry: 0 })
+            run: () => dossierFetch<unknown>(path, { method: method as 'POST' | 'PATCH' | 'DELETE', body: requestBody, headers: { ...headers, 'Idempotency-Key': attemptKey }, retry: 0 })
           }
         }
         for (const [key, value] of Object.entries(headers))

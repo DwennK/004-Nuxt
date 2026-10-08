@@ -548,7 +548,7 @@ async function saveItem(payload: CatalogItemInput) {
   const originalType = editingItem.value?.type
   if (editingItem.value) {
     const result = await save(
-      () => $fetch(`/api/catalog-items/${editingItem.value!.id}`, {
+      () => $fetch<CatalogItemRecord>(`/api/catalog-items/${editingItem.value!.id}`, {
         method: 'PATCH',
         body: payload
       }),
@@ -563,7 +563,7 @@ async function saveItem(payload: CatalogItemInput) {
     editingItem.value = null
   } else {
     const result = await save(
-      () => $fetch('/api/catalog-items', {
+      () => $fetch<CatalogItemRecord>('/api/catalog-items', {
         method: 'POST',
         body: payload
       }),
@@ -595,7 +595,7 @@ async function removeItem(item: CatalogItemRecord) {
   }
 
   const result = await runApiAction(
-    () => $fetch(`/api/catalog-items/${item.id}`, { method: 'DELETE' }),
+    () => $fetch<unknown>(`/api/catalog-items/${item.id}`, { method: 'DELETE' }),
     { success: getCreateUpdateTitle(item.type, 'deleted'), errorTitle: 'Suppression impossible' }
   )
 

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { CustomerFormValue } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerRecord } from '~~/shared/types/pos'
 
 const { isSaving, saveError, save } = useFormAction()
 const formId = 'customer-create-form'
 
 async function saveCustomer(payload: CustomerFormValue) {
-  const result = await save(() => $fetch(`/api/customers`, {
+  const result = await save(() => $fetch<CustomerRecord>(`/api/customers`, {
     method: 'POST',
     body: payload
   }), { success: 'Client créé' })

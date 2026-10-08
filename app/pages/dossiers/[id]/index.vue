@@ -517,7 +517,7 @@ async function changeTicketStatus(status: TicketStatus, internalNotes?: string) 
     return
   }
 
-  const result = await saveAction(() => $fetch(`/api/tickets/${id.value}/status`, {
+  const result = await saveAction(() => $fetch<unknown>(`/api/tickets/${id.value}/status`, {
     method: 'POST',
     body: {
       status,
@@ -544,7 +544,7 @@ async function handleWorkflowSubmit(payload: {
   }
 
   if (payload.action.kind === 'close') {
-    const result = await saveAction(() => $fetch(`/api/tickets/${id.value}/close`, {
+    const result = await saveAction(() => $fetch<unknown>(`/api/tickets/${id.value}/close`, {
       method: 'POST',
       body: {
         internalNotes: payload.internalNotes
@@ -685,7 +685,7 @@ async function markPaid(payload: {
     paidAt: new Date().toISOString()
   }))
 
-  const result = await saveAction(() => $fetch(`/api/documents/${documentId}/mark-paid`, {
+  const result = await saveAction(() => $fetch<unknown>(`/api/documents/${documentId}/mark-paid`, {
     method: 'POST',
     headers: { 'Idempotency-Key': attempt.key },
     body: attempt.payload

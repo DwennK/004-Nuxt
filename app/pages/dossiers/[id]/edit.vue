@@ -37,7 +37,7 @@ async function saveTicket(payload: {
     categoryHint: LineCategoryHint | null
   }>
 }) {
-  const result = await save(() => $fetch(`/api/tickets/${id.value}`, {
+  const result = await save(() => $fetch<unknown>(`/api/tickets/${id.value}`, {
     method: 'PATCH',
     body: payload
   }), { success: 'Dossier enregistré' })

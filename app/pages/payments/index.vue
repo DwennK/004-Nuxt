@@ -194,7 +194,7 @@ async function removePayment(payment: PaymentListItem) {
   }
 
   const result = await runApiAction(
-    () => $fetch(`/api/payments/${payment.id}`, { method: 'DELETE' }),
+    () => $fetch<unknown>(`/api/payments/${payment.id}`, { method: 'DELETE' }),
     { success: 'Paiement supprimé', errorTitle: 'Suppression impossible' }
   )
 

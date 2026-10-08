@@ -83,7 +83,7 @@ const customerAddressLine = computed(() => {
 })
 
 async function saveCustomer(payload: CustomerFormValue) {
-  const result = await save(() => $fetch(`/api/customers/${id.value}`, {
+  const result = await save(() => $fetch<unknown>(`/api/customers/${id.value}`, {
     method: 'PATCH',
     body: payload
   }), { success: 'Client enregistré' })

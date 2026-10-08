@@ -62,7 +62,7 @@ async function runtime() {
     useNuxtApp: () => nuxtApp,
     asyncDataDefaults: { deep: false },
     granularCachedData: true, pendingWhenIdle: false, purgeCachedData: true,
-    tracingChannelNuxt: false,
+    tracingChannelNuxt: false, vapor: false,
     defineKeyedFunctionFactory: ({ factory }: { factory: unknown }) => ({ __nuxt_factory: factory }),
     createError: (error: unknown) => error,
     dataDiagnostics: {}
@@ -72,6 +72,7 @@ async function runtime() {
   const useFetch = loadNuxtSource('dist/app/composables/fetch.js', {
     ...environment,
     alwaysRunFetchOnKeyChange: false,
+    routeTypedFetch: false,
     fetchDefaults: {},
     isPlainObject: (value: unknown) => Object.prototype.toString.call(value) === '[object Object]',
     $fetch: async (url: string, options: FetchOptions) => {

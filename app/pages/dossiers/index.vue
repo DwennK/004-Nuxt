@@ -101,7 +101,7 @@ async function removeTicket(ticket: TicketListItem) {
   }
 
   const result = await runApiAction(
-    () => $fetch(`/api/tickets/${ticket.id}`, { method: 'DELETE' }),
+    () => $fetch<unknown>(`/api/tickets/${ticket.id}`, { method: 'DELETE' }),
     { success: 'Dossier supprimé', errorTitle: 'Suppression impossible' }
   )
 
