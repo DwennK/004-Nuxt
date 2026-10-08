@@ -326,6 +326,15 @@ function startNewEmailAttempt() {
         </template>
 
         <template #right>
+          <PosCustomerSmsButton
+            v-if="document"
+            :key="id"
+            :customer="document.customer"
+            :reference-number="document.ticket?.ticketNumber || document.documentNumber"
+            :brand="document.ticket?.brand"
+            :model="document.ticket?.model"
+            :disabled="dossier.blocked.value || documentActionsDisabled"
+          />
           <UButton
             v-if="supportsA4Print"
             icon="i-lucide-mail"

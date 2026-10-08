@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { savStatusLabels, savCoverageLabels } from '~~/shared/types/sav'
-import { createQrCodeDataUrl } from '~~/shared/utils/qr-code'
 import type { TableColumn } from '@nuxt/ui'
 import {
   documentStatusColors,
@@ -23,13 +22,8 @@ import type {
   TicketStatus,
   TicketWorkflowAction
 } from '~~/shared/types/pos'
-import type { CustomerSmsSettingsRecord, SmsTemplateRecord } from '~~/shared/types/settings'
-import {
-  buildSmsHref,
-  freeSmsTemplateId,
-  normalizeSmsPhoneNumber,
-  resolveSmsTemplateBody
-} from '~~/shared/utils/customer-sms'
+import type { SmsTemplateRecord } from '~~/shared/types/settings'
+import { freeSmsTemplateId } from '~~/shared/utils/customer-sms'
 import { getTicketStatusTransitions } from '~~/shared/domain/tickets/workflow'
 import { canCreateTicketDocument } from '~~/shared/domain/tickets/document-policy'
 import { useCommercialLinesDraft } from '~~/app/composables/useCommercialLinesDraft'
@@ -62,7 +56,6 @@ const creatingDocument = ref(false)
 const commercialBusy = computed(() => linesSaving.value || actionSaving.value || creatingDocument.value)
 watch(workflowOpen, clearActionError)
 const paymentOpen = ref(false)
-const smsModalOpen = ref(false)
 const noteModalOpen = ref(false)
 const noteDraft = ref('')
 const noteSaving = ref(false)
@@ -71,15 +64,7 @@ const noteFocusReturn = usePosFocusReturn(noteModalOpen)
 const createdDocumentActionsOpen = ref(false)
 const selectedWorkflowAction = ref<TicketWorkflowAction | null>(null)
 const createdCommercialDocument = ref<DocumentDetail | null>(null)
-const selectedSmsTemplateId = ref<string>(freeSmsTemplateId)
-const smsQrDataUrl = ref<string | null>(null)
-const smsQrLoading = ref(false)
-const smsLogKey = ref<string | null>(null)
-
-const [{ data: ticket, status: ticketStatus, error: ticketError, refresh: refreshTicket }, { data: customerSmsSettings }] = await Promise.all([
-  useFetch<TicketDetail>(() => `/api/tickets/${id.value}`, { lazy: true }),
-  useFetch<CustomerSmsSettingsRecord>('/api/settings/customer-sms', { lazy: true })
-])
+const { data: ticket, status: ticketStatus, error: ticketError, refresh: refreshTicket } = await useFetch<TicketDetail>(() => `/api/tickets/${id.value}`, { lazy: true })
 
 const activeTab = ref(ticket.value?.type === 'sale' ? 'overview' : 'lines')
 const dossier = useDossier(() => ticket.value ? { kind: 'ticket', id: id.value } : null, {
@@ -197,33 +182,6 @@ const canChargeCreatedDocument = computed(() =>
   createdCommercialDocument.value?.type === 'invoice'
   && Boolean(ticket.value?.commercialSummary.balanceDue)
 )
-const normalizedCustomerPhone = computed(() => normalizeSmsPhoneNumber(ticket.value?.customer.phone || ''))
-const canSendSms = computed(() => Boolean(normalizedCustomerPhone.value))
-const smsTemplates = computed(() => customerSmsSettings.value?.templates || [])
-const smsTemplateItems = computed(() => [
-  ...smsTemplates.value,
-  {
-    id: freeSmsTemplateId,
-    label: 'Message libre',
-    body: ''
-  }
-])
-const selectedSmsTemplate = computed(() => smsTemplateItems.value.find(template => template.id === selectedSmsTemplateId.value) || smsTemplateItems.value[smsTemplateItems.value.length - 1] || null)
-const resolvedSmsMessage = computed(() => {
-  if (!ticket.value || !selectedSmsTemplate.value || selectedSmsTemplate.value.id === freeSmsTemplateId) {
-    return ''
-  }
-
-  return resolveSmsTemplateBody(selectedSmsTemplate.value, {
-    clientName: ticket.value.customer.displayName,
-    ticketNumber: ticket.value.ticketNumber,
-    brand: ticket.value.brand || '',
-    model: ticket.value.model || ''
-  })
-})
-const smsHref = computed(() => buildSmsHref(normalizedCustomerPhone.value, resolvedSmsMessage.value || null))
-const smsButtonHelp = computed(() => canSendSms.value ? '' : 'Ajoutez un numero de telephone client pour generer un QR SMS.')
-
 const statusMenuItems = computed(() => {
   if (!ticket.value || !isTicketMutable.value) {
     return []
@@ -701,40 +659,16 @@ async function markPaid(payload: {
   paymentMutation.complete(`ticket-payment:${documentId}`)
 }
 
-function openSmsModal() {
-  selectedSmsTemplateId.value = freeSmsTemplateId
-  smsLogKey.value = null
-  smsModalOpen.value = true
-}
-
-async function selectSmsTemplate(template: SmsTemplateRecord) {
-  selectedSmsTemplateId.value = template.id
-  smsQrLoading.value = true
-
-  try {
-    smsQrDataUrl.value = createQrCodeDataUrl(smsHref.value || buildSmsHref(normalizedCustomerPhone.value), {
-      errorCorrectionLevel: 'M',
-      margin: 1,
-      width: 320
-    })
-
-    const nextLogKey = `${template.id}:${resolvedSmsMessage.value || ''}:${normalizedCustomerPhone.value}`
-
-    if (smsLogKey.value !== nextLogKey && ticket.value) {
-      await $fetch(`/api/tickets/${id.value}/sms-qrcode`, {
-        method: 'POST',
-        body: {
-          templateId: template.id === freeSmsTemplateId ? null : template.id,
-          templateLabel: template.label,
-          mode: template.id === freeSmsTemplateId ? 'free' : 'template'
-        }
-      })
-      smsLogKey.value = nextLogKey
-      await refreshTicket()
+async function logSmsQrOpened(template: SmsTemplateRecord) {
+  await $fetch(`/api/tickets/${id.value}/sms-qrcode`, {
+    method: 'POST',
+    body: {
+      templateId: template.id === freeSmsTemplateId ? null : template.id,
+      templateLabel: template.label,
+      mode: template.id === freeSmsTemplateId ? 'free' : 'template'
     }
-  } finally {
-    smsQrLoading.value = false
-  }
+  })
+  await refreshTicket()
 }
 </script>
 
@@ -746,6 +680,16 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <PosCustomerSmsButton
+            v-if="ticket"
+            :key="id"
+            :customer="ticket.customer"
+            :reference-number="ticket.ticketNumber"
+            :brand="ticket.brand"
+            :model="ticket.model"
+            :disabled="dossier.blocked.value"
+            :log-qr-open="logSmsQrOpened"
+          />
           <PosPrintButton
             v-if="ticket"
             :preview-url="`/dossiers/${id}/print?profile=a4`"
@@ -1189,27 +1133,6 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
                 @click="activeTab = 'payments'"
               />
             </section>
-
-            <section aria-labelledby="ticket-counter-heading" class="rounded-xl border border-default bg-default p-4">
-              <h2 id="ticket-counter-heading" class="mb-3 text-sm font-semibold text-highlighted">
-                Au comptoir
-              </h2>
-              <div class="space-y-2">
-                <UButton
-                  label="SMS client"
-                  icon="i-lucide-message-square-share"
-                  color="neutral"
-                  variant="outline"
-                  block
-                  class="justify-start"
-                  :disabled="dossier.blocked.value || !canSendSms"
-                  @click="openSmsModal"
-                />
-                <p v-if="!canSendSms" class="text-xs text-toned">
-                  {{ smsButtonHelp }}
-                </p>
-              </div>
-            </section>
           </aside>
 
           <div v-if="activeTab === 'overview'" class="min-w-0 space-y-4 lg:col-start-1 lg:row-start-2">
@@ -1463,87 +1386,4 @@ async function selectSmsTemplate(template: SmsTemplateRecord) {
     :save-error="actionError"
     @save="markPaid"
   />
-
-  <UModal
-    v-model:open="smsModalOpen"
-    title="SMS client"
-    :description="ticket?.customer.phone ? `Scanner le QR avec l’iPhone pour ouvrir l’app Messages vers ${ticket.customer.displayName}.` : 'Ajoutez un numero de telephone pour utiliser ce flux.'"
-    :ui="{ content: 'sm:max-w-5xl' }"
-  >
-    <template #body>
-      <div class="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        <div class="space-y-2">
-          <p class="text-xs uppercase tracking-[0.18em] text-toned">
-            Messages
-          </p>
-
-          <UButton
-            v-for="template in smsTemplateItems"
-            :key="template.id"
-            :disabled="dossier.blocked.value"
-            :label="template.label"
-            :icon="template.id === freeSmsTemplateId ? 'i-lucide-pencil-line' : 'i-lucide-message-circle-more'"
-            :color="selectedSmsTemplateId === template.id ? 'primary' : 'neutral'"
-            :variant="selectedSmsTemplateId === template.id ? 'solid' : 'soft'"
-            block
-            class="justify-start"
-            @click="selectSmsTemplate(template)"
-          />
-        </div>
-
-        <div class="space-y-4 rounded-2xl border border-default bg-muted/20 p-4">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p class="text-xs uppercase tracking-[0.18em] text-toned">
-                QR code
-              </p>
-              <p class="text-lg font-semibold text-highlighted">
-                {{ selectedSmsTemplate?.label || 'Choisissez un message' }}
-              </p>
-              <p class="text-sm text-toned">
-                {{ normalizedCustomerPhone || 'Numero manquant' }}
-              </p>
-            </div>
-
-            <UButton
-              v-if="smsHref"
-              :disabled="dossier.blocked.value"
-              :to="smsHref"
-              external
-              target="_blank"
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-arrow-up-right"
-              label="Ouvrir le lien"
-            />
-          </div>
-
-          <div class="flex min-h-[22rem] items-center justify-center rounded-2xl border border-dashed border-default bg-white p-6">
-            <div v-if="smsQrLoading" class="flex flex-col items-center gap-3 text-sm text-toned">
-              <UIcon name="i-lucide-loader-circle" class="size-7 animate-spin" />
-              Génération du QR en cours...
-            </div>
-            <img
-              v-else-if="smsQrDataUrl"
-              :src="smsQrDataUrl"
-              alt="QR code SMS client"
-              class="h-auto w-full max-w-[20rem]"
-            >
-            <div v-else class="text-center text-sm text-toned">
-              Choisissez un message pour afficher le QR code.
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <p class="text-xs uppercase tracking-[0.18em] text-toned">
-              Aperçu du message
-            </p>
-            <div class="rounded-xl border border-default bg-default p-3 text-sm text-highlighted whitespace-pre-line">
-              {{ resolvedSmsMessage || 'Aucun texte pré-rempli. L’opérateur saisira le message directement sur l’iPhone.' }}
-            </div>
-          </div>
-        </div>
-      </div>
-    </template>
-  </UModal>
 </template>
