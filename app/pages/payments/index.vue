@@ -110,6 +110,42 @@ const { data: paymentsResponse, status, refresh } = await useFetch<PaymentListRe
 
 watch(paymentQuery, () => refresh(), { flush: 'post' })
 
+const exporting = ref(false)
+const toast = useToast()
+
+async function exportPdf() {
+  if (exporting.value) return
+  exporting.value = true
+  const { page: _page, pageSize: _pageSize, ...filters } = paymentQuery.value
+  try {
+    const pdf = await $fetch<Blob>('/api/payments/pdf', {
+      query: { ...filters, search: search.value.trim() || undefined },
+      responseType: 'blob'
+    })
+    const url = URL.createObjectURL(pdf)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `paiements-${filters.dateFrom || 'debut'}-${filters.dateTo || 'fin'}.pdf`
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+  } catch (error) {
+    // ofetch keeps error responses as blobs when requesting a PDF.
+    const data = (error as { data?: Blob }).data
+    let description = 'Veuillez réessayer.'
+    if (data instanceof Blob) {
+      try {
+        const body = JSON.parse(await data.text())
+        description = body.message || description
+      } catch { /* Keep the fallback for non-JSON responses. */ }
+    }
+    toast.add({ title: 'Impossible d’exporter les paiements', description, color: 'error' })
+  } finally {
+    exporting.value = false
+  }
+}
+
 const payments = computed(() => paymentsResponse.value?.items || [])
 const totalResults = computed(() => paymentsResponse.value?.total || 0)
 const totalPages = computed(() => Math.max(Math.ceil(totalResults.value / pagination.value.pageSize), 1))
@@ -337,6 +373,17 @@ const columns: TableColumn<PaymentListItem>[] = [
       <UDashboardNavbar title="Paiements">
         <template #leading>
           <UDashboardSidebarCollapse />
+        </template>
+        <template #right>
+          <UButton
+            v-if="can('financial:read')"
+            label="Exporter PDF"
+            icon="i-lucide-download"
+            color="neutral"
+            variant="outline"
+            :loading="exporting"
+            @click="exportPdf"
+          />
         </template>
       </UDashboardNavbar>
 

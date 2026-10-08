@@ -7,6 +7,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import * as schema from '../../server/db/schema'
 import { settlementCtes } from '../../server/utils/pos/document-settlement'
 import { paidReportCtes, getReportsOverview, getReportsLeaders, getEndOfDaySummary } from '../../server/utils/pos/reports'
+import { listPayments, listPaymentsForExport } from '../../server/utils/pos/payments'
+import { summarizePaymentExport } from '../../shared/utils/payment-export'
 import { listDocuments } from '../../server/utils/pos/documents'
 import { parseSchemaContract } from '../../scripts/db/_schema-contract.mjs'
 import { schemaPath } from '../../scripts/db/_shared.mjs'
@@ -95,6 +97,35 @@ describe('financial query equivalence and bounded query plans', () => {
     ]
     await insertDocs(docs)
     await insertPays(pays)
+  })
+
+  it('exports every filtered payment beyond page limits, preserving signed totals and ordering', async () => {
+    await insertPays(Array.from({ length: 260 }, (_, index) => ({ id: index + 100, document: 3, amount: 100, status: 'paid' })))
+    await insertPays([{ id: 400, document: 3, amount: -250, status: 'paid' }])
+    const filters = { dateFrom: '2026-09-11', dateTo: '2026-09-11', status: 'paid' as const, search: 'DOC-3', sortBy: 'amount' as const, sortDirection: 'asc' as const, page: 2, pageSize: 25 }
+    const page = await listPayments(filters)
+    const exported = await listPaymentsForExport(filters)
+    expect(page.items).toHaveLength(25)
+    expect(exported).toHaveLength(262)
+    expect(new Set(exported.map(row => row.id)).size).toBe(262)
+    expect(exported[0]!.amount).toBe(-250)
+    expect(exported.at(-1)!.amount).toBe(600)
+    expect(summarizePaymentExport(exported).net).toBe(26350)
+    expect(await listPaymentsForExport({ ...filters, method: 'stripe' })).toEqual([])
+  })
+
+  it('applies Zurich calendar dates to exports including midnight boundaries', async () => {
+    await insertPays([
+      { id: 100, document: 3, amount: 100, status: 'paid', paidAt: '2026-09-10T21:59:59.999Z' },
+      { id: 101, document: 3, amount: 100, status: 'paid', paidAt: '2026-09-10T22:00:00.000Z' },
+      { id: 102, document: 3, amount: 100, status: 'paid', paidAt: '2026-09-11T21:59:59.999Z' },
+      { id: 103, document: 3, amount: 100, status: 'paid', paidAt: '2026-09-11T22:00:00.000Z' }
+    ])
+    const exported = await listPaymentsForExport({ dateFrom: '2026-09-11', dateTo: '2026-09-11' })
+    expect(exported.map(row => row.id)).toContain(101)
+    expect(exported.map(row => row.id)).toContain(102)
+    expect(exported.map(row => row.id)).not.toContain(100)
+    expect(exported.map(row => row.id)).not.toContain(103)
   })
 
   it('matches independent settlement rules, including cancelled orders, mixed customers and stale statuses', async () => {

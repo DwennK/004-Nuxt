@@ -40,7 +40,7 @@ function assertPositivePaymentAmount(amount: number) {
   })
 }
 
-export async function listPayments(filters?: {
+type PaymentListFilters = {
   search?: string
   method?: PaymentRecord['method']
   status?: PaymentRecord['status']
@@ -52,7 +52,28 @@ export async function listPayments(filters?: {
   pageSize?: number
   sortBy?: 'paidAt' | 'amount'
   sortDirection?: 'asc' | 'desc'
-}): Promise<PaymentListResponse> {
+}
+
+export async function listPayments(filters?: PaymentListFilters): Promise<PaymentListResponse> {
+  return readPayments(filters)
+}
+
+const MAX_PDF_PAYMENTS = 10000
+
+export async function listPaymentsForExport(filters?: PaymentListFilters): Promise<PaymentListItem[]> {
+  const result = await readPayments(filters, true)
+  if (result.items.length > MAX_PDF_PAYMENTS) {
+    throw createError({
+      statusCode: 422,
+      message: 'L’export PDF est limité à 10 000 mouvements. Réduisez la période ou précisez les filtres.'
+    })
+  }
+  return result.items
+}
+
+// Both views share the exact filters, ordering and row mapping. Export reads
+// all rows in one query so its totals always describe the exported ledger.
+async function readPayments(filters?: PaymentListFilters, exportAll = false): Promise<PaymentListResponse> {
   await ensurePosSchema()
 
   const db = useDb()
@@ -60,8 +81,8 @@ export async function listPayments(filters?: {
   const dateTo = filters?.dateTo ? normalizePaymentDateTo(filters.dateTo) : undefined
   const normalizedSearch = foldSearchText(filters?.search).trim()
   const searchPattern = normalizedSearch ? `%${normalizedSearch}%` : undefined
-  const page = Math.max(filters?.page || 1, 1)
-  const pageSize = Math.min(Math.max(filters?.pageSize || 50, 1), 250)
+  const page = exportAll ? 1 : Math.max(filters?.page || 1, 1)
+  const pageSize = exportAll ? MAX_PDF_PAYMENTS + 1 : Math.min(Math.max(filters?.pageSize || 50, 1), 250)
   const offset = (page - 1) * pageSize
   const whereClause = and(
     filters?.method ? eq(payments.method, filters.method) : undefined,

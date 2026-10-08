@@ -34,6 +34,19 @@ modifiables ou supprimables. Un encaissement effectué ne peut plus être suppri
 par l'API : son annulation nécessite le parcours avec motif. Les corrections
 ordinaires d'un encaissement sans remboursement restent disponibles.
 
+## Export PDF des paiements
+
+Le bouton **Exporter PDF** de `/payments` télécharge un journal A4 paysage avec
+tous les mouvements correspondant aux filtres et au tri actifs, indépendamment
+de la pagination. Il indique les encaissements, les remboursements, le net
+encaissé, les montants en attente et le net par moyen de paiement. Seuls les
+mouvements `paid` contribuent aux totaux de caisse ; les autres statuts restent
+visibles dans le journal lorsqu'ils correspondent aux filtres.
+
+L'export exige `financial:read`, n'est pas mis en cache et utilise les dates
+commerciales Europe/Zurich. Au-delà de 10 000 mouvements, il demande de réduire
+la période au lieu de produire un journal incomplet.
+
 ## SQL : mouvements d'argent
 
 La vue `payment_movements` filtre les mouvements effectivement enregistrés
