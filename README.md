@@ -126,7 +126,7 @@ Use `useDossierFetch()` for mutations to existing cases. See [case editing, rese
 Use the toolchain pinned by the repository:
 
 - Node.js 22.23.2 ([`.node-version`](./.node-version), also used by CI)
-- `pnpm` 11.28.4 (`package.json` and CI use the same version)
+- `pnpm` 12.10.1 (`package.json` and CI use the same version)
 
 The authenticated app also needs a prepared Turso / libSQL development database, `TURSO_URL`, `TURSO_TOKEN` and a session secret. Unit and local SQLite integration tests do not require production credentials. External integrations are optional for working on unrelated POS features.
 

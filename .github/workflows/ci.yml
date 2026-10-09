@@ -40,7 +40,7 @@ jobs:
         run: |
           node --version
           pnpm --version
-          test "$(pnpm --version)" = "11.28.4"
+          test "$(pnpm --version)" = "12.10.1"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
