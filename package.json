@@ -6,7 +6,7 @@
     "node": ">=22.22.3 <23 || >=24.15.0 <25 || >=26"
   },
   "scripts": {
-    "build": "pnpm run scanner:wasm && NODE_OPTIONS=--max-old-space-size=4096 nuxt build",
+    "build": "pnpm run scanner:wasm && node --max-old-space-size=4096 node_modules/nuxt/bin/nuxt.mjs build",
     "check": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run security:regression && pnpm run build",
     "dev": "pnpm run scanner:wasm && nuxt dev",
     "preview": "pnpm run build && wrangler --cwd .output dev",
