@@ -11,3 +11,6 @@ overrides:
   # Patched releases while upstream dependencies still resolve vulnerable versions.
   'source-map-js@<1.2.2': 1.2.2
   'miniflare>sharp': 0.35.5
+  'fontless>esbuild': 0.28.2
+  # Keep the decoder glue aligned with the WASM copied into public/vendor.
+  'barcode-detector>zxing-wasm': 3.1.5

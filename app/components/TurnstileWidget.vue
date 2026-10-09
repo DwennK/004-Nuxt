@@ -29,7 +29,7 @@ const emit = defineEmits<{
   'error': [message: string]
 }>()
 
-const container = ref<HTMLDivElement | null>(null)
+const container = shallowRef<HTMLDivElement | null>(null)
 let widgetId: string | null = null
 let disposed = false
 

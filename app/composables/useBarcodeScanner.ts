@@ -30,7 +30,7 @@ export function useBarcodeScanner(options: BarcodeScannerOptions = {}) {
   const isScanning = ref(false)
   const lastValue = ref<string | null>(null)
   const error = ref<string | null>(null)
-  const videoRef = ref<HTMLVideoElement | null>(null)
+  const videoRef = shallowRef<HTMLVideoElement | null>(null)
 
   let stream: MediaStream | null = null
   let detector: InstanceType<typeof BarcodeDetector> | null = null

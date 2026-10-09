@@ -22,7 +22,7 @@ const emit = defineEmits<{
   scanned: [value: string]
 }>()
 
-const videoEl = ref<HTMLVideoElement | null>(null)
+const videoEl = shallowRef<HTMLVideoElement | null>(null)
 
 const { isScanning, error, start, stop } = useBarcodeScanner({
   onDetected(value) {
