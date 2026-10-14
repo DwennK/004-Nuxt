@@ -44,7 +44,7 @@ async function saveSav(sav: import('~~/shared/types/sav').SavDetails) {
   await saveDocument({ type: 'sav', status: 'issued', customerId: ticket.value.customerId, ticketId: ticket.value.id, issuedAt: sav.receivedAt, sav, notes: '', lines: [] })
 }
 
-const dossier = useDossier(() => ticketId.value ? { kind: 'ticket', id: ticketId.value } : null, { edit: true })
+const dossier = useDossier(() => ticketId.value ? { kind: 'ticket', id: ticketId.value } : null, { record: ticket, edit: true })
 provide('pos-dossier-state', dossier.current)
 
 async function saveDocument(payload: {

@@ -32,6 +32,24 @@ export function createDossierClient(fetcher: typeof globalThis.$fetch) {
   let audioContext: AudioContext | undefined
   let timer: ReturnType<typeof setInterval> | undefined
   const pending = new Map<string, Promise<DossierStatus>>()
+  const acknowledgedRevisions = new Map<string, number>()
+
+  function scopeKey(current: DossierClientState) {
+    return current.standalone
+      ? `document:${current.target.id}`
+      : current.baseline?.key || current.status?.key || `${current.target.kind}:${current.target.id}`
+  }
+
+  function resetInactive(current: DossierClientState) {
+    if (current.active) return
+    current.status = null
+    current.baseline = null
+    current.token = null
+    current.dirty = false
+    current.dirtySources = {}
+    current.lost = false
+    current.offline = false
+  }
 
   if (import.meta.client) {
     try {
@@ -127,6 +145,10 @@ export function createDossierClient(fetcher: typeof globalThis.$fetch) {
   }
 
   function apply(current: DossierClientState, result: DossierStatus) {
+    // A heartbeat may have read the scope just before our own write committed.
+    // Only acknowledged local writes can advance this response, never a newer
+    // revision merely observed on another workstation.
+    result = { ...result, revision: Math.max(result.revision, acknowledgedRevisions.get(result.key) ?? 0) }
     const previous = current.status
     if (current.token && current.token !== result.token) current.lost = true
     if (
@@ -157,12 +179,11 @@ export function createDossierClient(fetcher: typeof globalThis.$fetch) {
     current: DossierClientState,
     action: 'observe' | 'acquire' | 'takeover' | 'release' = 'observe'
   ) {
-    const id = `${current.target.kind}:${current.target.id}:${current.standalone}`
-    // Mutations and takeover must wait for an earlier heartbeat, never reuse it.
-    const earlier = pending.get(id)
-    if (earlier) {
-      if (action === 'observe') return earlier
-      await earlier.catch(() => {})
+    const id = scopeKey(current)
+    // Ticket, quote and invoice share a lease. In particular, entering the next
+    // page must wait for an in-flight release from the previous page.
+    while (pending.has(id)) {
+      await pending.get(id)!.catch(() => {})
     }
     const request = (async () => {
       current.pending = true
@@ -172,7 +193,8 @@ export function createDossierClient(fetcher: typeof globalThis.$fetch) {
           other =>
             other !== current
             && other.token
-            && other.status?.key === (current.status?.key || current.baseline?.key)
+            && !other.lost
+            && scopeKey(other) === id
         )
         let result = await fetcher<DossierStatus>('/api/dossiers/session', {
           method: 'POST',
@@ -215,7 +237,18 @@ export function createDossierClient(fetcher: typeof globalThis.$fetch) {
               }
             })
         }
-        apply(current, result)
+        if (action === 'release') {
+          // A page can mount while the release is in flight. Forget the old
+          // lease before its queued acquisition, retaining its fresh record.
+          for (const other of Object.values(states)) {
+            if (scopeKey(other) !== id) continue
+            other.token = null
+            other.status = null
+            resetInactive(other)
+          }
+        } else {
+          apply(current, result)
+        }
         return result
       } catch (error) {
         current.offline = true
@@ -260,13 +293,20 @@ export function createDossierClient(fetcher: typeof globalThis.$fetch) {
   }
 
   function acceptRevisions(snapshots: DossierSnapshot[]) {
+    for (const snapshot of snapshots) {
+      acknowledgedRevisions.set(snapshot.key, Math.max(snapshot.revision, acknowledgedRevisions.get(snapshot.key) ?? 0))
+    }
     for (const current of Object.values(states)) {
       const next = snapshots.find(
-        snapshot => snapshot.key === current.status?.key
+        snapshot => snapshot.key === scopeKey(current)
       )
       if (next) {
-        current.baseline = next
-        if (current.status) current.status.revision = next.revision
+        const revision = Math.max(
+          acknowledgedRevisions.get(next.key)!,
+          current.baseline?.key === next.key ? current.baseline.revision : 0
+        )
+        current.baseline = { key: next.key, revision }
+        if (current.status) current.status.revision = revision
       }
     }
   }
@@ -364,19 +404,23 @@ export function createDossierClient(fetcher: typeof globalThis.$fetch) {
     current.active = Math.max(0, current.active - 1)
     // Let the next page register first so ticket -> document navigation retains ownership.
     await new Promise(resolve => setTimeout(resolve, 300))
-    if (
-      current.active
-      || Object.values(states).some(
-        other =>
-          other.active
-          && (other.status?.key || other.baseline?.key) === current.status?.key
-      )
-    )
+    const key = scopeKey(current)
+    while (pending.has(key)) await pending.get(key)!.catch(() => {})
+    if (current.active) return
+    const nextPages = Object.values(states).filter(other => other.active && scopeKey(other) === key)
+    if (nextPages.length) {
+      // The next acquisition may still be queued behind the same heartbeat.
+      // Transfer the token before retiring the only page that knows it.
+      if (current.token && !current.lost) {
+        for (const next of nextPages) {
+          if (!next.token && !next.lost) next.token = current.token
+        }
+      }
+      resetInactive(current)
       return
-    await session(current, 'release').catch(() => {})
-    current.token = null
-    current.baseline = null
-    current.lost = false
+    }
+    if (current.token) await session(current, 'release').catch(() => {})
+    resetInactive(current)
   }
 
   return {

@@ -32,6 +32,9 @@ export function useDossier(
   async function enter() {
     const value = current.value
     if (!value) return
+    // An inactive page may have finished releasing while this page loaded.
+    // Reapply this page's record before acquiring its reservation.
+    $dossiers.snapshot(value.target, toValue(options.record))
     value.active++
     value.intent = toValue(options.edit) ? 'edit' : 'operate'
     try {
