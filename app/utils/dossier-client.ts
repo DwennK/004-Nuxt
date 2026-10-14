@@ -97,6 +97,14 @@ export function createDossierClient(fetcher: typeof globalThis.$fetch) {
     }
   }
 
+  function captureSnapshot(current: DossierClientState, dossier: DossierSnapshot) {
+    if (current.dirty || current.lost) return
+    // A local customer update can reuse the parent record from before a saved
+    // handover/payment. Never roll back a revision already acknowledged here.
+    if (current.baseline?.key === dossier.key && current.baseline.revision > dossier.revision) return
+    current.baseline = dossier
+  }
+
   function capture(value: unknown) {
     if (!value || typeof value !== 'object') return
     const item = value as { dossier?: DossierSnapshot }
@@ -106,7 +114,7 @@ export function createDossierClient(fetcher: typeof globalThis.$fetch) {
           current.status?.key === item.dossier.key
           || `${current.target.kind}:${current.target.id}` === item.dossier.key
         ) {
-          if (!current.dirty && !current.lost) current.baseline = item.dossier
+          captureSnapshot(current, item.dossier)
         }
       }
     }
@@ -115,7 +123,7 @@ export function createDossierClient(fetcher: typeof globalThis.$fetch) {
   function snapshot(target: DossierTarget, value: unknown) {
     const current = state(target)
     const dossier = (value as { dossier?: DossierSnapshot } | null)?.dossier
-    if (dossier && !current.dirty && !current.lost) current.baseline = dossier
+    if (dossier) captureSnapshot(current, dossier)
   }
 
   function apply(current: DossierClientState, result: DossierStatus) {

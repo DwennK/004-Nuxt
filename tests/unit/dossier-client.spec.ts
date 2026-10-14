@@ -20,6 +20,35 @@ function fixture() {
 }
 
 describe('dossier client state across forms and reconnection', () => {
+  it.each(['snapshot', 'capture'] as const)('keeps the acknowledged revision when %s receives the old document after a customer edit', async (source) => {
+    const { manager, set } = fixture()
+    const current = manager.state({ kind: 'document', id: 10 })
+    const document = { dossier: { key: 'ticket:1', revision: 4 }, customer: { name: 'Avant' } }
+    manager.snapshot(current.target, document)
+    await manager.session(current, 'acquire')
+
+    // Handover is saved separately, without replacing the parent document.
+    set({ revision: 5 })
+    manager.acceptRevisions([{ key: 'ticket:1', revision: 5 }])
+    const updated = { ...document, customer: { name: 'Après' } }
+    if (source === 'snapshot') manager.snapshot(current.target, updated)
+    else manager.capture(updated)
+
+    manager.setDirty(current, 'document', true)
+    const headers = await manager.prepare([current.target])
+    expect(JSON.parse(headers['X-Dossier-Proofs'])).toEqual([
+      { key: 'ticket:1', revision: 5, token: 'lease-a' }
+    ])
+    expect(current.lost).toBe(false)
+    expect(current.dirty).toBe(true)
+
+    // A later write from another operator must still block the stale draft.
+    set({ revision: 6 })
+    await expect(manager.prepare([current.target])).rejects.toThrow('Rechargez')
+    expect(current.baseline?.revision).toBe(5)
+    expect(current.lost).toBe(true)
+  })
+
   it('retains the revision at opening even for a new linked document with no saved record', async () => {
     const { manager, set } = fixture()
     const current = manager.state({ kind: 'ticket', id: 1 })
@@ -31,6 +60,32 @@ describe('dossier client state across forms and reconnection', () => {
     expect(current.lost).toBe(true)
     expect(current.dirty).toBe(true)
     expect(current.baseline?.revision).toBe(4)
+  })
+
+  it('captures fresh records while preserving dirty or lost baselines', async () => {
+    const { manager } = fixture()
+    const current = manager.state({ kind: 'document', id: 10 })
+    manager.snapshot(current.target, { dossier: { key: 'ticket:1', revision: 4 } })
+    await manager.session(current, 'acquire')
+    manager.capture({ dossier: { key: 'ticket:1', revision: 5 } })
+    expect(current.baseline?.revision).toBe(5)
+
+    manager.setDirty(current, 'document', true)
+    manager.snapshot(current.target, { dossier: { key: 'ticket:1', revision: 6 } })
+    expect(current.baseline?.revision).toBe(5)
+    manager.setDirty(current, 'document', false)
+    manager.invalidate(JSON.stringify([{ key: 'ticket:1' }]))
+    manager.capture({ dossier: { key: 'ticket:1', revision: 6 } })
+    expect(current.baseline?.revision).toBe(5)
+    expect(current.lost).toBe(true)
+  })
+
+  it('accepts the independent revision of a document moved to another dossier', () => {
+    const { manager } = fixture()
+    const current = manager.state({ kind: 'document', id: 10 })
+    manager.snapshot(current.target, { dossier: { key: 'ticket:1', revision: 4 } })
+    manager.snapshot(current.target, { dossier: { key: 'document:10', revision: 1 } })
+    expect(current.baseline).toEqual({ key: 'document:10', revision: 1 })
   })
 
   it('carries the lease from a ticket to its invoice in the same tab', async () => {
