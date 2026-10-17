@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { externalFetch } from '../../server/utils/external-fetch'
 import { getMobileSentrixOrder, listMobileSentrixOrders } from '../../server/utils/mobilesentrix'
 import { mapMobileSentrixOrder } from '../../server/utils/mobilesentrix-order-mapping'
-import { mergeMobileSentrixOrders, mobileSentrixCalendarDate, mobileSentrixLinesSubtotal, mobileSentrixOrderDate, mobileSentrixOrderLineKind, mobileSentrixOrderMoney, mobileSentrixOrderStatus, mobileSentrixVisibleOrderLines } from '../../shared/utils/mobilesentrix-orders'
+import { mergeMobileSentrixOrders, mobileSentrixCalendarDate, mobileSentrixLinesSubtotal, mobileSentrixOrderDate, mobileSentrixOrderLineKind, mobileSentrixOrderMatchesSearch, mobileSentrixOrderMoney, mobileSentrixOrderStatus, mobileSentrixVisibleOrderLines } from '../../shared/utils/mobilesentrix-orders'
 import { mobileSentrixOrderParamsSchema, mobileSentrixOrdersQuerySchema } from '../../shared/validation/mobilesentrix-orders'
 
 vi.mock('../../server/utils/external-fetch', () => ({ externalFetch: vi.fn() }))
@@ -108,6 +108,22 @@ describe('MobileSentrix orders API', () => {
 })
 
 describe('MobileSentrix order presentation', () => {
+  it('searches order numbers, translated status, calendar dates, tracking and article SKUs', () => {
+    const order = mapMobileSentrixOrder(fixture)
+    for (const query of ['#001234', 'expediee iphone', '15.10.2026', '2026-10-19', 'fedex 123456789012', '000123', '   ']) {
+      expect(mobileSentrixOrderMatchesSearch(order, query), query).toBe(true)
+    }
+    expect(mobileSentrixOrderMatchesSearch(order, 'iphone 16')).toBe(false)
+    expect(mobileSentrixOrderMatchesSearch(order, 'private@example.test')).toBe(false)
+  })
+  it('combines order search with smartphone filtering and restores matches when cleared', () => {
+    const order = mapMobileSentrixOrder(fixture)
+    expect(mobileSentrixOrderMatchesSearch(order, 'cable', false)).toBe(true)
+    expect(mobileSentrixOrderMatchesSearch(order, 'cable', true)).toBe(false)
+    expect(mobileSentrixOrderMatchesSearch(order, 'iphone', true)).toBe(true)
+    expect(mobileSentrixOrderMatchesSearch(order, '', true)).toBe(true)
+    expect(order.lines).toHaveLength(2)
+  })
   it.each([null, '', '0000-00-00 00:00:00', '2026-02-30', '2026-13-01', '2026-10-19 25:00:00', '2026-10-19 18:60:00', 'invalid'])('rejects an absent or invalid date %s', (value) => {
     expect(mobileSentrixCalendarDate(value)).toBeNull()
   })

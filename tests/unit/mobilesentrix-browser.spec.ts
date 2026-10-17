@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { supplierFacts, supplierPageRange, supplierPrice, supplierProductKey, supplierQuery } from '../../shared/utils/mobilesentrix-browser'
+import { supplierFacts, supplierPageRange, supplierPrice, supplierProductKey, supplierProductMatchesSearch, supplierQuery } from '../../shared/utils/mobilesentrix-browser'
 import type { MobileSentrixProductSummary } from '../../shared/types/pos'
 
 const product: MobileSentrixProductSummary = {
@@ -8,6 +8,20 @@ const product: MobileSentrixProductSummary = {
   imageUrl: null, url: 'https://www.mobilesentrix.com/screen', tags: [], raw: {}
 }
 describe('supplier browser display', () => {
+  it('searches names and both SKUs with unordered terms, accents and case folded', () => {
+    const item = { ...product, name: 'Écran iPhone 15 Pro Max', newSku: 'REF-456' }
+    expect(supplierProductMatchesSearch(item, '  PRO ecran 15 ')).toBe(true)
+    expect(supplierProductMatchesSearch(item, '000123')).toBe(true)
+    expect(supplierProductMatchesSearch(item, 'ref-456')).toBe(true)
+    expect(supplierProductMatchesSearch(item, 'iphone 16')).toBe(false)
+    expect(supplierProductMatchesSearch(item, '   ')).toBe(true)
+  })
+  it('searches displayed stock, quality and model without searching private raw fields', () => {
+    const item = { ...product, inStock: true, model: 'Test model', raw: { quality_text: 'Grade C', privateNote: 'hidden-secret' } }
+    expect(supplierProductMatchesSearch(item, 'test grade c stock')).toBe(true)
+    expect(supplierProductMatchesSearch(item, 'rupture')).toBe(false)
+    expect(supplierProductMatchesSearch(item, 'hidden-secret')).toBe(false)
+  })
   it('builds a supplier query from French filter choices without sending all placeholders', () => {
     expect(supplierQuery({ text: '  ', model: 'iPhone 15', part: 'screen', quality: 'XO7 Soft', color: 'black' })).toBe('iPhone 15 screen XO7 Soft black')
     expect(supplierQuery({ text: '000123', model: '', part: 'all', quality: 'Toutes les qualités', color: 'all' })).toBe('000123')

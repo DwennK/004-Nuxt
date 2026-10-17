@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MobileSentrixCategoriesResponse, MobileSentrixCategorySummary, MobileSentrixProductsResponse, MobileSentrixProductSummary, MobileSentrixSearchResponse } from '~~/shared/types/pos'
-import { colorOptions, partOptions, qualityOptions, supplierFacts, supplierPageRange, supplierPrice, supplierProductKey, supplierQuery, supplierStock } from '~~/shared/utils/mobilesentrix-browser'
+import { colorOptions, partOptions, qualityOptions, supplierFacts, supplierPageRange, supplierPrice, supplierProductKey, supplierProductMatchesSearch, supplierQuery, supplierStock } from '~~/shared/utils/mobilesentrix-browser'
 
 const props = defineProps<{ canUseApi: boolean, baseUrl: string }>()
 type Mode = 'search' | 'devices' | 'categories' | 'favorites'
@@ -21,6 +21,8 @@ const tabs = [
 const filters = reactive({ text: '', model: '', part: 'all', quality: qualityOptions[0]!, color: 'all' })
 const pageSize = ref(20)
 const stock = ref('all')
+const tableQueries = reactive<Record<Mode, string>>({ search: '', devices: '', categories: '', favorites: '' })
+const tableQuery = computed({ get: () => tableQueries[mode.value], set: value => tableQueries[mode.value] = value })
 const stockOptions = [{ label: 'Tout stock', value: 'all' }, { label: 'En stock', value: 'available' }, { label: 'Rupture', value: 'unavailable' }, { label: 'Non communiqué', value: 'unknown' }]
 const { favorites, favoriteKeys, recent, storageWarning, toggleFavorite, remember, clearRecent } = useMobileSentrixLibrary()
 const compared = ref<MobileSentrixProductSummary[]>([])
@@ -70,13 +72,13 @@ const isLocal = computed(() => mode.value === 'categories' || mode.value === 'fa
 const current = computed(() => results[mode.value])
 const matchesStock = (item: MobileSentrixProductSummary) => stock.value === 'all' || (stock.value === 'available' ? item.inStock === true : stock.value === 'unavailable' ? item.inStock === false : item.inStock === null)
 const sourceItems = computed(() => mode.value === 'favorites' ? favorites.value : current.value.items)
-const filteredItems = computed(() => sourceItems.value.filter(matchesStock))
+const filteredItems = computed(() => sourceItems.value.filter(item => matchesStock(item) && supplierProductMatchesSearch(item, tableQuery.value)))
 const shownItems = computed(() => isLocal.value ? filteredItems.value.slice((current.value.page - 1) * pageSize.value, current.value.page * pageSize.value) : filteredItems.value)
 const total = computed(() => isLocal.value ? filteredItems.value.length : current.value.total)
 const pageCount = computed(() => total.value === null ? null : Math.max(1, Math.ceil(total.value / pageSize.value)))
-const canNext = computed(() => pageCount.value === null ? current.value.items.length === pageSize.value : current.value.page < pageCount.value)
+const canNext = computed(() => pageCount.value === null ? current.value.items.length >= pageSize.value : current.value.page < pageCount.value)
 const range = computed(() => supplierPageRange(current.value.page, pageSize.value, isLocal.value ? shownItems.value.length : current.value.items.length, total.value))
-const emptyMessage = computed(() => !current.value.loaded ? mode.value === 'categories' ? 'Choisissez une catégorie pour afficher ses produits.' : 'Recherchez un modèle, une pièce ou un SKU.' : stock.value !== 'all' && !shownItems.value.length ? 'Aucune correspondance avec ce filtre de stock.' : mode.value === 'favorites' ? 'Ajoutez vos références avec l’étoile dans la liste.' : 'Aucun produit trouvé. Essayez une recherche plus large.')
+const emptyMessage = computed(() => !current.value.loaded ? mode.value === 'categories' ? 'Choisissez une catégorie pour afficher ses produits.' : 'Recherchez un modèle, une pièce ou un SKU.' : tableQuery.value.trim() ? `Aucune correspondance ${isLocal.value ? 'dans cette liste' : 'sur cette page'}. Effacez la recherche ou modifiez les filtres.` : stock.value !== 'all' && !shownItems.value.length ? 'Aucune correspondance avec ce filtre de stock.' : mode.value === 'favorites' ? 'Ajoutez vos références avec l’étoile dans la liste.' : 'Aucun produit trouvé. Essayez une recherche plus large.')
 const storeLabel = computed(() => {
   try {
     return new URL(props.baseUrl).hostname
@@ -189,7 +191,7 @@ watch(pageSize, () => {
   results.favorites.page = 1
   if (!isLocal.value && (mode.value === 'devices' || current.value.query)) load(mode.value, 1)
 })
-watch(stock, () => {
+watch([stock, tableQuery], () => {
   if (isLocal.value) current.value.page = 1
   productTable.value?.scrollToTop()
 })
@@ -336,6 +338,27 @@ watch(() => filteredItems.value.length, () => {
         />
       </div>
       <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-default px-3 py-2">
+        <UInput
+          v-bind="posInputAttrs"
+          v-model="tableQuery"
+          :aria-label="isLocal ? 'Rechercher dans la liste' : 'Rechercher sur cette page'"
+          :placeholder="isLocal ? 'Rechercher dans la liste…' : 'Rechercher sur cette page…'"
+          icon="i-lucide-search"
+          size="sm"
+          class="w-full sm:w-72"
+          @keydown.esc="tableQuery = ''"
+        >
+          <template v-if="tableQuery" #trailing>
+            <UButton
+              aria-label="Effacer la recherche dans la liste"
+              icon="i-lucide-x"
+              variant="link"
+              color="neutral"
+              size="xs"
+              @click="tableQuery = ''"
+            />
+          </template>
+        </UInput>
         <p class="min-w-0 text-xs text-muted">
           <template v-if="mode === 'favorites'">
             {{ favorites.length }} favoris · valeurs enregistrées dans ce navigateur
@@ -428,7 +451,7 @@ watch(() => filteredItems.value.length, () => {
       </div>
       <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-default px-3 py-2" aria-label="Pagination">
         <p role="status" class="text-xs tabular-nums text-muted">
-          {{ range }}<span v-if="stock !== 'all' && !isLocal"> · {{ shownItems.length }} avec ce stock</span>
+          {{ range }}<span v-if="(stock !== 'all' || tableQuery.trim()) && !isLocal"> · {{ shownItems.length }} correspondance(s) sur cette page</span>
         </p>
         <div class="flex items-center gap-2">
           <USelect

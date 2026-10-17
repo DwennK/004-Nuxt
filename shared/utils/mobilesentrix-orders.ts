@@ -1,4 +1,5 @@
 import type { MobileSentrixOrder, MobileSentrixOrderLine, MobileSentrixOrderLineKind } from '../types/mobilesentrix-orders'
+import { supplierMatchesSearch } from './mobilesentrix-browser'
 
 /** The supplier's device attribute set includes tablets, and is not a phone flag. */
 export function mobileSentrixOrderLineKind(attributeSet: unknown, name: string): MobileSentrixOrderLineKind {
@@ -46,6 +47,14 @@ export function mobileSentrixOrderStatus(status: string) {
 
 export function mobileSentrixVisibleOrderLines(order: MobileSentrixOrder, smartphonesOnly: boolean) {
   return smartphonesOnly ? order.lines.filter(line => line.kind === 'smartphone') : order.lines
+}
+
+export function mobileSentrixOrderMatchesSearch(order: MobileSentrixOrder, query: string, smartphonesOnly = false) {
+  if (!query.trim()) return true
+  return supplierMatchesSearch(query, [order.number, order.status, mobileSentrixOrderStatus(order.status),
+    order.createdAt, mobileSentrixOrderDate(order.createdAt), order.deliveryDate, mobileSentrixOrderDate(order.deliveryDate),
+    order.carrier, order.trackingNumber, mobileSentrixOrderMoney(order.totalCents, order.currency),
+    ...mobileSentrixVisibleOrderLines(order, smartphonesOnly).flatMap(line => [line.name, line.sku])])
 }
 
 export function mobileSentrixLinesSubtotal(lines: MobileSentrixOrderLine[]): number | null {

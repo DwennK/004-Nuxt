@@ -220,6 +220,20 @@ réponse fournisseur expose une hiérarchie (`parent_id`, `children` ou
 les recherches et les appareils utilisent la pagination fournisseur. Un total
 absent est signalé comme non communiqué.
 
+Chaque onglet propose également une recherche instantanée dans sa liste par
+désignation, modèle, SKU, qualité ou disponibilité, sans distinction de casse
+ni d’accent. Tous les mots saisis doivent correspondre, quel que soit leur ordre.
+Les critères sont conservés séparément par onglet. Pour **Recherche** et
+**Appareils**, ce filtre porte sur la page fournisseur courante ; les boutons de
+pagination restent accessibles même sans correspondance. Pour **Catégories**
+et **Favoris**, il porte sur toute la liste chargée avant sa pagination locale.
+Le moteur fournisseur reste accessible dans l’onglet **Recherche**.
+
+Dans **Commandes**, la recherche porte sur toutes les commandes chargées :
+numéro, articles/SKU, statut, dates, transporteur et suivi. Elle se combine avec
+le filtre smartphones, en excluant les lignes masquées. **Charger les précédentes**
+reste accessible. Effacer la recherche rétablit les résultats sans nouvel appel.
+
 Le filtre de disponibilité s’applique à la page reçue pour la recherche et les
 appareils, et à la liste complète reçue pour les catégories et les favoris. Le
 libellé « Stock de la page » et le compteur distinguent ce filtrage local du

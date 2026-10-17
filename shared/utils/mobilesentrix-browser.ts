@@ -1,4 +1,18 @@
 import type { MobileSentrixProductSummary } from '../types/pos'
+import { foldSearchText } from './search'
+
+export function supplierMatchesSearch(query: string, values: (string | null | undefined)[]) {
+  const normalize = (value: string) => foldSearchText(value).replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  const terms = normalize(query).split(/\s+/).filter(Boolean)
+  const text = normalize(values.filter(Boolean).join(' '))
+  return terms.every(term => text.includes(term))
+}
+
+export function supplierProductMatchesSearch(product: MobileSentrixProductSummary, query: string) {
+  if (!query.trim()) return true
+  return supplierMatchesSearch(query, [product.name, product.sku, product.newSku, product.model,
+    product.manufacturer, ...product.tags, ...Object.values(supplierFacts(product)), supplierStock(product), supplierPrice(product)])
+}
 
 export const partOptions = [
   { label: 'Toutes les pièces', value: 'all' },

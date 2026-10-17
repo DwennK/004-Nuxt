@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { MobileSentrixOrder, MobileSentrixOrdersResponse } from '~~/shared/types/mobilesentrix-orders'
-import { mergeMobileSentrixOrders, mobileSentrixLinesSubtotal, mobileSentrixOrderDate, mobileSentrixOrderMoney, mobileSentrixOrderStatus, mobileSentrixVisibleOrderLines } from '~~/shared/utils/mobilesentrix-orders'
+import { mergeMobileSentrixOrders, mobileSentrixLinesSubtotal, mobileSentrixOrderDate, mobileSentrixOrderMatchesSearch, mobileSentrixOrderMoney, mobileSentrixOrderStatus, mobileSentrixVisibleOrderLines } from '~~/shared/utils/mobilesentrix-orders'
 
 const props = defineProps<{ canUseApi: boolean, active: boolean }>()
 const orders = ref<MobileSentrixOrder[]>([])
 const smartphonesOnly = ref(false)
+const searchQuery = ref('')
 const loaded = ref(false)
 const pending = ref(false)
 const error = ref('')
@@ -13,7 +14,7 @@ const hasMore = ref(false)
 const failedPage = ref(1)
 const updatedAt = ref('')
 const scrollArea = useTemplateRef('scrollArea')
-const shownOrders = computed(() => orders.value.filter(order => !smartphonesOnly.value || visibleLines(order).length))
+const shownOrders = computed(() => orders.value.filter(order => (!smartphonesOnly.value || visibleLines(order).length) && mobileSentrixOrderMatchesSearch(order, searchQuery.value, smartphonesOnly.value)))
 const unknownCount = computed(() => orders.value.reduce((count, order) => count + order.lines.filter(line => line.kind === 'unknown').length, 0))
 const selected = ref<MobileSentrixOrder | null>(null)
 const detailsOpen = ref(false)
@@ -87,7 +88,7 @@ async function refreshDetail() {
 watch(() => [props.active, props.canUseApi], () => {
   if (props.active && props.canUseApi && !loaded.value) load()
 }, { immediate: true })
-watch(smartphonesOnly, () => scrollArea.value?.scrollTo({ top: 0 }))
+watch([smartphonesOnly, searchQuery], () => scrollArea.value?.scrollTo({ top: 0 }))
 watch(detailsOpen, (open) => {
   if (!open) {
     detailRequest++
@@ -106,6 +107,27 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Commandes MobileSentrix">
     <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-default p-3">
+      <UInput
+        v-bind="posInputAttrs"
+        v-model="searchQuery"
+        aria-label="Rechercher dans les commandes chargées"
+        placeholder="N° commande, article, SKU, suivi…"
+        icon="i-lucide-search"
+        size="sm"
+        class="w-full sm:w-80"
+        @keydown.esc="searchQuery = ''"
+      >
+        <template v-if="searchQuery" #trailing>
+          <UButton
+            aria-label="Effacer la recherche de commandes"
+            icon="i-lucide-x"
+            variant="link"
+            color="neutral"
+            size="xs"
+            @click="searchQuery = ''"
+          />
+        </template>
+      </UInput>
       <UCheckbox v-model="smartphonesOnly" label="Smartphones uniquement" />
       <UButton
         label="Actualiser"
@@ -144,7 +166,7 @@ onBeforeUnmount(() => {
         Chargement des commandes…
       </p>
       <p v-else-if="loaded && !shownOrders.length" role="status" class="p-4 text-sm text-muted">
-        {{ smartphonesOnly ? 'Aucun smartphone dans les commandes chargées.' : 'Aucune commande disponible.' }}
+        {{ searchQuery.trim() ? 'Aucune commande chargée ne correspond à la recherche et aux filtres.' : smartphonesOnly ? 'Aucun smartphone dans les commandes chargées.' : 'Aucune commande disponible.' }}
       </p>
       <article
         v-for="order in shownOrders"
@@ -204,7 +226,7 @@ onBeforeUnmount(() => {
     </div>
     <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-default px-3 py-2">
       <p role="status" class="text-xs text-muted">
-        {{ shownOrders.length }} / {{ orders.length }} commandes chargées<span v-if="smartphonesOnly"> · filtre smartphones</span><span v-if="updatedAt"> · lecture à {{ updatedAt }}</span>
+        {{ shownOrders.length }} / {{ orders.length }} commandes chargées<span v-if="searchQuery.trim()"> · recherche active</span><span v-if="smartphonesOnly"> · filtre smartphones</span><span v-if="updatedAt"> · lecture à {{ updatedAt }}</span>
       </p>
       <UButton
         v-if="hasMore"
