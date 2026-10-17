@@ -209,9 +209,9 @@ Validation ciblée : `pnpm exec vitest run tests/unit/mobilesentrix-orders.spec.
 ## Navigation dans le fournisseur
 
 L’explorateur propose une liste avec défilement local et en-tête fixe, une
-pagination de 20 ou 50 résultats, une recherche libre/SKU complétée par modèle,
-type de pièce, qualité et couleur, ainsi qu’une fiche latérale et un comparateur
-limité à trois références. Les critères de recherche sont envoyés au moteur
+pagination de 20 ou 50 résultats, une seule recherche libre par modèle, pièce ou
+SKU complétée par les filtres type de pièce, qualité et couleur, ainsi qu’une
+fiche latérale et un comparateur limité à trois références. Les critères de recherche sont envoyés au moteur
 fournisseur ; ils ne constituent pas une preuve de compatibilité.
 
 Les catégories sont cliquables. Les sous-catégories sont reprises quand la
@@ -220,14 +220,15 @@ réponse fournisseur expose une hiérarchie (`parent_id`, `children` ou
 les recherches et les appareils utilisent la pagination fournisseur. Un total
 absent est signalé comme non communiqué.
 
-Chaque onglet propose également une recherche instantanée dans sa liste par
-désignation, modèle, SKU, qualité ou disponibilité, sans distinction de casse
+Les onglets **Appareils**, **Catégories** et **Favoris** proposent une recherche
+instantanée dans leur liste par désignation, modèle, SKU, qualité ou disponibilité, sans distinction de casse
 ni d’accent. Tous les mots saisis doivent correspondre, quel que soit leur ordre.
-Les critères sont conservés séparément par onglet. Pour **Recherche** et
+Les critères sont conservés séparément par onglet. Pour
 **Appareils**, ce filtre porte sur la page fournisseur courante ; les boutons de
 pagination restent accessibles même sans correspondance. Pour **Catégories**
 et **Favoris**, il porte sur toute la liste chargée avant sa pagination locale.
-Le moteur fournisseur reste accessible dans l’onglet **Recherche**.
+L’onglet **Recherche** conserve uniquement sa barre de recherche fournisseur,
+sans second champ Modèle ni filtre de texte local superposé aux résultats.
 
 Dans **Commandes**, la recherche porte sur toutes les commandes chargées :
 numéro, articles/SKU, statut, dates, transporteur et suivi. Elle se combine avec

@@ -18,11 +18,14 @@ const tabs = [
   { label: 'Favoris', value: 'favorites', icon: 'i-lucide-star' },
   { label: 'Commandes', value: 'orders', icon: 'i-lucide-package-check' }
 ]
-const filters = reactive({ text: '', model: '', part: 'all', quality: qualityOptions[0]!, color: 'all' })
+const filters = reactive({ text: '', part: 'all', quality: qualityOptions[0]!, color: 'all' })
 const pageSize = ref(20)
 const stock = ref('all')
-const tableQueries = reactive<Record<Mode, string>>({ search: '', devices: '', categories: '', favorites: '' })
-const tableQuery = computed({ get: () => tableQueries[mode.value], set: value => tableQueries[mode.value] = value })
+const tableQueries = reactive<Record<Exclude<Mode, 'search'>, string>>({ devices: '', categories: '', favorites: '' })
+const tableQuery = computed({
+  get: () => mode.value === 'search' ? '' : tableQueries[mode.value],
+  set: (value) => { if (mode.value !== 'search') tableQueries[mode.value] = value }
+})
 const stockOptions = [{ label: 'Tout stock', value: 'all' }, { label: 'En stock', value: 'available' }, { label: 'Rupture', value: 'unavailable' }, { label: 'Non communiqué', value: 'unknown' }]
 const { favorites, favoriteKeys, recent, storageWarning, toggleFavorite, remember, clearRecent } = useMobileSentrixLibrary()
 const compared = ref<MobileSentrixProductSummary[]>([])
@@ -118,7 +121,7 @@ async function load(target: Mode, page = 1, query = results[target].query) {
   }
   if (!props.canUseApi) return
   if (target === 'search' && query.trim().length < 2) {
-    errors.search = 'Saisissez au moins deux caractères ou choisissez un modèle et une pièce.'
+    errors.search = 'Saisissez au moins deux caractères ou choisissez un type de pièce.'
     return
   }
   if (target === 'categories' && !query) return
@@ -149,12 +152,12 @@ function search() {
   load('search', 1, supplierQuery(filters))
 }
 function recall(query: string) {
-  Object.assign(filters, { text: query, model: '', part: 'all', quality: qualityOptions[0]!, color: 'all' })
+  Object.assign(filters, { text: query, part: 'all', quality: qualityOptions[0]!, color: 'all' })
   mode.value = 'search'
   load('search', 1, query)
 }
 function resetFilters() {
-  Object.assign(filters, { text: '', model: '', part: 'all', quality: qualityOptions[0]!, color: 'all' })
+  Object.assign(filters, { text: '', part: 'all', quality: qualityOptions[0]!, color: 'all' })
   stock.value = 'all'
 }
 function chooseCategory(id: string) {
@@ -229,7 +232,7 @@ watch(() => filteredItems.value.length, () => {
               v-bind="posInputAttrs"
               v-model="filters.text"
               aria-label="Recherche produit ou SKU"
-              placeholder="Rechercher une pièce, une référence…"
+              placeholder="Rechercher un modèle, une pièce ou un SKU…"
               icon="i-lucide-search"
               class="min-w-0 flex-1"
               :disabled="!canUseApi"
@@ -242,15 +245,7 @@ watch(() => filteredItems.value.length, () => {
               :disabled="!canUseApi"
             />
           </div>
-          <div class="grid grid-cols-2 gap-2 lg:grid-cols-[1.2fr_1fr_1.2fr_1fr_auto]">
-            <UInput
-              v-bind="posInputAttrs"
-              v-model="filters.model"
-              aria-label="Modèle"
-              placeholder="Modèle : iPhone 15…"
-              class="w-full"
-              :disabled="!canUseApi"
-            />
+          <div class="grid grid-cols-2 gap-2 lg:grid-cols-[1fr_1.2fr_1fr_auto]">
             <USelect
               v-model="filters.part"
               :items="partOptions"
@@ -339,6 +334,7 @@ watch(() => filteredItems.value.length, () => {
       </div>
       <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-default px-3 py-2">
         <UInput
+          v-if="mode !== 'search'"
           v-bind="posInputAttrs"
           v-model="tableQuery"
           :aria-label="isLocal ? 'Rechercher dans la liste' : 'Rechercher sur cette page'"

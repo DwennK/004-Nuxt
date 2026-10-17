@@ -34,13 +34,12 @@ export const colorOptions = [
 ]
 export interface SupplierSearch {
   text: string
-  model: string
   part: string
   quality: string
   color: string
 }
 export function supplierQuery(search: SupplierSearch) {
-  return [search.text.trim(), search.model.trim(), search.part === 'all' ? '' : search.part,
+  return [search.text.trim(), search.part === 'all' ? '' : search.part,
     search.quality === qualityOptions[0] ? '' : search.quality, search.color === 'all' ? '' : search.color]
     .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
 }

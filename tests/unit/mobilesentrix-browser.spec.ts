@@ -23,8 +23,8 @@ describe('supplier browser display', () => {
     expect(supplierProductMatchesSearch(item, 'hidden-secret')).toBe(false)
   })
   it('builds a supplier query from French filter choices without sending all placeholders', () => {
-    expect(supplierQuery({ text: '  ', model: 'iPhone 15', part: 'screen', quality: 'XO7 Soft', color: 'black' })).toBe('iPhone 15 screen XO7 Soft black')
-    expect(supplierQuery({ text: '000123', model: '', part: 'all', quality: 'Toutes les qualités', color: 'all' })).toBe('000123')
+    expect(supplierQuery({ text: '  iPhone 15  ', part: 'screen', quality: 'XO7 Soft', color: 'black' })).toBe('iPhone 15 screen XO7 Soft black')
+    expect(supplierQuery({ text: '000123', part: 'all', quality: 'Toutes les qualités', color: 'all' })).toBe('000123')
   })
   it('preserves supplier identity, leading zeroes and separate stores', () => {
     expect(supplierProductKey(product)).toBe('www.mobilesentrix.com:000123')
