@@ -362,7 +362,7 @@ const groups = computed(() => {
           popover
         />
 
-        <USeparator class="my-3" />
+        <USeparator :label="collapsed ? undefined : 'Commerce'" class="my-3" />
 
         <UNavigationMenu
           :collapsed="collapsed"
@@ -372,7 +372,7 @@ const groups = computed(() => {
           popover
         />
 
-        <USeparator class="my-3" />
+        <USeparator :label="collapsed ? undefined : 'Finances'" class="my-3" />
 
         <UNavigationMenu
           :collapsed="collapsed"
@@ -382,7 +382,7 @@ const groups = computed(() => {
           popover
         />
 
-        <USeparator class="my-3" />
+        <USeparator :label="collapsed ? undefined : 'Gestion'" class="my-3" />
 
         <UNavigationMenu
           :collapsed="collapsed"
