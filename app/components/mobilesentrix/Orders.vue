@@ -134,8 +134,8 @@ onBeforeUnmount(() => {
       />
     </div>
     <div ref="scrollArea" :aria-busy="pending" class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-      <div class="sticky top-0 z-10 hidden grid-cols-[1.1fr_2fr_1.5fr_1fr] gap-4 border-b border-default bg-elevated px-3 py-2 text-xs font-medium text-muted lg:grid" aria-hidden="true">
-        <span>Commande</span><span>{{ smartphonesOnly ? 'Smartphones' : 'Pièces / appareils' }}</span><span>Livraison prévue — fournisseur</span><span class="text-right">Montant TTC</span>
+      <div class="sticky top-0 z-10 hidden grid-cols-[1fr_7rem_2fr_1.5fr_1fr] gap-4 border-b border-default bg-elevated px-3 py-2 text-xs font-medium text-muted lg:grid" aria-hidden="true">
+        <span>Commande</span><span>Date de commande</span><span>{{ smartphonesOnly ? 'Smartphones' : 'Pièces / appareils' }}</span><span>Livraison prévue — fournisseur</span><span class="text-right">Montant TTC</span>
       </div>
       <p v-if="!canUseApi" class="p-4 text-sm text-muted">
         Connectez MobileSentrix pour consulter les commandes.
@@ -150,9 +150,9 @@ onBeforeUnmount(() => {
         v-for="order in shownOrders"
         :key="order.id"
         :aria-label="`Commande ${order.number}`"
-        class="grid grid-cols-1 gap-3 border-b border-default p-3 sm:grid-cols-2 lg:grid-cols-[1.1fr_2fr_1.5fr_1fr] lg:gap-4"
+        class="grid grid-cols-1 gap-3 border-b border-default p-3 sm:grid-cols-2 lg:grid-cols-[1fr_7rem_2fr_1.5fr_1fr] lg:gap-4"
       >
-        <div class="min-w-0">
+        <div class="flex min-w-0 flex-col items-start gap-1">
           <UButton
             :label="`#${order.number}`"
             :aria-label="`Ouvrir la commande ${order.number}`"
@@ -160,12 +160,15 @@ onBeforeUnmount(() => {
             class="px-0 py-0 font-semibold"
             @click="openOrder(order)"
           />
-          <p class="my-1 text-xs text-muted">
-            {{ mobileSentrixOrderDate(order.createdAt) }}
-          </p>
           <UBadge color="neutral" variant="subtle" size="sm">
             {{ mobileSentrixOrderStatus(order.status) }}
           </UBadge>
+        </div>
+        <div class="text-sm tabular-nums">
+          <p class="text-xs text-muted lg:hidden">
+            Date de commande
+          </p>
+          {{ mobileSentrixOrderDate(order.createdAt) }}
         </div>
         <div class="min-w-0">
           <p class="line-clamp-2 text-sm" :title="visibleLines(order).map(line => line.name).join('\n')">
