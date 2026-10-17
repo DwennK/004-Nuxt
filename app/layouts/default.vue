@@ -96,6 +96,13 @@ const reportLinks = [{
   onSelect: () => {
     open.value = false
   }
+}, {
+  label: 'Paiements',
+  icon: 'i-lucide-wallet',
+  to: '/payments',
+  onSelect: () => {
+    open.value = false
+  }
 }] satisfies NavigationMenuItem[]
 
 const secondaryLinks = [{
@@ -109,13 +116,6 @@ const secondaryLinks = [{
   label: 'Catalogue',
   icon: 'i-lucide-package-search',
   to: '/catalog',
-  onSelect: () => {
-    open.value = false
-  }
-}, {
-  label: 'Paiements',
-  icon: 'i-lucide-wallet',
-  to: '/payments',
   onSelect: () => {
     open.value = false
   }
