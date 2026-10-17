@@ -736,29 +736,25 @@ async function logSmsQrOpened(template: SmsTemplateRecord) {
         <PosFormFeedback v-show="actionSaving || actionError" :saving="actionSaving" :error="actionError" />
 
         <section aria-label="Résumé du dossier" class="overflow-hidden rounded-lg border border-default bg-default">
-          <div class="space-y-1 px-3 py-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <h1 class="text-xl font-semibold text-highlighted">
-                {{ ticket.type === 'sale' ? 'Vente' : ticket.brand || 'Appareil' }} {{ ticket.model || '' }}
-              </h1>
-              <UBadge :color="ticketTypeColors[ticket.type]" variant="subtle" size="sm">
-                {{ ticketTypeLabels[ticket.type] }}
-              </UBadge>
+          <div class="grid md:grid-cols-2">
+            <div class="min-w-0 space-y-1 px-3 py-2 md:border-r md:border-default">
+              <div class="flex flex-wrap items-center gap-2">
+                <h1 class="text-xl font-semibold text-highlighted">
+                  {{ ticket.type === 'sale' ? 'Vente' : ticket.brand || 'Appareil' }} {{ ticket.model || '' }}
+                </h1>
+                <UBadge :color="ticketTypeColors[ticket.type]" variant="subtle" size="sm">
+                  {{ ticketTypeLabels[ticket.type] }}
+                </UBadge>
+              </div>
+              <p v-if="ticket.issueDescription" class="text-sm text-highlighted whitespace-pre-line wrap-anywhere">
+                {{ ticket.issueDescription }}
+              </p>
+              <p class="text-xs text-toned">
+                Ouvert le {{ formatDateTime(ticket.openedAt) }}
+              </p>
             </div>
-            <p v-if="ticket.issueDescription" class="text-sm text-highlighted whitespace-pre-line wrap-anywhere">
-              {{ ticket.issueDescription }}
-            </p>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-toned">
-              <UButton
-                :label="ticket.customer.displayName"
-                icon="i-lucide-user-round"
-                color="neutral"
-                variant="link"
-                class="p-0"
-                @click="activeTab = 'client'"
-              />
-              <span v-if="ticket.customer.phone">{{ ticket.customer.phone }}</span>
-              <span class="text-xs">Ouvert le {{ formatDateTime(ticket.openedAt) }}</span>
+            <div class="min-w-0 border-t border-default px-3 py-2 md:border-t-0">
+              <PosCustomerInfo compact :customer="ticket.customer" :editable="false" />
             </div>
           </div>
           <div class="border-t border-default bg-muted/30 px-3 py-1.5">
