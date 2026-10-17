@@ -172,6 +172,40 @@ OAuth ou de droits API après ajout du header doit être distinguée du blocage
 Cloudflare. Ne jamais partager les headers d’authentification dans les captures
 ou les journaux de diagnostic.
 
+## Commandes et suivi
+
+L’onglet **Commandes** charge à la demande les 50 dernières commandes du compte
+configuré. Les lectures utilisent `/api/rest/orders` et `/api/rest/orders/:id`,
+avec les mêmes identifiants OAuth et le header REST que le catalogue. Les routes
+POS `/api/tools/mobilesentrix/orders` et `/api/tools/mobilesentrix/orders/:id`
+requièrent une session et désactivent le cache HTTP. Aucune donnée n’est importée
+dans les stocks, tickets, documents ou paiements du POS.
+
+**Charger les précédentes** poursuit la pagination fournisseur ; les commandes
+sont dédupliquées et triées par date décroissante. **Actualiser** recharge la
+première page. Le détail est relu à chaque ouverture. Une erreur conserve les
+dernières valeurs avec un avertissement. Le filtre **Smartphones uniquement**
+porte sur les commandes chargées et masque également les lignes non smartphones
+du détail. Il distingue le sous-total des smartphones du total de la commande.
+Les frais et ajustements restent inclus uniquement dans le total fournisseur.
+
+Le jeu d’attributs fournisseur `10` regroupe les appareils, y compris les iPad.
+L’identification des smartphones le combine avec les familles iPhone, Galaxy et
+OnePlus reconnues dans le nom, en excluant tablettes, montres et accessoires.
+Les modèles indéterminés sont signalés et exclus du filtre. Les montants sont
+normalisés en centimes avec la devise fournisseur ; un prix TTC absent n’est
+pas remplacé silencieusement par un prix HT.
+
+`delivery_date` fournit la **livraison prévue — fournisseur**. La date seule est
+affichée, car la réponse ne précise pas le fuseau horaire. Une valeur absente ou
+invalide devient « Non communiquée » ; ni cette date ni « Shipped » ne prouvent
+la livraison. Le suivi présente le transporteur et le numéro copiable, avec un
+lien officiel pour FedEx. Aucun appel à une API transporteur ni rapprochement
+automatique de colis entre commandes n’est effectué. Les réponses publiques
+du POS ne contiennent ni payload brut, ni adresses, ni informations de paiement.
+
+Validation ciblée : `pnpm exec vitest run tests/unit/mobilesentrix-orders.spec.ts`.
+
 ## Navigation dans le fournisseur
 
 L’explorateur propose une liste avec défilement local et en-tête fixe, une

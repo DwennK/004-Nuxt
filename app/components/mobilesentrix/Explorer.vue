@@ -5,11 +5,18 @@ import { colorOptions, partOptions, qualityOptions, supplierFacts, supplierPageR
 const props = defineProps<{ canUseApi: boolean, baseUrl: string }>()
 type Mode = 'search' | 'devices' | 'categories' | 'favorites'
 const mode = ref<Mode>('search')
+const tab = ref<Mode | 'orders'>('search')
+const ordersVisited = ref(false)
+watch(tab, (value) => {
+  if (value === 'orders') ordersVisited.value = true
+  else mode.value = value
+})
 const tabs = [
   { label: 'Recherche', value: 'search', icon: 'i-lucide-search' },
   { label: 'Appareils', value: 'devices', icon: 'i-lucide-smartphone' },
   { label: 'Catégories', value: 'categories', icon: 'i-lucide-list-tree' },
-  { label: 'Favoris', value: 'favorites', icon: 'i-lucide-star' }
+  { label: 'Favoris', value: 'favorites', icon: 'i-lucide-star' },
+  { label: 'Commandes', value: 'orders', icon: 'i-lucide-package-check' }
 ]
 const filters = reactive({ text: '', model: '', part: 'all', quality: qualityOptions[0]!, color: 'all' })
 const pageSize = ref(20)
@@ -192,11 +199,11 @@ watch(() => filteredItems.value.length, () => {
 </script>
 
 <template>
-  <section class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-default bg-default" aria-label="Catalogue MobileSentrix">
+  <section class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-default bg-default" aria-label="Explorateur MobileSentrix">
     <div class="shrink-0 border-b border-default px-3 pt-2">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <UTabs
-          v-model="mode"
+          v-model="tab"
           :items="tabs"
           :content="false"
           variant="link"
@@ -206,267 +213,275 @@ watch(() => filteredItems.value.length, () => {
         <span class="pb-2 text-xs text-muted">{{ storeLabel }}</span>
       </div>
     </div>
-    <div v-if="mode === 'search'" class="shrink-0 space-y-2 border-b border-default p-3">
-      <form class="space-y-2" @submit.prevent="search">
-        <div class="flex gap-2">
-          <UInput
-            v-bind="posInputAttrs"
-            v-model="filters.text"
-            aria-label="Recherche produit ou SKU"
-            placeholder="Rechercher une pièce, une référence…"
-            icon="i-lucide-search"
-            class="min-w-0 flex-1"
-            :disabled="!canUseApi"
-          />
-          <UButton
-            type="submit"
-            label="Rechercher"
-            icon="i-lucide-search"
-            :loading="pending.search"
-            :disabled="!canUseApi"
-          />
-        </div>
-        <div class="grid grid-cols-2 gap-2 lg:grid-cols-[1.2fr_1fr_1.2fr_1fr_auto]">
-          <UInput
-            v-bind="posInputAttrs"
-            v-model="filters.model"
-            aria-label="Modèle"
-            placeholder="Modèle : iPhone 15…"
-            class="w-full"
-            :disabled="!canUseApi"
-          />
-          <USelect
-            v-model="filters.part"
-            :items="partOptions"
-            aria-label="Type de pièce"
-            class="w-full"
-            :disabled="!canUseApi"
-          />
-          <USelect
-            v-model="filters.quality"
-            :items="qualityOptions"
-            aria-label="Qualité"
-            class="w-full"
-            :disabled="!canUseApi"
-          />
-          <USelect
-            v-model="filters.color"
-            :items="colorOptions"
-            aria-label="Couleur"
-            class="w-full"
-            :disabled="!canUseApi"
-          />
-          <UButton
-            icon="i-lucide-filter-x"
-            label="Effacer"
-            color="neutral"
-            variant="ghost"
-            @click="resetFilters"
-          />
-        </div>
-      </form>
-      <div v-if="recent.length" class="flex items-center gap-2">
-        <UIcon name="i-lucide-history" class="size-4 shrink-0 text-muted" />
-        <div class="flex min-w-0 flex-1 gap-1 overflow-x-auto" aria-label="Recherches récentes">
-          <UButton
-            v-for="query in recent"
-            :key="query"
-            :label="query"
-            :title="query"
-            color="neutral"
-            variant="soft"
-            size="xs"
-            class="max-w-52 shrink-0"
-            :ui="{ label: 'truncate' }"
-            :disabled="!canUseApi"
-            @click="recall(query)"
-          />
-        </div>
-        <UButton
-          icon="i-lucide-x"
-          aria-label="Effacer les recherches récentes"
-          variant="ghost"
-          color="neutral"
-          size="xs"
-          @click="clearRecent"
-        />
-      </div>
-    </div>
-    <div v-if="mode === 'categories'" class="flex shrink-0 flex-wrap items-center gap-2 border-b border-default p-3">
-      <UButton
-        label="Toutes les familles"
-        variant="link"
-        size="sm"
-        @click="chooseCategory('')"
-      />
-      <template v-for="category in categoryPath" :key="category.id">
-        <UIcon name="i-lucide-chevron-right" class="size-3 text-muted" /><UButton
-          :label="category.name"
-          variant="link"
-          size="sm"
-          @click="chooseCategory(category.id)"
-        />
-      </template>
-      <p v-if="categoriesPending" role="status" class="text-sm text-muted lg:hidden">
-        Chargement des catégories…
-      </p>
-      <div v-if="categoriesError" role="alert" class="text-sm text-error lg:hidden">
-        {{ categoriesError }}<UButton label="Réessayer" variant="link" @click="loadCategories" />
-      </div>
-      <USelect
-        :model-value="categoryId || 'root'"
-        :items="categoryOptions"
-        aria-label="Catégorie"
-        class="w-full lg:hidden"
-        @update:model-value="chooseCategory(String($event))"
-      />
-    </div>
-    <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-default px-3 py-2">
-      <p class="min-w-0 text-xs text-muted">
-        <template v-if="mode === 'favorites'">
-          {{ favorites.length }} favoris · valeurs enregistrées dans ce navigateur
-        </template>
-        <template v-else-if="mode === 'search' && current.loaded">
-          Recherche : <strong>{{ current.query }}</strong>
-        </template>
-        <template v-else-if="mode === 'devices'">
-          Téléphones d’occasion · prix et stock selon les données fournisseur
-        </template>
-        <template v-else>
-          Choisissez une référence pour ouvrir sa fiche.
-        </template>
-      </p>
-      <div class="flex items-center gap-2">
-        <label for="ms-stock" class="text-xs text-muted">Stock{{ isLocal ? '' : ' de la page' }}</label>
-        <USelect
-          id="ms-stock"
-          v-model="stock"
-          :items="stockOptions"
-          aria-label="Disponibilité"
-          size="sm"
-          class="w-40"
-        />
-      </div>
-    </div>
-    <UAlert
-      v-if="storageWarning"
-      :description="storageWarning"
-      color="warning"
-      variant="subtle"
-      class="shrink-0"
+    <MobilesentrixOrders
+      v-if="ordersVisited"
+      v-show="tab === 'orders'"
+      :active="tab === 'orders'"
+      :can-use-api="canUseApi"
     />
-    <div v-if="errors[mode]" role="alert" class="flex shrink-0 items-center justify-between gap-2 border-b border-default p-3 text-sm text-error">
-      <span>{{ errors[mode] }}</span><UButton
-        label="Réessayer"
-        color="neutral"
-        variant="outline"
-        size="sm"
-        :loading="pending[mode]"
-        @click="mode === 'search' ? search() : load(mode, current.page)"
-      />
-    </div>
-    <div class="flex min-h-0 min-w-0 flex-1">
-      <aside v-if="mode === 'categories'" class="hidden w-60 shrink-0 flex-col border-r border-default lg:flex" aria-label="Familles fournisseur">
-        <UInput
-          v-bind="posInputAttrs"
-          v-model="categorySearch"
-          aria-label="Filtrer les catégories"
-          placeholder="Filtrer les familles…"
-          icon="i-lucide-search"
-          class="m-2"
-        />
-        <div class="min-h-0 flex-1 overflow-y-auto p-2">
-          <p v-if="categoriesPending" role="status" class="p-2 text-sm text-muted">
-            Chargement des catégories…
-          </p>
-          <div v-else-if="categoriesError" role="alert" class="text-sm text-error">
-            {{ categoriesError }}<UButton label="Réessayer" variant="link" @click="loadCategories" />
-          </div>
-          <template v-else>
+    <div v-show="tab !== 'orders'" class="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div v-if="mode === 'search'" class="shrink-0 space-y-2 border-b border-default p-3">
+        <form class="space-y-2" @submit.prevent="search">
+          <div class="flex gap-2">
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="filters.text"
+              aria-label="Recherche produit ou SKU"
+              placeholder="Rechercher une pièce, une référence…"
+              icon="i-lucide-search"
+              class="min-w-0 flex-1"
+              :disabled="!canUseApi"
+            />
             <UButton
-              v-for="category in visibleCategories"
-              :key="category.id"
-              :label="category.name"
-              :trailing-icon="categories.some(item => item.parentId === category.id) ? 'i-lucide-chevron-right' : undefined"
+              type="submit"
+              label="Rechercher"
+              icon="i-lucide-search"
+              :loading="pending.search"
+              :disabled="!canUseApi"
+            />
+          </div>
+          <div class="grid grid-cols-2 gap-2 lg:grid-cols-[1.2fr_1fr_1.2fr_1fr_auto]">
+            <UInput
+              v-bind="posInputAttrs"
+              v-model="filters.model"
+              aria-label="Modèle"
+              placeholder="Modèle : iPhone 15…"
+              class="w-full"
+              :disabled="!canUseApi"
+            />
+            <USelect
+              v-model="filters.part"
+              :items="partOptions"
+              aria-label="Type de pièce"
+              class="w-full"
+              :disabled="!canUseApi"
+            />
+            <USelect
+              v-model="filters.quality"
+              :items="qualityOptions"
+              aria-label="Qualité"
+              class="w-full"
+              :disabled="!canUseApi"
+            />
+            <USelect
+              v-model="filters.color"
+              :items="colorOptions"
+              aria-label="Couleur"
+              class="w-full"
+              :disabled="!canUseApi"
+            />
+            <UButton
+              icon="i-lucide-filter-x"
+              label="Effacer"
               color="neutral"
               variant="ghost"
-              class="mb-1 w-full justify-between text-left"
-              :ui="{ label: 'whitespace-normal' }"
-              @click="chooseCategory(category.id)"
+              @click="resetFilters"
             />
-            <p v-if="!visibleCategories.length" class="p-2 text-xs text-muted">
-              {{ categorySearch ? 'Aucune catégorie trouvée.' : 'Aucune sous-catégorie fournie.' }}
-            </p>
-          </template>
+          </div>
+        </form>
+        <div v-if="recent.length" class="flex items-center gap-2">
+          <UIcon name="i-lucide-history" class="size-4 shrink-0 text-muted" />
+          <div class="flex min-w-0 flex-1 gap-1 overflow-x-auto" aria-label="Recherches récentes">
+            <UButton
+              v-for="query in recent"
+              :key="query"
+              :label="query"
+              :title="query"
+              color="neutral"
+              variant="soft"
+              size="xs"
+              class="max-w-52 shrink-0"
+              :ui="{ label: 'truncate' }"
+              :disabled="!canUseApi"
+              @click="recall(query)"
+            />
+          </div>
+          <UButton
+            icon="i-lucide-x"
+            aria-label="Effacer les recherches récentes"
+            variant="ghost"
+            color="neutral"
+            size="xs"
+            @click="clearRecent"
+          />
         </div>
-      </aside>
-      <MobilesentrixProductTable
-        ref="productTable"
-        :items="shownItems"
-        :loading="pending[mode]"
-        :favorites="favoriteKeys"
-        :compared="comparedKeys"
-        :empty="emptyMessage"
-        @open="openProduct"
-        @favorite="toggleFavorite"
-        @compare="toggleCompare"
-      />
-    </div>
-    <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-default px-3 py-2" aria-label="Pagination">
-      <p role="status" class="text-xs tabular-nums text-muted">
-        {{ range }}<span v-if="stock !== 'all' && !isLocal"> · {{ shownItems.length }} avec ce stock</span>
-      </p>
-      <div class="flex items-center gap-2">
+      </div>
+      <div v-if="mode === 'categories'" class="flex shrink-0 flex-wrap items-center gap-2 border-b border-default p-3">
+        <UButton
+          label="Toutes les familles"
+          variant="link"
+          size="sm"
+          @click="chooseCategory('')"
+        />
+        <template v-for="category in categoryPath" :key="category.id">
+          <UIcon name="i-lucide-chevron-right" class="size-3 text-muted" /><UButton
+            :label="category.name"
+            variant="link"
+            size="sm"
+            @click="chooseCategory(category.id)"
+          />
+        </template>
+        <p v-if="categoriesPending" role="status" class="text-sm text-muted lg:hidden">
+          Chargement des catégories…
+        </p>
+        <div v-if="categoriesError" role="alert" class="text-sm text-error lg:hidden">
+          {{ categoriesError }}<UButton label="Réessayer" variant="link" @click="loadCategories" />
+        </div>
         <USelect
-          v-model="pageSize"
-          :items="[{ label: '20 / page', value: 20 }, { label: '50 / page', value: 50 }]"
-          aria-label="Résultats par page"
-          size="sm"
-          class="w-28"
-        />
-        <UButton
-          icon="i-lucide-chevron-left"
-          aria-label="Page précédente"
-          size="sm"
-          variant="outline"
-          color="neutral"
-          :disabled="current.page <= 1 || pending[mode]"
-          @click="changePage(current.page - 1)"
-        />
-        <span class="text-xs tabular-nums">{{ current.page }}<template v-if="pageCount"> / {{ pageCount }}</template></span>
-        <UButton
-          icon="i-lucide-chevron-right"
-          aria-label="Page suivante"
-          size="sm"
-          variant="outline"
-          color="neutral"
-          :disabled="!canNext || pending[mode] || !current.loaded"
-          @click="changePage(current.page + 1)"
+          :model-value="categoryId || 'root'"
+          :items="categoryOptions"
+          aria-label="Catégorie"
+          class="w-full lg:hidden"
+          @update:model-value="chooseCategory(String($event))"
         />
       </div>
-    </div>
-    <div v-if="compared.length" class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-default bg-elevated px-3 py-2">
-      <div class="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-        <UButton
-          v-for="product in compared"
-          :key="supplierProductKey(product)"
-          :label="product.sku || product.name"
-          :aria-label="`Retirer ${product.sku || product.name} du comparateur`"
-          trailing-icon="i-lucide-x"
-          size="xs"
-          color="neutral"
-          variant="outline"
-          class="shrink-0"
-          @click="toggleCompare(product)"
-        />
+      <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-default px-3 py-2">
+        <p class="min-w-0 text-xs text-muted">
+          <template v-if="mode === 'favorites'">
+            {{ favorites.length }} favoris · valeurs enregistrées dans ce navigateur
+          </template>
+          <template v-else-if="mode === 'search' && current.loaded">
+            Recherche : <strong>{{ current.query }}</strong>
+          </template>
+          <template v-else-if="mode === 'devices'">
+            Téléphones d’occasion · prix et stock selon les données fournisseur
+          </template>
+          <template v-else>
+            Choisissez une référence pour ouvrir sa fiche.
+          </template>
+        </p>
+        <div class="flex items-center gap-2">
+          <label for="ms-stock" class="text-xs text-muted">Stock{{ isLocal ? '' : ' de la page' }}</label>
+          <USelect
+            id="ms-stock"
+            v-model="stock"
+            :items="stockOptions"
+            aria-label="Disponibilité"
+            size="sm"
+            class="w-40"
+          />
+        </div>
       </div>
-      <UButton
-        :label="`Comparer (${compared.length}/3)`"
-        icon="i-lucide-columns-3"
-        size="sm"
-        :disabled="compared.length < 2"
-        @click="compareOpen = true"
+      <UAlert
+        v-if="storageWarning"
+        :description="storageWarning"
+        color="warning"
+        variant="subtle"
+        class="shrink-0"
       />
+      <div v-if="errors[mode]" role="alert" class="flex shrink-0 items-center justify-between gap-2 border-b border-default p-3 text-sm text-error">
+        <span>{{ errors[mode] }}</span><UButton
+          label="Réessayer"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          :loading="pending[mode]"
+          @click="mode === 'search' ? search() : load(mode, current.page)"
+        />
+      </div>
+      <div class="flex min-h-0 min-w-0 flex-1">
+        <aside v-if="mode === 'categories'" class="hidden w-60 shrink-0 flex-col border-r border-default lg:flex" aria-label="Familles fournisseur">
+          <UInput
+            v-bind="posInputAttrs"
+            v-model="categorySearch"
+            aria-label="Filtrer les catégories"
+            placeholder="Filtrer les familles…"
+            icon="i-lucide-search"
+            class="m-2"
+          />
+          <div class="min-h-0 flex-1 overflow-y-auto p-2">
+            <p v-if="categoriesPending" role="status" class="p-2 text-sm text-muted">
+              Chargement des catégories…
+            </p>
+            <div v-else-if="categoriesError" role="alert" class="text-sm text-error">
+              {{ categoriesError }}<UButton label="Réessayer" variant="link" @click="loadCategories" />
+            </div>
+            <template v-else>
+              <UButton
+                v-for="category in visibleCategories"
+                :key="category.id"
+                :label="category.name"
+                :trailing-icon="categories.some(item => item.parentId === category.id) ? 'i-lucide-chevron-right' : undefined"
+                color="neutral"
+                variant="ghost"
+                class="mb-1 w-full justify-between text-left"
+                :ui="{ label: 'whitespace-normal' }"
+                @click="chooseCategory(category.id)"
+              />
+              <p v-if="!visibleCategories.length" class="p-2 text-xs text-muted">
+                {{ categorySearch ? 'Aucune catégorie trouvée.' : 'Aucune sous-catégorie fournie.' }}
+              </p>
+            </template>
+          </div>
+        </aside>
+        <MobilesentrixProductTable
+          ref="productTable"
+          :items="shownItems"
+          :loading="pending[mode]"
+          :favorites="favoriteKeys"
+          :compared="comparedKeys"
+          :empty="emptyMessage"
+          @open="openProduct"
+          @favorite="toggleFavorite"
+          @compare="toggleCompare"
+        />
+      </div>
+      <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-default px-3 py-2" aria-label="Pagination">
+        <p role="status" class="text-xs tabular-nums text-muted">
+          {{ range }}<span v-if="stock !== 'all' && !isLocal"> · {{ shownItems.length }} avec ce stock</span>
+        </p>
+        <div class="flex items-center gap-2">
+          <USelect
+            v-model="pageSize"
+            :items="[{ label: '20 / page', value: 20 }, { label: '50 / page', value: 50 }]"
+            aria-label="Résultats par page"
+            size="sm"
+            class="w-28"
+          />
+          <UButton
+            icon="i-lucide-chevron-left"
+            aria-label="Page précédente"
+            size="sm"
+            variant="outline"
+            color="neutral"
+            :disabled="current.page <= 1 || pending[mode]"
+            @click="changePage(current.page - 1)"
+          />
+          <span class="text-xs tabular-nums">{{ current.page }}<template v-if="pageCount"> / {{ pageCount }}</template></span>
+          <UButton
+            icon="i-lucide-chevron-right"
+            aria-label="Page suivante"
+            size="sm"
+            variant="outline"
+            color="neutral"
+            :disabled="!canNext || pending[mode] || !current.loaded"
+            @click="changePage(current.page + 1)"
+          />
+        </div>
+      </div>
+      <div v-if="compared.length" class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-default bg-elevated px-3 py-2">
+        <div class="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+          <UButton
+            v-for="product in compared"
+            :key="supplierProductKey(product)"
+            :label="product.sku || product.name"
+            :aria-label="`Retirer ${product.sku || product.name} du comparateur`"
+            trailing-icon="i-lucide-x"
+            size="xs"
+            color="neutral"
+            variant="outline"
+            class="shrink-0"
+            @click="toggleCompare(product)"
+          />
+        </div>
+        <UButton
+          :label="`Comparer (${compared.length}/3)`"
+          icon="i-lucide-columns-3"
+          size="sm"
+          :disabled="compared.length < 2"
+          @click="compareOpen = true"
+        />
+      </div>
     </div>
   </section>
   <MobilesentrixProductDetails

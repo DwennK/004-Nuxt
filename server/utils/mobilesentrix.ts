@@ -9,6 +9,21 @@ import type {
 } from '~~/shared/types/pos'
 import { externalFetch } from './external-fetch'
 import { normalizeOptionalText } from '~~/shared/lib/text'
+import type { MobileSentrixOrder, MobileSentrixOrdersResponse } from '~~/shared/types/mobilesentrix-orders'
+import { mergeMobileSentrixOrders } from '~~/shared/utils/mobilesentrix-orders'
+import { mapMobileSentrixOrder, mobileSentrixOrderCollection } from './mobilesentrix-order-mapping'
+
+export async function listMobileSentrixOrders(query: { page: number, limit: number }): Promise<MobileSentrixOrdersResponse> {
+  const payload = await mobileSentrixRequest<unknown>('/orders', { ...query, order: 'created_at', dir: 'desc' })
+  const rows = mobileSentrixOrderCollection(payload)
+  return { items: mergeMobileSentrixOrders([], rows.map(mapMobileSentrixOrder)), page: query.page, hasMore: rows.length === query.limit }
+}
+
+export async function getMobileSentrixOrder(id: string): Promise<MobileSentrixOrder> {
+  const order = mapMobileSentrixOrder(await mobileSentrixRequest<unknown>(`/orders/${encodeURIComponent(id)}`))
+  if (order.id !== id) throw createMobileSentrixError(502, 'La commande reçue ne correspond pas à la commande demandée.')
+  return order
+}
 
 type MobileSentrixConfig = {
   baseUrl: string
