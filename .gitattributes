@@ -1,0 +1,2 @@
+# Migration hashes must match across Windows and production.
+drizzle/**/migration.sql text eol=lf
