@@ -43,15 +43,6 @@ export const checks = [
     )`
   },
   {
-    name: 'duplicate_catalog_skus',
-    tables: ['catalog_items'],
-    sql: `SELECT COUNT(*) AS violations FROM (
-      SELECT sku FROM catalog_items
-      WHERE sku IS NOT NULL AND TRIM(sku) != ''
-      GROUP BY sku HAVING COUNT(*) > 1
-    )`
-  },
-  {
     name: 'duplicate_stock_imeis',
     tables: ['smartphone_stocks'],
     sql: `SELECT COUNT(*) AS violations FROM (

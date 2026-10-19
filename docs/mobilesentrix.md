@@ -15,7 +15,9 @@ Sinon le lien `.com` est conservé avec une note « présence sur .eu non confir
 La présence d’une fiche ne prouve ni le stock européen ni la livraison.
 Aucun secret ne doit figurer dans un rapport ou dans Git.
 
-Le catalogue conserve son SKU interne unique. La colonne nullable
+Le SKU du catalogue est nullable et non unique : plusieurs réparations peuvent
+partager le SKU MobileSentrix seul. L'identifiant de l'article reste la clé
+utilisée pour les éditions et les lignes commerciales. La colonne nullable
 `catalog_items.mobilesentrix_json` contient une association fournisseur : état,
 SKU (chaîne de caractères), identifiant produit de la boutique liée, URL `.com` ou `.eu`, note, provenance
 `manual` / `api` et date de vérification API. Une même référence fournisseur peut
@@ -38,9 +40,12 @@ de l'effacer, et la recherche catalogue accepte le SKU fournisseur.
   n'existe. Une rupture de stock ne déclenche pas de changement de gamme.
 - Faces arrière/châssis iPhone : Used OEM Pull Grade A, preuve de compatibilité
   Europe requise. Pas de choix automatique de couleur.
+- Châssis : laisser le SKU POS vide, la couleur étant choisie pour chaque réparation.
 - Faces arrière/ports Samsung : Service Pack uniquement.
 - Ports et petites pièces iPhone : Premium, puis Aftermarket Plus ; compatibilité
   Europe à confirmer pour les ports.
+- Ports de charge : choisir le noir lorsqu'une variante noire est confirmée.
+  Ce choix de couleur ne valide pas une compatibilité ou une gamme incertaine.
 - Autres petites pièces Samsung : Service Pack, puis Premium, Aftermarket Plus,
   puis Aftermarket explicitement identifié. Toute ambiguïté reste à examiner.
 

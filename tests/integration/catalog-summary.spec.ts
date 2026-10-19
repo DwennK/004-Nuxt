@@ -25,7 +25,7 @@ describe('catalog summary preserves each tab total without loading its rows', ()
   beforeEach(async () => {
     client = createClient({ url: 'file::memory:' })
     await client.execute(`CREATE TABLE catalog_items (
-      id INTEGER PRIMARY KEY, name TEXT NOT NULL, sku TEXT UNIQUE, type TEXT NOT NULL, category TEXT NOT NULL,
+      id INTEGER PRIMARY KEY, name TEXT NOT NULL, sku TEXT, type TEXT NOT NULL, category TEXT NOT NULL,
       brand TEXT, model TEXT, service_kind TEXT, keywords_json TEXT, mobilesentrix_json TEXT,
       default_price INTEGER NOT NULL, vat_rate REAL NOT NULL, is_active INTEGER NOT NULL,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL

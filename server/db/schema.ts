@@ -131,7 +131,7 @@ export const catalogItems = sqliteTable('catalog_items', {
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, table => ({
   nameIdx: index('catalog_items_name_idx').on(table.name),
-  skuIdx: uniqueIndex('catalog_items_sku_idx').on(table.sku),
+  skuIdx: index('catalog_items_sku_lookup_idx').on(table.sku),
   typeIdx: index('catalog_items_type_idx').on(table.type),
   typeOrderIdx: index('catalog_items_type_order_idx').on(table.type, table.category, table.name, table.id),
   categoryIdx: index('catalog_items_category_idx').on(table.category),

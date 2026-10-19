@@ -1,6 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 import { defineRelations } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
@@ -20,22 +18,22 @@ const input: CatalogItemInput = { name: 'Batterie iPhone 13', sku: 'SERV-13-BATT
 
 describe('catalogue supplier references and additive migration', () => {
   let client: ReturnType<typeof createClient>
-  let directory: string
   beforeEach(async () => {
-    directory = mkdtempSync(join(tmpdir(), 'pos-ms-'))
-    client = createClient({ url: `file:${join(directory, 'catalog.db')}` })
+    client = createClient({ url: 'file::memory:' })
     await client.execute(`CREATE TABLE catalog_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, sku TEXT UNIQUE,
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, sku TEXT,
       type TEXT NOT NULL, category TEXT NOT NULL, brand TEXT, model TEXT, service_kind TEXT,
       keywords_json TEXT, default_price INTEGER NOT NULL, vat_rate REAL NOT NULL,
       is_active INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     )`)
+    await client.execute('CREATE UNIQUE INDEX catalog_items_sku_idx ON catalog_items(sku)')
     await client.execute(readFileSync(new URL('../../drizzle/20260907145502_catalog_mobilesentrix_europe/migration.sql', import.meta.url), 'utf8'))
+    const migration = readFileSync(new URL('../../drizzle/20261019150432_shared_catalog_skus/migration.sql', import.meta.url), 'utf8')
+    for (const statement of migration.split('--> statement-breakpoint')) await client.execute(statement)
     context.db = drizzle({ client, relations: defineRelations(schema) })
   })
   afterEach(() => {
     client.close()
-    rmSync(directory, { recursive: true, force: true })
   })
 
   it('keeps internal SKUs, permits shared supplier SKUs and searches them', async () => {
@@ -43,6 +41,24 @@ describe('catalogue supplier references and additive migration', () => {
     await createCatalogItem({ ...input, sku: 'SERV-OTHER', mobileSentrix: reference })
     expect(first).toMatchObject({ sku: input.sku, defaultPrice: 9900, mobileSentrix: { sku: '000123', source: 'manual' } })
     expect((await listCatalogItems({ search: '000123' })).total).toBe(2)
+  })
+
+  it('keeps articles distinct when their POS SKU is the same supplier reference', async () => {
+    const first = await createCatalogItem({ ...input, sku: reference.sku, mobileSentrix: reference })
+    const second = await createCatalogItem({ ...input, name: 'Batterie autre modèle', sku: reference.sku, mobileSentrix: reference })
+    expect(first.id).not.toBe(second.id)
+    const matches = await listCatalogItems({ search: reference.sku })
+    expect(matches.total).toBe(2)
+    expect(new Set(matches.items.map(item => item.id))).toEqual(new Set([first.id, second.id]))
+
+    await updateCatalogItem(first.id, { ...input, sku: reference.sku, defaultPrice: 14900 })
+    expect(await getCatalogItemById(first.id)).toMatchObject({ sku: reference.sku, defaultPrice: 14900 })
+    expect(await getCatalogItemById(second.id)).toMatchObject({ sku: reference.sku, defaultPrice: 9900 })
+
+    await updateCatalogItem(first.id, { ...input, sku: null })
+    expect((await getCatalogItemById(first.id)).sku).toBeNull()
+    expect((await listCatalogItems({ search: reference.sku })).total).toBe(2)
+    expect((await getCatalogItemById(second.id)).sku).toBe(reference.sku)
   })
 
   it('ranks descriptive iPhone SE matches before SERV references and pagination', async () => {
