@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui'
-import ReportsLeaders from '~/components/reports/ReportsLeaders.client.vue'
-import ReportsOverviewCharts from '~/components/reports/ReportsOverviewCharts.client.vue'
+import ReportsLeaders from '~/components/reports/ReportsLeaders.vue'
+import ReportsOverviewCharts from '~/components/reports/ReportsOverviewCharts.vue'
 import type { ReportsLeaders as ReportsLeadersData, ReportsOverview } from '~~/shared/types/pos'
 import { formatCurrency, formatDate, toDateInputValue } from '~~/shared/utils/pos'
 

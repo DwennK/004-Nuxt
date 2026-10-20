@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui'
-import { BarChart } from 'vue-chrts'
-import { Orientation } from 'vue-chrts/enums'
+import { barX, defineChart, ruleX } from '@tanstack/charts'
+import { scaleBand } from '@tanstack/charts/scales/band'
+import { scaleLinear } from '@tanstack/charts/scales/linear'
 import { lineCategoryColors, lineCategoryLabels } from '~~/shared/constants/pos'
 import type { ReportsLeaders } from '~~/shared/types/pos'
 import { formatCurrency } from '~~/shared/utils/pos'
@@ -45,7 +46,7 @@ const itemMetricTabs: TabsItem[] = [
 ]
 
 function toChartColor(color: UiColorToken) {
-  return `var(--ui-color-${color}-500)`
+  return color === 'neutral' ? 'var(--ui-bg-inverted)' : `var(--ui-${color})`
 }
 
 function formatInteger(value: number | Date) {
@@ -135,6 +136,7 @@ function metricValue(item: CustomerRow | ItemRow) {
 
 const chartData = computed(() => {
   return rankingRows.value.map(item => ({
+    key: item.key,
     label: item.label,
     value: metricValue(item)
   }))
@@ -157,16 +159,36 @@ const categories = computed(() => ({
 
 const chartHeight = computed(() => Math.max(220, chartData.value.length * 46))
 
-const axisLabel = (tick: number | Date) => {
-  const index = Math.round(Number(tick))
-  return chartData.value[index]?.label || ''
-}
-
 const valueLabel = (tick: number | Date) => {
   return activeMetric.value === 'total'
     ? formatCurrency(Number(tick))
     : formatInteger(tick)
 }
+
+const chartDefinition = computed(() => defineChart({
+  marks: [
+    barX(chartData.value, { x: 'value', y: 'key', key: 'key', fill: categories.value.value.color, radius: { end: 6 } }),
+    ruleX([0])
+  ],
+  scales: {
+    x: {
+      scale: scaleLinear,
+      nice: true,
+      grid: true,
+      axis: { ticks: { format: value => activeMetric.value === 'total' || Number.isInteger(Number(value)) ? valueLabel(Number(value)) : '' } }
+    },
+    y: {
+      // Stable keys keep distinct customers/articles with the same label on separate rows.
+      scale: scaleBand<string>().domain(chartData.value.map(row => row.key)).padding(0.3),
+      axis: { ticks: { format: (value) => {
+        const label = chartData.value.find(row => row.key === value)?.label || String(value)
+        return label.length > 24 ? label.slice(0, 23) + '…' : label
+      } } }
+    }
+  },
+  focus: 'nearest',
+  maxFocusDistance: Number.POSITIVE_INFINITY
+}))
 
 function metricSummary(item: CustomerRow | ItemRow) {
   if (props.kind === 'customers') {
@@ -188,7 +210,7 @@ function itemCategory(item: CustomerRow | ItemRow) {
 </script>
 
 <template>
-  <UCard class="reports-leaders" :ui="{ body: 'space-y-4 p-4', header: 'p-4 pb-0' }">
+  <UCard :ui="{ body: 'space-y-4 p-4', header: 'p-4 pb-0' }">
     <template #header>
       <div class="flex flex-col gap-4">
         <div class="flex flex-col gap-1">
@@ -220,23 +242,21 @@ function itemCategory(item: CustomerRow | ItemRow) {
       class="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
     >
       <div class="overflow-hidden rounded-2xl border border-default/80 bg-muted/20 px-3 py-3">
-        <BarChart
-          :data="chartData"
-          :categories="categories"
+        <UChart
+          :definition="chartDefinition"
           :height="chartHeight"
-          :y-axis="['value']"
-          :orientation="Orientation.Horizontal"
-          :padding="{ top: 6, right: 12, bottom: 0, left: 0 }"
-          :radius="10"
-          :x-grid-line="true"
-          :x-tick-line="false"
-          :y-grid-line="false"
-          :y-tick-line="false"
-          :hide-legend="true"
-          :x-formatter="valueLabel"
-          :y-formatter="axisLabel"
-          :tooltip-title-formatter="(item) => item.label"
-        />
+          :aria-label="config.title + ' — ' + categories.value.name"
+        >
+          <template #tooltip="{ primaryPoint }">
+            <p class="max-w-64 font-semibold text-highlighted">
+              {{ primaryPoint.datum.label }}
+            </p>
+            <div class="flex items-center justify-between gap-4 text-sm">
+              <span class="text-toned">{{ categories.value.name }}</span>
+              <span class="font-medium tabular-nums">{{ valueLabel(primaryPoint.datum.value) }}</span>
+            </div>
+          </template>
+        </UChart>
       </div>
 
       <div class="rounded-2xl border border-default/80 bg-muted/15">
@@ -292,17 +312,3 @@ function itemCategory(item: CustomerRow | ItemRow) {
     />
   </UCard>
 </template>
-
-<style scoped>
-.reports-leaders {
-  --vis-axis-grid-color: color-mix(in srgb, var(--ui-border) 86%, transparent);
-  --vis-axis-tick-color: var(--ui-border);
-  --vis-axis-tick-label-color: var(--ui-text-dimmed);
-  --vis-tooltip-background-color: light-dark(#ffffff, #18181b);
-  --vis-tooltip-border-color: light-dark(rgba(24, 24, 27, 0.12), rgba(255, 255, 255, 0.12));
-  --vis-tooltip-text-color: light-dark(#18181b, #fafafa);
-  --vis-tooltip-label-color: light-dark(#52525b, #d4d4d8);
-  --vis-tooltip-value-color: light-dark(#111827, #fafafa);
-  --vis-tooltip-shadow-color: light-dark(rgba(24, 24, 27, 0.12), rgba(0, 0, 0, 0.35));
-}
-</style>
