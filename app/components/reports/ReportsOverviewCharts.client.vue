@@ -162,6 +162,7 @@ const ticketCategories = {
 }
 
 const ticketTicks = computed(() => ticketChartData.value.map((_, index) => index))
+const ticketDayLabel = (tick: number | Date) => ticketChartData.value[Math.round(Number(tick))]?.label || ''
 
 const hasTicketActivity = computed(() => ticketChartData.value.some(day => day.opened > 0 || day.closed > 0))
 
@@ -358,7 +359,7 @@ const integerLabel = (tick: number | Date) => String(Math.round(Number(tick)))
             :x-tick-line="false"
             :y-grid-line="true"
             :y-tick-line="false"
-            :x-formatter="dayLabel"
+            :x-formatter="ticketDayLabel"
             :y-formatter="integerLabel"
             :tooltip-title-formatter="(item) => formatTooltipDate(item.date)"
           />
