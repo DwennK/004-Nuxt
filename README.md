@@ -387,7 +387,7 @@ Scripts are defined in [`package.json`](./package.json):
 | `pnpm run check` | Lint, typecheck, tests, security regression and build |
 | `pnpm run test:e2e` | Playwright login-page smoke test; case editing tests require explicit isolated setup |
 | `pnpm run preview` | Rebuild, then run Wrangler locally against `.output` |
-| `pnpm run deploy` | Rebuild, then deploy `.output` with `--keep-vars` |
+| `pnpm run deploy` | Manual fallback: rebuild, then deploy `.output` with `--keep-vars`; normal production deployment follows a push to `main` |
 | `pnpm run cf-typegen` | Generate Worker binding types in `server/types/cloudflare-env.d.ts` |
 | `pnpm run db:push` / `pnpm run db:studio` | Development schema push / database UI; verify the configured target first |
 | `pnpm run db:introspect` / `pnpm run db:verify` | Database inventory / schema and invariant verification |
@@ -408,7 +408,7 @@ pnpm run test:e2e
 
 [`playwright.config.ts`](./playwright.config.ts) uses a 1440×900 viewport and starts or reuses a local server on port 3000. Local macOS runs use `channel: 'chrome'` without accessing the personal Chrome profile. If Chrome is missing, install it separately; do not download Chromium as a fallback. CI and other operating systems keep Playwright's bundled Chromium (`npx playwright install --with-deps chromium` in that environment). The default smoke test checks the login shell, not an authenticated sale or an external integration. The optional case editing suite requires `POS_DOSSIER_E2E_URL` and an isolated server with disposable fixtures; it modifies those records. Follow [the test setup](./docs/dossier-editing.md) before enabling it. UI changes still need a desktop check and a mobile check when responsive behavior is affected.
 
-The [CI workflow](./.github/workflows/ci.yml) runs `pnpm install --frozen-lockfile`, `pnpm run check`, then the browser smoke job. It does not deploy the Worker. Local e-mail simulation, passing tests and a Git push are not proof of a live delivery or deployment.
+The [CI workflow](./.github/workflows/ci.yml) runs `pnpm install --frozen-lockfile`, `pnpm run check`, then the browser smoke job. Production deployment runs separately through the Cloudflare Workers Builds GitHub integration: a push to `main` automatically builds and deploys the Worker. Check both GitHub Actions and the pushed commit's `Workers Builds: nuxt` check, then verify the live app; a successful push alone does not confirm a successful deployment.
 
 ## Architecture
 
@@ -532,6 +532,10 @@ Relevant files:
 
 The app uses the `cloudflare_module` Nitro preset configured in [`nuxt.config.ts`](./nuxt.config.ts).
 
+**A push to `main` automatically deploys Worker `nuxt` to [pos.microwest.ch](https://pos.microwest.ch) through Cloudflare Workers Builds.** This GitHub integration was verified on 2026-10-20. It runs independently of the repository's GitHub Actions workflow; do not assume it waits for the quality gate before deploying.
+
+Local Wrangler login is not needed for this path. An unauthenticated local `wrangler whoami` does not block automatic deployment. Follow the `Workers Builds: nuxt` check on the pushed commit to open the Cloudflare build details and identify the deployed version.
+
 For local Worker verification:
 
 ```bash
@@ -546,10 +550,13 @@ Before an authorized production deployment:
 2. Complete the [database migration gate](./docs/database-migrations.md), including backup restore verification and a recorded rollback reference.
 3. For e-mail or backups, also complete [Cloudflare e-mail activation](./docs/cloudflare-email.md) or [Dropbox backup setup](./docs/backups.md). Use reviewed migrations in `drizzle/`; SQL candidates under `docs/sql/` are not the production migration ledger.
 4. Verify the Cloudflare account, Worker target, required runtime secrets, bindings and queues. Changing `.env` does not update Worker secrets.
-5. Deploy using the release procedure. `pnpm run deploy` rebuilds and directly deploys `.output` with `--keep-vars`; it is not the staged promotion workflow described in the migration runbook.
-6. Verify the affected screens and external integrations on the deployed version. A successful build or upload alone is not a live functional check.
+5. Push the validated release to `main` to trigger automatic deployment. Complete the prerequisites above before pushing, especially migrations that must precede the new Worker.
+6. Wait for both the `Workers Builds: nuxt` check and GitHub Actions checks on that exact commit. If the Cloudflare check fails, inspect its build logs.
+7. Verify the affected screens and external integrations on the deployed version. A successful build or upload alone is not a live functional check.
 
-[`wrangler.json`](./wrangler.json) declares Worker `nuxt` and the custom domain `pos.microwest.ch`. Use the provided preview / deploy scripts so Wrangler reads the generated `.output` configuration. Do not change that output by hand. A Worker rollback does not restore the external Turso database.
+`pnpm run deploy` remains a manual fallback requiring local Cloudflare authentication. It rebuilds and directly deploys `.output` with `--keep-vars`; avoid running it after a successful automatic deployment. Neither this command nor the automatic deployment is the staged promotion workflow described in the migration runbook.
+
+[`wrangler.json`](./wrangler.json) declares Worker `nuxt` and the custom domain `pos.microwest.ch`. For local preview or a manual deployment, use the provided scripts so Wrangler reads the generated `.output` configuration. Do not change that output by hand. A Worker rollback does not restore the external Turso database.
 
 ## Further Documentation
 

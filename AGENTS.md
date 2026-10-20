@@ -26,7 +26,8 @@ Favor small, production-friendly changes that preserve the current business mode
 - Preview worker output: `pnpm run preview`
 - DB push: `pnpm run db:push`
 - DB studio: `pnpm run db:studio`
-- Deploy worker: `pnpm run deploy`
+- Deploy production: push to `main` (Cloudflare Workers Builds)
+- Manual deployment fallback: `pnpm run deploy`
 - Refresh Cloudflare worker types: `pnpm run cf-typegen`
 
 Run `pnpm run lint` and `pnpm run typecheck` after meaningful code changes. Run `pnpm run build` when the change affects app wiring, server routes, or deployment behavior.
@@ -211,6 +212,16 @@ The `/assistant` route is an internal tool with intentionally narrow capabilitie
 - do not broaden database access, tool access, or model behavior without an explicit request
 
 ## Git Workflow
+
+### Production deployment
+
+- A push to `main` automatically builds and deploys Worker `nuxt` to `https://pos.microwest.ch` through the Cloudflare Workers Builds GitHub integration (verified on 2026-10-20).
+- This integration runs separately from `.github/workflows/ci.yml`, which only runs quality and browser checks. Do not assume the deployment waits for GitHub Actions to pass; complete required local checks and any database migration prerequisites before pushing to `main`.
+- After pushing, inspect the pushed commit's `Workers Builds: nuxt` check as well as the GitHub Actions checks, then verify the affected production screens.
+- Local Wrangler authentication is not required for this deployment path. Do not ask the user to run `wrangler login` or perform a duplicate manual deployment just because the local CLI is unauthenticated.
+- Keep `pnpm run deploy` as a manual fallback. If automatic deployment fails, inspect the Cloudflare build logs before choosing that fallback. See [README deployment notes](./README.md#deployment-notes).
+
+### Commits and pushes
 
 When working in this repository:
 
