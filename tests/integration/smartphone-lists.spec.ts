@@ -11,6 +11,7 @@ import { createSmartphoneStock, updateSmartphoneStock, listSmartphoneStocks, lis
 import { listSmartphoneReservations, listSmartphoneReservationsPage } from '../../server/utils/smartphone-reservations'
 import { smartphoneListQuerySchema } from '../../server/utils/smartphone-list'
 import { buildSmartphoneReservationsCsv, parseSmartphoneReservationsCsv } from '../../server/utils/smartphone-reservations-csv'
+import { getRequestErrorMessage } from '../../app/utils/request-error'
 import type { SmartphoneListQuery, SmartphoneReservationListQuery, SmartphoneStockListQuery } from '../../shared/types/smartphone-list'
 
 const context = vi.hoisted(() => ({ db: null as unknown, queries: [] as string[] }))
@@ -134,11 +135,40 @@ describe('smartphone lists use server pages without changing table results', () 
     expect((await listSmartphoneStocksPage(stockQuery({ search: '00abcd 5678xy', sort: 'asc' }))).items).toEqual([edited])
     expect((await listSmartphoneStocksPage(stockQuery({ search: 'DMPX1234ABCD' }))).total).toBe(0)
     await expect(createSmartphoneStock(smartphoneStockSchema.parse({ ...edited, imei: '00abcd5678xy' })))
-      .rejects.toMatchObject({ cause: { message: expect.stringContaining('UNIQUE constraint failed') } })
+      .rejects.toMatchObject({ statusCode: 409, message: 'Cet IMEI ou numéro de série existe déjà dans la liste IMEI.' })
     const phone = await createSmartphoneStock(smartphoneStockSchema.parse({
       model: 'iPhone test', imei: '490 154 203 237 518', capacity: '128 Go', stockedAt: '2026-09-30'
     }))
     expect((await listSmartphoneStocksPage(stockQuery({ search: '490 154 203' }))).items).toEqual([phone])
+  })
+
+  it('explains duplicate IMEIs on creation and editing without changing existing stock', async () => {
+    await client.execute('CREATE UNIQUE INDEX stock_identifier_unique_test ON smartphone_stocks(imei)')
+    const original = await createSmartphoneStock(smartphoneStockSchema.parse({
+      model: 'iPhone SE', imei: '352308259108810', capacity: '64', stockedAt: '2026-10-23', sold: true
+    }))
+    const other = await createSmartphoneStock(smartphoneStockSchema.parse({ ...original, imei: '' }))
+    const before = await listSmartphoneStocks()
+    for (const operation of [
+      () => createSmartphoneStock(smartphoneStockSchema.parse({ ...original, imei: '352 308 259 108 810' })),
+      () => updateSmartphoneStock(updateSmartphoneStockSchema.parse({ ...other, imei: '352 308 259 108 810' }))
+    ]) {
+      const error = await operation().catch(error => error)
+      expect(error).toMatchObject({ statusCode: 409, message: 'Cet IMEI ou numéro de série existe déjà dans la liste IMEI.' })
+      expect(getRequestErrorMessage({ data: error.toJSON(), message: '[POST] /api/smartphone-stocks: 409' }))
+        .toBe('Cet IMEI ou numéro de série existe déjà dans la liste IMEI.')
+      expect(await listSmartphoneStocks()).toEqual(before)
+    }
+    expect(await updateSmartphoneStock(updateSmartphoneStockSchema.parse(original))).toEqual(original)
+    expect(await createSmartphoneStock(smartphoneStockSchema.parse({ ...other, imei: '' }))).toMatchObject({ imei: '' })
+  })
+
+  it('distinguishes legacy SKU conflicts and preserves unrelated database errors', async () => {
+    await client.execute('CREATE UNIQUE INDEX stock_sku_unique_test ON smartphone_stocks(sku)')
+    const input = smartphoneStockSchema.parse({ model: 'iPhone SE', capacity: '64', stockedAt: '2026-10-23', sku: 'SKU-2' })
+    await expect(createSmartphoneStock(input)).rejects.toMatchObject({ statusCode: 409, message: 'Ce SKU existe déjà dans la liste IMEI.' })
+    await client.execute('DROP TABLE smartphone_stocks')
+    await expect(createSmartphoneStock(input)).rejects.toMatchObject({ cause: { message: expect.stringContaining('no such table') } })
   })
 
   it('keeps stock status, literal substring, Unicode and natural sorting identical across pages', async () => {

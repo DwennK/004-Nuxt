@@ -13,35 +13,13 @@ export default eventHandler(async (event) => {
   if (event.method === 'POST') {
     const body = await readValidatedBody(event, smartphoneStockSchema.parse)
 
-    try {
-      return await createSmartphoneStock(body)
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
-        throw createError({
-          statusCode: 409,
-          statusMessage: 'IMEI ou numero de serie deja existant'
-        })
-      }
-
-      throw error
-    }
+    return createSmartphoneStock(body)
   }
 
   if (event.method === 'PATCH') {
     const body = await readValidatedBody(event, updateSmartphoneStockSchema.parse)
 
-    try {
-      return await updateSmartphoneStock(body)
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
-        throw createError({
-          statusCode: 409,
-          statusMessage: 'IMEI ou numero de serie deja existant'
-        })
-      }
-
-      throw error
-    }
+    return updateSmartphoneStock(body)
   }
 
   throw createError({

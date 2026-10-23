@@ -1,5 +1,6 @@
 import { matchesSmartphoneStock } from '~~/shared/utils/smartphones'
 import { asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { createError } from 'h3'
 import type { z } from 'zod'
 import type { updateSmartphoneStockSchema } from '~~/shared/validation/smartphones'
 import type { SmartphoneStock } from '~~/shared/types/smartphones'
@@ -87,6 +88,26 @@ const seedSmartphoneStocks: SmartphoneStock[] = [{
 function normalizeOptionalText(value: string) {
   const normalized = value.trim()
   return normalized ? normalized : null
+}
+
+function handleStockWriteError(error: unknown): never {
+  // Drizzle wraps the libSQL constraint error in `cause`.
+  const visited = new Set<unknown>()
+  let cause = error
+  while (cause instanceof Error && !visited.has(cause)) {
+    visited.add(cause)
+    const column = /UNIQUE constraint failed: smartphone_stocks\.(imei|sku)\b/.exec(cause.message)?.[1]
+    if (column) {
+      throw createError({
+        statusCode: 409,
+        message: column === 'imei'
+          ? 'Cet IMEI ou numéro de série existe déjà dans la liste IMEI.'
+          : 'Ce SKU existe déjà dans la liste IMEI.'
+      })
+    }
+    cause = cause.cause
+  }
+  throw error
 }
 
 function mapSmartphoneStock(row: SmartphoneStockRow): SmartphoneStock {
@@ -318,7 +339,7 @@ export async function createSmartphoneStock(input: Omit<SmartphoneStock, 'id'>) 
     supplier: normalizeOptionalText(input.supplier),
     stockedAt: input.stockedAt,
     sold: input.sold
-  }).returning()
+  }).returning().catch(handleStockWriteError)
 
   const row = result[0]
 
@@ -348,6 +369,7 @@ export async function updateSmartphoneStock(input: z.output<typeof updateSmartph
     })
     .where(eq(smartphoneStocks.id, input.id))
     .returning()
+    .catch(handleStockWriteError)
 
   if (!result.length) {
     throw createError({

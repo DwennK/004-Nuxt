@@ -7,6 +7,7 @@ import { formatSmartphoneIdentifier, normalizeSmartphoneIdentifier } from '~~/sh
 import { getImeiWarning, isValidImei } from '~~/shared/utils/pos'
 import type { SmartphoneImeiLookup } from '~~/shared/types/smartphones'
 import type { SmartphoneStock } from '~/types'
+import { getRequestErrorMessage } from '~/utils/request-error'
 
 const props = withDefaults(defineProps<{
   item?: SmartphoneStock | null
@@ -175,7 +176,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     state.supplier = ''
     await refreshNuxtData('smartphone-stocks')
   } catch (error) {
-    const description = error instanceof Error ? error.message : 'Opération impossible'
+    const description = getRequestErrorMessage(error) || 'Impossible d’enregistrer le smartphone. Veuillez réessayer.'
     toast.add({
       title: 'Erreur',
       description,
