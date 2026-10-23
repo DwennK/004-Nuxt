@@ -16,8 +16,10 @@ export function evaluateDocumentRevision(input: {
   nextTotal: number
   paymentCount: number
   paidTotal: number
+  creditedTotal?: number
   nextTypeIsPayable: boolean
 }): DocumentRevisionResult {
+  const settledTotal = input.paidTotal + (input.creditedTotal || 0)
   if (input.paymentCount > 0 && (
     input.currentType !== input.nextType
     || !input.nextTypeIsPayable
@@ -25,15 +27,15 @@ export function evaluateDocumentRevision(input: {
     return { ok: false, code: 'DOCUMENT_TYPE_WITH_PAYMENTS_IMMUTABLE' }
   }
 
-  if (input.paidTotal > input.nextTotal) {
+  if (settledTotal > input.nextTotal) {
     return { ok: false, code: 'DOCUMENT_TOTAL_BELOW_PAID' }
   }
 
-  if (input.paidTotal > 0 && input.requestedStatus === 'cancelled') {
+  if (settledTotal > 0 && input.requestedStatus === 'cancelled') {
     return { ok: false, code: 'PAID_DOCUMENT_CANNOT_BE_CANCELLED' }
   }
 
-  if (input.nextTypeIsPayable && input.paidTotal >= input.nextTotal && input.nextTotal > 0) {
+  if (input.nextTypeIsPayable && settledTotal >= input.nextTotal && input.nextTotal > 0) {
     return { ok: true, status: 'paid' }
   }
 

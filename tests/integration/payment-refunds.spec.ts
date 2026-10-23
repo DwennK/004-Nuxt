@@ -13,6 +13,7 @@ import { refundPayment, voidPayment } from '../../server/utils/pos/payment-corre
 import { getDocumentSettlement, settlementCtes } from '../../server/utils/pos/document-settlement'
 import { getEndOfDaySummary, getReportsLeaders, getReportsOverview } from '../../server/utils/pos/reports'
 import { deletePayment, updatePaymentRecord } from '../../server/utils/pos/payments'
+import { getDocumentById, updateDocumentRecord } from '../../server/utils/pos/documents'
 
 const database = vi.hoisted(() => ({ db: null as PosDatabase | null }))
 vi.mock('../../server/utils/turso', () => ({ useDb: () => database.db }))
@@ -38,7 +39,9 @@ describe('signed payment ledger and commercial reductions', () => {
     database.db = db
     vi.stubGlobal('createError', (value: object) => Object.assign(new Error(), value))
     await client.batch(importTables, 'write')
-    await client.execute(`CREATE TABLE tickets (id INTEGER PRIMARY KEY, customer_id INTEGER, status TEXT, opened_at TEXT, closed_at TEXT)`)
+    await client.execute(`CREATE TABLE tickets (id INTEGER PRIMARY KEY, ticket_number TEXT, customer_id INTEGER, type TEXT, status TEXT,
+      brand TEXT, model TEXT, serial_number TEXT, imei TEXT, access_code TEXT, sim_code TEXT, issue_description TEXT, internal_notes TEXT,
+      opened_at TEXT, closed_at TEXT, created_at TEXT, updated_at TEXT)`)
     await client.execute(`CREATE TABLE ticket_events (id INTEGER PRIMARY KEY, ticket_id INTEGER, kind TEXT, label TEXT, note TEXT, metadata_json TEXT, occurred_at TEXT, created_at TEXT)`)
     await client.execute(`CREATE TABLE catalog_items (id INTEGER PRIMARY KEY, name TEXT)`)
     await createDossierTables(client)
@@ -60,6 +63,44 @@ describe('signed payment ledger and commercial reductions', () => {
     const [doc] = await db.select().from(schema.documents).where(eq(schema.documents.id, 1))
     return getDocumentSettlement(db, doc!)
   }
+  async function editDocument(overrides: Partial<Parameters<typeof updateDocumentRecord>[1]> = {}) {
+    const document = await getDocumentById(1)
+    return updateDocumentRecord(1, { ...document, ...overrides }, await testDossierContext(db, { kind: 'document', id: 1 }))
+  }
+  it.each([1000, 3900])('edits a commercially refunded invoice (%i cents) without rewriting its ledger', async (amount) => {
+    await refund({ ...input, amount })
+    const ledger = (await client.execute('SELECT * FROM payments ORDER BY id')).rows
+    const credits = (await client.execute('SELECT * FROM document_credits')).rows
+    const saved = await editDocument({
+      notes: 'Informations corrigées', dueDate: '2026-10-01',
+      lines: [{ label: 'Prestation corrigée', quantity: 1, unitPrice: 3900, vatRate: 8.1 }]
+    })
+    expect(saved).toMatchObject({ notes: 'Informations corrigées', dueDate: '2026-10-01', total: 3900, creditedTotal: amount, status: 'paid', settlement: { balanceDue: 0 } })
+    expect(saved.lines[0]).toMatchObject({ label: 'Prestation corrigée', vatRate: 8.1 })
+    expect((await client.execute('SELECT status FROM documents WHERE id=1')).rows[0]?.status).toBe('paid')
+    expect((await client.execute('SELECT * FROM payments ORDER BY id')).rows).toEqual(ledger)
+    expect((await client.execute('SELECT * FROM document_credits')).rows).toEqual(credits)
+
+    const increased = await editDocument({ lines: [{ label: 'Prestation complétée', quantity: 1, unitPrice: 4900, vatRate: 8.1 }] })
+    expect(increased).toMatchObject({ status: 'issued', total: 4900, creditedTotal: amount, settlement: { balanceDue: 1000 } })
+    expect((await client.execute('SELECT status FROM documents WHERE id=1')).rows[0]?.status).toBe('issued')
+    expect((await editDocument({ lines: saved.lines })).status).toBe('paid')
+  })
+  it.each([1000, 3900])('rejects totals below net receipts plus commercial credits (%i cents) atomically', async (amount) => {
+    await refund({ ...input, amount })
+    const before = await getDocumentById(1)
+    await expect(editDocument({ notes: 'Must roll back', lines: [{ label: 'Invalid reduction', quantity: 1, unitPrice: 3899, vatRate: 0 }] }))
+      .rejects.toMatchObject({ data: { code: 'DOCUMENT_TOTAL_BELOW_PAID' } })
+    expect(await getDocumentById(1)).toEqual(before)
+    await expect(editDocument({ status: 'cancelled' })).rejects.toMatchObject({ data: { code: 'PAID_DOCUMENT_CANNOT_BE_CANCELLED' } })
+    await expect(editDocument({ type: 'quote' })).rejects.toMatchObject({ data: { code: 'DOCUMENT_TYPE_WITH_PAYMENTS_IMMUTABLE' } })
+  })
+  it('allows editing after a payment-only refund and preserves the refunded customer', async () => {
+    await refundPayment(1, { ...input, effect: 'payment_correction' }, 'editable-correction', 'Test', await context())
+    const saved = await editDocument({ lines: [{ label: 'Montant corrigé', quantity: 1, unitPrice: 2900, vatRate: 0 }] })
+    expect(saved).toMatchObject({ total: 2900, creditedTotal: 0, status: 'issued', settlement: { paidAmount: 0, balanceDue: 2900 } })
+    await expect(editDocument({ customerId: 2 })).rejects.toMatchObject({ data: { code: 'DOCUMENT_REFUND_CONTEXT_IMMUTABLE' } })
+  })
   it('keeps +39 and -39 and settles the commercially reduced invoice without a new receivable', async () => {
     const result = await refund()
     expect(result).toMatchObject({ amount: -3900, kind: 'refund', originalPaymentId: 1, status: 'paid', recordedBy: '1 · Test' })
@@ -163,6 +204,9 @@ describe('signed payment ledger and commercial reductions', () => {
     expect((await client.execute('SELECT document_id FROM payments WHERE kind=\'refund\'')).rows[0]?.document_id).toBe(2)
     expect((await client.execute('SELECT document_id FROM document_credits')).rows[0]?.document_id).toBe(1)
     expect(await settlement()).toMatchObject({ paidAmount: 0, balanceDue: 0 })
+    const saved = await editDocument({ notes: 'Facture corrigée après remboursement de l’acompte' })
+    expect(saved).toMatchObject({ status: 'paid', creditedTotal: 3900, settlement: { paidAmount: 0, balanceDue: 0 } })
+    expect(saved.payments.map(payment => payment.documentId)).toEqual([2, 2])
   })
   it('enforces signs and refund caps for direct SQL writes too', async () => {
     await expect(client.execute(`INSERT INTO payments (document_id, kind, amount, status, method, paid_at, created_at, updated_at) VALUES (1,'receipt',-1,'paid','cash','${refundDate}','${refundDate}','${refundDate}')`)).rejects.toThrow()

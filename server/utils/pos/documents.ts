@@ -804,12 +804,15 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
       })
     }
 
-    if (existingDocument.creditedTotal > 0) {
-      throw createError({ statusCode: 409, statusMessage: 'Ce document comporte des remboursements commerciaux. Son montant et son contexte sont conservés.', data: { code: 'DOCUMENT_CREDITED_IMMUTABLE' } })
-    }
-
     const sav = await validateSavWrite(tx, input, existingDocument)
     const settlement = await getDocumentSettlement(tx, existingDocument)
+    if (settlement.payments.some(payment => payment.kind === 'refund') && (
+      input.customerId !== existingDocument.customerId
+      || (input.ticketId ?? null) !== existingDocument.ticketId
+      || (input.savId ?? null) !== existingDocument.savId
+    )) {
+      throw createError({ statusCode: 409, statusMessage: 'Un document avec remboursement doit conserver son client et son dossier.', data: { code: 'DOCUMENT_REFUND_CONTEXT_IMMUTABLE' } })
+    }
     if (settlement.activeDocument && settlement.activeDocument.id !== id && existingDocument.status !== 'cancelled') {
       throw createError({ statusCode: 409, statusMessage: 'Modifiez le document courant du dossier ; cette étape est conservée dans l’historique.', data: { code: 'DOCUMENT_SUPERSEDED', documentId: settlement.activeDocument.id } })
     }
@@ -844,12 +847,13 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
       nextTotal: totals.total,
       paymentCount: Number(paymentSummary?.count || 0),
       paidTotal: Number(paymentSummary?.paidTotal || 0),
+      creditedTotal: existingDocument.creditedTotal,
       nextTypeIsPayable: isPayable
     })
 
     if (!revision.ok) {
       const messages = {
-        DOCUMENT_TOTAL_BELOW_PAID: 'Document total cannot be lower than the amount already paid',
+        DOCUMENT_TOTAL_BELOW_PAID: 'Le total ne peut pas être inférieur au montant net encaissé et aux réductions commerciales déjà accordées.',
         DOCUMENT_TYPE_WITH_PAYMENTS_IMMUTABLE: 'A document with payments cannot change commercial type',
         PAID_DOCUMENT_CANNOT_BE_CANCELLED: 'A paid document cannot be cancelled without a correction or refund'
       } satisfies Record<typeof revision.code, string>
@@ -859,7 +863,8 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
         statusMessage: messages[revision.code],
         data: {
           code: revision.code,
-          paidTotal: Number(paymentSummary?.paidTotal || 0)
+          paidTotal: Number(paymentSummary?.paidTotal || 0),
+          creditedTotal: existingDocument.creditedTotal
         }
       })
     }
@@ -890,7 +895,7 @@ export async function updateDocumentRecord(id: number, input: DocumentWriteInput
       })
     }
 
-    if (Number(paymentSummary?.count || 0) > 0) {
+    if (Number(paymentSummary?.count || 0) > 0 && input.customerId !== existingDocument.customerId) {
       await tx.update(payments)
         .set({
           customerId: input.customerId,
