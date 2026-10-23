@@ -31,7 +31,7 @@ const saveError = ref<string | null>(null)
 const lastCreatedDocument = ref<DocumentDetail | null>(null)
 const lastCompletedPaymentMethod = ref<PaymentMethod | null>(null)
 const saleCompletionOpen = ref(false)
-const nextSaleButton = useTemplateRef('nextSaleButton')
+const completionPrint = useTemplateRef('completionPrint')
 const customerPool = ref<CustomerRecord[]>([])
 const cashReceived = ref<number | null>(null)
 const saleDirty = computed(() => lines.value.length > 0 || selectedCustomerId.value !== null || cashReceived.value !== null)
@@ -216,9 +216,9 @@ function cancelSaleChanges() {
   void focusSearch()
 }
 
-function focusNextSale(event: Event) {
+function focusCompletionPrint(event: Event) {
   event.preventDefault()
-  nextSaleButton.value?.$el?.focus()
+  completionPrint.value?.querySelector('button')?.focus()
 }
 
 function handleSaleCompletionClosed() {
@@ -391,73 +391,56 @@ defineShortcuts({
         <UModal
           v-if="lastCreatedDocument"
           v-model:open="saleCompletionOpen"
-          title="Encaissement terminé"
+          title="Paiement encaissé"
           :description="`${documentTypeLabels[lastCreatedDocument.type]} ${lastCreatedDocument.documentNumber} enregistrée`"
-          :dismissible="false"
-          :close="false"
-          :content="{ onOpenAutoFocus: focusNextSale }"
+          :content="{ onOpenAutoFocus: focusCompletionPrint }"
           :ui="{
-            content: 'max-w-md overflow-hidden rounded-2xl divide-y-0',
-            header: 'sr-only',
-            body: 'p-5 sm:p-6',
-            footer: 'grid grid-cols-1 gap-2 border-t border-default bg-muted/40 p-5 sm:grid-cols-2 sm:p-6'
+            content: 'max-w-sm rounded-2xl divide-y-0',
+            header: 'p-4 pb-2',
+            description: 'sr-only',
+            body: 'px-4 py-2',
+            footer: 'grid grid-cols-[auto_minmax(0,1fr)] gap-2 p-4 pt-2'
           }"
           @after:leave="handleSaleCompletionClosed"
         >
-          <template #body>
-            <div class="flex items-center gap-2.5">
-              <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-success text-inverted">
-                <UIcon name="i-lucide-check" class="size-4" />
-              </span>
-              <p aria-hidden="true" class="text-sm font-semibold text-highlighted">
-                Encaissement terminé
-              </p>
-            </div>
+          <template #title>
+            <span class="flex items-center gap-2">
+              <UIcon name="i-lucide-circle-check" class="size-5 text-success" />
+              Paiement encaissé
+            </span>
+          </template>
 
-            <div class="my-6">
-              <p class="text-sm text-muted">
-                Montant encaissé
-              </p>
-              <p class="mt-1 break-words text-4xl font-semibold tracking-tight text-highlighted tabular-nums sm:text-5xl">
+          <template #body>
+            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p class="text-2xl font-semibold text-highlighted tabular-nums">
                 {{ formatCurrency(lastCreatedDocument.total) }}
               </p>
+              <p class="text-sm text-muted">
+                {{ lastPaymentMethodLabel }}
+              </p>
             </div>
+            <UButton
+              :label="`${documentTypeLabels[lastCreatedDocument.type]} ${lastCreatedDocument.documentNumber}`"
+              color="neutral"
+              variant="link"
+              size="sm"
+              class="px-0"
+              @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}`)"
+            />
+          </template>
 
-            <dl class="space-y-3 border-t border-dashed border-default pt-5 text-sm">
-              <div class="flex items-baseline justify-between gap-4">
-                <dt class="shrink-0 text-muted">
-                  {{ documentTypeLabels[lastCreatedDocument.type] }}
-                </dt>
-                <dd class="min-w-0 text-right font-medium break-words text-highlighted">
-                  {{ lastCreatedDocument.documentNumber }}
-                </dd>
-              </div>
-              <div class="flex items-baseline justify-between gap-4">
-                <dt class="shrink-0 text-muted">
-                  Paiement
-                </dt>
-                <dd class="min-w-0 text-right font-medium text-highlighted">
-                  {{ lastPaymentMethodLabel }}
-                </dd>
-              </div>
-              <div class="flex items-baseline justify-between gap-4">
-                <dt class="shrink-0 text-muted">
-                  Client
-                </dt>
-                <dd class="min-w-0 text-right font-medium break-words text-highlighted">
-                  {{ lastCreatedDocument.customer.displayName }}
-                </dd>
-              </div>
-            </dl>
-
-            <div class="mt-6">
+          <template #footer>
+            <UButton
+              label="Fermer"
+              color="neutral"
+              variant="ghost"
+              class="justify-center"
+              @click="closeSaleCompletionModal"
+            />
+            <div ref="completionPrint" class="min-w-0">
               <PosPrintButton
+                :key="lastCreatedDocument.id"
                 label="Imprimer"
-                aria-label="Imprimer"
-                color="neutral"
-                variant="outline"
-                icon="i-lucide-printer"
-                size="lg"
                 :preview-url="`/documents/${lastCreatedDocument.id}/print?profile=a4`"
                 :thermal-preview-url="supportsDocumentPrintProfile(lastCreatedDocument.type, 'thermal') ? `/documents/${lastCreatedDocument.id}/print?profile=thermal` : undefined"
                 :document-id="lastCreatedDocument.id"
@@ -465,27 +448,6 @@ defineShortcuts({
                 block
               />
             </div>
-          </template>
-
-          <template #footer>
-            <UButton
-              label="Voir le document"
-              color="neutral"
-              variant="ghost"
-              size="lg"
-              class="justify-center max-sm:order-2"
-              @click="navigateToCompletedDocument(`/documents/${lastCreatedDocument.id}`)"
-            />
-            <UButton
-              ref="nextSaleButton"
-              label="Nouvelle vente"
-              color="primary"
-              trailing-icon="i-lucide-arrow-right"
-              size="lg"
-              class="justify-center"
-              autofocus
-              @click="closeSaleCompletionModal"
-            />
           </template>
         </UModal>
 
