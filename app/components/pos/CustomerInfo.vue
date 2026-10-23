@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CustomerRecord } from '~~/shared/types/pos'
+import type { CustomerFormValue, CustomerRecord } from '~~/shared/types/pos'
 
 const props = withDefaults(defineProps<{
   customer: CustomerRecord
@@ -12,8 +12,51 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  edit: []
+  updated: [customer: CustomerRecord]
 }>()
+
+const $fetch = useDossierFetch()
+const editOpen = ref(false)
+const editingCustomer = ref<CustomerRecord | null>(null)
+const { isSaving, saveError, save, clearSaveError } = useFormAction()
+const initialValue = computed(() => {
+  const customer = editingCustomer.value
+  if (!customer) return undefined
+  return {
+    ...customer,
+    companyName: customer.companyName || '',
+    addressLine1: customer.addressLine1 || '',
+    addressLine2: customer.addressLine2 || '',
+    postalCode: customer.postalCode || '',
+    city: customer.city || '',
+    notes: customer.notes || ''
+  }
+})
+
+watch(() => props.customer.id, () => {
+  editOpen.value = false
+})
+
+function openEditor() {
+  if (!props.editable || props.disabled || isSaving.value) return
+  editingCustomer.value = { ...props.customer }
+  clearSaveError()
+  editOpen.value = true
+}
+
+async function saveCustomer(payload: CustomerFormValue) {
+  const customerId = editingCustomer.value?.id
+  if (!customerId || customerId !== props.customer.id || !props.editable || props.disabled) return
+
+  const result = await save(() => $fetch<CustomerRecord>(`/api/customers/${customerId}`, {
+    method: 'PATCH',
+    body: payload
+  }), { success: 'Client mis à jour' })
+  if (!result?.ok || props.customer.id !== customerId) return
+
+  emit('updated', result.data)
+  editOpen.value = false
+}
 
 const address = computed(() => [
   props.customer.addressLine1,
@@ -30,7 +73,7 @@ const address = computed(() => [
       </h2>
       <UTooltip v-if="editable" text="Modifier la fiche client">
         <UButton
-          :disabled="disabled"
+          :disabled="disabled || isSaving"
           type="button"
           icon="i-lucide-pencil"
           aria-label="Modifier la fiche client"
@@ -38,7 +81,7 @@ const address = computed(() => [
           variant="ghost"
           size="xs"
           class="shrink-0"
-          @click="emit('edit')"
+          @click="openEditor"
         />
       </UTooltip>
       <slot name="actions" />
@@ -64,5 +107,16 @@ const address = computed(() => [
         </address>
       </div>
     </div>
+    <PosCustomerSlideover
+      v-if="editingCustomer"
+      v-model:open="editOpen"
+      title="Modifier la fiche client"
+      description="Les modifications sont enregistrées dans la fiche client."
+      submit-label="Enregistrer le client"
+      :initial-value="initialValue"
+      :saving="isSaving"
+      :save-error="saveError"
+      @save="saveCustomer"
+    />
   </section>
 </template>

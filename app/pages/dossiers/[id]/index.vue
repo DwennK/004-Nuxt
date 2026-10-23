@@ -116,7 +116,7 @@ const tabItems = computed(() => [
   { label: ticket.value?.type === 'repair' ? 'Réparation' : 'Vue d’ensemble', icon: 'i-lucide-wrench', value: 'overview' },
   { label: 'Paiements', icon: 'i-lucide-wallet', value: 'payments', badge: ticket.value?.payments.length || 0 },
   { label: 'SMS', icon: 'i-lucide-message-square-share', value: 'sms', badge: smsTimelineItems.value.length || 0 },
-  { label: ticket.value?.type === 'sale' ? 'Client' : 'Client & Appareil', icon: 'i-lucide-user', value: 'client' },
+  ...(ticket.value?.type !== 'sale' ? [{ label: 'Appareil', icon: 'i-lucide-smartphone', value: 'device' }] : []),
   { label: ticket.value?.type === 'repair' ? 'État de la réparation' : 'État du dossier', icon: 'i-lucide-list-checks', value: 'status' }
 ])
 
@@ -754,7 +754,11 @@ async function logSmsQrOpened(template: SmsTemplateRecord) {
               </p>
             </div>
             <div class="min-w-0 border-t border-default px-3 py-2 md:border-t-0">
-              <PosCustomerInfo compact :customer="ticket.customer" :editable="false" />
+              <PosCustomerInfo
+                compact
+                :customer="ticket.customer"
+                @updated="ticket = { ...ticket, customer: $event }"
+              />
             </div>
           </div>
           <div class="border-t border-default bg-muted/30 px-3 py-1.5">
@@ -974,25 +978,9 @@ async function logSmsQrOpened(template: SmsTemplateRecord) {
                 </p>
               </section>
 
-              <!-- Client tab -->
-              <div v-else-if="activeTab === 'client'" class="space-y-4 text-sm max-h-[32rem] overflow-y-auto pr-1">
+              <div v-else-if="activeTab === 'device'" class="space-y-4 text-sm max-h-[32rem] overflow-y-auto pr-1">
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="rounded-xl border border-default p-4">
-                    <p class="text-xs uppercase tracking-[0.14em] text-toned">
-                      Client
-                    </p>
-                    <p class="mt-2 font-medium text-highlighted">
-                      {{ ticket.customer.displayName }}
-                    </p>
-                    <p class="text-toned">
-                      {{ ticket.customer.phone || 'Pas de téléphone' }}
-                    </p>
-                    <p class="text-toned">
-                      {{ ticket.customer.email || 'Pas d\'e-mail' }}
-                    </p>
-                  </div>
-
-                  <div v-if="ticket.type !== 'sale'" class="rounded-xl border border-default p-4">
                     <p class="text-xs uppercase tracking-[0.14em] text-toned">
                       Appareil
                     </p>

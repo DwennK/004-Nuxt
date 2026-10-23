@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { savStatusLabels } from '~~/shared/types/sav'
 import { documentStatusColors, documentStatusLabels, documentTypeLabels } from '~~/shared/constants/pos'
-import type { DocumentDetail } from '~~/shared/types/pos'
+import type { CustomerRecord, DocumentDetail } from '~~/shared/types/pos'
 import { formatCurrency, formatDate, formatDateTime } from '~~/shared/utils/pos'
 
 const props = withDefaults(defineProps<{
@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   editContext: []
-  editCustomer: []
+  customerUpdated: [customer: CustomerRecord]
 }>()
 
 const documentOrder = { quote: 0, customer_order: 1, invoice: 2, sav: 3 }
@@ -110,7 +110,7 @@ const isSettled = computed(() => props.isPayableDocument && props.balanceDue ===
       </div>
 
       <div class="min-w-0 border-t border-default px-3 py-2 md:border-t-0">
-        <PosCustomerInfo compact :customer="props.document.customer" @edit="emit('editCustomer')" />
+        <PosCustomerInfo compact :customer="props.document.customer" @updated="emit('customerUpdated', $event)" />
       </div>
     </div>
 

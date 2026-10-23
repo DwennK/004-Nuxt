@@ -30,10 +30,7 @@ const emit = defineEmits<{
 const toast = useToast()
 const menuOpen = ref(false)
 const createOpen = ref(false)
-const editOpen = ref(false)
-const editingCustomer = ref<CustomerRecord | null>(null)
 const updatedCustomers = ref<CustomerRecord[]>([])
-const { isSaving: isEditing, saveError: editError, save: saveEdit, clearSaveError: clearEditError } = useFormAction()
 const customerSelect = useTemplateRef<{ inputRef?: HTMLInputElement }>('customerSelect')
 const isSaving = ref(false)
 const saveError = ref<string | null>(null)
@@ -122,40 +119,8 @@ watch([debouncedSearch, trimmedSearch], async ([term, currentTerm], _previous, o
   }
 })
 
-const editInitialValue = computed(() => {
-  const customer = editingCustomer.value
-  if (!customer) return undefined
-
-  return {
-    ...customer,
-    companyName: customer.companyName || '',
-    addressLine1: customer.addressLine1 || '',
-    addressLine2: customer.addressLine2 || '',
-    postalCode: customer.postalCode || '',
-    city: customer.city || '',
-    notes: customer.notes || ''
-  }
-})
-
-function openEdit() {
-  if (props.disabled || !selectedCustomer.value) return
-  editingCustomer.value = selectedCustomer.value
-  clearEditError()
-  editOpen.value = true
-}
-
-async function saveCustomer(payload: CustomerFormValue) {
-  const customerId = editingCustomer.value?.id
-  if (!customerId || props.disabled) return
-
-  const result = await saveEdit(() => $fetch<CustomerRecord>(`/api/customers/${customerId}`, {
-    method: 'PATCH',
-    body: payload
-  }), { success: 'Client mis à jour' })
-  if (!result?.ok) return
-
-  updatedCustomers.value = [...updatedCustomers.value.filter(customer => customer.id !== customerId), result.data]
-  editOpen.value = false
+function updateCustomer(customer: CustomerRecord) {
+  updatedCustomers.value = [...updatedCustomers.value.filter(item => item.id !== customer.id), customer]
 }
 
 async function changeCustomer() {
@@ -283,7 +248,7 @@ onBeforeUnmount(() => {
       v-if="showSummary && selectedCustomer"
       :customer="selectedCustomer"
       :disabled="disabled"
-      @edit="openEdit"
+      @updated="updateCustomer"
     >
       <template #actions>
         <UButton
@@ -378,18 +343,6 @@ onBeforeUnmount(() => {
         </div>
       </template>
     </UInputMenu>
-
-    <PosCustomerSlideover
-      v-if="showSummary && editingCustomer"
-      v-model:open="editOpen"
-      title="Modifier la fiche client"
-      description="Les modifications sont enregistrées dans la fiche client."
-      submit-label="Enregistrer le client"
-      :initial-value="editInitialValue"
-      :saving="isEditing"
-      :save-error="editError"
-      @save="saveCustomer"
-    />
 
     <PosCustomerSlideover
       v-model:open="createOpen"
