@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm'
 import { type AnySQLiteColumn, index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { sentMailStatuses } from '../../shared/constants/email'
 import { lineCategoryHints } from '../../shared/constants/pos'
+import type { PaymentCategoryAllocation } from '../../shared/types/payment-categories'
 
 export const backupSettings = sqliteTable('backup_settings', {
   id: integer('id').primaryKey(),
@@ -318,6 +319,15 @@ export const payments = sqliteTable('payments', {
   customerIdx: index('payments_customer_id_idx').on(table.customerId),
   documentPaidAtIdIdx: index('payments_document_id_paid_at_id_idx').on(table.documentId, table.paidAt, table.id)
 }))
+
+// Reporting metadata only: never edits the payment ledger or commercial lines.
+export const paymentClassifications = sqliteTable('payment_classifications', {
+  paymentId: integer('payment_id').primaryKey().references(() => payments.id, { onDelete: 'cascade' }),
+  allocations: text('allocations', { mode: 'json' }).$type<PaymentCategoryAllocation[] | null>(),
+  revision: integer('revision').notNull().default(1),
+  updatedAt: text('updated_at').notNull(),
+  updatedBy: integer('updated_by').notNull()
+})
 
 // Commercial reductions are distinct from cash movements. The cached document
 // total is maintained atomically by migration triggers for all SQL callers.

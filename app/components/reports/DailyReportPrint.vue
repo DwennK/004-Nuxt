@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { lineCategoryLabels } from '~~/shared/constants/pos'
 import type { DailySummary } from '~~/shared/types/pos'
+import { paymentCategoryLabels } from '~~/shared/types/payment-categories'
+import { summarizePaymentCategories } from '~~/shared/utils/payment-categories'
 import { businessTimeZone, formatCurrency, formatDate, getPaymentMethodLabel } from '~~/shared/utils/pos'
 
 const props = defineProps<{ summary: DailySummary }>()
@@ -10,6 +12,7 @@ const reportDate = computed(() => formatDate(props.summary.date))
 const receivedTotal = computed(() => (props.summary.payments).reduce((sum, p) => sum + Math.max(p.amount, 0), 0))
 const refundedTotal = computed(() => (props.summary.payments).reduce((sum, p) => sum - Math.min(p.amount, 0), 0))
 const paymentCount = computed(() => props.summary.payments.length)
+const cashCategories = computed(() => summarizePaymentCategories(props.summary.payments))
 const categories = computed(() => [...props.summary.turnoverByCategory].sort((a, b) => b.total - a.total || a.category.localeCompare(b.category)))
 const categoryTotal = computed(() => categories.value.reduce((sum, item) => sum + item.total, 0))
 const unpaidDocuments = computed(() => [...props.summary.unpaidDocuments].sort((a, b) => b.balanceDue - a.balanceDue || a.documentNumber.localeCompare(b.documentNumber, 'fr-CH', { numeric: true })))
@@ -126,7 +129,21 @@ function paymentTime(value: string) {
             <th scope="row">
               {{ payment.documentNumber || '—' }}
             </th>
-            <td>{{ payment.customerName }}</td>
+            <td>
+              {{ payment.customerName }}
+              <div class="payment-category" :class="!payment.classification.allocations.length ? 'emphasis' : ''">
+                <template v-if="payment.classification.allocations.length">
+                  <div v-for="allocation in payment.classification.allocations" :key="allocation.category">
+                    {{ paymentCategoryLabels[allocation.category] }}<template v-if="payment.classification.allocations.length > 1">
+                      : {{ amount(Math.sign(payment.amount) * allocation.amount) }}
+                    </template>
+                  </div>
+                </template>
+                <template v-else>
+                  À catégoriser
+                </template>
+              </div>
+            </td>
             <td>{{ paymentTime(payment.paidAt) }}</td>
             <td>
               {{ payment.amount < 0 ? 'Remb. · ' : '' }}<span class="payment-method">{{ getPaymentMethodLabel(payment.method) }}</span>
@@ -151,7 +168,47 @@ function paymentTime(value: string) {
     </section>
 
     <section>
-      <h2>Répartition par catégorie</h2>
+      <h2>Encaissements par catégorie</h2>
+      <p class="section-note compact-note">
+        Mouvements du jour, acomptes inclus et remboursements déduits.
+      </p>
+      <table v-if="cashCategories.length" class="compact-table">
+        <thead>
+          <tr>
+            <th scope="col">
+              Catégorie
+            </th>
+            <th scope="col" class="amount">
+              Montant CHF
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in cashCategories" :key="item.category || 'uncategorized'">
+            <th scope="row" :class="item.category === null ? 'emphasis' : ''">
+              {{ item.category ? paymentCategoryLabels[item.category] : 'À catégoriser' }}
+            </th>
+            <td class="amount">
+              {{ amount(item.total) }}
+            </td>
+          </tr>
+          <tr class="subtotal">
+            <th scope="row">
+              Encaissement net
+            </th>
+            <td class="amount">
+              {{ amount(summary.totalPaid) }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="empty">
+        Aucun mouvement enregistré ce jour.
+      </p>
+    </section>
+
+    <section>
+      <h2>Factures soldées par catégorie</h2>
       <p class="section-note compact-note">
         Valeur nette des factures soldées avec mouvement ce jour, après réductions commerciales
       </p>
@@ -383,6 +440,11 @@ function paymentTime(value: string) {
   .payment-method {
     white-space: nowrap;
     overflow-wrap: normal;
+  }
+
+  .payment-category {
+    margin-top: 0.6mm;
+    font-size: 8pt;
   }
 
   th {

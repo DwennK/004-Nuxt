@@ -110,6 +110,7 @@ describe('editing recorded financial data', () => {
 
     await client.executeMultiple(await readFile(new URL('../../drizzle/20260917101011_sav_documents/migration.sql', import.meta.url), 'utf8'))
     await createDossierTables(client)
+    await client.executeMultiple(await readFile(new URL('../../drizzle/20261102134248_payment_classifications/migration.sql', import.meta.url), 'utf8'))
     await client.executeMultiple(await readFile(new URL('../../docs/sql/counter-customer-additive.sql', import.meta.url), 'utf8'))
 
     ;({ updateDocumentRecord, markDocumentAsPaid, createAndPayDocumentRecord } = await import('../../server/utils/pos/documents'))

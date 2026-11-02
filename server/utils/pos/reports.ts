@@ -1,4 +1,5 @@
 import { settlementCtes } from './document-settlement'
+import { classifyReportPayments } from './payment-classifications'
 import { and, desc, eq, gte, lte, sql, sum, type SQL } from 'drizzle-orm'
 import { customers, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
@@ -365,7 +366,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
   return {
     date,
     totalPaid: paymentRows.reduce((total, row) => total + row.amount, 0),
-    payments: paymentRows,
+    payments: await classifyReportPayments(db, paymentRows),
     paidDocuments: paidDocumentRows.map(row => ({
       id: row.id,
       documentNumber: row.documentNumber,

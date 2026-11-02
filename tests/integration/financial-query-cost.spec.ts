@@ -247,7 +247,8 @@ describe('financial query equivalence and bounded query plans', () => {
     expect(daily.payments.map(payment => payment.id)).toEqual([22, 21, 7, 6, 4, 2, 1, 20])
     expect(daily.payments[0]).toEqual({
       id: 22, documentId: 5, documentNumber: 'DOC-5', customerName: 'Bob Beta',
-      method: 'card_twint', amount: 25, paidAt: '2026-09-11T21:59:59.999Z'
+      method: 'card_twint', amount: 25, paidAt: '2026-09-11T21:59:59.999Z',
+      classification: { allocations: [], source: 'automatic', revision: 0 }
     })
     expect(daily.payments.at(-1)).toEqual(expect.objectContaining({ documentId: 1, amount: 50 }))
     expect(daily.totalPaid).toBe(1750)

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import DailyReportPrint from '~/components/reports/DailyReportPrint.vue'
+import PaymentCategoryMenu from '~/components/reports/PaymentCategoryMenu.vue'
+import { paymentCategoryLabels } from '~~/shared/types/payment-categories'
+import { summarizePaymentCategories } from '~~/shared/utils/payment-categories'
 import { lineCategoryLabels } from '~~/shared/constants/pos'
 import type { DailySummary } from '~~/shared/types/pos'
 import { businessTimeZone, formatCurrency, formatDateTime, getPaymentMethodLabel, toDateInputValue } from '~~/shared/utils/pos'
@@ -14,6 +17,10 @@ const reportReady = computed(() => !!summary.value && status.value === 'success'
 const receivedTotal = computed(() => (summary.value?.payments || []).reduce((sum, p) => sum + Math.max(p.amount, 0), 0))
 const refundedTotal = computed(() => (summary.value?.payments || []).reduce((sum, p) => sum - Math.min(p.amount, 0), 0))
 const paymentCount = computed(() => summary.value?.payments.length || 0)
+const onlyUncategorized = ref(false)
+const uncategorizedCount = computed(() => summary.value?.payments.filter(payment => !payment.classification.allocations.length).length || 0)
+const visiblePayments = computed(() => (summary.value?.payments || []).filter(payment => !onlyUncategorized.value || !payment.classification.allocations.length))
+const cashCategories = computed(() => summarizePaymentCategories(summary.value?.payments || []))
 const categories = computed(() => [...(summary.value?.turnoverByCategory || [])].sort((a, b) => b.total - a.total || a.category.localeCompare(b.category)))
 const categoryTotal = computed(() => categories.value.reduce((sum, item) => sum + item.total, 0))
 const unpaidDocuments = computed(() => [...(summary.value?.unpaidDocuments || [])].sort((a, b) => b.balanceDue - a.balanceDue || a.documentNumber.localeCompare(b.documentNumber, 'fr-CH', { numeric: true })))
@@ -158,6 +165,17 @@ function printReport() {
                 variant="soft"
                 size="sm"
               />
+              <UButton
+                v-if="uncategorizedCount || onlyUncategorized"
+                :label="`${uncategorizedCount} à catégoriser`"
+                icon="i-lucide-circle-alert"
+                color="error"
+                :variant="onlyUncategorized ? 'solid' : 'soft'"
+                size="xs"
+                :aria-pressed="onlyUncategorized"
+                class="ml-auto font-semibold"
+                @click="onlyUncategorized = !onlyUncategorized"
+              />
             </div>
             <div
               v-if="summary.payments.length"
@@ -176,6 +194,9 @@ function printReport() {
                       Client
                     </th>
                     <th scope="col">
+                      Catégorie
+                    </th>
+                    <th scope="col">
                       Heure
                     </th>
                     <th scope="col">
@@ -187,13 +208,16 @@ function printReport() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="payment in summary.payments" :key="payment.id">
+                  <tr v-for="payment in visiblePayments" :key="payment.id">
                     <th scope="row">
                       <NuxtLink v-if="payment.documentNumber" :to="`/documents/${payment.documentId}`">{{ payment.documentNumber }}</NuxtLink>
                       <span v-else>—</span>
                     </th>
                     <td class="customer-cell">
                       {{ payment.customerName }}
+                    </td>
+                    <td class="category-cell">
+                      <PaymentCategoryMenu :payment="payment" @saved="refresh()" @conflict="refresh()" />
                     </td>
                     <td class="text-toned" :title="formatDateTime(payment.paidAt)">
                       {{ paymentTime(payment.paidAt) }}
@@ -207,6 +231,9 @@ function printReport() {
                   </tr>
                 </tbody>
               </table>
+              <p v-if="!visiblePayments.length" class="report-empty">
+                Tous les mouvements sont catégorisés.
+              </p>
             </div>
             <div v-if="summary.payments.length" class="report-subtotal">
               <span>Encaissement net</span>
@@ -217,45 +244,90 @@ function printReport() {
             </p>
           </section>
 
-          <section class="report-section" aria-labelledby="category-title">
+          <section class="report-section" aria-labelledby="cash-category-title">
             <div class="report-section-heading">
-              <h2 id="category-title">
-                Répartition par catégorie
+              <h2 id="cash-category-title">
+                Encaissements par catégorie
               </h2>
             </div>
             <p class="report-note">
-              Valeur nette des factures soldées avec mouvement ce jour, après réductions commerciales
+              Mouvements du jour, acomptes inclus et remboursements déduits.
             </p>
-            <table v-if="categories.length" class="report-table">
+            <table v-if="cashCategories.length" class="report-table">
               <thead>
                 <tr>
                   <th scope="col">
                     Catégorie
                   </th>
                   <th scope="col" class="amount">
-                    Montant TTC CHF
+                    Montant CHF
                   </th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in categories" :key="item.category">
-                  <th scope="row">
-                    {{ lineCategoryLabels[item.category] }}
+                <tr v-for="item in cashCategories" :key="item.category || 'uncategorized'">
+                  <th scope="row" :class="item.category === null ? '!font-semibold text-error' : ''">
+                    {{ item.category ? paymentCategoryLabels[item.category] : 'À catégoriser' }}
                   </th>
-                  <td class="amount">
+                  <td class="amount" :class="item.category === null ? 'font-semibold text-error' : ''">
                     {{ amount(item.total) }}
                   </td>
                 </tr>
               </tbody>
             </table>
-            <div v-if="categories.length" class="report-subtotal">
-              <span>Total catégorisé</span>
-              <strong>{{ formatCurrency(categoryTotal) }}</strong>
+            <div v-if="cashCategories.length" class="report-subtotal">
+              <span>Encaissement net</span>
+              <strong>{{ formatCurrency(summary.totalPaid) }}</strong>
             </div>
             <p v-else class="report-empty">
-              Aucune répartition disponible.
+              Aucun mouvement enregistré ce jour.
             </p>
           </section>
+
+          <details class="report-section">
+            <summary class="cursor-pointer text-sm font-semibold text-toned">
+              Factures soldées par catégorie
+            </summary>
+            <div class="mt-3">
+              <div class="report-section-heading">
+                <h2 id="category-title">
+                  Factures soldées par catégorie
+                </h2>
+              </div>
+              <p class="report-note">
+                Valeur nette des factures soldées avec mouvement ce jour, après réductions commerciales
+              </p>
+              <table v-if="categories.length" class="report-table">
+                <thead>
+                  <tr>
+                    <th scope="col">
+                      Catégorie
+                    </th>
+                    <th scope="col" class="amount">
+                      Montant TTC CHF
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in categories" :key="item.category">
+                    <th scope="row">
+                      {{ lineCategoryLabels[item.category] }}
+                    </th>
+                    <td class="amount">
+                      {{ amount(item.total) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-if="categories.length" class="report-subtotal">
+                <span>Total catégorisé</span>
+                <strong>{{ formatCurrency(categoryTotal) }}</strong>
+              </div>
+              <p v-else class="report-empty">
+                Aucune répartition disponible.
+              </p>
+            </div>
+          </details>
 
           <section class="report-section report-unpaid" aria-labelledby="unpaid-title">
             <template v-if="unpaidDocuments.length">
@@ -423,7 +495,7 @@ function printReport() {
   font-variant-numeric: tabular-nums;
 }
 
-.documents-table { min-width: 44rem; }
+.documents-table { min-width: 50rem; }
 
 .report-table th,
 .report-table td {
@@ -453,7 +525,8 @@ function printReport() {
 
 .report-table tbody tr:last-child > * { border-bottom: 0; }
 .documents-table tbody tr:hover > * { background: var(--ui-bg-muted); }
-.report-table .customer-cell { width: 40%; min-width: 12rem; overflow-wrap: anywhere; }
+.report-table .customer-cell { width: 28%; min-width: 10rem; overflow-wrap: anywhere; }
+.report-table .category-cell { min-width: 11rem; }
 .report-table .amount { text-align: right; white-space: nowrap; }
 .report-table .strong { font-weight: 600; color: var(--ui-text-highlighted); }
 .report-table a { color: var(--ui-primary); font-weight: 600; white-space: nowrap; }

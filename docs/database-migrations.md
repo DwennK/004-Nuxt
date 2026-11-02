@@ -179,6 +179,20 @@ pending migrations.
 
 ## Normal migration workflow
 
+### Payment classification (20261102134248)
+
+The additive `payment_classifications` table stores reporting metadata keyed by
+payment ID: positive-cent allocations, a revision, and the last editor/time.
+It does not change payment amounts, document lines, VAT, or settlement status.
+Apply this migration through the normal verified workflow before releasing the
+daily-report UI. Existing Workers remain compatible with the added table.
+No historical backfill is required: absent/null allocations use a suggestion
+only when every document line has the same known category; an explicit empty
+array keeps a payment uncategorized. Mixed documents require operator input.
+Manual splits must match the absolute payment amount; refunds subtract their
+allocations. Revisions prevent one operator from overwriting a stale selection.
+This classification is separate from commercial turnover by line category.
+
 Use expand/backfill/switch/cleanup across separate releases:
 
 1. **Expand:** add compatible nullable columns, tables, and indexes.

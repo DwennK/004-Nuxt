@@ -422,6 +422,7 @@ export interface DailySummary {
     method: PaymentMethod
     amount: number
     paidAt: string
+    classification: import('./payment-categories').PaymentClassification
   }>
   paidDocuments: Array<{
     id: number
