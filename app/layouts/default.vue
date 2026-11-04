@@ -339,7 +339,7 @@ const groups = computed(() => {
         root: 'ring-0',
         handle: 'w-px bg-[var(--mw-outlook-line)] hover:bg-[var(--mw-outlook-blue)] transition-colors',
         header: 'outlook-sidebar-header px-2 py-2',
-        body: 'px-2 pb-2',
+        body: 'gap-1 px-2 pb-2',
         footer: 'outlook-sidebar-footer px-2 py-2'
       }"
     >
@@ -362,7 +362,7 @@ const groups = computed(() => {
           popover
         />
 
-        <USeparator :label="collapsed ? undefined : 'Commerce'" class="my-3" />
+        <USeparator :label="collapsed ? undefined : 'Commerce'" class="mt-3" />
 
         <UNavigationMenu
           :collapsed="collapsed"
@@ -372,7 +372,7 @@ const groups = computed(() => {
           popover
         />
 
-        <USeparator :label="collapsed ? undefined : 'Finances'" class="my-3" />
+        <USeparator :label="collapsed ? undefined : 'Finances'" class="mt-3" />
 
         <UNavigationMenu
           :collapsed="collapsed"
@@ -382,7 +382,7 @@ const groups = computed(() => {
           popover
         />
 
-        <USeparator :label="collapsed ? undefined : 'Gestion'" class="my-3" />
+        <USeparator :label="collapsed ? undefined : 'Gestion'" class="mt-3" />
 
         <UNavigationMenu
           :collapsed="collapsed"
