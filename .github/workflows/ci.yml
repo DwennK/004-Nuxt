@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 env:
-  NUXT_SESSION_PASSWORD: ci-only-session-password-with-at-least-32-characters
+  NUXT_APP_SECRET: ci-only-session-password-with-at-least-32-characters
 
 jobs:
   quality:

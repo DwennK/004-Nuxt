@@ -144,7 +144,7 @@ Create a local environment file only if you do not already have one:
 cp .env.example .env
 ```
 
-Fill in `.env` with credentials for a dedicated development database, never production. Generate `NUXT_SESSION_PASSWORD` with `openssl rand -base64 32`.
+Fill in `.env` with credentials for a dedicated development database, never production. Generate `NUXT_APP_SECRET` with `openssl rand -base64 32`.
 
 Prepare that database before starting the app. It no longer creates the POS schema or demo data automatically. For an empty development database, `db:push` uses [`server/db/schema.ts`](./server/db/schema.ts). A remote development target must be mapped to `development` in `DB_REMOTE_TARGETS` and explicitly confirmed:
 
@@ -200,7 +200,7 @@ Dropbox backups:
 
 Authentication:
 
-- `NUXT_SESSION_PASSWORD`: secret used to seal session cookies, min. 32 chars
+- `NUXT_APP_SECRET`: root secret used to derive session-cookie keys, min. 32 chars
 - `NUXT_PUBLIC_TURNSTILE_SITE_KEY`: public login widget key
 - `NUXT_TURNSTILE_SECRET_KEY`: server-side Turnstile verification key
 

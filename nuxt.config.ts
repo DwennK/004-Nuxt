@@ -19,6 +19,8 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
 
   runtimeConfig: {
+    // Resolve NUXT_APP_SECRET at runtime; never bake the session secret into the Worker.
+    appSecret: '',
     tursoUrl: process.env.TURSO_URL,
     tursoToken: process.env.TURSO_TOKEN,
     dropboxAppKey: '',

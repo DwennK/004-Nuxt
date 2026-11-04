@@ -104,3 +104,53 @@ Source : [pnpm 12.15](https://github.com/pnpm/pnpm/releases/tag/v12.15.0).
   sont fournis seulement au serveur local. Une API protégée renvoie bien 401.
 - Le WASM du scanner servi par le Worker est identique au fichier de `zxing-wasm`
   3.1.6 (946 860 octets). La vitesse réelle avec la caméra du magasin reste à mesurer.
+
+## Suivi du 4 novembre 2026
+
+Le lot suivant met à jour Nuxt 4.6.4, Tailwind 4.3.4, TanStack Charts 1.2.1,
+Vitest 5.1.0, Wrangler 4.157.0 et les types Cloudflare 5.20261103.1. Il inclut
+aussi les correctifs Lucide 1.2.151, Simple Icons 1.2.101, sql.js 1.15.2,
+dotenv 18.0.9, ESLint 10.14.0 et nuxt-auth-utils 0.6.0.
+Les overrides de node-forge, undici et serialize-javascript conservent leurs
+versions corrigées dans les branches majeures déjà utilisées.
+
+Les limites de compatibilité restent explicites :
+
+- H3 reste en 1.15.11 : Nuxt 4.6.4 utilise Nitro 2.13.6 et H3 1.
+- TanStack Table reste en 8.21.3 pour correspondre à Nuxt UI 4.12.0.
+- TypeScript reste en 6.0.3 : le compilateur Vue et les tests utilisent son API
+  JavaScript, absente sous cette forme dans TypeScript 7.
+- vue-tsc est fixé à 3.3.13 : l'essai de 3.3.14 produit neuf erreurs TS2339
+  sur `state.value` dans le formulaire société, alors que son état est un objet
+  `reactive` et que le template utilise directement ses propriétés.
+
+L'audit npm de ce lot conserve trois alertes transitives : deepmerge 4.3.1
+(faible, sans version corrigée), minimatch 10.2.6 et glob 13.0.6 (modérées,
+correctifs disponibles seulement dans les majeures 11 et 14). Aucun remplacement
+forcé de ces majeures n'est appliqué aux outils amont. Aucune alerte élevée ou
+critique n'est signalée par cet audit.
+
+### Migration des sessions vers nuxt-auth-utils 0.6
+
+Avant de déployer, ajouter le secret Worker `NUXT_APP_SECRET` (32 octets
+aléatoires encodés en base64). Il est résolu à l'exécution ; sa valeur ne doit
+pas être committée ni intégrée au build. `.env.example`, la CI et les types
+Workers utilisent maintenant ce nom.
+
+La version 0.6 change le cookie en `nuxt-auth-session` et dérive sa clé depuis
+`appSecret`. Les utilisateurs devront se reconnecter une fois ; aucun compte,
+mot de passe utilisateur ni donnée POS n'est modifié. L'ancien secret Worker
+`NUXT_SESSION_PASSWORD` peut rester en place pour permettre un retour à la
+version précédente ; il n'est plus utilisé par la version 0.6.
+Source : [version 0.6.0](https://github.com/atinux/nuxt-auth-utils/releases/tag/v0.6.0).
+
+Validation du lot : installation figée et `pnpm run check` réussis sous Linux
+avec Node 22.23.2 : lint, types, 666 tests unitaires, 332 tests d'intégration,
+9 tests de sécurité, contrôles de régression et build Workers. Le premier
+passage concurrent avec le build Windows a dépassé le délai d'un test TAC ;
+la relance complète passe sans modification de ses assertions ni de son délai.
+Le build Windows et les vérifications du Worker local passent aussi : ancienne
+session refusée, connexion, lecture authentifiée, cookie falsifié refusé et
+déconnexion. Le menu est contrôlé dans le navigateur sans erreur JavaScript.
+Le nouveau secret de production a été ajouté dans Cloudflare avant le push ;
+aucune valeur de secret n'est incluse dans ce document ou dans le build.

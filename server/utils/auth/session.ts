@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import type { H3Event } from 'h3'
+import type { RequestEvent } from 'nuxt/server'
 import { users } from '~~/server/db/schema'
 import { useDb } from '~~/server/utils/turso'
 import {
@@ -33,6 +34,8 @@ export type AuthRequestContext = UseCaseContext & {
   capabilities: AuthCapability[]
 }
 
+type AuthSessionEvent = H3Event | RequestEvent
+
 function toRequestActor(user: ActiveSessionUser): RequestActor {
   return {
     userId: user.id,
@@ -42,8 +45,8 @@ function toRequestActor(user: ActiveSessionUser): RequestActor {
   }
 }
 
-function setAuthRequestContext(event: H3Event, user: ActiveSessionUser) {
-  const requestId = event.context.auth?.requestId || crypto.randomUUID()
+function setAuthRequestContext(event: AuthSessionEvent, user: ActiveSessionUser) {
+  const requestId = getAuthRequestContext(event)?.requestId || crypto.randomUUID()
   const auth = {
     requestId,
     actor: toRequestActor(user),
@@ -57,7 +60,7 @@ function setAuthRequestContext(event: H3Event, user: ActiveSessionUser) {
   return auth
 }
 
-export function getAuthRequestContext(event: H3Event) {
+export function getAuthRequestContext(event: AuthSessionEvent) {
   return event.context.auth as AuthRequestContext | undefined
 }
 
@@ -77,7 +80,7 @@ export function getUseCaseContext(event: H3Event): UseCaseContext {
   }
 }
 
-export async function resolveActiveSessionUser(event: H3Event) {
+export async function resolveActiveSessionUser(event: AuthSessionEvent) {
   const existingAuth = getAuthRequestContext(event)
   if (existingAuth) {
     return existingAuth.user
