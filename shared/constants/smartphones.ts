@@ -1,1 +1,1 @@
-export const smartphoneSuppliers = ['MobileSentrix', 'Recommerce', 'Digitec'] as const
+export const smartphoneSuppliers = ['MobileSentrix', 'Recommerce', 'Digitec', 'Foxway'] as const
