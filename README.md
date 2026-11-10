@@ -518,9 +518,15 @@ Current output includes:
 - number of open tickets
 - number of tickets opened today
 - number of tickets closed today
-- current settled invoice value split by document line category when available
+- invoices issued that day less commercial reductions recorded that day, split by document line category
 
-The printed daily report lists payment movements, including deposits on quotes or orders and partial payments on invoices that remain unpaid. Refunds appear on their own payment date. Rankings and category totals describe current settled invoice value; they are not the cash ledger or an invoice-date tax report. See [payment ledger semantics](./docs/payment-ledger.md).
+The printed daily report lists payment movements, including deposits on quotes or orders and partial payments on invoices that remain unpaid. Refunds appear on their own payment date. The main category breakdown in `/reports` uses the same payment classifications as the daily report, over the explicitly displayed seven-day range. Uncategorized payments remain included; negative category totals use the table instead of a donut. Changing the payment-chart tab affects only that chart.
+
+The **Ventes facturées** tab provides day, calendar month and calendar year reports in Europe/Zurich. Each issued or paid invoice contributes its original TTC total once on its issue date, regardless of payments; drafts, cancelled invoices, quotes and customer orders are excluded. Each commercial reduction contributes once on its recording date (`document_credits.created_at`), independently of the refund payment date. Daily totals add up to monthly totals, and monthly totals to annual totals.
+
+The daily commercial breakdown, the seven-day commercial breakdown and customer/article rankings all use this same rule. Line categories include uncategorized amounts, and global reductions are allocated with cumulative rounding so every cent is conserved, including repeated partial reductions and negative lines. Rankings use the recorded line labels and quantities; reductions do not imply stock returns. An invoice can have several categories while its invoice count stays one. Rankings retain candidates for both monetary value and volume before showing the eight leaders for the selected metric.
+
+These are TTC management reports, not a VAT breakdown or closed accounting periods: editing or cancelling an invoice still updates its issue-period report. No database migration is required. See [payment ledger semantics](./docs/payment-ledger.md).
 
 Relevant files:
 

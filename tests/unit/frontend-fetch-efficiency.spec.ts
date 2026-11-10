@@ -197,6 +197,10 @@ describe('frontend query execution budget', () => {
     expect(app.calls.map(call => call.url)).toEqual(['/api/reports/overview'])
     expect(app.calls[0]!.query.includeLeaders).toBe(false)
     app.calls.splice(0)
+    state.selectedTab.value = 'commercial'
+    await settle()
+    expect(app.calls).toHaveLength(0)
+    state.selectedTab.value = 'revenue'
     state.date.value = '2026-09-10'
     await settle()
     expect(app.calls).toHaveLength(1)
@@ -213,6 +217,25 @@ describe('frontend query execution budget', () => {
     await settle()
     expect(app.calls).toHaveLength(1)
     expect(app.calls[0]!.query).toEqual({ startDate: '2026-08-01', endDate: '2026-08-31' })
+  })
+
+  it('fetches the commercial report once per period change and ignores an empty date', async () => {
+    const app = await runtime()
+    const source = pageStatements('app/components/reports/ReportsCommercial.vue', text =>
+      text.startsWith('const date =') || text.startsWith('const period =') || text.includes('await useFetch<') || text.startsWith('watch(')
+    )
+    const state = await app.setup<{ date: vue.Ref<string>, period: vue.Ref<string> }>(source, { toDateInputValue: () => '2026-11-10' }, '{ date, period }')
+    await settle()
+    expect(app.calls.map(call => call.query)).toEqual([{ date: '2026-11-10', period: 'month' }])
+    app.calls.splice(0)
+    state.date.value = '2025-12-31'
+    state.period.value = 'year'
+    await settle()
+    expect(app.calls.map(call => call.query)).toEqual([{ date: '2025-12-31', period: 'year' }])
+    app.calls.splice(0)
+    state.date.value = ''
+    await settle()
+    expect(app.calls).toHaveLength(0)
   })
 
   it('loads only the visible catalog type and refreshes moved items when their tabs are opened', async () => {

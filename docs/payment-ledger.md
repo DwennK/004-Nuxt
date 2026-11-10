@@ -93,12 +93,42 @@ le net encaissé, avec reprise des acomptes des étapes précédentes. Réutilis
 `settlementCtes()` / `getDocumentSettlement()` pour cette reprise ; une simple
 jointure sur l'identifiant de la facture oublie les acomptes de devis et commande.
 
-Les classements et répartitions par catégorie présentent la valeur actuelle des
-factures soldées ayant un mouvement sur la période. Ils ne constituent pas un
-journal de caisse ni un chiffre d'affaires fiscal par date d'émission. Une
-réduction globale est répartie proportionnellement entre les lignes, avec
-arrondi cumulatif pour conserver les centimes. Les quantités d'origine restent
-inchangées ; ce parcours ne gère pas un retour de stock.
+La répartition principale « Encaissements par catégorie » des rapports utilise
+les mêmes classifications de paiement que Fin de journée, sur les sept jours
+indiqués. Elle comprend les acomptes, les remboursements signés et les mouvements
+à catégoriser. Leur somme correspond au net encaissé. Les catégories négatives
+restent visibles dans le tableau ; elles ne sont pas représentées en anneau.
+
+Les rapports commerciaux « Ventes facturées », les classements clients/articles et
+les répartitions commerciales de Fin de journée utilisent une même source :
+
+- Une facture `issued` ou `paid` compte une fois à sa date d’émission, même impayée.
+- Les devis, commandes, brouillons et factures annulées sont exclus.
+- Chaque réduction de `document_credits` est déduite une fois à sa date
+  d’enregistrement (`created_at`). Elle ne modifie pas rétroactivement le montant
+  commercial du jour d’émission. La date du mouvement de remboursement reste
+  réservée au journal de caisse.
+- Les journées et mois suivent le calendrier Europe/Zurich. La somme des jours
+  égale le mois, et la somme des mois égale l’année, pour un même état des données.
+
+Une facture « écran 150 CHF + verre 25 CHF » compte comme une facture de 175 CHF,
+avec 150 CHF en réparation et 25 CHF en accessoire si ses lignes portent ces
+catégories. Les paiements partiels ne multiplient ni ses lignes ni son montant.
+Les lignes sans catégorie sont incluses sous « Sans catégorie ». Une anomalie de
+total ou une facture sans lignes reste visible via un montant sans ligne détaillée.
+
+Les réductions globales sont réparties au prorata des lignes TTC. Les arrondis
+cumulatifs sont calculés entre lignes et entre réductions successives : les
+centimes concordent pour chaque événement et une réduction totale inverse
+exactement chaque ligne. Les lignes négatives conservent leur signe. Les
+quantités facturées ne sont pas diminuées par une réduction, qui ne prouve pas un
+retour de stock. Le classement des articles utilise le libellé enregistré sur
+la facture, pas le nom courant du catalogue.
+
+Ce calcul n’instaure pas de clôture : une modification de montant, date, catégorie
+ou statut d’une facture modifie les rapports concernés. Il ne reconstitue pas les
+versions historiques des documents. Modifier une catégorie de paiement reste
+sans effet sur les lignes de la facture et sur les ventes facturées.
 
 Les ajustements TTC ne constituent pas un nouveau type de document « avoir » et
 ne réécrivent pas les bases TVA de la facture d'origine. Un export comptable doit

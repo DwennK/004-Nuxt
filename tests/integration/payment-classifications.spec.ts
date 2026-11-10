@@ -7,9 +7,11 @@ import type { PosDatabase } from '../../server/utils/turso'
 import { classifyReportPayments, updatePaymentClassification } from '../../server/utils/pos/payment-classifications'
 import { summarizePaymentCategories } from '../../shared/utils/payment-categories'
 import { importTables } from '../fixtures/shopify'
+import { getEndOfDaySummary, getReportsOverview, getReportsLeaders } from '../../server/utils/pos/reports'
 
 const database = vi.hoisted(() => ({ db: null as PosDatabase | null }))
 vi.mock('../../server/utils/turso', () => ({ useDb: () => database.db }))
+vi.mock('../../server/utils/pos/schema', () => ({ ensurePosSchema: async () => {} }))
 
 describe('cashflow classification independent of commercial documents', () => {
   let client: ReturnType<typeof createClient>
@@ -20,6 +22,9 @@ describe('cashflow classification independent of commercial documents', () => {
     db = drizzle({ client, relations: defineRelations(schema) })
     database.db = db
     await client.batch(importTables, 'write')
+    await client.execute('CREATE TABLE document_credits (id INTEGER PRIMARY KEY, document_id INTEGER, amount INTEGER, created_at TEXT)')
+    await client.execute('CREATE TABLE tickets (id INTEGER PRIMARY KEY, status TEXT, opened_at TEXT, closed_at TEXT)')
+    await client.execute('CREATE TABLE catalog_items (id INTEGER PRIMARY KEY, name TEXT)')
     await client.execute('INSERT INTO customers (id,name,phone,email,created_at,updated_at) VALUES (1,\'Client test\',\'\',\'\',\'2026-11-02\',\'2026-11-02\')')
     await client.execute('INSERT INTO documents (id,document_number,type,status,customer_id,issued_at,subtotal,tax_amount,total,created_at,updated_at) VALUES (1,\'CO-1\',\'customer_order\',\'issued\',1,\'2026-11-02\',30000,0,30000,\'2026-11-02\',\'2026-11-02\')')
     await client.execute('INSERT INTO document_lines (document_id,label,quantity,unit_price,vat_rate,line_total,category_hint) VALUES (1,\'Prestation\',1,30000,0,30000,\'repair\')')
@@ -28,6 +33,58 @@ describe('cashflow classification independent of commercial documents', () => {
   afterEach(() => client.close())
   const read = () => classifyReportPayments(db, [payment])
   const save = (allocations: Parameters<typeof updatePaymentClassification>[1]['allocations'], revision = 0) => updatePaymentClassification(1, { allocations, expectedRevision: revision, expectedAmount: 13001 }, 42)
+
+  it('updates daily and overview categories after a manual deposit classification, without changing commercial values', async () => {
+    const before = await getReportsOverview('2026-11-02')
+    expect(before.paymentCategories).toEqual([{ category: 'repair', total: 13001 }])
+    expect(before.turnoverByCategory).toEqual([])
+    await save([{ category: 'device', amount: 10000 }, { category: 'other', amount: 3001 }])
+    const daily = await getEndOfDaySummary('2026-11-02')
+    const overview = await getReportsOverview('2026-11-02')
+    expect(overview.paymentCategories).toEqual(summarizePaymentCategories(daily.payments))
+    expect(overview.paymentCategories).toEqual([{ category: 'device', total: 10000 }, { category: 'other', total: 3001 }])
+    expect(overview.kpis.totalPaid).toBe(13001)
+    expect(overview.turnoverByCategory).toEqual(before.turnoverByCategory)
+    await save([], 1)
+    expect((await getReportsOverview('2026-11-02')).paymentCategories).toEqual([{ category: null, total: 13001 }])
+    await save(null, 2)
+    expect((await getReportsOverview('2026-11-02')).paymentCategories).toEqual(before.paymentCategories)
+  })
+
+  it('reconciles overview categories with all seven daily ledgers, including refunds and uncategorized cash', async () => {
+    await save([{ category: 'device', amount: 13001 }])
+    await client.execute(`INSERT INTO payments (id,document_id,method,status,amount,paid_at,created_at,updated_at) VALUES
+      (2,1,'card_twint','paid',-3001,'2026-11-03T10:00:00.000Z','2026-11-03','2026-11-03'),
+      (3,1,'cash','pending',90000,'2026-11-03T10:00:00.000Z','2026-11-03','2026-11-03'),
+      (4,1,'cash','cancelled',90000,'2026-11-03T10:00:00.000Z','2026-11-03','2026-11-03'),
+      (5,1,'shopify','paid',2000,'2026-11-04T10:00:00.000Z','2026-11-04','2026-11-04')`)
+    await updatePaymentClassification(5, { allocations: [], expectedRevision: 0, expectedAmount: 2000 }, 42)
+    const days = await Promise.all(Array.from({ length: 7 }, (_, i) => getEndOfDaySummary(`2026-11-0${i + 1}`)))
+    const overview = await getReportsOverview('2026-11-07')
+    expect(overview.paymentCategories).toEqual(summarizePaymentCategories(days.flatMap(day => day.payments)))
+    expect(overview.paymentCategories).toEqual([{ category: 'device', total: 13001 }, { category: 'repair', total: -3001 }, { category: null, total: 2000 }])
+    expect(overview.paymentCategories.reduce((sum, row) => sum + row.total, 0)).toBe(overview.kpis.totalPaid)
+    expect(overview.kpis.totalPaid).toBe(12000)
+    expect((await getReportsOverview('2026-11-01')).paymentCategories).toEqual([])
+  })
+
+  it('keeps uncategorized and negative commercial lines in the full net total and resolves blank company names', async () => {
+    await client.execute('UPDATE customers SET company_name = \'   \' WHERE id = 1')
+    await client.execute('UPDATE documents SET type = \'invoice\', total = 13001, credited_total = 1001 WHERE id = 1')
+    await client.execute('UPDATE document_lines SET line_total = 14001, category_hint = NULL WHERE document_id = 1')
+    await client.execute('INSERT INTO document_lines (document_id,label,quantity,unit_price,vat_rate,line_total,category_hint) VALUES (1,\'Réduction\',1,-1000,0,-1000,\'repair\')')
+    await client.execute('INSERT INTO document_credits VALUES (1,1,1001,\'2026-11-02T10:00:00Z\')')
+    const daily = await getEndOfDaySummary('2026-11-02')
+    const overview = await getReportsOverview('2026-11-02')
+    expect(daily.turnoverByCategory).toHaveLength(2)
+    expect(daily.turnoverByCategory.find(row => row.category === null)?.total).toBeGreaterThan(12000)
+    expect(daily.turnoverByCategory.find(row => row.category === 'repair')?.total).toBeLessThan(0)
+    expect(daily.turnoverByCategory.reduce((sum, row) => sum + row.total, 0)).toBe(12000)
+    expect(overview.turnoverByCategory.reduce((sum, row) => sum + row.total, 0)).toBe(12000)
+    expect(overview.turnoverByCategory.find(row => row.category === null)?.label).toBe('Sans catégorie')
+    const leaders = await getReportsLeaders('2026-11-02', '2026-11-02')
+    expect(leaders.topCustomers[0]).toMatchObject({ customerName: 'Client test', total: 12000 })
+  })
 
   it('categorizes only the deposit amount, without requiring a settled invoice', async () => {
     const rows = await read()

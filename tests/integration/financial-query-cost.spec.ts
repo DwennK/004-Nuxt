@@ -188,8 +188,11 @@ describe('financial query equivalence and bounded query plans', () => {
     expect(daily.totalPaid).toBe(1200)
     expect(daily.paidDocuments).toEqual([expect.objectContaining({ id: 3, paidAmountToday: 600 })])
     const leaders = await getReportsLeaders('2026-09-11', '2026-09-11')
-    expect(leaders.totalPaid).toBe(1200)
-    expect(leaders.topCustomers).toEqual([expect.objectContaining({ customerId: 1, total: 1000, documentCount: 1 })])
+    expect(leaders.totalCommercial).toBe(3500)
+    expect(leaders.topCustomers).toEqual([
+      expect.objectContaining({ customerId: 2, total: 2000, documentCount: 1 }),
+      expect.objectContaining({ customerId: 1, total: 1500, documentCount: 3 })
+    ])
   })
 
   it('assigns receipts to Swiss months and years across winter and summer boundaries', async () => {
@@ -227,7 +230,7 @@ describe('financial query equivalence and bounded query plans', () => {
     const full = await getReportsOverview('2026-09-11')
     const lean = await getReportsOverview('2026-09-11', { includeLeaders: false })
     expect(lean).toEqual({ ...full, topCustomers: [], topItems: [] })
-    expect(full.topCustomers).toHaveLength(1)
+    expect(full.topCustomers).toHaveLength(2)
     // Both receipts after Swiss midnight belong to January, including 23:00 UTC.
     expect(full.paymentPeriods.find(period => period.key === 'month')?.buckets.reduce((sum, row) => sum + row.total, 0)).toBe(1650)
     expect(full.paymentPeriods.find(period => period.key === 'years')?.buckets.reduce((sum, row) => sum + row.total, 0)).toBe(1660)

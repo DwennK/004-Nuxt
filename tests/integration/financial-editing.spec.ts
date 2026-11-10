@@ -23,6 +23,7 @@ describe('editing recorded financial data', () => {
     client = createClient({ url: databaseUrl })
 
     await client.batch([
+      'CREATE TABLE document_credits (id INTEGER PRIMARY KEY, document_id INTEGER, amount INTEGER, created_at TEXT)',
       `CREATE TABLE document_imports (id INTEGER PRIMARY KEY, document_id INTEGER NOT NULL, source TEXT NOT NULL, external_id TEXT NOT NULL, external_number TEXT NOT NULL, created_at TEXT NOT NULL)`,
       'CREATE UNIQUE INDEX document_imports_source_external_id_idx ON document_imports(source, external_id)',
       'CREATE TABLE number_sequences (scope TEXT PRIMARY KEY, last_value INTEGER NOT NULL)',

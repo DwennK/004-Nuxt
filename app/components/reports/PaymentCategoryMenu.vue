@@ -48,6 +48,7 @@ async function save(value: PaymentCategoryAllocation[] | null) {
       body: { allocations: value, expectedRevision: props.payment.classification.revision, expectedAmount: props.payment.amount }
     })
     splitOpen.value = false
+    clearNuxtData('reports-overview')
     emit('saved')
   } catch (error) {
     saveError.value = getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.'

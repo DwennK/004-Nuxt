@@ -10,8 +10,12 @@ import { businessTimeZone, formatCurrency, formatDateTime, getPaymentMethodLabel
 const date = ref(toDateInputValue())
 const { data: summary, status, error, refresh } = await useFetch<DailySummary>('/api/reports/end-of-day', {
   lazy: true,
-  query: computed(() => ({ date: date.value }))
+  query: computed(() => ({ date: date.value })),
+  watch: false
 })
+watch(date, () => {
+  if (date.value) refresh()
+}, { flush: 'post' })
 
 const reportReady = computed(() => !!summary.value && status.value === 'success')
 const receivedTotal = computed(() => (summary.value?.payments || []).reduce((sum, p) => sum + Math.max(p.amount, 0), 0))
@@ -21,7 +25,7 @@ const onlyUncategorized = ref(false)
 const uncategorizedCount = computed(() => summary.value?.payments.filter(payment => !payment.classification.allocations.length).length || 0)
 const visiblePayments = computed(() => (summary.value?.payments || []).filter(payment => !onlyUncategorized.value || !payment.classification.allocations.length))
 const cashCategories = computed(() => summarizePaymentCategories(summary.value?.payments || []))
-const categories = computed(() => [...(summary.value?.turnoverByCategory || [])].sort((a, b) => b.total - a.total || a.category.localeCompare(b.category)))
+const categories = computed(() => [...(summary.value?.turnoverByCategory || [])].sort((a, b) => b.total - a.total || (a.category || '').localeCompare(b.category || '')))
 const categoryTotal = computed(() => categories.value.reduce((sum, item) => sum + item.total, 0))
 const unpaidDocuments = computed(() => [...(summary.value?.unpaidDocuments || [])].sort((a, b) => b.balanceDue - a.balanceDue || a.documentNumber.localeCompare(b.documentNumber, 'fr-CH', { numeric: true })))
 const unpaidTotal = computed(() => unpaidDocuments.value.reduce((sum, document) => sum + document.balanceDue, 0))
@@ -49,6 +53,15 @@ function printReport() {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UButton
+            label="Actualiser"
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="ghost"
+            :loading="status === 'pending'"
+            :disabled="!date"
+            @click="refresh()"
+          />
           <UButton
             label="Imprimer"
             icon="i-lucide-printer"
@@ -286,16 +299,16 @@ function printReport() {
 
           <details class="report-section">
             <summary class="cursor-pointer text-sm font-semibold text-toned">
-              Factures soldées par catégorie
+              Ventes facturées par catégorie
             </summary>
             <div class="mt-3">
               <div class="report-section-heading">
                 <h2 id="category-title">
-                  Factures soldées par catégorie
+                  Ventes facturées par catégorie
                 </h2>
               </div>
               <p class="report-note">
-                Valeur nette des factures soldées avec mouvement ce jour, après réductions commerciales
+                Factures émises ce jour, réglées ou non, moins les réductions commerciales enregistrées ce jour.
               </p>
               <table v-if="categories.length" class="report-table">
                 <thead>
@@ -309,9 +322,9 @@ function printReport() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="item in categories" :key="item.category">
+                  <tr v-for="item in categories" :key="item.category || 'uncategorized'">
                     <th scope="row">
-                      {{ lineCategoryLabels[item.category] }}
+                      {{ item.category ? lineCategoryLabels[item.category] : 'Sans catégorie' }}
                     </th>
                     <td class="amount">
                       {{ amount(item.total) }}
@@ -320,7 +333,7 @@ function printReport() {
                 </tbody>
               </table>
               <div v-if="categories.length" class="report-subtotal">
-                <span>Total catégorisé</span>
+                <span>Net commercial TTC</span>
                 <strong>{{ formatCurrency(categoryTotal) }}</strong>
               </div>
               <p v-else class="report-empty">

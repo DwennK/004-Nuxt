@@ -1,6 +1,8 @@
+import { getCommercialCategories, getCommercialLeaders } from './commercial-reports'
 import { settlementCtes } from './document-settlement'
 import { classifyReportPayments } from './payment-classifications'
-import { and, desc, eq, gte, lte, sql, sum, type SQL } from 'drizzle-orm'
+import { summarizePaymentCategories } from '~~/shared/utils/payment-categories'
+import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm'
 import { customers, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
 import type { DailySummary, ReportsLeaders, ReportsOverview } from '~~/shared/types/pos'
@@ -196,108 +198,50 @@ export function paidReportCtes(start: string, end: string): SQL {
   `
 }
 
-function documentIdsFilter(column: SQL, ids: number[]) {
-  // One bound JSON value avoids SQLite's parameter limit on long report periods.
-  return sql`${column} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`
-}
-
-async function getPaidReportDocumentIds(db: ReturnType<typeof useDb>, start: string, end: string) {
-  return db.all<{ documentId: number }>(sql`WITH ${paidReportCtes(start, end)}
-    SELECT id AS "documentId" FROM report_paid_documents`)
-}
-
 function normalizeDateRange(startDate: string, endDate: string) {
   return startDate <= endDate
     ? { startDate, endDate }
     : { startDate: endDate, endDate: startDate }
 }
 
+// Keep the candidates for both rankings before limiting the visible list in the UI.
+function rankingCandidates<T>(rows: T[], byValue: (a: T, b: T) => number, byCount: (a: T, b: T) => number) {
+  return [...new Set([
+    ...[...rows].sort(byValue).slice(0, 8),
+    ...[...rows].sort(byCount).slice(0, 8)
+  ])]
+}
+
 export function projectReportsLeaders(topCustomerRows: TopCustomerRow[], topItemRows: TopItemRow[]) {
+  const customers = topCustomerRows.map(row => ({
+    customerId: row.customerId,
+    customerName: row.customerName,
+    total: Number(row.total || 0),
+    documentCount: Number(row.documentCount || 0)
+  }))
+  const items = topItemRows.map(row => ({
+    key: `${row.category || 'uncategorized'}:${row.label}`,
+    label: row.label,
+    category: row.category,
+    total: Number(row.total || 0),
+    quantity: Number(row.quantity || 0)
+  }))
   return {
-    topCustomers: topCustomerRows
-      .map(row => ({
-        customerId: row.customerId,
-        customerName: row.customerName,
-        total: Number(row.total || 0),
-        documentCount: Number(row.documentCount || 0)
-      }))
-      .sort((left, right) =>
-        right.total - left.total
-        || right.documentCount - left.documentCount
-        || left.customerName.localeCompare(right.customerName, 'fr-CH')
-      )
-      .slice(0, 8),
-    topItems: topItemRows
-      .map(row => ({
-        key: `${row.category || 'uncategorized'}:${row.label}`,
-        label: row.label,
-        category: row.category,
-        total: Number(row.total || 0),
-        quantity: Number(row.quantity || 0)
-      }))
-      .sort((left, right) =>
-        right.total - left.total
-        || right.quantity - left.quantity
-        || left.label.localeCompare(right.label, 'fr-CH')
-      )
-      .slice(0, 8)
+    topCustomers: rankingCandidates(customers,
+      (a, b) => b.total - a.total || b.documentCount - a.documentCount || a.customerName.localeCompare(b.customerName, 'fr-CH'),
+      (a, b) => b.documentCount - a.documentCount || b.total - a.total || a.customerName.localeCompare(b.customerName, 'fr-CH')),
+    topItems: rankingCandidates(items,
+      (a, b) => b.total - a.total || b.quantity - a.quantity || a.label.localeCompare(b.label, 'fr-CH'),
+      (a, b) => b.quantity - a.quantity || b.total - a.total || a.label.localeCompare(b.label, 'fr-CH'))
   }
 }
 
-// Keep commercial values separate from cashflow. Allocate a global reduction
-// across the original lines with cumulative rounding so the cents add up exactly.
-function netCommercialLinesCte(ids: number[]) {
-  return sql`commercial_lines AS (
-    SELECT l.*, d.total AS original_total, coalesce(d.credited_total, 0) AS credited_total,
-      sum(l.line_total) OVER (PARTITION BY l.document_id ORDER BY l.id ROWS UNBOUNDED PRECEDING) AS cumulative_total
-    FROM document_lines l INNER JOIN documents d ON d.id = l.document_id
-    WHERE ${documentIdsFilter(sql`l.document_id`, ids)}
-  ), net_commercial_lines AS (
-    SELECT *, CASE WHEN credited_total = 0 OR original_total = 0 THEN line_total ELSE
-      CAST(round(cumulative_total * 1.0 * (original_total - credited_total) / original_total)
-        - round((cumulative_total - line_total) * 1.0 * (original_total - credited_total) / original_total) AS INTEGER)
-      END AS net_line_total
-    FROM commercial_lines
-  )`
-}
-
-async function getNetTurnover(db: ReturnType<typeof useDb>, ids: number[]): Promise<TurnoverRow[]> {
-  if (!ids.length) return []
-  return db.all<TurnoverRow>(sql`WITH ${netCommercialLinesCte(ids)}
-    SELECT category_hint AS category, sum(net_line_total) AS total
-    FROM net_commercial_lines WHERE category_hint IS NOT NULL GROUP BY category_hint`)
-}
-
-async function getTopLeaders(
-  db: ReturnType<typeof useDb>,
-  paidDocumentIds: number[]
-): Promise<Pick<ReportsLeaders, 'topCustomers' | 'topItems'>> {
-  if (!paidDocumentIds.length) {
-    return {
-      topCustomers: [],
-      topItems: []
-    }
+async function getTopLeaders(db: ReturnType<typeof useDb>, start: string, end: string) {
+  const rows = await getCommercialLeaders(db, start, end)
+  return {
+    ...projectReportsLeaders(rows.customers, rows.items),
+    totalCommercial: rows.customers.reduce((sum, row) => sum + row.total, 0)
   }
-
-  const [topCustomerRows, topItemRows]: [TopCustomerRow[], TopItemRow[]] = await Promise.all([
-    db.select({
-      customerId: customers.id,
-      customerName: sql<string>`coalesce(${customers.companyName}, ${customers.name})`,
-      total: sql<number>`sum(${documents.total} - coalesce(${documents.creditedTotal}, 0))`,
-      documentCount: sql<number>`count(${documents.id})`
-    })
-      .from(documents)
-      .innerJoin(customers, eq(documents.customerId, customers.id))
-      .where(documentIdsFilter(sql`${documents.id}`, paidDocumentIds))
-      .groupBy(customers.id),
-    db.all<TopItemRow>(sql`WITH ${netCommercialLinesCte(paidDocumentIds)}
-      SELECT coalesce(c.name, l.label) AS label, l.category_hint AS category,
-        sum(l.net_line_total) AS total, sum(l.quantity) AS quantity
-      FROM net_commercial_lines l LEFT JOIN catalog_items c ON c.id = l.catalog_item_id
-      GROUP BY coalesce(c.name, l.label), l.category_hint`)
-  ])
-
-  return projectReportsLeaders(topCustomerRows, topItemRows)
 }
 
 export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
@@ -349,8 +293,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       .where(and(eq(tickets.status, 'closed'), gte(tickets.closedAt, start), lte(tickets.closedAt, end)))
   ])
 
-  const paidDocumentIds = paidDocumentRows.map(row => row.id)
-  const turnoverRows = await getNetTurnover(db, paidDocumentIds)
+  const turnoverRows = await getCommercialCategories(db, start, end)
 
   const totalsByMethod = new Map(paymentMethods.map(method => [method, {
     total: 0,
@@ -405,9 +348,8 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
       closedToday: Number(closedTodayRows[0]?.count || 0)
     },
     turnoverByCategory: turnoverRows
-      .filter(row => row.category)
       .map(row => ({
-        category: row.category!,
+        category: row.category,
         total: Number(row.total || 0)
       }))
   }
@@ -415,6 +357,7 @@ export async function getEndOfDaySummary(date: string): Promise<DailySummary> {
 
 type ReportsOverviewProjectionInput = {
   date: string
+  paymentCategories: ReportsOverview['paymentCategories']
   weeklyPaymentRows: Array<{
     amount: number
     method: (typeof paymentMethods)[number]
@@ -521,7 +464,7 @@ export function projectReportsOverview(input: ReportsOverviewProjectionInput): R
     paymentPeriods: [{
       key: 'week',
       label: '7 jours',
-      description: 'Vue glissante quotidienne sur les 7 derniers jours encaissés.',
+      description: 'Encaissements et remboursements sur les sept jours affichés.',
       buckets: weeklyBuckets
     }, {
       key: 'month',
@@ -535,12 +478,12 @@ export function projectReportsOverview(input: ReportsOverviewProjectionInput): R
       buckets: yearlyBuckets
     }],
     turnoverByCategory: input.turnoverRows
-      .filter((row): row is typeof row & { category: NonNullable<typeof row.category> } => Boolean(row.category))
       .map(row => ({
         category: row.category,
-        label: lineCategoryLabels[row.category],
+        label: row.category ? lineCategoryLabels[row.category] : 'Sans catégorie',
         total: Number(row.total || 0)
       })),
+    paymentCategories: input.paymentCategories,
     topCustomers: input.topCustomers,
     topItems: input.topItems,
     ticketFlowByDay
@@ -567,8 +510,10 @@ export async function getReportsOverview(date: string, options: { includeLeaders
     return sql`(${bucket}, ${buildDayRange(`${bucket}-01`).start}, ${buildDayRange(`${nextMonth}-01`).start})`
   })
 
-  const [weeklyPaymentRows, periodPaymentRows, paidDocumentRows, openTicketRows, openedRows, closedRows] = await Promise.all([
+  const [weeklyPaymentRows, periodPaymentRows, openTicketRows, openedRows, closedRows] = await Promise.all([
     db.select({
+      id: payments.id,
+      documentId: payments.documentId,
       amount: payments.amount,
       method: payments.method,
       paidAt: payments.paidAt
@@ -582,7 +527,6 @@ export async function getReportsOverview(date: string, options: { includeLeaders
         ON p.paid_at >= r.start_at AND p.paid_at < r.end_at AND p.status = 'paid'
       GROUP BY r.bucket, p.method ORDER BY r.bucket, p.method
     `),
-    getPaidReportDocumentIds(db, start, end),
     db.select({ count: sql<number>`count(*)` })
       .from(tickets)
       .where(sql`${tickets.status} not in ('closed', 'cancelled')`),
@@ -605,14 +549,14 @@ export async function getReportsOverview(date: string, options: { includeLeaders
     yearlyTotals.set(key, current)
   }
   const yearlyPaymentRows = [...yearlyTotals.values()]
-  const paidDocumentIds = paidDocumentRows.map(row => row.documentId)
   const [{ topCustomers, topItems }, turnoverRows]: [Pick<ReportsLeaders, 'topCustomers' | 'topItems'>, TurnoverRow[]] = await Promise.all([
-    options.includeLeaders === false ? Promise.resolve({ topCustomers: [], topItems: [] }) : getTopLeaders(db, paidDocumentIds),
-    getNetTurnover(db, paidDocumentIds)
+    options.includeLeaders === false ? Promise.resolve({ topCustomers: [], topItems: [] }) : getTopLeaders(db, start, end),
+    getCommercialCategories(db, start, end)
   ])
 
   return projectReportsOverview({
     date,
+    paymentCategories: summarizePaymentCategories(await classifyReportPayments(db, weeklyPaymentRows)),
     weeklyPaymentRows,
     monthlyPaymentRows,
     yearlyPaymentRows,
@@ -633,18 +577,10 @@ export async function getReportsLeaders(startDate: string, endDate: string): Pro
   const { start } = buildDayRange(normalizedRange.startDate)
   const { end } = buildDayRange(normalizedRange.endDate)
 
-  const [paymentTotalRows, paidDocumentRows] = await Promise.all([
-    db.select({ total: sum(payments.amount) })
-      .from(payments)
-      .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end))),
-    getPaidReportDocumentIds(db, start, end)
-  ])
-
-  const leaders = await getTopLeaders(db, paidDocumentRows.map(row => row.documentId))
+  const leaders = await getTopLeaders(db, start, end)
 
   return {
     range: normalizedRange,
-    totalPaid: Number(paymentTotalRows[0]?.total || 0),
     ...leaders
   }
 }

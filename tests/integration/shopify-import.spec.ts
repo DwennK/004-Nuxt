@@ -25,6 +25,7 @@ describe('Shopify atomic invoice and payment import', () => {
     client = createClient({ url: `file:${join(directory, 'shopify.db')}` })
     db = drizzle({ client }) as unknown as PosDatabase
     await client.batch(importTables, 'write')
+    await client.execute('CREATE TABLE document_credits (id INTEGER PRIMARY KEY, document_id INTEGER, amount INTEGER, created_at TEXT)')
     await createDossierTables(client)
     vi.stubGlobal('useRuntimeConfig', () => ({ posAllowRuntimeSchemaBootstrap: false }))
     vi.stubGlobal('createError', createError)

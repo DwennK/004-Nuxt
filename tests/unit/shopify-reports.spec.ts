@@ -5,6 +5,7 @@ describe('Shopify payment reporting', () => {
   it('includes Shopify in totals and every period without assigning it to cash or Stripe', () => {
     const result = projectReportsOverview({
       date: '2026-08-20',
+      paymentCategories: [],
       weeklyPaymentRows: [{ method: 'shopify', amount: 10810, paidAt: '2026-08-19T10:00:00Z' }],
       monthlyPaymentRows: [{ method: 'shopify', total: 10810, bucket: '2026-08' }],
       yearlyPaymentRows: [{ method: 'shopify', total: 10810, bucket: '2026' }],

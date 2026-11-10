@@ -2,6 +2,7 @@
 import type { TabsItem } from '@nuxt/ui'
 import ReportsLeaders from '~/components/reports/ReportsLeaders.vue'
 import ReportsOverviewCharts from '~/components/reports/ReportsOverviewCharts.vue'
+import ReportsCommercial from '~/components/reports/ReportsCommercial.vue'
 import type { ReportsLeaders as ReportsLeadersData, ReportsOverview } from '~~/shared/types/pos'
 import { formatCurrency, formatDate, toDateInputValue } from '~~/shared/utils/pos'
 
@@ -22,7 +23,8 @@ const leadersEndDate = ref(date.value)
 const selectedTab = ref('revenue')
 
 const tabs: TabsItem[] = [
-  { label: 'Chiffre d’affaires', icon: 'i-lucide-chart-column', value: 'revenue', slot: 'revenue' },
+  { label: 'Encaissements', icon: 'i-lucide-chart-column', value: 'revenue', slot: 'revenue' },
+  { label: 'Ventes facturées', icon: 'i-lucide-receipt-text', value: 'commercial', slot: 'commercial' },
   { label: 'Clients', icon: 'i-lucide-users', value: 'customers', slot: 'customers' },
   { label: 'Articles', icon: 'i-lucide-package', value: 'items', slot: 'items' }
 ]
@@ -37,7 +39,9 @@ const { data: overview, refresh, status, error } = await useFetch<ReportsOvervie
   watch: false
 })
 
-watch(date, () => refresh(), { flush: 'post' })
+watch(date, () => {
+  if (date.value) refresh()
+}, { flush: 'post' })
 
 const normalizedLeadersRange = computed(() => {
   return leadersStartDate.value <= leadersEndDate.value
@@ -51,7 +55,7 @@ const normalizedLeadersRange = computed(() => {
       }
 })
 
-const { data: leaders, refresh: refreshLeaders, status: leadersStatus } = await useFetch<ReportsLeadersData>('/api/reports/leaders', {
+const { data: leaders, refresh: refreshLeaders, status: leadersStatus, error: leadersError } = await useFetch<ReportsLeadersData>('/api/reports/leaders', {
   key: 'reports-leaders',
   query: computed(() => ({
     startDate: normalizedLeadersRange.value.startDate,
@@ -61,8 +65,8 @@ const { data: leaders, refresh: refreshLeaders, status: leadersStatus } = await 
   watch: false
 })
 
-watch([() => selectedTab.value !== 'revenue', normalizedLeadersRange], async ([visible]) => {
-  if (!visible) return
+watch([() => selectedTab.value === 'customers' || selectedTab.value === 'items', normalizedLeadersRange], async ([visible]) => {
+  if (!visible || !leadersStartDate.value || !leadersEndDate.value) return
   await refreshLeaders()
 })
 
@@ -81,19 +85,19 @@ const stats = computed(() => {
     description: `Période du ${formatRangeDate(overview.value.range.startDate)} au ${formatRangeDate(overview.value.range.endDate)}`,
     icon: 'i-lucide-wallet-cards'
   }, {
-    title: 'Encaissé net aujourd’hui',
+    title: 'Encaissé net le jour sélectionné',
     value: formatCurrency(overview.value.kpis.paidToday),
-    description: `Ancré sur la date du ${formatRangeDate(date.value)}`,
+    description: formatRangeDate(overview.value.range.endDate),
     icon: 'i-lucide-badge-swiss-franc'
   }, {
     title: 'Moyenne par jour',
     value: formatCurrency(overview.value.kpis.averagePerDay),
-    description: 'Base glissante sur 7 journées commerciales',
+    description: 'Moyenne sur les sept jours affichés',
     icon: 'i-lucide-chart-column'
   }, {
     title: 'Dossiers encore ouverts',
     value: String(overview.value.kpis.openTickets),
-    description: 'Vue opérationnelle du backlog atelier',
+    description: 'Situation actuelle de l’atelier',
     icon: 'i-lucide-wrench'
   }]
 })
@@ -108,16 +112,28 @@ const stats = computed(() => {
         </template>
 
         <template #trailing>
-          <UBadge v-if="overview" color="neutral" variant="subtle">
+          <UBadge v-if="overview && selectedTab === 'revenue'" color="neutral" variant="subtle">
             7 jours glissants
           </UBadge>
+        </template>
+        <template #right>
+          <UButton
+            v-if="selectedTab !== 'commercial'"
+            label="Actualiser"
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="outline"
+            :loading="selectedTab === 'revenue' ? status === 'pending' : leadersStatus === 'pending'"
+            :disabled="selectedTab === 'revenue' ? !date : !leadersStartDate || !leadersEndDate"
+            @click="selectedTab === 'revenue' ? refresh() : refreshLeaders()"
+          />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <div class="space-y-4">
-        <UDashboardToolbar>
+        <UDashboardToolbar v-if="selectedTab !== 'commercial'">
           <div class="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div
               v-if="selectedTab === 'revenue'"
@@ -180,9 +196,12 @@ const stats = computed(() => {
           :items="tabs"
           class="w-full"
         >
+          <template #commercial>
+            <ReportsCommercial v-if="selectedTab === 'commercial'" />
+          </template>
           <template #revenue>
             <div class="space-y-4">
-              <PosAsyncState v-if="error && !overview" :error="error" @retry="refresh()" />
+              <PosAsyncState v-if="error" :error="error" @retry="refresh()" />
               <div
                 v-if="(status === 'idle' || status === 'pending') && !overview"
                 role="status"
@@ -246,8 +265,9 @@ const stats = computed(() => {
           </template>
 
           <template #customers>
+            <PosAsyncState v-if="leadersError" :error="leadersError" @retry="refreshLeaders()" />
             <ReportsLeaders
-              v-if="leaders"
+              v-else-if="leaders"
               kind="customers"
               :leaders="leaders"
             />
@@ -259,8 +279,9 @@ const stats = computed(() => {
           </template>
 
           <template #items>
+            <PosAsyncState v-if="leadersError" :error="leadersError" @retry="refreshLeaders()" />
             <ReportsLeaders
-              v-if="leaders"
+              v-else-if="leaders"
               kind="items"
               :leaders="leaders"
             />

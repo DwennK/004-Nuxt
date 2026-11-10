@@ -13,7 +13,7 @@ const receivedTotal = computed(() => (props.summary.payments).reduce((sum, p) =>
 const refundedTotal = computed(() => (props.summary.payments).reduce((sum, p) => sum - Math.min(p.amount, 0), 0))
 const paymentCount = computed(() => props.summary.payments.length)
 const cashCategories = computed(() => summarizePaymentCategories(props.summary.payments))
-const categories = computed(() => [...props.summary.turnoverByCategory].sort((a, b) => b.total - a.total || a.category.localeCompare(b.category)))
+const categories = computed(() => [...props.summary.turnoverByCategory].sort((a, b) => b.total - a.total || (a.category || '').localeCompare(b.category || '')))
 const categoryTotal = computed(() => categories.value.reduce((sum, item) => sum + item.total, 0))
 const unpaidDocuments = computed(() => [...props.summary.unpaidDocuments].sort((a, b) => b.balanceDue - a.balanceDue || a.documentNumber.localeCompare(b.documentNumber, 'fr-CH', { numeric: true })))
 const unpaidTotal = computed(() => unpaidDocuments.value.reduce((sum, document) => sum + document.balanceDue, 0))
@@ -208,9 +208,9 @@ function paymentTime(value: string) {
     </section>
 
     <section>
-      <h2>Factures soldées par catégorie</h2>
+      <h2>Ventes facturées par catégorie</h2>
       <p class="section-note compact-note">
-        Valeur nette des factures soldées avec mouvement ce jour, après réductions commerciales
+        Factures émises ce jour, réglées ou non, moins les réductions commerciales enregistrées ce jour.
       </p>
       <table v-if="categories.length" class="compact-table">
         <thead>
@@ -224,9 +224,9 @@ function paymentTime(value: string) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in categories" :key="item.category">
+          <tr v-for="item in categories" :key="item.category || 'uncategorized'">
             <th scope="row">
-              {{ lineCategoryLabels[item.category] }}
+              {{ item.category ? lineCategoryLabels[item.category] : 'Sans catégorie' }}
             </th>
             <td class="amount emphasis">
               {{ amount(item.total) }}
@@ -234,7 +234,7 @@ function paymentTime(value: string) {
           </tr>
           <tr class="subtotal">
             <th scope="row">
-              Total catégorisé
+              Net commercial TTC
             </th>
             <td class="amount">
               {{ amount(categoryTotal) }}

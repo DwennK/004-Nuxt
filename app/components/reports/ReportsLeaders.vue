@@ -16,7 +16,6 @@ type CustomerRow = {
   label: string
   total: number
   documentCount: number
-  share: number
 }
 type ItemRow = {
   key: string
@@ -24,7 +23,6 @@ type ItemRow = {
   category: ReportsLeaders['topItems'][number]['category']
   total: number
   quantity: number
-  share: number
 }
 
 const props = defineProps<{
@@ -36,12 +34,12 @@ const customerMetric = ref<CustomerMetric>('total')
 const itemMetric = ref<ItemMetric>('total')
 
 const customerMetricTabs: TabsItem[] = [
-  { label: 'CA', value: 'total' },
+  { label: 'Net TTC', value: 'total' },
   { label: 'Documents', value: 'documentCount' }
 ]
 
 const itemMetricTabs: TabsItem[] = [
-  { label: 'CA', value: 'total' },
+  { label: 'Net TTC', value: 'total' },
   { label: 'Quantité', value: 'quantity' }
 ]
 
@@ -57,19 +55,19 @@ const config = computed(() => {
   if (props.kind === 'customers') {
     return {
       title: 'Top clients',
-      description: 'Factures soldées après réductions commerciales.',
+      description: 'Factures émises sur la période, réglées ou non, moins les réductions commerciales enregistrées sur la période.',
       icon: 'i-lucide-users',
       emptyTitle: 'Aucun client à classer',
-      emptyDescription: 'Les clients encaissés sur la période apparaîtront ici.'
+      emptyDescription: 'Aucune facture émise ni réduction commerciale sur la période.'
     }
   }
 
   return {
     title: 'Top articles',
-    description: 'Lignes des factures soldées après réductions commerciales.',
+    description: 'Lignes des factures émises et réductions commerciales de la période. Les quantités correspondent aux lignes facturées, sans déduire de retour de stock.',
     icon: 'i-lucide-package',
     emptyTitle: 'Aucun article à classer',
-    emptyDescription: 'Les articles encaissés sur la période apparaîtront ici.'
+    emptyDescription: 'Aucune ligne facturée ni réduction commerciale sur la période.'
   }
 })
 
@@ -78,15 +76,13 @@ const customerRows = computed<CustomerRow[]>(() => {
     key: String(item.customerId),
     label: item.customerName,
     total: item.total,
-    documentCount: item.documentCount,
-    share: props.leaders.topCustomers.reduce((sum, row) => sum + row.total, 0) > 0 ? item.total / props.leaders.topCustomers.reduce((sum, row) => sum + row.total, 0) : 0
+    documentCount: item.documentCount
   }))
 })
 
 const itemRows = computed<ItemRow[]>(() => {
   return props.leaders.topItems.map(item => ({
-    ...item,
-    share: props.leaders.topItems.reduce((sum, row) => sum + row.total, 0) > 0 ? item.total / props.leaders.topItems.reduce((sum, row) => sum + row.total, 0) : 0
+    ...item
   }))
 })
 
@@ -113,16 +109,23 @@ const rankingRows = computed<Array<CustomerRow | ItemRow>>(() => {
     return [...customerRows.value].sort((left, right) =>
       right[customerMetric.value] - left[customerMetric.value]
       || right.total - left.total
+      || right.documentCount - left.documentCount
       || left.label.localeCompare(right.label, 'fr-CH')
-    )
+    ).slice(0, 8)
   }
 
   return [...itemRows.value].sort((left, right) =>
     right[itemMetric.value] - left[itemMetric.value]
     || right.total - left.total
+    || right.quantity - left.quantity
     || left.label.localeCompare(right.label, 'fr-CH')
-  )
+  ).slice(0, 8)
 })
+
+function rankingShare(item: CustomerRow | ItemRow) {
+  const total = rankingRows.value.reduce((sum, row) => sum + row.total, 0)
+  return total > 0 ? Math.round(item.total / total * 100) : 0
+}
 
 function metricValue(item: CustomerRow | ItemRow) {
   if (props.kind === 'customers') {
@@ -220,6 +223,9 @@ function itemCategory(item: CustomerRow | ItemRow) {
           <p class="text-sm text-toned">
             {{ config.description }}
           </p>
+          <p class="text-sm font-medium tabular-nums">
+            Net commercial de la période : {{ formatCurrency(leaders.totalCommercial) }}
+          </p>
         </div>
 
         <UTabs
@@ -279,7 +285,7 @@ function itemCategory(item: CustomerRow | ItemRow) {
                   <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-toned">
                     <span>{{ metricSummary(item) }}</span>
                     <span>•</span>
-                    <span>{{ Math.round(item.share * 100) }}% du classement</span>
+                    <span>{{ rankingShare(item) }}% du montant affiché</span>
                     <UBadge
                       v-if="itemCategory(item)"
                       :label="lineCategoryLabels[itemCategory(item)!]"

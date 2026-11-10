@@ -453,7 +453,7 @@ export interface DailySummary {
     closedToday: number
   }
   turnoverByCategory: Array<{
-    category: LineCategoryHint
+    category: LineCategoryHint | null
     total: number
   }>
 }
@@ -526,6 +526,10 @@ export interface HomeOverview {
 }
 
 export interface ReportsOverview {
+  paymentCategories: Array<{
+    category: import('./payment-categories').PaymentCategory | null
+    total: number
+  }>
   range: {
     startDate: string
     endDate: string
@@ -564,7 +568,7 @@ export interface ReportsOverview {
     }>
   }>
   turnoverByCategory: Array<{
-    category: LineCategoryHint
+    category: LineCategoryHint | null
     label: string
     total: number
   }>
@@ -576,6 +580,22 @@ export interface ReportsOverview {
     opened: number
     closed: number
   }>
+}
+
+export interface CommercialTotals {
+  invoicedTotal: number
+  creditTotal: number
+  total: number
+  invoiceCount: number
+  creditCount: number
+}
+
+export interface CommercialReport {
+  period: 'day' | 'month' | 'year'
+  range: { startDate: string, endDate: string }
+  totals: CommercialTotals
+  buckets: Array<CommercialTotals & { date: string }>
+  categories: Array<{ category: LineCategoryHint | null, invoicedTotal: number, creditTotal: number, total: number }>
 }
 
 export interface CounterOverviewResponse {
@@ -615,7 +635,7 @@ export interface ReportsLeaders {
     startDate: string
     endDate: string
   }
-  totalPaid: number
+  totalCommercial: number
   topCustomers: ReportsTopCustomer[]
   topItems: ReportsTopItem[]
 }

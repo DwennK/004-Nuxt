@@ -113,7 +113,7 @@ describe('signed payment ledger and commercial reductions', () => {
     expect(daily.totalPaid).toBe(0)
     expect(daily.payments.map(p => p.amount)).toEqual([-3900, 3900])
     expect(daily.unpaidDocuments).toEqual([])
-    expect(daily.turnoverByCategory.reduce((sum, row) => sum + row.total, 0)).toBe(0)
+    expect(daily.turnoverByCategory.reduce((sum, row) => sum + row.total, 0)).toBe(3900)
     expect(daily.totalsByMethod).toContainEqual({ method: 'cash', total: 0, transactionCount: 2 })
   })
   it('supports partial refunds and rejects cumulative excess without writing anything', async () => {
@@ -143,15 +143,15 @@ describe('signed payment ledger and commercial reductions', () => {
     expect(daily.totalsByMethod).toContainEqual({ method: 'cash', total: 3900, transactionCount: 1 })
     expect(daily.totalsByMethod).toContainEqual({ method: 'card_twint', total: -3900, transactionCount: 1 })
   })
-  it('subtracts partial commercial reductions from category and customer totals without losing cents', async () => {
+  it('keeps the invoice at its issue date when a reduction is recorded later', async () => {
     await client.execute('DELETE FROM document_lines')
     await client.execute(`INSERT INTO document_lines (document_id, label, quantity, unit_price, vat_rate, line_total, category_hint) VALUES (1,'First',1,1300,0,1300,'repair'),(1,'Second',1,2600,0,2600,'repair')`)
     await refund({ ...input, amount: 1001 })
     const daily = await getEndOfDaySummary('2026-09-11')
-    expect(daily.turnoverByCategory.reduce((sum, row) => sum + row.total, 0)).toBe(2899)
+    expect(daily.turnoverByCategory.reduce((sum, row) => sum + row.total, 0)).toBe(3900)
     const leaders = await getReportsLeaders('2026-09-11', '2026-09-11')
-    expect(leaders.topCustomers[0]?.total).toBe(2899)
-    expect(leaders.topItems.reduce((sum, row) => sum + row.total, 0)).toBe(2899)
+    expect(leaders.topCustomers[0]?.total).toBe(3900)
+    expect(leaders.topItems.reduce((sum, row) => sum + row.total, 0)).toBe(3900)
     expect((await getReportsOverview('2026-09-11')).kpis.totalPaid).toBe(2899)
   })
   it('serializes competing refunds and never allows more than the original receipt', async () => {
