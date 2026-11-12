@@ -2,6 +2,7 @@
 import type { TabsItem } from '@nuxt/ui'
 import ReportsLeaders from '~/components/reports/ReportsLeaders.vue'
 import ReportsOverviewCharts from '~/components/reports/ReportsOverviewCharts.vue'
+import ReportsCategories from '~/components/reports/ReportsCategories.vue'
 import ReportsCommercial from '~/components/reports/ReportsCommercial.vue'
 import type { ReportsLeaders as ReportsLeadersData, ReportsOverview } from '~~/shared/types/pos'
 import { formatCurrency, formatDate, toDateInputValue } from '~~/shared/utils/pos'
@@ -22,8 +23,11 @@ const leadersStartDate = ref(shiftIsoDate(date.value, -6))
 const leadersEndDate = ref(date.value)
 const selectedTab = ref('revenue')
 
+const isOverviewTab = computed(() => selectedTab.value === 'revenue' || selectedTab.value === 'categories')
+
 const tabs: TabsItem[] = [
   { label: 'Encaissements', icon: 'i-lucide-chart-column', value: 'revenue', slot: 'revenue' },
+  { label: 'Catégories et dossiers', icon: 'i-lucide-chart-pie', value: 'categories', slot: 'categories' },
   { label: 'Ventes facturées', icon: 'i-lucide-receipt-text', value: 'commercial', slot: 'commercial' },
   { label: 'Clients', icon: 'i-lucide-users', value: 'customers', slot: 'customers' },
   { label: 'Articles', icon: 'i-lucide-package', value: 'items', slot: 'items' }
@@ -112,7 +116,7 @@ const stats = computed(() => {
         </template>
 
         <template #trailing>
-          <UBadge v-if="overview && selectedTab === 'revenue'" color="neutral" variant="subtle">
+          <UBadge v-if="overview && isOverviewTab" color="neutral" variant="subtle">
             7 jours glissants
           </UBadge>
         </template>
@@ -123,9 +127,9 @@ const stats = computed(() => {
             icon="i-lucide-refresh-cw"
             color="neutral"
             variant="outline"
-            :loading="selectedTab === 'revenue' ? status === 'pending' : leadersStatus === 'pending'"
-            :disabled="selectedTab === 'revenue' ? !date : !leadersStartDate || !leadersEndDate"
-            @click="selectedTab === 'revenue' ? refresh() : refreshLeaders()"
+            :loading="isOverviewTab ? status === 'pending' : leadersStatus === 'pending'"
+            :disabled="isOverviewTab ? !date : !leadersStartDate || !leadersEndDate"
+            @click="isOverviewTab ? refresh() : refreshLeaders()"
           />
         </template>
       </UDashboardNavbar>
@@ -136,7 +140,7 @@ const stats = computed(() => {
         <UDashboardToolbar v-if="selectedTab !== 'commercial'">
           <div class="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div
-              v-if="selectedTab === 'revenue'"
+              v-if="isOverviewTab"
               class="flex flex-wrap items-center gap-2"
             >
               <UInput
@@ -195,6 +199,7 @@ const stats = computed(() => {
           v-model="selectedTab"
           :items="tabs"
           class="w-full"
+          :ui="{ list: 'max-w-full overflow-x-auto', trigger: 'shrink-0' }"
         >
           <template #commercial>
             <ReportsCommercial v-if="selectedTab === 'commercial'" />
@@ -251,16 +256,27 @@ const stats = computed(() => {
                 class="space-y-4"
               >
                 <USkeleton class="h-[28rem] rounded-2xl" />
-                <div class="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-                  <USkeleton class="h-80 rounded-2xl" />
-                  <USkeleton class="h-80 rounded-2xl" />
-                </div>
               </div>
 
               <ReportsOverviewCharts
                 v-if="overview"
                 :overview="overview"
               />
+            </div>
+          </template>
+
+          <template #categories>
+            <div class="space-y-4">
+              <PosAsyncState v-if="error" :error="error" @retry="refresh()" />
+              <div
+                v-if="(status === 'idle' || status === 'pending') && !overview"
+                role="status"
+                aria-label="Chargement des catégories et dossiers"
+                class="grid gap-4 xl:grid-cols-2"
+              >
+                <USkeleton v-for="index in 2" :key="index" class="h-96 rounded-2xl" />
+              </div>
+              <ReportsCategories v-else-if="overview" :overview="overview" />
             </div>
           </template>
 
