@@ -247,7 +247,7 @@ async function removePayment(payment: PaymentRecord) {
     <div class="grid gap-4 xl:h-[calc(100vh-24rem)] xl:grid-cols-[minmax(0,1fr)_20rem]">
       <UCard
         :ui="{
-          root: 'rounded-[1.75rem] shadow-sm',
+          root: 'rounded-lg border border-default ring-0 shadow-none',
           body: 'space-y-3 p-4',
           header: 'p-4 pb-0'
         }"
@@ -492,7 +492,7 @@ async function removePayment(payment: PaymentRecord) {
       <div class="space-y-4 xl:min-h-0 xl:overflow-y-auto pr-1">
         <UCard
           :ui="{
-            root: 'rounded-[1.75rem] shadow-sm',
+            root: 'rounded-lg border border-default ring-0 shadow-none',
             body: 'space-y-4 p-4',
             header: 'p-4 pb-0'
           }"
