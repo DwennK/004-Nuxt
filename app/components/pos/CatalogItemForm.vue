@@ -11,6 +11,7 @@ import type { CatalogItemInput, CatalogMobileSentrix } from '~~/shared/types/pos
 import { catalogMobileSentrixSchema } from '~~/shared/validation/pos'
 import { isCatalogCategory, normalizeCatalogCategory } from '~~/shared/utils/catalog'
 import { formatCurrency } from '~~/shared/utils/pos'
+import { findRepairCopy, findRepairCopyByName, repairCopyRules, repairName } from '~~/shared/utils/repair-copy'
 
 type FormState = {
   name: string
@@ -69,7 +70,7 @@ const schema = z.object({
       code: 'custom',
       path: ['serviceKind'],
       message: value.type === 'repair'
-        ? 'Le libellé de la réparation est obligatoire'
+        ? 'Le détail de l’intervention est obligatoire'
         : 'Le libellé est obligatoire'
     })
   }
@@ -163,8 +164,16 @@ function onTypeChange(type: FormState['type']) {
   }
 }
 
+const serviceKindSuggestions = computed(() => isRepair.value
+  ? repairCopyRules.map(rule => rule.label)
+  : catalogServiceKindSuggestions.filter(label => !findRepairCopy(label)))
+
 function applyServiceKindSuggestion(value: string) {
-  state.serviceKind = value
+  const rule = isRepair.value ? findRepairCopy(value) : undefined
+  state.serviceKind = rule?.description || value
+  if (rule && (!state.name.trim() || findRepairCopyByName(state.name, state.model))) {
+    state.name = repairName(rule, state.model)
+  }
 }
 
 function parseKeywords(value: string) {
@@ -230,7 +239,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
               </UFormField>
 
               <UFormField
-                label="Libellé / Description"
+                :label="isRepair ? 'Détail de l’intervention' : 'Libellé / Description'"
+                :description="isRepair ? 'Affiché sous le nom sur les devis et factures.' : undefined"
                 name="serviceKind"
                 :required="isCatalogService"
                 :hint="isCatalogService ? undefined : 'Optionnel'"
@@ -242,7 +252,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
                   :rows="3"
                   :maxrows="8"
                   autoresize
-                  placeholder="Détails affichés sous le titre dans les documents"
+                  :placeholder="isRepair ? 'Précisez la pièce remplacée et ce que comprend l’intervention' : 'Détails affichés sous le titre dans les documents'"
                 />
               </UFormField>
             </div>
@@ -311,7 +321,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
           <div class="flex flex-wrap gap-2">
             <UButton
-              v-for="suggestion in catalogServiceKindSuggestions"
+              v-for="suggestion in serviceKindSuggestions"
               :key="suggestion"
               type="button"
               color="neutral"
@@ -406,7 +416,8 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
       </UFormField>
 
       <UFormField
-        label="Libellé / Description"
+        :label="isRepair ? 'Détail de l’intervention' : 'Libellé / Description'"
+        :description="isRepair ? 'Affiché sous le nom sur les devis et factures.' : undefined"
         name="serviceKind"
         :required="isCatalogService"
         :hint="isCatalogService ? undefined : 'Optionnel'"
@@ -418,7 +429,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
           :rows="3"
           :maxrows="8"
           autoresize
-          placeholder="Détails affichés sous le titre dans les documents"
+          :placeholder="isRepair ? 'Précisez la pièce remplacée et ce que comprend l’intervention' : 'Détails affichés sous le titre dans les documents'"
         />
       </UFormField>
 
@@ -475,7 +486,7 @@ function onSubmit(event: FormSubmitEvent<Schema>) {
 
         <div class="flex flex-wrap gap-2">
           <UButton
-            v-for="suggestion in catalogServiceKindSuggestions"
+            v-for="suggestion in serviceKindSuggestions"
             :key="suggestion"
             type="button"
             color="neutral"

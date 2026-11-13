@@ -1,4 +1,6 @@
-export const rulesVersion = 3
+import { findRepairCopy } from '../../shared/utils/repair-copy.ts'
+
+export const rulesVersion = 4
 export const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\+/g, ' plus ').replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ')
 
 function modelsIn(value) {
@@ -29,19 +31,19 @@ export function modelsMatch(repair, product) {
 }
 
 const parts = {
-  'remplacement ecran': ['display', /(?:oled|lcd|display) assembly/],
-  'remplacement batterie': ['battery', /(?:replacement )?battery/],
-  'camera arriere': ['rear-camera', /(?:rear|back) camera/],
-  'camera avant': ['front-camera', /front camera/],
-  'chassis cadre': ['housing', /(?:housing|back cover with frame|rear case)/],
-  'face arriere': ['back', /(?:back (?:cover|glass)|rear glass)/],
-  'haut parleur oreille': ['earpiece', /(?:earpiece|ear speaker)/],
-  'lentille camera': ['lens', /camera lens/],
-  'port de charge': ['charging', /(?:charging|charge) port/]
+  screen: ['display', /(?:oled|lcd|display) assembly/],
+  battery: ['battery', /(?:replacement )?battery/],
+  rear_camera: ['rear-camera', /(?:rear|back) camera/],
+  front_camera: ['front-camera', /front camera/],
+  chassis: ['housing', /(?:housing|back cover with frame|rear case)/],
+  back_glass: ['back', /(?:back (?:cover|glass)|rear glass)/],
+  earpiece: ['earpiece', /(?:earpiece|ear speaker)/],
+  camera_lens: ['lens', /camera lens/],
+  charge_port: ['charging', /(?:charging|charge) port/]
 }
 
 export function partMatches(repair, product) {
-  const part = parts[normalize(repair.service_kind || repair.serviceKind)]
+  const part = parts[findRepairCopy(repair.service_kind || repair.serviceKind)?.key]
   const title = normalize(product.name || product.title)
   if (!part || !part[1].test(title)) return false
   if (/\b(?:adaptor|adapter|programmer|repair tool|tag on|read and write|stencil|solder|protector|sticker|connector only|board only)\b/.test(title)) return false
@@ -55,7 +57,7 @@ export function partMatches(repair, product) {
 
 export function qualityRank(repair, product) {
   const title = normalize(product.name || product.title)
-  const kind = parts[normalize(repair.service_kind || repair.serviceKind)]?.[0]
+  const kind = parts[findRepairCopy(repair.service_kind || repair.serviceKind)?.key]?.[0]
   const apple = normalize(repair.brand) === 'apple'
   if (kind === 'display') return apple
     ? (/xo7 soft/.test(title) && !/xo7 3 0/.test(title) ? 0 : null)
@@ -75,7 +77,7 @@ export function qualityRank(repair, product) {
 function ambiguity(repair, product) {
   const title = normalize(product.name)
   const detail = normalize(`${product.name} ${product.description || ''} ${product.specification_text || ''}`)
-  const kind = parts[normalize(repair.service_kind || repair.serviceKind)]?.[0]
+  const kind = parts[findRepairCopy(repair.service_kind || repair.serviceKind)?.key]?.[0]
   const color = normalize(product.color_text)
   const reasons = []
   if (/\b(?:[2-9]|\d{2,}) pack\b/.test(title)) reasons.push('Conditionnement en lot à choisir')

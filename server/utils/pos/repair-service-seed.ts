@@ -1,4 +1,5 @@
 import type { CatalogItemInput } from '~~/shared/types/pos'
+import { repairCopyRules, repairName } from '~~/shared/utils/repair-copy'
 
 type RepairIssueKey
   = | 'screen'
@@ -31,64 +32,52 @@ type RepairMatrixEntry = {
 
 type IssueDefinition = {
   issueKey: RepairIssueKey
-  issueLabel: string
   aliases: string[]
 }
 
 const issueDefinitions: Record<SourceIssueLabel, IssueDefinition> = {
   'Ecran': {
     issueKey: 'screen',
-    issueLabel: 'Remplacement écran',
     aliases: ['ecran', 'screen', 'display', 'vitre', 'lcd', 'oled']
   },
   'Batterie': {
     issueKey: 'battery',
-    issueLabel: 'Remplacement batterie',
     aliases: ['batterie', 'battery', 'autonomie']
   },
   'Chassis': {
     issueKey: 'chassis',
-    issueLabel: 'Châssis / cadre',
     aliases: ['chassis', 'cadre', 'frame']
   },
   'Face arrière': {
     issueKey: 'back_glass',
-    issueLabel: 'Face arrière',
     aliases: ['face arriere', 'arriere', 'dos', 'back glass']
   },
   'Face Arrière': {
     issueKey: 'back_glass',
-    issueLabel: 'Face arrière',
     aliases: ['face arriere', 'arriere', 'dos', 'back glass']
   },
   'Caméra Arrière': {
     issueKey: 'rear_camera',
-    issueLabel: 'Caméra arrière',
     aliases: ['camera arriere', 'camera', 'objectif arriere']
   },
   'Caméra Avant': {
     issueKey: 'front_camera',
-    issueLabel: 'Caméra avant',
     aliases: ['camera avant', 'selfie', 'facetime']
   },
   'Caméra arrière': {
     issueKey: 'rear_camera',
-    issueLabel: 'Caméra arrière',
     aliases: ['camera arriere', 'camera', 'objectif arriere']
   },
   'Lentille Caméra': {
     issueKey: 'camera_lens',
-    issueLabel: 'Lentille caméra',
     aliases: ['lentille', 'vitre camera', 'camera lens']
   },
   'Port de charge': {
     issueKey: 'charge_port',
-    issueLabel: 'Port de charge',
     aliases: ['port charge', 'charge', 'connecteur charge', 'usb', 'dock']
   },
   'Haut Parleur Oreille': {
     issueKey: 'earpiece',
-    issueLabel: 'Haut-parleur oreille',
     aliases: ['haut parleur oreille', 'oreille', 'ecouteur', 'earpiece']
   }
 }
@@ -199,14 +188,16 @@ function expandMatrix(brand: string, category: string, matrix: RepairMatrixEntry
     return Object.entries(entry.prices).map(([sourceIssueLabel, priceCents]) => {
       const issue = issueDefinitions[sourceIssueLabel as SourceIssueLabel]
 
+      const copy = repairCopyRules.find(rule => rule.key === issue.issueKey)!
+
       return {
-        name: `${issue.issueLabel} ${fullModel}`,
+        name: repairName(copy, fullModel),
         sku: buildServiceSku(brand, fullModel, issue.issueKey),
         type: 'repair',
         category,
         brand,
         model: fullModel,
-        serviceKind: issue.issueLabel,
+        serviceKind: copy.description,
         keywords: buildKeywords(brand, fullModel, issue.aliases),
         defaultPrice: priceCents,
         vatRate: 8.1,

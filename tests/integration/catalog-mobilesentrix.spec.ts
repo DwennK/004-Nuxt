@@ -7,6 +7,7 @@ import * as schema from '../../server/db/schema'
 import { createCatalogItem, getCatalogItemById, listCatalogItems, updateCatalogItem } from '../../server/utils/pos/catalog'
 import { catalogItemInputSchema } from '../../shared/validation/pos'
 import { applyReport, fingerprint } from '../../scripts/mobilesentrix/catalog.mjs'
+import { rulesVersion } from '../../scripts/mobilesentrix/match.mjs'
 import type { CatalogItemInput } from '../../shared/types/pos'
 
 const context = vi.hoisted(() => ({ db: null as unknown }))
@@ -115,7 +116,7 @@ describe('catalogue supplier references and additive migration', () => {
     const first = await createCatalogItem(input)
     const row = (await client.execute('SELECT * FROM catalog_items')).rows[0]!
     return {
-      version: 1, rulesVersion: 3, origin: 'https://www.mobilesentrix.com', generatedAt: '2026-09-07T12:00:00.000Z',
+      version: 1, rulesVersion, origin: 'https://www.mobilesentrix.com', generatedAt: '2026-09-07T12:00:00.000Z',
       entries: [{ id: first.id, beforeHash: fingerprint(row), status: 'matched', reference: { sku: '000123', productId: '10', url: reference.url }, note: 'Confirmé Europe' }]
     }
   }
