@@ -92,6 +92,14 @@ Important product rules:
 - payments are tracked separately from documents
 - financial creation routes require an `Idempotency-Key` to prevent duplicate documents and payments on retry; see [API contracts](./docs/api-contracts.md)
 
+### Collecting a Document Balance
+
+The document's **Lignes** tab includes a compact payment bar: payment actions on the left, with the subtotal excluding VAT, VAT and remaining balance on the right. On desktop, the buttons and amounts share one row; smaller screens allow them to wrap.
+
+These buttons reuse the **Paiements** tab's actions and record the outstanding balance using the selected method. Save document edits before collecting payment. Quick actions disappear once the document is settled and are unavailable on cancelled or superseded documents.
+
+Use **Paiements** for payment history, **Acompte / autre montant**, cash received and change calculations, or payment corrections.
+
 ### Refunds and Payment Corrections
 
 Receipts are positive payment movements. Refunds are separate negative movements linked to the original receipt, with their own date, method and reason. Recording a refund documents money already returned to the customer; it does not call a payment provider to return funds.
