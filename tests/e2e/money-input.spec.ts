@@ -68,6 +68,21 @@ test('money fields accept both separators without changing amounts or validation
   await expect(price).toHaveValue('13,50') // A second separator is rejected.
   await price.press('Tab')
 
+  // An empty received amount means exact cash; only an explicit shortfall blocks cash.
+  const cashButton = page.getByRole('button', { name: 'Espèces F2', exact: true })
+  const cardButton = page.getByRole('button', { name: 'Carte / TWINT F3', exact: true })
+  await expect(cash).toHaveValue('')
+  await expect(cashButton).toBeEnabled()
+  await expect(page.getByText('Monnaie à rendre', { exact: true })).not.toBeVisible()
+  await cash.fill('10')
+  await cash.press('Tab')
+  await expect(cashButton).toBeDisabled()
+  await expect(cardButton).toBeEnabled()
+  await expect(page.getByText('Montant manquant', { exact: true })).toBeVisible()
+  await clearInput(cash)
+  await cash.press('Tab')
+  await expect(cashButton).toBeEnabled()
+
   await clearInput(cash)
   await cash.pressSequentially('20.50')
   await cash.press('Tab')
@@ -76,7 +91,7 @@ test('money fields accept both separators without changing amounts or validation
   await page.screenshot({ path: testInfo.outputPath('money-desktop.png') })
 
   const submitted = page.waitForRequest('**/api/sales/create-and-pay')
-  await page.getByRole('button', { name: 'Encaisser · Espèces (F2)', exact: true }).click()
+  await page.getByRole('button', { name: 'Espèces F2', exact: true }).click()
   const payload = (await submitted).postDataJSON()
   expect(payload.document.lines[0].unitPrice).toBe(1350)
   expect(payload.payment.notes).toContain('20.50')
@@ -93,6 +108,6 @@ test('money fields accept both separators without changing amounts or validation
 
   await clearInput(price)
   await price.press('Tab')
-  await expect(page.getByRole('button', { name: 'Encaisser · Carte / TWINT (F3)', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Carte / TWINT F3', exact: true })).toBeDisabled()
   expect(errors).toEqual([])
 })

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { documentTypeLabels, paymentMethodLabels, paymentMethods } from '~~/shared/constants/pos'
+import { documentTypeLabels, paymentMethodLabels } from '~~/shared/constants/pos'
 import { calculateCommercialTotals } from '~~/shared/domain/commercial/money'
 import type { CatalogItemRecord, CustomerRecord, DocumentDetail, PaymentMethod } from '~~/shared/types/pos'
 import { supportsDocumentPrintProfile } from '~~/shared/utils/print'
-import { formatCurrency, normalizeSearchText, parseCurrencyInput } from '~~/shared/utils/pos'
+import { formatCurrency, normalizeSearchText } from '~~/shared/utils/pos'
 import {
   commercialLineUnitPriceInputClass,
   commercialLineUnitPriceMin,
@@ -96,10 +96,6 @@ const canCharge = computed(() => {
 })
 
 const hasNegativeTotal = computed(() => totals.value.total < 0)
-const cashReceivedCents = computed(() => parseCurrencyInput(cashReceived.value || 0))
-const cashDifference = computed(() => cashReceivedCents.value - totals.value.total)
-const hasEnoughCash = computed(() => canCharge.value && cashDifference.value >= 0)
-const secondaryPaymentMethods = paymentMethods.filter(method => !['cash', 'card_twint'].includes(method))
 
 const lastPaymentMethodLabel = computed(() => {
   return lastCompletedPaymentMethod.value ? paymentMethodLabels[lastCompletedPaymentMethod.value] : ''
@@ -232,8 +228,8 @@ async function navigateToCompletedDocument(path: string) {
   await navigateTo(path)
 }
 
-async function completeSale(method: PaymentMethod) {
-  if (isSaving.value) return
+async function completeSale(method: PaymentMethod, notes?: string) {
+  if (isSaving.value || !canCharge.value) return
   saveError.value = null
   const linesToSubmit = lineEditor.serializeLines(payableLines.value).map(line => ({
     ...line,
@@ -262,15 +258,6 @@ async function completeSale(method: PaymentMethod) {
     return
   }
 
-  if (method === 'cash' && !hasEnoughCash.value) {
-    toast.add({
-      title: 'Montant reçu insuffisant',
-      description: `Il manque ${formatCurrency(Math.abs(cashDifference.value))}.`,
-      color: 'warning'
-    })
-    return
-  }
-
   isSaving.value = method
 
   try {
@@ -291,9 +278,7 @@ async function completeSale(method: PaymentMethod) {
       payment: {
         method,
         paidAt: new Date().toISOString(),
-        notes: method === 'cash'
-          ? `Reçu ${formatCurrency(cashReceivedCents.value)} · Monnaie ${formatCurrency(cashDifference.value)}`
-          : null
+        notes: notes ?? null
       }
     }))
 
@@ -319,38 +304,6 @@ async function completeSale(method: PaymentMethod) {
     isSaving.value = null
   }
 }
-
-watch(() => totals.value.total, (nextTotal, previousTotal) => {
-  const currentCash = cashReceived.value
-
-  if (nextTotal <= 0) {
-    cashReceived.value = null
-    return
-  }
-
-  if (currentCash === null || parseCurrencyInput(currentCash) === previousTotal) {
-    cashReceived.value = nextTotal / 100
-  }
-})
-
-function chargeWithShortcut(method: 'cash' | 'card_twint') {
-  if (!canCharge.value || isSaving.value) {
-    return
-  }
-
-  void completeSale(method)
-}
-
-defineShortcuts({
-  f2: {
-    usingInput: true,
-    handler: () => chargeWithShortcut('cash')
-  },
-  f3: {
-    usingInput: true,
-    handler: () => chargeWithShortcut('card_twint')
-  }
-})
 </script>
 
 <template>
@@ -791,94 +744,15 @@ defineShortcuts({
                   Paiement direct
                 </h3>
 
-                <div class="space-y-3 rounded-2xl border border-default bg-default/70 p-3">
-                  <div class="flex items-center justify-between gap-3">
-                    <div>
-                      <p class="text-sm font-medium text-highlighted">
-                        Espèces reçues
-                      </p>
-                      <p class="text-xs text-toned">
-                        Saisissez le montant remis par le client.
-                      </p>
-                    </div>
-                    <UButton
-                      type="button"
-                      label="Exact"
-                      color="neutral"
-                      variant="soft"
-                      size="xs"
-                      :disabled="!canCharge"
-                      @click="cashReceived = totals.total / 100"
-                    />
-                  </div>
-
-                  <div class="relative">
-                    <PosMoneyInput
-                      v-bind="posInputAttrs"
-                      v-model="cashReceived"
-                      :min="0"
-                      :step="0.05"
-                      :increment="false"
-                      :decrement="false"
-                      :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
-                      :ui="{ base: 'pe-12' }"
-                      size="lg"
-                      class="w-full"
-                      @focus="selectAllOnFocus"
-                    />
-                    <span class="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs font-medium text-toned">
-                      CHF
-                    </span>
-                  </div>
-
-                  <div class="flex items-center justify-between gap-3 border-t border-default pt-3">
-                    <span class="text-sm text-toned">
-                      {{ cashDifference >= 0 ? 'Monnaie à rendre' : 'Montant manquant' }}
-                    </span>
-                    <span :class="cashDifference >= 0 ? 'text-success' : 'text-error'" class="text-lg font-semibold">
-                      {{ formatCurrency(Math.abs(cashDifference)) }}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                  <PosFormFeedback :saving="Boolean(isSaving)" :error="saveError" />
-
-                  <UButton
-                    type="button"
-                    label="Encaisser · Espèces (F2)"
-                    :icon="isSaving === 'cash' ? 'i-lucide-loader-circle' : 'i-lucide-banknote'"
-                    :loading="isSaving === 'cash'"
-                    :disabled="!hasEnoughCash || Boolean(isSaving)"
-                    size="lg"
-                    color="success"
-                    class="justify-center"
-                    @click="completeSale('cash')"
-                  />
-                  <UButton
-                    type="button"
-                    label="Encaisser · Carte / TWINT (F3)"
-                    :icon="isSaving === 'card_twint' ? 'i-lucide-loader-circle' : 'i-lucide-credit-card'"
-                    :loading="isSaving === 'card_twint'"
-                    :disabled="!canCharge || Boolean(isSaving)"
-                    size="lg"
-                    class="justify-center"
-                    @click="completeSale('card_twint')"
-                  />
-                  <UButton
-                    v-for="method in secondaryPaymentMethods"
-                    :key="method"
-                    type="button"
-                    :label="`Encaisser · ${paymentMethodLabels[method]}`"
-                    :icon="isSaving === method ? 'i-lucide-loader-circle' : 'i-lucide-badge-check'"
-                    :loading="isSaving === method"
-                    :disabled="!canCharge || Boolean(isSaving)"
-                    color="neutral"
-                    variant="soft"
-                    class="justify-center"
-                    @click="completeSale(method)"
-                  />
-                </div>
+                <PosPaymentActions
+                  v-model:cash-received="cashReceived"
+                  :amount="totals.total"
+                  :disabled="!canCharge"
+                  :loading-method="isSaving"
+                  shortcuts
+                  @pay="completeSale"
+                />
+                <PosFormFeedback :saving="Boolean(isSaving)" :error="saveError" />
               </div>
             </UCard>
           </div>

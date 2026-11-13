@@ -153,7 +153,7 @@ export const documentStatusColors: Record<(typeof documentStatuses)[number], 'ne
 
 export const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
   cash: 'Espèces',
-  card_twint: 'Carte Bancaire / TWINT',
+  card_twint: 'Carte / TWINT',
   bank_transfer: 'Virement bancaire',
   stripe: 'Stripe',
   shopify: 'Shopify'

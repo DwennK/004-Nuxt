@@ -32,7 +32,7 @@ const confirmDelete = useConfirmDelete()
 const { can } = useCapabilities()
 const paymentMutation = useIdempotentMutation()
 const paymentOpen = ref(false)
-const quickPaymentMethod = ref<PaymentMethod>('cash')
+const cashReceived = ref<number | null>(null)
 const correctionOpen = ref(false)
 const correctionPayment = ref<PaymentRecord | null>(null)
 const correctionAction = ref<'refund' | 'void'>('refund')
@@ -72,6 +72,7 @@ watch(paymentOpen, () => {
   createError.value = null
 })
 watch(() => props.documentId, () => {
+  cashReceived.value = null
   createError.value = null
   paymentErrors.value = {}
 })
@@ -118,6 +119,7 @@ async function addPayment(input: {
       color: 'success'
     })
     paymentOpen.value = false
+    cashReceived.value = null
     emit('refresh')
   } catch (error) {
     createError.value = getRequestErrorMessage(error) || 'Vérifiez la connexion puis réessayez.'
@@ -131,8 +133,9 @@ async function addPayment(input: {
   }
 }
 
-function createQuickPayment(method: PaymentMethod) {
-  return addPayment({ method }, method)
+function createQuickPayment(method: PaymentMethod, notes?: string) {
+  if (!canCreatePayment.value) return
+  return addPayment({ method, notes }, method)
 }
 
 function resetDraft(payment: PaymentRecord) {
@@ -533,26 +536,14 @@ async function removePayment(payment: PaymentRecord) {
           </div>
 
           <template v-if="isPayableDocument && balanceDue > 0">
-            <div class="space-y-2">
-              <UFormField label="Mode de paiement">
-                <USelect
-                  v-model="quickPaymentMethod"
-                  :items="methodItems"
-                  value-key="value"
-                  class="w-full"
-                  :disabled="!canCreatePayment || mutationPending"
-                />
-              </UFormField>
-              <UButton
-                type="button"
-                :label="`Encaisser le solde · ${formatCurrency(balanceDue)}`"
-                icon="i-lucide-wallet"
-                :loading="creatingMethod === quickPaymentMethod"
-                :disabled="!canCreatePayment || mutationPending"
-                block
-                @click="createQuickPayment(quickPaymentMethod)"
-              />
-            </div>
+            <PosPaymentActions
+              v-model:cash-received="cashReceived"
+              :amount="balanceDue"
+              :disabled="!canCreatePayment"
+              :loading="mutationPending"
+              :loading-method="creatingMethod === 'details' ? null : creatingMethod"
+              @pay="createQuickPayment"
+            />
 
             <PosFormFeedback :saving="Boolean(creatingMethod)" :error="createError" />
 
@@ -585,7 +576,6 @@ async function removePayment(payment: PaymentRecord) {
           v-model:open="paymentOpen"
           :disabled="props.disabled"
           :balance-due="balanceDue"
-          :initial-method="quickPaymentMethod"
           :save-error="createError"
           :loading="creatingMethod === 'details'"
           @save="addPayment($event, 'details')"

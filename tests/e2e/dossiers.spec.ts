@@ -101,7 +101,7 @@ test('an explicitly retried payment with a lost response is recorded only once',
     expect(response.ok()).toBe(true)
     await route.abort('failed')
   })
-  await page.getByRole('button', { name: 'Encaisser le solde · 10.00 CHF', exact: true }).click()
+  await page.getByRole('button', { name: 'Espèces', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Vérifier la tentative', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Vérifier la tentative', exact: true }).click()
   await expect(page.getByText('Opération confirmée', { exact: true })).toBeVisible()

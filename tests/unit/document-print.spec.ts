@@ -123,7 +123,7 @@ describe('printed document payments', () => {
 
     expect(model.payments).toEqual([
       { id: 1, amount: 2500, label: 'Espèces', paidAt: '01/09/2026' },
-      { id: 2, amount: 3000, label: 'Carte Bancaire / TWINT', paidAt: '08/09/2026' }
+      { id: 2, amount: 3000, label: 'Carte / TWINT', paidAt: '08/09/2026' }
     ])
     expect(document.payments[0]?.id).toBe(2)
     expect(model.paidAmount).toBe(5500)

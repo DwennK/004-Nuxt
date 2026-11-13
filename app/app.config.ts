@@ -2,6 +2,7 @@ export default defineAppConfig({
   ui: {
     colors: {
       primary: 'outlook',
+      secondary: 'violet',
       neutral: 'zinc',
       success: 'emerald',
       warning: 'amber'
