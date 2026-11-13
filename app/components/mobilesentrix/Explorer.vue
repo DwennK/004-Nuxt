@@ -518,7 +518,7 @@ watch(() => filteredItems.value.length, () => {
     :ui="{ content: 'sm:max-w-5xl', body: 'overflow-x-auto p-3 sm:p-4' }"
   >
     <template #body>
-      <table class="w-full min-w-[640px] table-fixed border-collapse text-sm">
+      <table class="pos-data-table w-full min-w-[640px] table-fixed border-collapse text-sm">
         <thead>
           <tr>
             <th class="w-28 p-3 text-left">

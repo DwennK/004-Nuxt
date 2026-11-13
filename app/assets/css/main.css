@@ -317,12 +317,31 @@
     border-bottom: 0;
   }
 
-  .office-table tbody tr[data-selectable="true"]:hover {
-    background: var(--ui-bg-muted);
-  }
+  /* Data tables share subtle stripes; opaque cells also cover pinned columns.
+     Keep calendars, headers, totals and printed documents outside these styles. */
+  @media screen {
+    :is(.office-table table, .report-table, .commercial-table, .assistant-table table, .pos-data-table) {
+      & > tbody > tr {
+        --mw-table-row-bg: var(--ui-bg);
+        background-color: var(--mw-table-row-bg);
+      }
 
-  .office-table tbody tr[data-selected="true"] {
-    background: var(--mw-theme-selection);
+      & > tbody > tr:where(:nth-child(even of :not([aria-hidden="true"]))) {
+        --mw-table-row-bg: color-mix(in srgb, var(--ui-text) 3%, var(--ui-bg));
+      }
+
+      & > tbody > tr:hover {
+        --mw-table-row-bg: var(--ui-bg-elevated);
+      }
+
+      & > tbody > tr[data-selected="true"] {
+        --mw-table-row-bg: var(--mw-theme-selection);
+      }
+
+      & > tbody > tr > :is(td, th) {
+        background-color: var(--mw-table-row-bg);
+      }
+    }
   }
 
   .office-table tbody tr[data-selected="true"] td:first-child {

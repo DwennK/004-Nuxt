@@ -71,7 +71,7 @@ const invoicedTotal = computed(() => props.overview.turnoverByCategory.reduce((s
         </UChart>
       </div>
 
-      <table v-if="turnoverChartData.length" class="w-full text-sm tabular-nums">
+      <table v-if="turnoverChartData.length" class="pos-data-table w-full text-sm tabular-nums">
         <thead>
           <tr class="text-left text-muted">
             <th scope="col" class="pb-2 font-medium">
@@ -132,7 +132,7 @@ const invoicedTotal = computed(() => props.overview.turnoverByCategory.reduce((s
         </p>
       </template>
 
-      <table v-if="overview.turnoverByCategory.length" class="w-full text-sm tabular-nums">
+      <table v-if="overview.turnoverByCategory.length" class="pos-data-table w-full text-sm tabular-nums">
         <thead>
           <tr class="text-left text-muted">
             <th scope="col" class="pb-2 font-medium">
