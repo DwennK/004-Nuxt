@@ -33,8 +33,8 @@
     "cf-typegen": "wrangler types server/types/cloudflare-env.d.ts --include-runtime false --env-file .env.example --env-interface PosCloudflareEnv"
   },
   "dependencies": {
-    "@iconify-json/lucide": "^1.2.152",
-    "@iconify-json/simple-icons": "^1.2.101",
+    "@iconify-json/lucide": "^1.2.154",
+    "@iconify-json/simple-icons": "^1.2.102",
     "@internationalized/date": "^3.12.4",
     "@libsql/client": "^0.18.0",
     "@nuxt/ui": "4.12.0",
@@ -51,25 +51,25 @@
     "nostics": "1.3.0",
     "nuxt": "^4.6.4",
     "nuxt-auth-utils": "^0.6.2",
-    "papaparse": "^5.7.0",
+    "papaparse": "^5.7.1",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "scule": "^1.3.0",
-    "sql.js": "1.15.2",
+    "sql.js": "1.16.0",
     "tailwindcss": "^4.3.5",
-    "vue": "^3.5.44",
-    "vue-router": "5.4.0",
+    "vue": "^3.5.45",
+    "vue-router": "5.5.0",
     "zod": "^4.6.7",
     "zxing-wasm": "3.1.6"
   },
   "devDependencies": {
     "@adonisjs/hash": "^10.1.1",
-    "@cloudflare/workers-types": "5.20261109.1",
+    "@cloudflare/workers-types": "5.20261112.1",
     "@nuxt/eslint": "^1.17.0",
     "@types/papaparse": "^5.5.2",
     "@types/qrcode": "^1.5.6",
     "@types/sql.js": "^1.4.11",
-    "@vue/server-renderer": "3.5.44",
+    "@vue/server-renderer": "3.5.45",
     "dotenv": "^18.0.10",
     "drizzle-kit": "1.0.0-rc.4",
     "eslint": "^10.14.0",
@@ -78,7 +78,7 @@
     "typescript": "^6.0.3",
     "vitest": "^5.1.0",
     "vue-tsc": "3.3.13",
-    "wrangler": "^4.159.0"
+    "wrangler": "^4.161.0"
   },
   "packageManager": "pnpm@12.10.1"
 }
