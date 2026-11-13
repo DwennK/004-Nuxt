@@ -9,6 +9,7 @@ const props = defineProps<{
   loading?: boolean
   loadingMethod?: PaymentMethod | null
   shortcuts?: boolean
+  inline?: boolean
 }>()
 
 const cashReceived = defineModel<number | null>('cashReceived', { default: null })
@@ -44,8 +45,8 @@ defineShortcuts({
 </script>
 
 <template>
-  <div class="space-y-3">
-    <UFormField label="Reçu en espèces (CHF)" hint="Facultatif">
+  <div :class="inline ? 'min-w-0' : 'space-y-3'">
+    <UFormField v-if="!inline" label="Reçu en espèces (CHF)" hint="Facultatif">
       <PosMoneyInput
         v-bind="posInputAttrs"
         v-model="cashReceived"
@@ -61,14 +62,14 @@ defineShortcuts({
       />
     </UFormField>
 
-    <div v-if="cashReceived !== null" class="flex items-center justify-between gap-2 text-sm" aria-live="polite">
+    <div v-if="!inline && cashReceived !== null" class="flex items-center justify-between gap-2 text-sm" aria-live="polite">
       <span class="text-toned">{{ enoughCash ? 'Monnaie à rendre' : 'Montant manquant' }}</span>
       <strong class="tabular-nums" :class="enoughCash ? 'text-success' : 'text-error'">
         {{ formatCurrency(Math.abs(cashDifference)) }}
       </strong>
     </div>
 
-    <div class="grid grid-cols-2 gap-2" role="group" aria-label="Enregistrer le paiement">
+    <div :class="inline ? 'flex flex-wrap items-center gap-2' : 'grid grid-cols-2 gap-2'" role="group" aria-label="Enregistrer le paiement">
       <UButton
         v-for="method in paymentMethods"
         :key="method"
@@ -79,10 +80,11 @@ defineShortcuts({
         :loading="loadingMethod === method"
         :disabled="unavailable || (method === 'cash' && !enoughCash)"
         :aria-keyshortcuts="shortcuts && method === 'cash' ? 'F2' : shortcuts && method === 'card_twint' ? 'F3' : undefined"
-        class="min-h-11 min-w-0 justify-start px-3"
+        class="min-w-0 justify-start px-3"
+        :class="inline ? 'h-9 shrink-0' : 'min-h-11'"
         @click="pay(method)"
       >
-        <span class="min-w-0 whitespace-normal text-left leading-tight">{{ paymentMethodLabels[method] }}</span>
+        <span class="min-w-0 text-left leading-tight" :class="inline ? 'whitespace-nowrap' : 'whitespace-normal'">{{ paymentMethodLabels[method] }}</span>
         <span v-if="shortcuts && (method === 'cash' || method === 'card_twint')" class="ml-auto text-xs opacity-75">
           {{ method === 'cash' ? 'F2' : 'F3' }}
         </span>

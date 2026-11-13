@@ -254,7 +254,14 @@ function onSubmitError(event: { errors?: Array<{ name?: string, message?: string
           :editor="editor"
           :catalog-items="catalogItems"
           fill-height
-        />
+        >
+          <template v-if="$slots['footer-actions']" #footer-actions>
+            <slot name="footer-actions" />
+          </template>
+          <template v-if="$slots['footer-total']" #footer-total="slotProps">
+            <slot name="footer-total" v-bind="slotProps" />
+          </template>
+        </PosDocumentLinesEditor>
 
         <PosDocumentContextFields
           v-model:open="contextOpen"

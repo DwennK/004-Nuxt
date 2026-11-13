@@ -402,19 +402,21 @@ async function handleBarcodeScan(value: string) {
       :class="{ 'lg:mt-0 lg:shrink-0': fillHeight }"
     />
 
-    <div class="flex shrink-0 flex-col gap-2 border-t border-default pt-3 sm:flex-row sm:items-center sm:justify-between">
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-toned tabular-nums">
-        <span>{{ state.lines.length }} ligne(s)</span>
-        <span>Sous-total HT {{ formatCurrency(totals.subtotal) }}</span>
-        <span>TVA {{ formatCurrency(totals.taxAmount) }}</span>
-      </div>
-      <div class="flex items-baseline justify-end gap-3 tabular-nums">
-        <p class="text-sm text-toned">
-          Total TTC
-        </p>
-        <p class="text-xl font-semibold text-highlighted">
-          {{ formatCurrency(totals.total) }}
-        </p>
+    <div class="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-default pt-3">
+      <slot name="footer-actions" />
+      <div class="ml-auto flex flex-wrap items-baseline justify-end gap-x-4 gap-y-1 tabular-nums">
+        <span class="whitespace-nowrap text-xs text-toned">HT {{ formatCurrency(totals.subtotal) }}</span>
+        <span class="whitespace-nowrap text-xs text-toned">TVA {{ formatCurrency(totals.taxAmount) }}</span>
+        <div class="flex items-baseline gap-3 whitespace-nowrap">
+          <slot name="footer-total" :totals="totals">
+            <p class="text-sm text-toned">
+              Total TTC
+            </p>
+            <p class="text-xl font-semibold text-highlighted">
+              {{ formatCurrency(totals.total) }}
+            </p>
+          </slot>
+        </div>
       </div>
     </div>
   </div>

@@ -14,6 +14,7 @@ const $fetch = useDossierFetch()
 
 const props = defineProps<{
   disabled?: boolean
+  compact?: boolean
   documentId: number
   payments: PaymentRecord[]
   documentTotal: number
@@ -233,7 +234,18 @@ async function removePayment(payment: PaymentRecord) {
 </script>
 
 <template>
-  <div class="min-w-0">
+  <div v-if="compact" class="min-w-0">
+    <PosPaymentActions
+      v-if="isPayableDocument && balanceDue > 0"
+      inline
+      :amount="balanceDue"
+      :disabled="!canCreatePayment"
+      :loading="mutationPending"
+      :loading-method="creatingMethod === 'details' ? null : creatingMethod"
+      @pay="createQuickPayment"
+    />
+  </div>
+  <div v-else class="min-w-0">
     <PosPaymentCorrectionModal
       v-if="correctionPayment"
       v-model:open="correctionOpen"

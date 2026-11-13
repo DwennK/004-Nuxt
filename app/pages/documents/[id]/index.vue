@@ -84,6 +84,20 @@ const supportsA4Print = computed(() => document.value ? supportsDocumentPrintPro
 const supportsThermalPrint = computed(() => document.value ? supportsDocumentPrintProfile(document.value.type, 'thermal') : false)
 const documentActionsDisabled = computed(() => hasUnsavedDocumentChanges.value || isSavingDocument.value || isConverting.value)
 const saveButtonLabel = computed(() => isSavingDocument.value ? 'Enregistrement…' : hasUnsavedDocumentChanges.value ? 'Enregistrer les modifications' : 'Enregistrer')
+const paymentEditorProps = computed(() => ({
+  disabled: dossier.blocked.value || documentActionsDisabled.value,
+  documentId: id.value,
+  payments: document.value?.payments || [],
+  documentTotal: document.value?.total || 0,
+  creditedTotal: document.value?.creditedTotal,
+  commercialRefundAllowed: document.value?.type === 'invoice' && isPayableDocument.value,
+  balanceDue: balanceDue.value,
+  isPayableDocument: isPayableDocument.value
+}))
+
+function displayedBalance(total: number) {
+  return Math.max(balanceDue.value + total - (document.value?.total || 0), 0)
+}
 
 const savCommercialTypes = computed(() => {
   const related = (document.value?.relatedDocuments || []).filter(row => row.savId === id.value)
@@ -468,7 +482,24 @@ function startNewEmailAttempt() {
             submit-label="Enregistrer le document"
             @save="saveDocument"
             @cancel="saveError = null"
-          />
+          >
+            <template #footer-actions>
+              <PosDocumentPaymentsEditor
+                v-bind="paymentEditorProps"
+                compact
+                :title="hasUnsavedDocumentChanges ? 'Enregistrez le document avant d’encaisser.' : undefined"
+                @refresh="refresh()"
+              />
+            </template>
+            <template #footer-total="{ totals }">
+              <span class="text-sm text-toned">
+                {{ isPayableDocument ? displayedBalance(totals.total) > 0 ? 'À encaisser' : 'Soldé' : 'Total TTC' }}
+              </span>
+              <span class="text-xl font-semibold text-highlighted">
+                {{ formatCurrency(isPayableDocument ? displayedBalance(totals.total) : totals.total) }}
+              </span>
+            </template>
+          </PosDocumentEditor>
 
           <div v-else class="space-y-3">
             <UAlert
@@ -505,13 +536,21 @@ function startNewEmailAttempt() {
               </div>
 
               <template #footer>
-                <div class="ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm">
-                  <span class="text-toned">Total HT</span>
-                  <span class="text-right tabular-nums">{{ formatCurrency(document.subtotal) }}</span>
-                  <span class="text-toned">TVA</span>
-                  <span class="text-right tabular-nums">{{ formatCurrency(document.taxAmount) }}</span>
-                  <span class="font-semibold text-highlighted">Total TTC</span>
-                  <span class="text-right font-semibold tabular-nums text-highlighted">{{ formatCurrency(document.total) }}</span>
+                <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                  <PosDocumentPaymentsEditor
+                    v-bind="paymentEditorProps"
+                    :key="dossier.current.value?.epoch"
+                    compact
+                    @refresh="refresh()"
+                  />
+                  <div class="ml-auto flex flex-wrap items-baseline justify-end gap-x-4 gap-y-1 tabular-nums">
+                    <span class="whitespace-nowrap text-xs text-toned">HT {{ formatCurrency(document.subtotal) }}</span>
+                    <span class="whitespace-nowrap text-xs text-toned">TVA {{ formatCurrency(document.taxAmount) }}</span>
+                    <div class="flex items-baseline gap-3 whitespace-nowrap">
+                      <span class="text-sm text-toned">{{ isPayableDocument ? balanceDue > 0 ? 'À encaisser' : 'Soldé' : 'Total TTC' }}</span>
+                      <span class="text-xl font-semibold text-highlighted">{{ formatCurrency(isPayableDocument ? balanceDue : document.total) }}</span>
+                    </div>
+                  </div>
                 </div>
               </template>
             </UCard>
@@ -525,14 +564,7 @@ function startNewEmailAttempt() {
           </div>
           <PosDocumentPaymentsEditor
             :key="dossier.current.value?.epoch"
-            :disabled="dossier.blocked.value || isConverting"
-            :document-id="document.id"
-            :payments="document.payments"
-            :document-total="document.total"
-            :credited-total="document.creditedTotal"
-            :commercial-refund-allowed="document.type === 'invoice' && isPayableDocument"
-            :balance-due="balanceDue"
-            :is-payable-document="isPayableDocument"
+            v-bind="paymentEditorProps"
             class="min-h-0 flex-1"
             @refresh="refresh()"
           />
