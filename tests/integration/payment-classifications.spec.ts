@@ -92,10 +92,83 @@ describe('cashflow classification independent of commercial documents', () => {
     expect(summarizePaymentCategories(rows)).toEqual([{ category: 'repair', total: 13001 }])
   })
 
-  it.each(['accessory', null])('leaves mixed or incomplete documents (%s) uncategorized', async (category) => {
+  it.each([null, 'unknown'])('leaves incomplete or invalid categories (%s) uncategorized', async (category) => {
     await client.execute({ sql: 'INSERT INTO document_lines (document_id,label,quantity,unit_price,vat_rate,line_total,category_hint) VALUES (1,\'Autre ligne\',1,1000,0,1000,?)', args: [category] })
     expect((await read())[0]?.classification.allocations).toEqual([])
     expect(summarizePaymentCategories(await read())).toEqual([{ category: null, total: 13001 }])
+  })
+
+  async function setMixedLines() {
+    await client.execute('UPDATE document_lines SET unit_price = 10900, line_total = 10900 WHERE document_id = 1')
+    await client.execute('INSERT INTO document_lines (document_id,label,quantity,unit_price,vat_rate,line_total,category_hint) VALUES (1,\'Verre trempé\',1,2500,8.1,2500,\'accessory\')')
+    await client.execute('UPDATE documents SET subtotal = 12396, tax_amount = 1004, total = 13400 WHERE id = 1')
+  }
+
+  it('automatically splits the 134 CHF receipt in daily and overview reports without writing metadata', async () => {
+    await setMixedLines()
+    await client.execute('UPDATE payments SET amount = 13400 WHERE id = 1')
+    const daily = await getEndOfDaySummary('2026-11-02')
+    const overview = await getReportsOverview('2026-11-02')
+    expect(daily.payments[0]?.classification).toEqual({
+      source: 'automatic', revision: 0,
+      allocations: [{ category: 'repair', amount: 10900 }, { category: 'accessory', amount: 2500 }]
+    })
+    expect(overview.paymentCategories).toEqual([{ category: 'repair', total: 10900 }, { category: 'accessory', total: 2500 }])
+    expect(summarizePaymentCategories(daily.payments)).toEqual(overview.paymentCategories)
+    expect(overview.kpis.totalPaid).toBe(13400)
+    expect((await client.execute('SELECT * FROM payment_classifications')).rows).toEqual([])
+  })
+
+  it.each([
+    [6700, 5450, 1250],
+    [13001, 10575, 2426],
+    [-6700, 5450, 1250],
+    [-13001, 10575, 2426],
+    [1, 1, 0]
+  ])('prorates a mixed payment of %i cents and conserves its signed total', async (amount, repair, accessory) => {
+    await setMixedLines()
+    const rows = await classifyReportPayments(db, [{ ...payment, amount }])
+    expect(rows[0]?.classification.allocations).toEqual([
+      { category: 'repair', amount: repair }, { category: 'accessory', amount: accessory }
+    ].filter(part => part.amount > 0))
+    expect(summarizePaymentCategories(rows).reduce((sum, item) => sum + item.total, 0)).toBe(amount)
+  })
+
+  it('groups repeated categories using TTC line totals including quantities and discounts', async () => {
+    await setMixedLines()
+    await client.execute('INSERT INTO document_lines (document_id,label,quantity,unit_price,vat_rate,line_total,category_hint) VALUES (1,\'Câbles\',2,1000,8.1,2000,\'accessory\'), (1,\'Remise écran\',1,-900,8.1,-900,\'repair\')')
+    const rows = await classifyReportPayments(db, [{ ...payment, amount: 14500 }])
+    expect(rows[0]?.classification.allocations).toEqual([{ category: 'repair', amount: 10000 }, { category: 'accessory', amount: 4500 }])
+  })
+
+  it('resolves equal remainders deterministically and drops zero category totals', async () => {
+    await setMixedLines()
+    await client.execute('UPDATE document_lines SET line_total = 1 WHERE document_id = 1')
+    await client.execute('INSERT INTO document_lines (document_id,label,quantity,unit_price,vat_rate,line_total,category_hint) VALUES (1,\'Offert\',1,0,0,0,\'service\')')
+    const rows = await classifyReportPayments(db, [{ ...payment, amount: 3 }])
+    expect(rows[0]?.classification.allocations).toEqual([{ category: 'repair', amount: 2 }, { category: 'accessory', amount: 1 }])
+  })
+
+  it.each(['negative category', 'zero total', 'no lines', 'zero payment'])('keeps %s unallocated without inventing weights', async (scenario) => {
+    await setMixedLines()
+    if (scenario === 'negative category') await client.execute('UPDATE document_lines SET line_total = -2500 WHERE category_hint = \'accessory\'')
+    if (scenario === 'zero total') await client.execute('UPDATE document_lines SET line_total = 0')
+    if (scenario === 'no lines') await client.execute('DELETE FROM document_lines')
+    const rows = await classifyReportPayments(db, [{ ...payment, amount: scenario === 'zero payment' ? 0 : payment.amount }])
+    expect(rows[0]?.classification.allocations).toEqual([])
+    expect(summarizePaymentCategories(rows).reduce((sum, item) => sum + item.total, 0)).toBe(rows[0]?.amount)
+  })
+
+  it('preserves manual choices on mixed documents and recalculates current lines when reset', async () => {
+    await setMixedLines()
+    await save([{ category: 'device', amount: 13001 }])
+    expect((await read())[0]?.classification.allocations).toEqual([{ category: 'device', amount: 13001 }])
+    await save([], 1)
+    expect((await read())[0]?.classification).toMatchObject({ source: 'manual', allocations: [] })
+    await save(null, 2)
+    expect((await read())[0]?.classification).toMatchObject({ source: 'automatic', allocations: [{ category: 'repair', amount: 10575 }, { category: 'accessory', amount: 2426 }] })
+    await client.execute('UPDATE document_lines SET category_hint = \'service\' WHERE category_hint = \'accessory\'')
+    expect((await read())[0]?.classification.allocations).toEqual([{ category: 'repair', amount: 10575 }, { category: 'service', amount: 2426 }])
   })
 
   it('persists a split and an explicit uncategorized choice, then restores the suggestion', async () => {

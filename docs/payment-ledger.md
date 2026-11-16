@@ -99,6 +99,18 @@ indiqués. Elle comprend les acomptes, les remboursements signés et les mouveme
 à catégoriser. Leur somme correspond au net encaissé. Les catégories négatives
 restent visibles dans le tableau ; elles ne sont pas représentées en anneau.
 
+Sans choix manuel, chaque mouvement est réparti automatiquement au prorata des
+totaux TTC des catégories de ses lignes. Un paiement intégral de 134 CHF pour
+109 CHF de réparation et 25 CHF d'accessoire reprend ces deux montants. Les
+acomptes et remboursements utilisent les mêmes proportions ; les centimes
+restants vont aux plus grands restes, avec un ordre stable en cas d'égalité.
+Chaque répartition correspond exactement au montant du mouvement.
+Les réductions sur les lignes diminuent le total de leur catégorie. Si une
+catégorie manque, si un total de catégorie est négatif ou si tous les totaux
+sont nuls, le mouvement reste à catégoriser. Les choix manuels, y compris
+« À catégoriser », sont conservés ; « Reprendre la suggestion automatique »
+réactive le calcul à partir des lignes actuelles. Aucune migration n'est requise.
+
 Les rapports commerciaux « Ventes facturées », les classements clients/articles et
 les répartitions commerciales de Fin de journée utilisent une même source :
 
