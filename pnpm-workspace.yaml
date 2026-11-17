@@ -5,8 +5,12 @@ allowBuilds:
   "vue-demi": true
   "workerd": true
 minimumReleaseAgeExclude:
-  - '@iconify-json/lucide@1.2.140'
-  - '@iconify-json/simple-icons@1.2.99'
+  - '@iconify-json/lucide@1.2.140 || 1.2.156'
+  - '@iconify-json/simple-icons@1.2.99 || 1.2.103'
+  - '@cloudflare/workers-types@5.20261117.1'
+  - '@nuxt/ui@4.12.2'
+  - miniflare@5.20261116.0-beta
+  - wrangler@4.163.0
 overrides:
   # Patched releases while upstream dependencies still resolve vulnerable versions.
   'source-map-js@<1.2.2': 1.2.2
@@ -16,4 +20,4 @@ overrides:
   'undici@>=8.0.0 <8.12.2': 8.12.2
   'serialize-javascript@>=7.0.0 <7.1.3': 7.1.3
   # Keep the decoder glue aligned with the WASM copied into public/vendor.
-  'barcode-detector>zxing-wasm': 3.1.6
+  'barcode-detector>zxing-wasm': 3.1.7
