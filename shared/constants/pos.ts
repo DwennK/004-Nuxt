@@ -62,7 +62,7 @@ export const documentTypes = ['quote', 'customer_order', 'invoice', 'sav'] as co
 export const documentStatuses = ['draft', 'issued', 'paid', 'cancelled'] as const
 export const paymentMethods = ['cash', 'card_twint', 'bank_transfer', 'stripe', 'shopify'] as const
 export const paymentStatuses = ['pending', 'paid', 'refunded', 'cancelled'] as const
-export const lineCategoryHints = ['accessory', 'repair', 'service', 'ecommerce'] as const
+export const lineCategoryHints = ['accessory', 'repair', 'service', 'device_new', 'device_refurbished'] as const
 export const payableDocumentTypes = ['quote', 'customer_order', 'invoice'] as const
 
 export const catalogItemTypeLabels: Record<(typeof catalogItemTypes)[number], string> = {
@@ -185,14 +185,16 @@ export const lineCategoryLabels: Record<(typeof lineCategoryHints)[number], stri
   accessory: 'Accessoire',
   repair: 'Réparation',
   service: 'Service',
-  ecommerce: 'Ecommerce'
+  device_new: 'Vente appareils neufs',
+  device_refurbished: 'Vente appareils reconditionnés'
 }
 
-export const lineCategoryColors: Record<(typeof lineCategoryHints)[number], 'info' | 'warning' | 'success' | 'primary'> = {
+export const lineCategoryColors: Record<(typeof lineCategoryHints)[number], 'info' | 'warning' | 'success' | 'primary' | 'secondary'> = {
   accessory: 'info',
   repair: 'warning',
   service: 'success',
-  ecommerce: 'primary'
+  device_new: 'primary',
+  device_refurbished: 'secondary'
 }
 
 export const documentTypePrefixes: Record<(typeof documentTypes)[number], string> = {

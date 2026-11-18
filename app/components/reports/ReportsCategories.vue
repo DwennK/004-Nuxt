@@ -13,7 +13,7 @@ const turnoverChartData = computed(() => props.overview.paymentCategories.map(it
   label: item.category ? paymentCategoryLabels[item.category] : 'À catégoriser'
 })))
 const turnoverColors = computed(() => turnoverChartData.value.map(item => ({
-  repair: 'warning', accessory: 'info', service: 'success', device: 'primary', ecommerce: 'secondary', other: 'neutral'
+  repair: 'warning', accessory: 'info', service: 'success', device_new: 'primary', device_refurbished: 'secondary', other: 'neutral'
 }[item.category || 'other'])))
 const turnoverTotal = computed(() => turnoverChartData.value.reduce((sum, item) => sum + item.total, 0))
 // A donut cannot represent negative categories or a zero net total honestly.

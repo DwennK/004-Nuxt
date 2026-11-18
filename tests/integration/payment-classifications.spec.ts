@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
 import { defineRelations } from 'drizzle-orm'
@@ -34,15 +35,35 @@ describe('cashflow classification independent of commercial documents', () => {
   const read = () => classifyReportPayments(db, [payment])
   const save = (allocations: Parameters<typeof updatePaymentClassification>[1]['allocations'], revision = 0) => updatePaymentClassification(1, { allocations, expectedRevision: revision, expectedAmount: 13001 }, 42)
 
+  it('merges legacy manual shares once and preserves the signed refund and automatic categories', async () => {
+    const migration = readFileSync(new URL('../../drizzle/20261118152633_device_sale_categories/migration.sql', import.meta.url), 'utf8')
+    await client.execute('CREATE TABLE ticket_lines (category_hint TEXT)')
+    await client.execute('UPDATE document_lines SET category_hint = \'ecommerce\'')
+    await client.execute('INSERT INTO ticket_lines VALUES (\'ecommerce\')')
+    await client.execute('UPDATE payments SET amount = -13001 WHERE id = 1')
+    const allocations = [{ category: 'device', amount: 5000 }, { category: 'ecommerce', amount: 7000 }, { category: 'other', amount: 1001 }]
+    await client.execute({ sql: 'INSERT INTO payment_classifications VALUES (1, ?, 3, ?, 42)', args: [JSON.stringify(allocations), '2026-11-02'] })
+    await client.executeMultiple(migration)
+    await client.executeMultiple(migration)
+    const daily = await getEndOfDaySummary('2026-11-02')
+    expect(daily.payments[0]).toMatchObject({
+      amount: -13001,
+      classification: { revision: 4, source: 'manual', allocations: [{ category: 'device_refurbished', amount: 12000 }, { category: 'other', amount: 1001 }] }
+    })
+    expect((await client.execute('SELECT category_hint FROM ticket_lines')).rows[0]?.category_hint).toBe('device_refurbished')
+    await client.execute('DELETE FROM payment_classifications')
+    expect((await getEndOfDaySummary('2026-11-02')).payments[0]?.classification.allocations).toEqual([{ category: 'device_refurbished', amount: 13001 }])
+  })
+
   it('updates daily and overview categories after a manual deposit classification, without changing commercial values', async () => {
     const before = await getReportsOverview('2026-11-02')
     expect(before.paymentCategories).toEqual([{ category: 'repair', total: 13001 }])
     expect(before.turnoverByCategory).toEqual([])
-    await save([{ category: 'device', amount: 10000 }, { category: 'other', amount: 3001 }])
+    await save([{ category: 'device_new', amount: 10000 }, { category: 'other', amount: 3001 }])
     const daily = await getEndOfDaySummary('2026-11-02')
     const overview = await getReportsOverview('2026-11-02')
     expect(overview.paymentCategories).toEqual(summarizePaymentCategories(daily.payments))
-    expect(overview.paymentCategories).toEqual([{ category: 'device', total: 10000 }, { category: 'other', total: 3001 }])
+    expect(overview.paymentCategories).toEqual([{ category: 'device_new', total: 10000 }, { category: 'other', total: 3001 }])
     expect(overview.kpis.totalPaid).toBe(13001)
     expect(overview.turnoverByCategory).toEqual(before.turnoverByCategory)
     await save([], 1)
@@ -52,7 +73,7 @@ describe('cashflow classification independent of commercial documents', () => {
   })
 
   it('reconciles overview categories with all seven daily ledgers, including refunds and uncategorized cash', async () => {
-    await save([{ category: 'device', amount: 13001 }])
+    await save([{ category: 'device_new', amount: 13001 }])
     await client.execute(`INSERT INTO payments (id,document_id,method,status,amount,paid_at,created_at,updated_at) VALUES
       (2,1,'card_twint','paid',-3001,'2026-11-03T10:00:00.000Z','2026-11-03','2026-11-03'),
       (3,1,'cash','pending',90000,'2026-11-03T10:00:00.000Z','2026-11-03','2026-11-03'),
@@ -62,7 +83,7 @@ describe('cashflow classification independent of commercial documents', () => {
     const days = await Promise.all(Array.from({ length: 7 }, (_, i) => getEndOfDaySummary(`2026-11-0${i + 1}`)))
     const overview = await getReportsOverview('2026-11-07')
     expect(overview.paymentCategories).toEqual(summarizePaymentCategories(days.flatMap(day => day.payments)))
-    expect(overview.paymentCategories).toEqual([{ category: 'device', total: 13001 }, { category: 'repair', total: -3001 }, { category: null, total: 2000 }])
+    expect(overview.paymentCategories).toEqual([{ category: 'device_new', total: 13001 }, { category: 'repair', total: -3001 }, { category: null, total: 2000 }])
     expect(overview.paymentCategories.reduce((sum, row) => sum + row.total, 0)).toBe(overview.kpis.totalPaid)
     expect(overview.kpis.totalPaid).toBe(12000)
     expect((await getReportsOverview('2026-11-01')).paymentCategories).toEqual([])
@@ -161,8 +182,8 @@ describe('cashflow classification independent of commercial documents', () => {
 
   it('preserves manual choices on mixed documents and recalculates current lines when reset', async () => {
     await setMixedLines()
-    await save([{ category: 'device', amount: 13001 }])
-    expect((await read())[0]?.classification.allocations).toEqual([{ category: 'device', amount: 13001 }])
+    await save([{ category: 'device_new', amount: 13001 }])
+    expect((await read())[0]?.classification.allocations).toEqual([{ category: 'device_new', amount: 13001 }])
     await save([], 1)
     expect((await read())[0]?.classification).toMatchObject({ source: 'manual', allocations: [] })
     await save(null, 2)
@@ -197,10 +218,10 @@ describe('cashflow classification independent of commercial documents', () => {
 
   it('rejects totals off by one cent and stale writes without losing the existing choice', async () => {
     await expect(save([{ category: 'other', amount: 13000 }])).rejects.toMatchObject({ statusCode: 400 })
-    await save([{ category: 'device', amount: 13001 }])
+    await save([{ category: 'device_new', amount: 13001 }])
     await expect(save([])).rejects.toMatchObject({ statusCode: 409 })
     await expect(updatePaymentClassification(1, { allocations: [], expectedRevision: 1, expectedAmount: 9999 }, 42)).rejects.toMatchObject({ statusCode: 409 })
-    expect((await read())[0]?.classification.allocations).toEqual([{ category: 'device', amount: 13001 }])
+    expect((await read())[0]?.classification.allocations).toEqual([{ category: 'device_new', amount: 13001 }])
     await client.execute('UPDATE payments SET status=\'cancelled\' WHERE id=1')
     await expect(save([], 1)).rejects.toMatchObject({ statusCode: 409 })
   })
@@ -218,7 +239,7 @@ describe('cashflow classification independent of commercial documents', () => {
   })
 
   it('keeps cashflow totals correct if an external writer changes a classified amount', async () => {
-    await save([{ category: 'device', amount: 13001 }])
+    await save([{ category: 'device_new', amount: 13001 }])
     const rows = await classifyReportPayments(db, [{ ...payment, amount: 8000 }])
     expect(summarizePaymentCategories(rows)).toEqual([{ category: null, total: 8000 }])
   })

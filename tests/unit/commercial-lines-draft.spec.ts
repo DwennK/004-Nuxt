@@ -23,6 +23,16 @@ function editor(allowEmpty = false, catalogItems = [item]) {
 afterEach(() => scopes.splice(0).forEach(scope => scope.stop()))
 
 describe('shared commercial line drafts', () => {
+  it.each([
+    ['smartphoneneuf', 'device_new'],
+    ['smartphonereconditionne', 'device_refurbished'],
+    ['coque', 'accessory']
+  ])('classifies catalog product %s when added to a sale', (sku, categoryHint) => {
+    const draft = editor()
+    draft.addCatalogItem({ ...item, type: 'product', sku })
+    expect(draft.serializeLines()[0]?.categoryHint).toBe(categoryHint)
+  })
+
   it.each(['product', 'repair', 'service'] as const)('includes the multiline description when adding, merging or selecting a %s', (type) => {
     const service = { ...item, type, name: 'Installation', serviceKind: 'Configuration\n\nTransfert des données' }
     const expectedLabel = 'Installation\nConfiguration\n\nTransfert des données'

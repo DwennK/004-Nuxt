@@ -23,7 +23,7 @@ describe('payment classification route authorization and validation', () => {
   }
 
   it('uses the authenticated operator, not an actor supplied by the client', async () => {
-    const body = { allocations: [{ category: 'device', amount: 32200 }], expectedRevision: 0, expectedAmount: 32200 }
+    const body = { allocations: [{ category: 'device_new', amount: 32200 }], expectedRevision: 0, expectedAmount: 32200 }
     const response = await request(body)
     expect(response.status).toBe(200)
     expect(mocks.auth).toHaveBeenCalledWith(expect.anything(), 'financial:record')

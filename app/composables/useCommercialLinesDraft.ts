@@ -61,6 +61,8 @@ export type CommercialLinesDraftController = {
 
 export function getLineCategoryFromItem(item: CatalogItemRecord): LineCategoryHint {
   if (item.type === 'product') {
+    if (item.sku === 'smartphoneneuf') return 'device_new'
+    if (item.sku === 'smartphonereconditionne') return 'device_refurbished'
     return 'accessory'
   }
 

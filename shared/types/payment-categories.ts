@@ -1,12 +1,14 @@
-export const paymentCategories = ['repair', 'accessory', 'service', 'device', 'ecommerce', 'other'] as const
+import { lineCategoryLabels } from '../constants/pos'
+
+export const paymentCategories = ['repair', 'accessory', 'service', 'device_new', 'device_refurbished', 'other'] as const
 export type PaymentCategory = (typeof paymentCategories)[number]
 
 export const paymentCategoryLabels: Record<PaymentCategory, string> = {
   repair: 'Réparation',
   accessory: 'Accessoire',
   service: 'Service',
-  device: 'Vente d’appareil',
-  ecommerce: 'Ecommerce',
+  device_new: lineCategoryLabels.device_new,
+  device_refurbished: lineCategoryLabels.device_refurbished,
   other: 'Autre'
 }
 

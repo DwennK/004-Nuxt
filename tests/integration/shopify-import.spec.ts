@@ -51,10 +51,10 @@ describe('Shopify atomic invoice and payment import', () => {
     expect(await getShopifyProvenance(first.documentId, db)).toMatchObject({ domain, orderName: '#1001' })
     const lines = (await client.execute('SELECT category_hint FROM document_lines')).rows
     expect(lines).toHaveLength(2)
-    expect(lines.every(line => line.category_hint === 'ecommerce')).toBe(true)
+    expect(lines.every(line => line.category_hint === 'device_refurbished')).toBe(true)
   })
 
-  it('includes imported ecommerce totals in daily and overview reports on the historical payment date', async () => {
+  it('includes imported refurbished device sales in daily and overview reports on the historical payment date', async () => {
     await client.batch([
       'CREATE TABLE tickets (id INTEGER PRIMARY KEY, status TEXT, opened_at TEXT, closed_at TEXT)',
       'CREATE TABLE catalog_items (id INTEGER PRIMARY KEY, name TEXT)'
@@ -62,10 +62,10 @@ describe('Shopify atomic invoice and payment import', () => {
     await persistShopifyOrder(domain, orderFixture(), db)
     const daily = await getEndOfDaySummary('2026-08-20')
     expect(daily.totalPaid).toBe(10810)
-    expect(daily.turnoverByCategory).toEqual([{ category: 'ecommerce', total: 10810 }])
+    expect(daily.turnoverByCategory).toEqual([{ category: 'device_refurbished', total: 10810 }])
     const overview = await getReportsOverview('2026-08-20')
-    expect(overview.turnoverByCategory).toEqual([{ category: 'ecommerce', label: 'Ecommerce', total: 10810 }])
-    expect(overview.topItems.every(item => item.category === 'ecommerce')).toBe(true)
+    expect(overview.turnoverByCategory).toEqual([{ category: 'device_refurbished', label: 'Vente appareils reconditionnés', total: 10810 }])
+    expect(overview.topItems.every(item => item.category === 'device_refurbished')).toBe(true)
     expect((await getEndOfDaySummary('2026-08-21')).turnoverByCategory).toEqual([])
   })
 
@@ -81,11 +81,11 @@ describe('Shopify atomic invoice and payment import', () => {
     await persistShopifyOrder(domain, order, db)
     const lines = (await client.execute('SELECT * FROM document_lines ORDER BY id')).rows
     expect(lines).toHaveLength(4)
-    expect(lines.every(line => line.category_hint === 'ecommerce')).toBe(true)
+    expect(lines.every(line => line.category_hint === 'device_refurbished')).toBe(true)
     expect(lines.map(line => Number(line.line_total))).toEqual([666, 334, 1081, 0])
     expect((await client.execute('SELECT total, tax_amount FROM documents')).rows[0]).toMatchObject({ total: 2081, tax_amount: 81 })
     for (const line of lines) {
-      expect(commercialLineInputSchema.parse({ label: line.label, quantity: line.quantity, unitPrice: line.unit_price, vatRate: line.vat_rate, categoryHint: line.category_hint }).categoryHint).toBe('ecommerce')
+      expect(commercialLineInputSchema.parse({ label: line.label, quantity: line.quantity, unitPrice: line.unit_price, vatRate: line.vat_rate, categoryHint: line.category_hint }).categoryHint).toBe('device_refurbished')
     }
     expect(await count('payments')).toBe(0)
   })
@@ -128,7 +128,7 @@ describe('Shopify atomic invoice and payment import', () => {
     expect(await count('payments')).toBe(2)
     expect(await count('document_lines')).toBe(2)
     expect((await client.execute('SELECT status FROM documents')).rows[0]!.status).toBe('paid')
-    expect((await client.execute('SELECT DISTINCT category_hint FROM document_lines')).rows).toEqual([{ category_hint: 'ecommerce' }])
+    expect((await client.execute('SELECT DISTINCT category_hint FROM document_lines')).rows).toEqual([{ category_hint: 'device_refurbished' }])
   })
 
   it.each(['line', 'payment', 'manual', 'shop', 'remote'])('refuses sync after conflict: %s', async (conflict) => {
