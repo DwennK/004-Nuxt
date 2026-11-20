@@ -2,10 +2,11 @@ import { getCommercialCategories, getCommercialLeaders } from './commercial-repo
 import { settlementCtes } from './document-settlement'
 import { classifyReportPayments } from './payment-classifications'
 import { summarizePaymentCategories } from '~~/shared/utils/payment-categories'
-import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm'
+import { and, desc, eq, gte, lt, lte, sql, type SQL } from 'drizzle-orm'
+import { parseDate } from '@internationalized/date'
 import { customers, documents, payments, tickets } from '~~/server/db/schema'
 import { lineCategoryLabels, paymentMethods } from '~~/shared/constants/pos'
-import type { DailySummary, ReportsLeaders, ReportsOverview } from '~~/shared/types/pos'
+import type { DailySummary, ReportsCategories, ReportsLeaders, ReportsOverview } from '~~/shared/types/pos'
 import { businessTimeZone, formatDate, toDateInputValue, buildZonedDayRange as buildDayRange } from '~~/shared/utils/pos'
 import { useDb } from '../turso'
 import { ensurePosSchema } from '~~/server/utils/pos/schema'
@@ -381,10 +382,51 @@ type ReportsOverviewProjectionInput = {
   turnoverRows: TurnoverRow[]
 }
 
+function projectTicketFlow(
+  startDate: string,
+  endDate: string,
+  { openedRows, closedRows }: Pick<ReportsOverviewProjectionInput, 'openedRows' | 'closedRows'>,
+  interval: ReportsCategories['ticketInterval'] = 'day'
+) {
+  const keyLength = { day: 10, month: 7, year: 4 }[interval]
+  const endKey = endDate.slice(0, keyLength)
+  const first = parseDate(startDate)
+  const firstBucket = interval === 'day' ? first : first.set({ day: 1, month: interval === 'year' ? 1 : first.month })
+  const step = interval === 'day' ? { days: 1 } : interval === 'month' ? { months: 1 } : { years: 1 }
+  const buckets = new Map<string, ReportsCategories['ticketFlow'][number]>()
+  for (let cursor = firstBucket; cursor.toString().slice(0, keyLength) <= endKey; cursor = cursor.add(step)) {
+    const date = cursor.toString().slice(0, keyLength)
+    const label = interval === 'day'
+      ? formatDayLabel(date)
+      : interval === 'month' ? formatMonthTooltipLabel(cursor.year, cursor.month) : date
+    buckets.set(date, { date, label, opened: 0, closed: 0 })
+    if (date === endKey) break
+  }
+  for (const [field, timestamps] of [
+    ['opened', openedRows.map(row => row.openedAt)],
+    ['closed', closedRows.map(row => row.closedAt)]
+  ] as const) {
+    for (const timestamp of timestamps) {
+      if (!timestamp) continue
+      const day = toDateInputValue(new Date(timestamp), businessTimeZone)
+      const bucket = buckets.get(day.slice(0, keyLength))
+      if (bucket) bucket[field] += 1
+    }
+  }
+  return [...buckets.values()]
+}
+
+function projectTurnoverCategories(rows: TurnoverRow[]): ReportsOverview['turnoverByCategory'] {
+  return rows.map(row => ({
+    category: row.category,
+    label: row.category ? lineCategoryLabels[row.category] : 'Sans catégorie',
+    total: Number(row.total || 0)
+  }))
+}
+
 export function projectReportsOverview(input: ReportsOverviewProjectionInput): ReportsOverview {
-  const rangeDates = Array.from({ length: 7 }, (_, index) => shiftIsoDate(input.date, index - 6))
-  const startDate = rangeDates[0]!
-  const endDate = rangeDates[rangeDates.length - 1]!
+  const startDate = shiftIsoDate(input.date, -6)
+  const endDate = input.date
   const weeklyBuckets = buildDailyPaymentBuckets(startDate, endDate, formatDayLabel, formatDetailedDayLabel)
   const monthlyBuckets = buildMonthlyPaymentBuckets(input.date)
   const yearlyBuckets = buildAnnualPaymentBuckets(input.date)
@@ -403,36 +445,6 @@ export function projectReportsOverview(input: ReportsOverviewProjectionInput): R
 
   for (const payment of input.yearlyPaymentRows) {
     applyPaymentAmount(yearlyBucketsMap.get(payment.bucket), payment.method, Number(payment.total || 0))
-  }
-
-  const ticketFlowByDay = rangeDates.map(day => ({
-    date: day,
-    label: formatDayLabel(day),
-    opened: 0,
-    closed: 0
-  }))
-  const ticketFlowByDayMap = new Map(ticketFlowByDay.map(item => [item.date, item]))
-
-  for (const ticket of input.openedRows) {
-    const dayKey = toDateInputValue(new Date(ticket.openedAt), businessTimeZone)
-    const bucket = ticketFlowByDayMap.get(dayKey)
-
-    if (bucket) {
-      bucket.opened += 1
-    }
-  }
-
-  for (const ticket of input.closedRows) {
-    if (!ticket.closedAt) {
-      continue
-    }
-
-    const dayKey = toDateInputValue(new Date(ticket.closedAt), businessTimeZone)
-    const bucket = ticketFlowByDayMap.get(dayKey)
-
-    if (bucket) {
-      bucket.closed += 1
-    }
   }
 
   const paymentsByDay = weeklyBuckets.map(({ date: bucketDate, label, total, cash, cardTwint, bankTransfer, stripe, shopify }) => ({
@@ -477,16 +489,61 @@ export function projectReportsOverview(input: ReportsOverviewProjectionInput): R
       description: 'Total annuel sur les 5 dernières années.',
       buckets: yearlyBuckets
     }],
-    turnoverByCategory: input.turnoverRows
-      .map(row => ({
-        category: row.category,
-        label: row.category ? lineCategoryLabels[row.category] : 'Sans catégorie',
-        total: Number(row.total || 0)
-      })),
+    turnoverByCategory: projectTurnoverCategories(input.turnoverRows),
     paymentCategories: input.paymentCategories,
     topCustomers: input.topCustomers,
     topItems: input.topItems,
-    ticketFlowByDay
+    ticketFlowByDay: projectTicketFlow(startDate, endDate, input)
+  }
+}
+
+function getPaidRows(db: ReturnType<typeof useDb>, start: string, end: string) {
+  const until = new Date(Date.parse(end) + 1).toISOString()
+  return db.select({
+    id: payments.id,
+    documentId: payments.documentId,
+    amount: payments.amount,
+    method: payments.method,
+    paidAt: payments.paidAt
+  })
+    .from(payments)
+    .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lt(payments.paidAt, until)))
+}
+
+async function getTicketFlowRows(db: ReturnType<typeof useDb>, start: string, end: string) {
+  const until = new Date(Date.parse(end) + 1).toISOString()
+  const [openedRows, closedRows] = await Promise.all([
+    db.select({ openedAt: tickets.openedAt })
+      .from(tickets)
+      .where(and(gte(tickets.openedAt, start), lt(tickets.openedAt, until))),
+    db.select({ closedAt: tickets.closedAt })
+      .from(tickets)
+      .where(and(eq(tickets.status, 'closed'), gte(tickets.closedAt, start), lt(tickets.closedAt, until)))
+  ])
+  return { openedRows, closedRows }
+}
+
+export async function getReportsCategories(firstDate: string, lastDate: string): Promise<ReportsCategories> {
+  await ensurePosSchema()
+
+  const db = useDb()
+  const { startDate, endDate } = normalizeDateRange(firstDate, lastDate)
+  const { start } = buildDayRange(startDate)
+  const { end } = buildDayRange(endDate)
+  const from = parseDate(startDate)
+  const to = parseDate(endDate)
+  const monthSpan = (to.year - from.year) * 12 + to.month - from.month
+  const ticketInterval = monthSpan >= 24 ? 'year' : from.add({ days: 45 }).compare(to) <= 0 ? 'month' : 'day'
+  const [paymentRows, turnoverRows, ticketRows] = await Promise.all([
+    getPaidRows(db, start, end),
+    getCommercialCategories(db, start, end),
+    getTicketFlowRows(db, start, end)
+  ])
+  return {
+    paymentCategories: summarizePaymentCategories(await classifyReportPayments(db, paymentRows)),
+    turnoverByCategory: projectTurnoverCategories(turnoverRows),
+    ticketInterval,
+    ticketFlow: projectTicketFlow(startDate, endDate, ticketRows, ticketInterval)
   }
 }
 
@@ -494,9 +551,8 @@ export async function getReportsOverview(date: string, options: { includeLeaders
   await ensurePosSchema()
 
   const db = useDb()
-  const rangeDates = Array.from({ length: 7 }, (_, index) => shiftIsoDate(date, index - 6))
-  const startDate = rangeDates[0]!
-  const endDate = rangeDates[rangeDates.length - 1]!
+  const startDate = shiftIsoDate(date, -6)
+  const endDate = date
   const { start } = buildDayRange(startDate)
   const { end } = buildDayRange(endDate)
   const selectedYear = Number(date.slice(0, 4))
@@ -510,16 +566,8 @@ export async function getReportsOverview(date: string, options: { includeLeaders
     return sql`(${bucket}, ${buildDayRange(`${bucket}-01`).start}, ${buildDayRange(`${nextMonth}-01`).start})`
   })
 
-  const [weeklyPaymentRows, periodPaymentRows, openTicketRows, openedRows, closedRows] = await Promise.all([
-    db.select({
-      id: payments.id,
-      documentId: payments.documentId,
-      amount: payments.amount,
-      method: payments.method,
-      paidAt: payments.paidAt
-    })
-      .from(payments)
-      .where(and(eq(payments.status, 'paid'), gte(payments.paidAt, start), lte(payments.paidAt, end))),
+  const [weeklyPaymentRows, periodPaymentRows, openTicketRows, ticketRows] = await Promise.all([
+    getPaidRows(db, start, end),
     db.all<{ bucket: string, method: (typeof paymentMethods)[number], total: number }>(sql`
       WITH month_ranges(bucket, start_at, end_at) AS (VALUES ${sql.join(monthRanges, sql`, `)})
       SELECT r.bucket, p.method, sum(p.amount) AS total
@@ -530,12 +578,7 @@ export async function getReportsOverview(date: string, options: { includeLeaders
     db.select({ count: sql<number>`count(*)` })
       .from(tickets)
       .where(sql`${tickets.status} not in ('closed', 'cancelled')`),
-    db.select({ openedAt: tickets.openedAt })
-      .from(tickets)
-      .where(and(gte(tickets.openedAt, start), lte(tickets.openedAt, end))),
-    db.select({ closedAt: tickets.closedAt })
-      .from(tickets)
-      .where(and(eq(tickets.status, 'closed'), gte(tickets.closedAt, start), lte(tickets.closedAt, end)))
+    getTicketFlowRows(db, start, end)
   ])
 
   const monthlyPaymentRows = periodPaymentRows
@@ -561,8 +604,7 @@ export async function getReportsOverview(date: string, options: { includeLeaders
     monthlyPaymentRows,
     yearlyPaymentRows,
     openTicketCount: openTicketRows[0]?.count || 0,
-    openedRows,
-    closedRows,
+    ...ticketRows,
     topCustomers,
     topItems,
     turnoverRows

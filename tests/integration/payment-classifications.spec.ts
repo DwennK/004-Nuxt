@@ -8,7 +8,7 @@ import type { PosDatabase } from '../../server/utils/turso'
 import { classifyReportPayments, updatePaymentClassification } from '../../server/utils/pos/payment-classifications'
 import { summarizePaymentCategories } from '../../shared/utils/payment-categories'
 import { importTables } from '../fixtures/shopify'
-import { getEndOfDaySummary, getReportsOverview, getReportsLeaders } from '../../server/utils/pos/reports'
+import { getEndOfDaySummary, getReportsCategories, getReportsOverview, getReportsLeaders } from '../../server/utils/pos/reports'
 
 const database = vi.hoisted(() => ({ db: null as PosDatabase | null }))
 vi.mock('../../server/utils/turso', () => ({ useDb: () => database.db }))
@@ -111,6 +111,29 @@ describe('cashflow classification independent of commercial documents', () => {
     const rows = await read()
     expect(rows[0]?.classification).toEqual({ allocations: [{ category: 'repair', amount: 13001 }], source: 'automatic', revision: 0 })
     expect(summarizePaymentCategories(rows)).toEqual([{ category: 'repair', total: 13001 }])
+  })
+
+  it('applies the category range to payments, invoices and ticket events at Swiss day boundaries', async () => {
+    await client.execute(`UPDATE documents SET type = 'invoice', issued_at = '2026-11-01T23:00:00Z' WHERE id = 1`)
+    await client.execute(`UPDATE payments SET paid_at = '2026-11-01T23:00:00Z' WHERE id = 1`)
+    await client.execute(`INSERT INTO tickets VALUES
+      (1, 'closed', '2026-11-01T22:59:59Z', '2026-11-01T23:00:00Z'),
+      (2, 'closed', '2026-11-30T22:59:59Z', '2026-11-30T23:00:00Z')`)
+
+    const categories = await getReportsCategories('2026-11-02', '2026-11-30')
+    expect(categories.paymentCategories).toEqual([{ category: 'repair', total: 13001 }])
+    expect(categories.turnoverByCategory).toMatchObject([{ category: 'repair', total: 30000 }])
+    expect(categories.ticketInterval).toBe('day')
+    expect(categories.ticketFlow).toHaveLength(29)
+    expect(categories.ticketFlow[0]).toMatchObject({ date: '2026-11-02', opened: 0, closed: 1 })
+    expect(categories.ticketFlow.at(-1)).toMatchObject({ date: '2026-11-30', opened: 1, closed: 0 })
+
+    const longerRange = await getReportsCategories('2026-12-31', '2026-11-02')
+    expect(longerRange.ticketInterval).toBe('month')
+    expect(longerRange.ticketFlow).toMatchObject([
+      { date: '2026-11', opened: 1, closed: 1 },
+      { date: '2026-12', opened: 0, closed: 1 }
+    ])
   })
 
   it.each([null, 'unknown'])('leaves incomplete or invalid categories (%s) uncategorized', async (category) => {

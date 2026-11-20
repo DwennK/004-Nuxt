@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import type { ChartCategory } from '@nuxt/ui'
 import { paymentCategoryLabels } from '~~/shared/types/payment-categories'
-import type { ReportsOverview } from '~~/shared/types/pos'
-import { formatCurrency, formatDate } from '~~/shared/utils/pos'
+import type { ReportsCategories } from '~~/shared/types/pos'
+import { formatCurrency } from '~~/shared/utils/pos'
 
 const props = defineProps<{
-  overview: ReportsOverview
+  report: ReportsCategories
 }>()
 
-const turnoverChartData = computed(() => props.overview.paymentCategories.map(item => ({
+const turnoverChartData = computed(() => props.report.paymentCategories.map(item => ({
   ...item,
   label: item.category ? paymentCategoryLabels[item.category] : 'À catégoriser'
 })))
@@ -19,14 +19,15 @@ const turnoverTotal = computed(() => turnoverChartData.value.reduce((sum, item) 
 // A donut cannot represent negative categories or a zero net total honestly.
 const hasTurnoverActivity = computed(() => turnoverTotal.value > 0 && turnoverChartData.value.every(item => item.total >= 0))
 
-const ticketChartData = computed(() => props.overview.ticketFlowByDay)
-const ticketCategories: ChartCategory<ReportsOverview['ticketFlowByDay'][number]>[] = [
+const ticketChartData = computed(() => props.report.ticketFlow)
+const ticketIntervalLabel = computed(() => ({ day: 'jour', month: 'mois', year: 'année' })[props.report.ticketInterval])
+const ticketCategories: ChartCategory<ReportsCategories['ticketFlow'][number]>[] = [
   { key: 'opened', label: 'Ouverts', color: 'primary' },
   { key: 'closed', label: 'Clôturés', color: 'success' }
 ]
 const hasTicketActivity = computed(() => ticketChartData.value.some(day => day.opened > 0 || day.closed > 0))
 const integerLabel = (value: number) => Number.isInteger(value) ? new Intl.NumberFormat('fr-CH').format(value) : ''
-const invoicedTotal = computed(() => props.overview.turnoverByCategory.reduce((sum, item) => sum + item.total, 0))
+const invoicedTotal = computed(() => props.report.turnoverByCategory.reduce((sum, item) => sum + item.total, 0))
 </script>
 
 <template>
@@ -56,7 +57,7 @@ const invoicedTotal = computed(() => props.overview.turnoverByCategory.reduce((s
           :height="208"
           :thickness="20"
           :format="formatCurrency"
-          aria-label="Encaissements par catégorie sur sept jours"
+          aria-label="Encaissements par catégorie"
         >
           <template #center>
             <div class="space-y-1 text-center">
@@ -107,7 +108,7 @@ const invoicedTotal = computed(() => props.overview.turnoverByCategory.reduce((s
       <UEmpty
         v-else
         icon="i-lucide-chart-pie"
-        title="Aucun mouvement sur ces sept jours"
+        title="Aucun mouvement sur cette période"
         description="Les paiements apparaîtront ici, y compris ceux qui restent à catégoriser."
       />
 
@@ -132,7 +133,7 @@ const invoicedTotal = computed(() => props.overview.turnoverByCategory.reduce((s
         </p>
       </template>
 
-      <table v-if="overview.turnoverByCategory.length" class="pos-data-table w-full text-sm tabular-nums">
+      <table v-if="report.turnoverByCategory.length" class="pos-data-table w-full text-sm tabular-nums">
         <thead>
           <tr class="text-left text-muted">
             <th scope="col" class="pb-2 font-medium">
@@ -144,7 +145,7 @@ const invoicedTotal = computed(() => props.overview.turnoverByCategory.reduce((s
           </tr>
         </thead>
         <tbody class="divide-y divide-default">
-          <tr v-for="item in overview.turnoverByCategory" :key="item.category || 'uncategorized'">
+          <tr v-for="item in report.turnoverByCategory" :key="item.category || 'uncategorized'">
             <th scope="row" class="py-2 text-left font-normal">
               {{ item.label }}
             </th>
@@ -165,7 +166,7 @@ const invoicedTotal = computed(() => props.overview.turnoverByCategory.reduce((s
         </tfoot>
       </table>
       <p v-else class="text-sm text-toned">
-        Aucune facture émise ni réduction commerciale sur ces sept jours.
+        Aucune facture émise ni réduction commerciale sur cette période.
       </p>
     </UCard>
 
@@ -176,7 +177,7 @@ const invoicedTotal = computed(() => props.overview.turnoverByCategory.reduce((s
             Ouvertures et clôtures de dossiers
           </h2>
           <p class="text-sm text-toned">
-            Nombre de dossiers par jour sur les sept jours affichés.
+            Nombre de dossiers par {{ ticketIntervalLabel }}.
           </p>
         </div>
       </template>
@@ -192,11 +193,11 @@ const invoicedTotal = computed(() => props.overview.turnoverByCategory.reduce((s
           :categories="ticketCategories"
           :height="180"
           :format="integerLabel"
-          aria-label="Ouvertures et clôtures de dossiers sur sept jours"
+          :aria-label="`Ouvertures et clôtures de dossiers par ${ticketIntervalLabel}`"
         >
           <template #tooltip="{ title, rows }">
             <p class="font-semibold text-highlighted">
-              {{ formatDate(ticketChartData.find(day => day.label === title)?.date || '') }}
+              {{ title }}
             </p>
             <div v-for="row in rows" :key="row.label" class="flex items-center gap-2 text-sm">
               <span class="size-2 rounded-full" :style="{ backgroundColor: row.color }" />

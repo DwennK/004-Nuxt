@@ -1,39 +1,31 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui'
+import { parseDate } from '@internationalized/date'
 import ReportsLeaders from '~/components/reports/ReportsLeaders.vue'
 import ReportsOverviewCharts from '~/components/reports/ReportsOverviewCharts.vue'
 import ReportsCategories from '~/components/reports/ReportsCategories.vue'
 import ReportsCommercial from '~/components/reports/ReportsCommercial.vue'
-import type { ReportsLeaders as ReportsLeadersData, ReportsOverview } from '~~/shared/types/pos'
+import type { CommercialReport, ReportsCategories as ReportsCategoriesData, ReportsLeaders as ReportsLeadersData, ReportsOverview } from '~~/shared/types/pos'
 import { formatCurrency, formatDate, toDateInputValue } from '~~/shared/utils/pos'
 
-function shiftIsoDate(date: string, days: number) {
-  const [year, month, day] = date.split('-').map(Number)
-  const value = new Date(Date.UTC(year!, month! - 1, day! + days, 12, 0, 0))
-
-  return [
-    value.getUTCFullYear(),
-    String(value.getUTCMonth() + 1).padStart(2, '0'),
-    String(value.getUTCDate()).padStart(2, '0')
-  ].join('-')
-}
-
 const date = ref(toDateInputValue())
-const leadersStartDate = ref(shiftIsoDate(date.value, -6))
-const leadersEndDate = ref(date.value)
+const last30Days = { startDate: parseDate(date.value).subtract({ days: 29 }).toString(), endDate: date.value }
+const categoriesRange = ref({ ...last30Days })
+const leadersRange = ref({ ...last30Days })
+const commercialDate = ref(date.value)
+const commercialPeriod = ref<CommercialReport['period']>('month')
 const selectedTab = ref('revenue')
-
-const isOverviewTab = computed(() => selectedTab.value === 'revenue' || selectedTab.value === 'categories')
+const showLeaders = computed(() => selectedTab.value === 'customers' || selectedTab.value === 'items')
 
 const tabs: TabsItem[] = [
   { label: 'Encaissements', icon: 'i-lucide-chart-column', value: 'revenue', slot: 'revenue' },
   { label: 'Catégories et dossiers', icon: 'i-lucide-chart-pie', value: 'categories', slot: 'categories' },
   { label: 'Ventes facturées', icon: 'i-lucide-receipt-text', value: 'commercial', slot: 'commercial' },
-  { label: 'Clients', icon: 'i-lucide-users', value: 'customers', slot: 'customers' },
-  { label: 'Articles', icon: 'i-lucide-package', value: 'items', slot: 'items' }
+  { label: 'Clients', icon: 'i-lucide-users', value: 'customers' },
+  { label: 'Articles', icon: 'i-lucide-package', value: 'items' }
 ]
 
-const { data: overview, refresh, status, error } = await useFetch<ReportsOverview>('/api/reports/overview', {
+const { data: overviewData, refresh, status, error } = await useFetch<ReportsOverview>('/api/reports/overview', {
   key: 'reports-overview',
   lazy: true,
   query: computed(() => ({
@@ -42,41 +34,30 @@ const { data: overview, refresh, status, error } = await useFetch<ReportsOvervie
   })),
   watch: false
 })
+const overview = computed(() => overviewData.value?.range.endDate === date.value ? overviewData.value : undefined)
 
-watch(date, () => {
-  if (date.value) refresh()
-}, { flush: 'post' })
+watch(date, () => refresh(), { flush: 'post' })
 
-const normalizedLeadersRange = computed(() => {
-  return leadersStartDate.value <= leadersEndDate.value
-    ? {
-        startDate: leadersStartDate.value,
-        endDate: leadersEndDate.value
-      }
-    : {
-        startDate: leadersEndDate.value,
-        endDate: leadersStartDate.value
-      }
+const { data: categories, refresh: refreshCategories, status: categoriesStatus, error: categoriesError } = await useFetch<ReportsCategoriesData>('/api/reports/categories', {
+  key: 'reports-categories',
+  query: categoriesRange,
+  immediate: false,
+  watch: false
+})
+watch([() => selectedTab.value === 'categories', categoriesRange], ([visible]) => {
+  if (visible) refreshCategories()
 })
 
 const { data: leaders, refresh: refreshLeaders, status: leadersStatus, error: leadersError } = await useFetch<ReportsLeadersData>('/api/reports/leaders', {
   key: 'reports-leaders',
-  query: computed(() => ({
-    startDate: normalizedLeadersRange.value.startDate,
-    endDate: normalizedLeadersRange.value.endDate
-  })),
+  query: leadersRange,
   immediate: false,
   watch: false
 })
 
-watch([() => selectedTab.value === 'customers' || selectedTab.value === 'items', normalizedLeadersRange], async ([visible]) => {
-  if (!visible || !leadersStartDate.value || !leadersEndDate.value) return
-  await refreshLeaders()
+watch([showLeaders, leadersRange], ([visible]) => {
+  if (visible) refreshLeaders()
 })
-
-function formatRangeDate(value: string) {
-  return formatDate(value)
-}
 
 const stats = computed(() => {
   if (!overview.value) {
@@ -86,17 +67,15 @@ const stats = computed(() => {
   return [{
     title: 'Encaissé net sur 7 jours',
     value: formatCurrency(overview.value.kpis.totalPaid),
-    description: `Période du ${formatRangeDate(overview.value.range.startDate)} au ${formatRangeDate(overview.value.range.endDate)}`,
     icon: 'i-lucide-wallet-cards'
   }, {
     title: 'Encaissé net le jour sélectionné',
     value: formatCurrency(overview.value.kpis.paidToday),
-    description: formatRangeDate(overview.value.range.endDate),
+    description: formatDate(overview.value.range.endDate),
     icon: 'i-lucide-badge-swiss-franc'
   }, {
     title: 'Moyenne par jour',
     value: formatCurrency(overview.value.kpis.averagePerDay),
-    description: 'Moyenne sur les sept jours affichés',
     icon: 'i-lucide-chart-column'
   }, {
     title: 'Dossiers encore ouverts',
@@ -114,87 +93,11 @@ const stats = computed(() => {
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
-
-        <template #trailing>
-          <UBadge v-if="overview && isOverviewTab" color="neutral" variant="subtle">
-            7 jours glissants
-          </UBadge>
-        </template>
-        <template #right>
-          <UButton
-            v-if="selectedTab !== 'commercial'"
-            label="Actualiser"
-            icon="i-lucide-refresh-cw"
-            color="neutral"
-            variant="outline"
-            :loading="isOverviewTab ? status === 'pending' : leadersStatus === 'pending'"
-            :disabled="isOverviewTab ? !date : !leadersStartDate || !leadersEndDate"
-            @click="isOverviewTab ? refresh() : refreshLeaders()"
-          />
-        </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <div class="space-y-4">
-        <UDashboardToolbar v-if="selectedTab !== 'commercial'">
-          <div class="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div
-              v-if="isOverviewTab"
-              class="flex flex-wrap items-center gap-2"
-            >
-              <UInput
-                v-bind="posInputAttrs"
-                v-model="date"
-                type="date"
-                class="w-52"
-              />
-
-              <UBadge
-                v-if="overview"
-                color="primary"
-                variant="subtle"
-                size="sm"
-              >
-                {{ formatRangeDate(overview.range.startDate) }} → {{ formatRangeDate(overview.range.endDate) }}
-              </UBadge>
-            </div>
-
-            <div
-              v-else
-              class="flex flex-wrap items-end gap-2"
-            >
-              <UFormField label="Date début">
-                <UInput
-                  v-bind="posInputAttrs"
-                  v-model="leadersStartDate"
-                  type="date"
-                  class="w-40"
-                />
-              </UFormField>
-
-              <UFormField label="Date fin">
-                <UInput
-                  v-bind="posInputAttrs"
-                  v-model="leadersEndDate"
-                  type="date"
-                  class="w-40"
-                />
-              </UFormField>
-
-              <UBadge
-                v-if="leaders"
-                color="primary"
-                variant="subtle"
-                size="sm"
-                class="mb-0.5"
-              >
-                {{ formatRangeDate(leaders.range.startDate) }} → {{ formatRangeDate(leaders.range.endDate) }}
-              </UBadge>
-            </div>
-          </div>
-        </UDashboardToolbar>
-
         <UTabs
           v-model="selectedTab"
           :items="tabs"
@@ -202,10 +105,16 @@ const stats = computed(() => {
           :ui="{ list: 'max-w-full overflow-x-auto', trigger: 'shrink-0' }"
         >
           <template #commercial>
-            <ReportsCommercial v-if="selectedTab === 'commercial'" />
+            <ReportsCommercial v-model:date="commercialDate" v-model:period="commercialPeriod" />
           </template>
           <template #revenue>
             <div class="space-y-4">
+              <ReportsPeriodBar
+                v-model:date="date"
+                rolling-week
+                :loading="status === 'pending'"
+                @refresh="refresh()"
+              />
               <PosAsyncState v-if="error" :error="error" @retry="refresh()" />
               <div
                 v-if="(status === 'idle' || status === 'pending') && !overview"
@@ -242,7 +151,7 @@ const stats = computed(() => {
                       <p class="text-2xl font-semibold leading-none text-highlighted">
                         {{ stat.value }}
                       </p>
-                      <p class="text-sm text-toned">
+                      <p v-if="stat.description" class="text-sm text-toned">
                         {{ stat.description }}
                       </p>
                     </div>
@@ -267,45 +176,27 @@ const stats = computed(() => {
 
           <template #categories>
             <div class="space-y-4">
-              <PosAsyncState v-if="error" :error="error" @retry="refresh()" />
+              <ReportsPeriodBar v-model:range="categoriesRange" :loading="categoriesStatus === 'pending'" @refresh="refreshCategories()" />
+              <PosAsyncState v-if="categoriesError" :error="categoriesError" @retry="refreshCategories()" />
               <div
-                v-if="(status === 'idle' || status === 'pending') && !overview"
+                v-else-if="categoriesStatus === 'idle' || categoriesStatus === 'pending'"
                 role="status"
                 aria-label="Chargement des catégories et dossiers"
                 class="grid gap-4 xl:grid-cols-2"
               >
                 <USkeleton v-for="index in 2" :key="index" class="h-96 rounded-2xl" />
               </div>
-              <ReportsCategories v-else-if="overview" :overview="overview" />
+              <ReportsCategories v-else-if="categories" :report="categories" />
             </div>
           </template>
 
-          <template #customers>
-            <PosAsyncState v-if="leadersError" :error="leadersError" @retry="refreshLeaders()" />
-            <ReportsLeaders
-              v-else-if="leaders"
-              kind="customers"
-              :leaders="leaders"
-            />
-
-            <USkeleton
-              v-else-if="leadersStatus === 'pending'"
-              class="h-[28rem] rounded-2xl"
-            />
-          </template>
-
-          <template #items>
-            <PosAsyncState v-if="leadersError" :error="leadersError" @retry="refreshLeaders()" />
-            <ReportsLeaders
-              v-else-if="leaders"
-              kind="items"
-              :leaders="leaders"
-            />
-
-            <USkeleton
-              v-else-if="leadersStatus === 'pending'"
-              class="h-[28rem] rounded-2xl"
-            />
+          <template #content="{ item }">
+            <div v-if="item.value === 'customers' || item.value === 'items'" class="space-y-4">
+              <ReportsPeriodBar v-model:range="leadersRange" :loading="leadersStatus === 'pending'" @refresh="refreshLeaders()" />
+              <PosAsyncState v-if="leadersError" :error="leadersError" @retry="refreshLeaders()" />
+              <PosAsyncState v-else-if="leadersStatus === 'pending' || leadersStatus === 'idle'" loading loading-label="Chargement du classement" />
+              <ReportsLeaders v-else-if="leaders" :kind="item.value" :leaders="leaders" />
+            </div>
           </template>
         </UTabs>
       </div>

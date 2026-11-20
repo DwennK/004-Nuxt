@@ -582,6 +582,11 @@ export interface ReportsOverview {
   }>
 }
 
+export interface ReportsCategories extends Pick<ReportsOverview, 'paymentCategories' | 'turnoverByCategory'> {
+  ticketInterval: 'day' | 'month' | 'year'
+  ticketFlow: ReportsOverview['ticketFlowByDay']
+}
+
 export interface CommercialTotals {
   invoicedTotal: number
   creditTotal: number

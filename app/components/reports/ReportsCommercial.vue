@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import type { CommercialReport } from '~~/shared/types/pos'
 import { lineCategoryLabels } from '~~/shared/constants/pos'
-import { formatCurrency, formatDate, toDateInputValue } from '~~/shared/utils/pos'
+import { formatCurrency, formatDate } from '~~/shared/utils/pos'
 
-const date = ref(toDateInputValue())
-const period = ref<CommercialReport['period']>('month')
+const date = defineModel<string>('date', { required: true })
+const period = defineModel<CommercialReport['period']>('period', { required: true })
 const periods = [{ label: 'Jour', value: 'day' }, { label: 'Mois', value: 'month' }, { label: 'Année', value: 'year' }]
+const pickerType = computed(() => period.value === 'day' ? 'date' : period.value)
 const { data: report, status, error, refresh } = await useFetch<CommercialReport>('/api/reports/commercial', {
   key: 'reports-commercial',
+  lazy: true,
   query: computed(() => ({ date: date.value, period: period.value })),
   watch: false
 })
-watch([date, period], () => {
-  if (date.value) refresh()
-}, { flush: 'post' })
+watch([date, period], () => refresh(), { flush: 'post' })
 
 const stats = computed(() => report.value
   ? [
@@ -31,43 +31,22 @@ function bucketLabel(value: string) {
 
 <template>
   <div class="space-y-4">
-    <div class="flex flex-wrap items-end gap-3">
-      <UFormField label="Période" name="commercial-period">
-        <USelect
-          v-model="period"
-          :items="periods"
-          aria-label="Période commerciale"
-          class="w-32"
-        />
-      </UFormField>
-      <UFormField label="Date de référence" name="commercial-date">
-        <UInput
-          v-bind="posInputAttrs"
-          v-model="date"
-          type="date"
-          aria-label="Date commerciale"
-          class="w-44"
-        />
-      </UFormField>
-      <UBadge
-        v-if="report"
+    <ReportsPeriodBar
+      v-model:date="date"
+      :type="pickerType"
+      :loading="status === 'pending'"
+      @refresh="refresh()"
+    >
+      <UTabs
+        v-model="period"
+        :items="periods"
+        :content="false"
+        aria-label="Type de période"
         color="neutral"
-        variant="subtle"
-        class="mb-1"
-      >
-        {{ formatDate(report.range.startDate) }} → {{ formatDate(report.range.endDate) }}
-      </UBadge>
-      <UButton
-        label="Actualiser"
-        icon="i-lucide-refresh-cw"
-        color="neutral"
-        variant="outline"
-        :loading="status === 'pending'"
-        :disabled="!date"
-        class="ml-auto"
-        @click="refresh()"
+        size="xs"
+        class="w-auto"
       />
-    </div>
+    </ReportsPeriodBar>
     <p class="text-sm text-toned">
       Chaque facture est comptée une fois à sa date d’émission, réglée ou non. Les réductions commerciales sont déduites à leur date d’enregistrement. Devis, commandes, brouillons et factures annulées sont exclus.
     </p>

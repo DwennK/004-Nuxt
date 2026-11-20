@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { parseDate } from '@internationalized/date'
 import * as vue from 'vue'
 import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -49,6 +50,7 @@ async function runtime() {
   const scope = vue.effectScope()
   scopes.push(scope)
   const calls: FetchCall[] = []
+  const beforeMount: Array<() => void> = []
   let holdRequests = false
   const releases: Array<() => void> = []
   const nuxtApp = {
@@ -59,6 +61,7 @@ async function runtime() {
   const hash = await import(pathToFileURL(join(nuxtRoot, 'dist/app/utils/hash.js')).href)
   const environment: Record<string, unknown> = {
     ...vue, ...hash,
+    onBeforeMount: (mount: () => void) => beforeMount.push(mount),
     useNuxtApp: () => nuxtApp,
     asyncDataDefaults: { deep: false },
     granularCachedData: true, pendingWhenIdle: false, purgeCachedData: true,
@@ -93,6 +96,7 @@ async function runtime() {
   }, 'useFetch') as NuxtFetch
   return {
     calls,
+    mount() { beforeMount.splice(0).forEach(mount => mount()) },
     holdRequests() { holdRequests = true },
     releaseRequests() {
       holdRequests = false
@@ -187,12 +191,14 @@ describe('frontend query execution budget', () => {
     expect(app.calls[1]!.query.search).toBe('martin')
   })
 
-  it('loads report leaders only when visible and executes one request per date change', async () => {
+  it('loads categories and rankings only when visible and refreshes the selected period once', async () => {
     const app = await runtime()
-    const source = pageScript('app/pages/reports/index.vue').split('function shiftIsoDate')[1]!.split('function formatRangeDate')[0]!
-    const state = await app.setup<{ date: vue.Ref<string>, selectedTab: vue.Ref<string>, leadersStartDate: vue.Ref<string>, leadersEndDate: vue.Ref<string> }>(
-      `function shiftIsoDate${source}`, { toDateInputValue: () => '2026-09-11' }, '{ date, selectedTab, leadersStartDate, leadersEndDate }'
+    const source = pageStatements('app/pages/reports/index.vue', text => !text.startsWith('import '))
+    type DateRange = vue.Ref<{ startDate: string, endDate: string }>
+    const state = await app.setup<{ date: vue.Ref<string>, selectedTab: vue.Ref<string>, leadersRange: DateRange, categoriesRange: DateRange }>(
+      source, { parseDate, toDateInputValue: () => '2026-09-11' }, '{ date, selectedTab, leadersRange, categoriesRange }'
     )
+    app.mount()
     await settle()
     expect(app.calls.map(call => call.url)).toEqual(['/api/reports/overview'])
     expect(app.calls[0]!.query.includeLeaders).toBe(false)
@@ -205,26 +211,37 @@ describe('frontend query execution budget', () => {
     await settle()
     expect(app.calls).toHaveLength(1)
     app.calls.splice(0)
+    state.selectedTab.value = 'categories'
+    await settle()
+    expect(app.calls.map(call => call.url)).toEqual(['/api/reports/categories'])
+    expect(app.calls[0]!.query).toEqual({ startDate: '2026-08-13', endDate: '2026-09-11' })
+    app.calls.splice(0)
+    state.categoriesRange.value = { startDate: '2026-08-01', endDate: '2026-08-31' }
+    await settle()
+    expect(app.calls.map(call => call.query)).toEqual([{ startDate: '2026-08-01', endDate: '2026-08-31' }])
+    app.calls.splice(0)
     state.selectedTab.value = 'customers'
     await settle()
     expect(app.calls.map(call => call.url)).toEqual(['/api/reports/leaders'])
+    expect(app.calls[0]!.query).toEqual({ startDate: '2026-08-13', endDate: '2026-09-11' })
     app.calls.splice(0)
     state.selectedTab.value = 'items'
     await settle()
     expect(app.calls).toHaveLength(0)
-    state.leadersStartDate.value = '2026-08-01'
-    state.leadersEndDate.value = '2026-08-31'
+    state.leadersRange.value = { startDate: '2026-08-01', endDate: '2026-08-31' }
     await settle()
     expect(app.calls).toHaveLength(1)
     expect(app.calls[0]!.query).toEqual({ startDate: '2026-08-01', endDate: '2026-08-31' })
   })
 
-  it('fetches the commercial report once per period change and ignores an empty date', async () => {
+  it('fetches the commercial report once when its date and period change together', async () => {
     const app = await runtime()
     const source = pageStatements('app/components/reports/ReportsCommercial.vue', text =>
       text.startsWith('const date =') || text.startsWith('const period =') || text.includes('await useFetch<') || text.startsWith('watch(')
     )
-    const state = await app.setup<{ date: vue.Ref<string>, period: vue.Ref<string> }>(source, { toDateInputValue: () => '2026-11-10' }, '{ date, period }')
+    const models = { date: vue.ref('2026-11-10'), period: vue.ref('month') }
+    const state = await app.setup<typeof models>(source, { defineModel: (name: keyof typeof models) => models[name] }, '{ date, period }')
+    app.mount()
     await settle()
     expect(app.calls.map(call => call.query)).toEqual([{ date: '2026-11-10', period: 'month' }])
     app.calls.splice(0)
@@ -232,10 +249,6 @@ describe('frontend query execution budget', () => {
     state.period.value = 'year'
     await settle()
     expect(app.calls.map(call => call.query)).toEqual([{ date: '2025-12-31', period: 'year' }])
-    app.calls.splice(0)
-    state.date.value = ''
-    await settle()
-    expect(app.calls).toHaveLength(0)
   })
 
   it('loads only the visible catalog type and refreshes moved items when their tabs are opened', async () => {
